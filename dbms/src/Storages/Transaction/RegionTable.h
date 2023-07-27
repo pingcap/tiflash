@@ -163,7 +163,7 @@ public:
     // This function is only for debug.
     bool tryFlushRegions();
 
-    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the smae time.
+    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
     RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);
@@ -214,7 +214,7 @@ private:
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
-    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_tb_id, RegionID region_id);
+    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
 
     // Try write the committed kvs into cache of columnar DeltaMergeStore.
     // Flush the cache if try_persist is set to true.

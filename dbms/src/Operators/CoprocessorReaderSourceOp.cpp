@@ -19,10 +19,10 @@
 namespace DB
 {
 CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
     CoprocessorReaderPtr coprocessor_reader_)
-    : SourceOp(exec_status_, req_id)
+    : SourceOp(exec_context_, req_id)
     , coprocessor_reader(coprocessor_reader_)
     , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, coprocessor_reader->getSourceNum()))
 {
@@ -117,8 +117,11 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
 }
 OperatorStatus CoprocessorReaderSourceOp::awaitImpl()
 {
-    if (!block_queue.empty() || reader_res)
+    if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;
+    if unlikely (reader_res)
+        return OperatorStatus::HAS_OUTPUT;
+
     reader_res.emplace(coprocessor_reader->nonBlockingNext());
     if (reader_res->second || reader_res->first.finished)
     {

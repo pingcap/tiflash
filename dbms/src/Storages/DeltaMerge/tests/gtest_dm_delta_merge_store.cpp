@@ -77,6 +77,12 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
         return "V2_FileOnly";
     case TestMode::V2_Mix:
         return "V2_Mix";
+    case TestMode::V3_BlockOnly:
+        return "V3_BlockOnly";
+    case TestMode::V3_FileOnly:
+        return "V3_FileOnly";
+    case TestMode::V3_Mix:
+        return "V3_Mix";
     default:
         return "Unknown";
     }
@@ -110,6 +116,10 @@ try
 {
     // create table
     ASSERT_NE(store, nullptr);
+
+    // Write some data, or gc will not run.
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
 
@@ -197,6 +207,10 @@ try
 {
     // create table
     ASSERT_NE(store, nullptr);
+
+    // Write some data, or gc will not run.
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
 
@@ -423,6 +437,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -509,6 +524,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -630,6 +646,7 @@ try
         }
         db_context->getSettingsRef().dt_segment_delta_cache_limit_rows = 8;
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
         ASSERT_THROW(store->write(*db_context, db_context->getSettingsRef(), block), DB::Exception);
         try
         {
@@ -641,7 +658,6 @@ try
                 throw;
         }
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
 
     {
         // read all columns from store
@@ -708,9 +724,11 @@ try
                 col_i8_define.name,
                 col_i8_define.id));
         }
-
+        ASSERT_TRUE(store->segments.empty());
+        store->write(*db_context, db_context->getSettingsRef(), block); // Create first segment, will write PS.
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
-        store->write(*db_context, db_context->getSettingsRef(), block);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
+        store->write(*db_context, db_context->getSettingsRef(), block); // Will not write PS.
         ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
         try
         {
@@ -722,7 +740,6 @@ try
                 throw;
         }
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
 
     {
         // read all columns from store
@@ -764,6 +781,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -845,6 +863,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -852,6 +871,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -865,6 +885,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -919,6 +940,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -926,6 +948,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -937,6 +960,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -1079,6 +1103,31 @@ try
                 createColumn<Int64>(createNumbers<Int64>(0, 9)),
             }));
     }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, Empty)
+try
+{
+    ASSERT_TRUE(store->segments.empty());
+
+    auto settings = db_context->getSettings();
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(*db_context,
+                                         settings,
+                                         columns,
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                         /* num_streams= */ 1,
+                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                         EMPTY_FILTER,
+                                         std::vector<RuntimeFilterPtr>{},
+                                         0,
+                                         TRACING_NAME,
+                                         /* keep_order= */ false,
+                                         /* is_fast_scan= */ false,
+                                         /* expected_block_size= */ 1024)[0];
+    auto b = in->read();
+    ASSERT_FALSE(static_cast<bool>(b));
 }
 CATCH
 
@@ -1495,12 +1544,15 @@ try
             {
             case TestMode::V1_BlockOnly:
             case TestMode::V2_BlockOnly:
+            case TestMode::V3_BlockOnly:
                 store->write(*db_context, settings, block);
                 break;
             case TestMode::V2_FileOnly:
+            case TestMode::V3_FileOnly:
                 write_as_file();
                 break;
             case TestMode::V2_Mix:
+            case TestMode::V3_Mix:
             {
                 if ((random() % 2) == 0)
                 {
@@ -2908,7 +2960,6 @@ try
                 false);
 
             store->write(*db_context, settings, block);
-
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
             auto segment_stats = store->getSegmentsStats();
@@ -2966,7 +3017,7 @@ CATCH
 INSTANTIATE_TEST_CASE_P(
     TestMode,
     DeltaMergeStoreRWTest,
-    testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
+    testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix, TestMode::V3_BlockOnly, TestMode::V3_FileOnly, TestMode::V3_Mix),
     testModeToString);
 
 

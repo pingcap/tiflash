@@ -27,6 +27,15 @@ namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;
 
+void fillTaskMetaWithDAGProperties(mpp::TaskMeta & meta, const DAGProperties & properties)
+{
+    meta.set_start_ts(properties.start_ts);
+    meta.set_gather_id(properties.gather_id);
+    meta.set_query_ts(properties.query_ts);
+    meta.set_local_query_id(properties.local_query_id);
+    meta.set_server_id(properties.server_id);
+}
+
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
 {
     tipb_region_info->set_region_id(region.first);
@@ -39,7 +48,7 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
-BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, DAGSchema & root_task_schema, const String & root_addr, bool enable_local_tunnel)
+BlockInputStreamPtr constructRootExchangeReceiverStream(Context & context, tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, DAGSchema & root_task_schema, const String & root_addr)
 {
     for (auto & field : root_task_schema)
     {
@@ -50,10 +59,7 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
     }
 
     mpp::TaskMeta root_tm;
-    root_tm.set_start_ts(properties.start_ts);
-    root_tm.set_query_ts(properties.query_ts);
-    root_tm.set_local_query_id(properties.local_query_id);
-    root_tm.set_server_id(properties.server_id);
+    fillTaskMetaWithDAGProperties(root_tm, properties);
     root_tm.set_address(root_addr);
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
@@ -65,7 +71,7 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
                 root_tm,
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                enable_local_tunnel,
+                false,
                 context.getSettingsRef().enable_async_grpc_client),
             tipb_exchange_receiver.encoded_task_meta_size(),
             10,
@@ -77,32 +83,26 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
     return ret;
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel)
+BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema)
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
     {
         mpp::TaskMeta tm;
-        tm.set_start_ts(properties.start_ts);
-        tm.set_query_ts(properties.query_ts);
-        tm.set_local_query_id(properties.local_query_id);
-        tm.set_server_id(properties.server_id);
+        fillTaskMetaWithDAGProperties(tm, properties);
         tm.set_address(Debug::LOCAL_HOST);
         tm.set_task_id(root_task_id);
         tm.set_partition_id(-1);
         auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
         tm.AppendToString(tm_string);
     }
-    return constructExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
+    return constructRootExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST);
 }
 
 void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, Int64 task_id, String & addr)
 {
     mpp::TaskMeta tm;
-    tm.set_start_ts(properties.start_ts);
-    tm.set_query_ts(properties.query_ts);
-    tm.set_local_query_id(properties.local_query_id);
-    tm.set_server_id(properties.server_id);
+    fillTaskMetaWithDAGProperties(tm, properties);
     tm.set_address(addr);
     tm.set_task_id(task_id);
     tm.set_partition_id(-1);
@@ -116,28 +116,25 @@ BlockInputStreamPtr prepareRootExchangeReceiverWithMultipleContext(Context & con
 
     prepareExchangeReceiverMetaWithMultipleContext(tipb_exchange_receiver, properties, task_id, addr);
 
-    return constructExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, root_addr, true);
+    return constructRootExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, root_addr);
 }
 
-void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
+void prepareDispatchTaskRequest(QueryTask & task, mpp::DispatchTaskRequest & req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
 {
     if (task.is_root_task)
     {
         root_task_ids.push_back(task.task_id);
         root_task_schema = task.result_schema;
     }
-    auto * tm = req->mutable_meta();
-    tm->set_start_ts(properties.start_ts);
-    tm->set_query_ts(properties.query_ts);
-    tm->set_local_query_id(properties.local_query_id);
-    tm->set_server_id(properties.server_id);
+    auto * tm = req.mutable_meta();
+    fillTaskMetaWithDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
-    auto * encoded_plan = req->mutable_encoded_plan();
+    auto * encoded_plan = req.mutable_encoded_plan();
     task.dag_request->AppendToString(encoded_plan);
-    req->set_timeout(properties.mpp_timeout);
-    req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+    req.set_timeout(properties.mpp_timeout);
+    req.set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
 }
 
 void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, std::vector<Int64> & root_task_partition_ids, DAGSchema & root_task_schema, String & addr)
@@ -149,10 +146,7 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
         root_task_schema = task.result_schema;
     }
     auto * tm = req->mutable_meta();
-    tm->set_start_ts(properties.start_ts);
-    tm->set_query_ts(properties.query_ts);
-    tm->set_local_query_id(properties.local_query_id);
-    tm->set_server_id(properties.server_id);
+    fillTaskMetaWithDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
@@ -170,7 +164,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     std::vector<Int64> root_task_ids;
     for (auto & task : query_tasks)
     {
-        auto req = std::make_shared<mpp::DispatchTaskRequest>();
+        mpp::DispatchTaskRequest req;
         prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, Debug::LOCAL_HOST);
         auto table_id = task.table_id;
         if (table_id != -1)
@@ -193,7 +187,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                             current_table_regions = nullptr;
                         if (current_table_regions == nullptr)
                         {
-                            current_table_regions = req->add_table_regions();
+                            current_table_regions = req.add_table_regions();
                             current_table_regions->set_physical_table_id(partition_id);
                         }
                         setTipbRegionInfo(current_table_regions->add_regions(), regions[i], partition_id);
@@ -212,17 +206,22 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                 {
                     if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
                         continue;
-                    setTipbRegionInfo(req->add_regions(), regions[i], table_id);
+                    setTipbRegionInfo(req.add_regions(), regions[i], table_id);
                 }
             }
         }
 
-        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-        context.getTMTContext().getKVCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
-        if (call.getResp()->has_error())
-            throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+        pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(DispatchMPPTask)> rpc(context.getTMTContext().getKVCluster()->rpc_client, Debug::LOCAL_HOST);
+        grpc::ClientContext client_context;
+        rpc.setClientContext(client_context, 5);
+        mpp::DispatchTaskResponse resp;
+        auto status = rpc.call(&client_context, req, &resp);
+        if (!status.ok())
+            throw Exception("Meet grpc error while dispatch mpp task: " + rpc.errMsg(status));
+        if (resp.has_error())
+            throw Exception("Meet error while dispatch mpp task: " + resp.error().msg());
     }
-    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, context.getSettingsRef().enable_local_tunnel);
+    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema);
 }
 
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)

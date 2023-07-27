@@ -124,7 +124,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                              UInt64 file_id,
                              const String & parent_path)
 {
-    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig());
+    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig(), dm_context.db_context.getSettingsRef().dt_small_file_size_threshold, dm_context.db_context.getSettingsRef().dt_merged_file_max_size);
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap);
     const auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -695,8 +695,9 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed(););
+    SCOPE_EXIT({
+        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed();
+    });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
@@ -713,16 +714,17 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
                                             UInt64 max_version,
                                             size_t expected_block_size)
 {
+    auto clipped_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read, segment_snap->stable->stable);
     switch (read_mode)
     {
     case ReadMode::Normal:
-        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, max_version, expected_block_size);
+        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, max_version, clipped_block_rows);
     case ReadMode::Fast:
-        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, expected_block_size);
+        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, clipped_block_rows);
     case ReadMode::Raw:
-        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, expected_block_size);
+        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, clipped_block_rows);
     case ReadMode::Bitmap:
-        return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size, clipped_block_rows);
     default:
         return nullptr;
     }
@@ -2486,7 +2488,6 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
                                            size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
-
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(dm_context, segment_snap, read_ranges, filter, max_version, expected_block_size);
@@ -2859,20 +2860,22 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
                                                         const RowKeyRanges & read_ranges,
                                                         const PushDownFilterPtr & filter,
                                                         UInt64 max_version,
-                                                        size_t expected_block_size)
+                                                        size_t build_bitmap_filter_block_rows,
+                                                        size_t read_data_block_rows)
 {
     auto real_ranges = shrinkRowKeyRanges(read_ranges);
     if (real_ranges.empty())
     {
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
+
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
-        expected_block_size);
+        build_bitmap_filter_block_rows);
 
     if (filter && filter->before_where)
     {
@@ -2885,7 +2888,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
             real_ranges,
             filter,
             max_version,
-            expected_block_size);
+            read_data_block_rows);
     }
 
     return getBitmapFilterInputStream(
@@ -2896,7 +2899,31 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
-        expected_block_size);
+        read_data_block_rows);
+}
+
+// clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
+size_t Segment::clipBlockRows(const Context & context, size_t expected_block_rows, const ColumnDefines & read_columns, const StableValueSpacePtr & stable)
+{
+    size_t max_block_bytes = context.getSettingsRef().max_block_bytes;
+    size_t pack_rows = context.getSettingsRef().dt_segment_stable_pack_rows; // At least one pack.
+    return clipBlockRows(max_block_bytes, pack_rows, expected_block_rows, read_columns, stable);
+}
+
+size_t Segment::clipBlockRows(size_t max_block_bytes, size_t pack_rows, size_t expected_block_rows, const ColumnDefines & read_columns, const StableValueSpacePtr & stable)
+{
+    // Disable block bytes limit.
+    if (stable == nullptr || unlikely(max_block_bytes <= 0))
+    {
+        return expected_block_rows;
+    }
+    else
+    {
+        auto row_bytes = std::max(1, stable->avgRowBytes(read_columns)); // Avoid row_bytes to be 0.
+        auto rows = max_block_bytes / row_bytes;
+        rows = std::max(rows / pack_rows * pack_rows, pack_rows); // Align down with pack rows and at least read one pack.
+        return std::min(expected_block_rows, rows);
+    }
 }
 
 } // namespace DM

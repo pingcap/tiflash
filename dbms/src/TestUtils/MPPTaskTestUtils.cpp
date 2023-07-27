@@ -23,19 +23,23 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id)
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id, int query_ts, int gather_id)
 {
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = server_num;
     properties.start_ts = MockTimeStampGenerator::instance().nextTs();
+    if (query_ts > 0)
+        properties.query_ts = query_ts;
     if (local_query_id >= 0)
         properties.local_query_id = local_query_id;
     else
         properties.local_query_id = properties.start_ts;
     if (tidb_server_id >= 0)
         properties.server_id = tidb_server_id;
+    if (gather_id > 0)
+        properties.gather_id = gather_id;
     return properties;
 }
 
@@ -164,7 +168,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
-        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id).first != nullptr)
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getMPPQuery(query_id) != nullptr)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
@@ -178,17 +182,51 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     return ::testing::AssertionSuccess();
 }
 
+::testing::AssertionResult MPPTaskTestUtils::assertGatherCancelled(const MPPGatherId & gather_id)
+{
+    auto seconds = std::chrono::seconds(1);
+    auto retry_times = 0;
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+    {
+        // wait until the task is empty for <query:start_ts>
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first != nullptr)
+        {
+            std::this_thread::sleep_for(seconds);
+            ++retry_times;
+            // Currenly we wait for 20 times to ensure all tasks are cancelled.
+            if (retry_times > 20)
+            {
+                return ::testing::AssertionFailure() << "Gather not cancelled, " << queryInfo(i) << std::endl;
+            }
+        }
+    }
+    return ::testing::AssertionSuccess();
+}
+
 ::testing::AssertionResult MPPTaskTestUtils::assertQueryActive(const MPPQueryId & query_id)
 {
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
-        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id).first == nullptr)
+        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getMPPQuery(query_id) == nullptr)
         {
             return ::testing::AssertionFailure() << "Query " << query_id.toString() << "not active" << std::endl;
         }
     }
     return ::testing::AssertionSuccess();
 }
+
+::testing::AssertionResult MPPTaskTestUtils::assertGatherActive(const MPPGatherId & gather_id)
+{
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+    {
+        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first == nullptr)
+        {
+            return ::testing::AssertionFailure() << "Gather " << gather_id.toString() << "not active" << std::endl;
+        }
+    }
+    return ::testing::AssertionSuccess();
+}
+
 
 ColumnsWithTypeAndName MPPTaskTestUtils::buildAndExecuteMPPTasks(DAGRequestBuilder builder)
 {

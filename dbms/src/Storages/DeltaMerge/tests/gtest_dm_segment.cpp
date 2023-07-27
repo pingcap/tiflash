@@ -189,6 +189,45 @@ try
 }
 CATCH
 
+
+TEST_F(SegmentTest, ClipBlockRows)
+try
+{
+    constexpr auto num_rows_write = 100;
+    auto block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+    segment->write(dmContext(), block);
+    auto row_bytes = segment->stable->avgRowBytes(*tableColumns());
+    ASSERT_EQ(row_bytes, 0);
+
+    constexpr size_t pack_rows = 512;
+
+    auto clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1024, pack_rows, /*max_block_rows*/ 1023, *tableColumns(), segment->stable);
+    ASSERT_EQ(clipped_block_rows, 1023);
+
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1024, pack_rows, /*max_block_rows*/ 102400, *tableColumns(), segment->stable);
+    ASSERT_EQ(clipped_block_rows, 1024);
+
+    segment = segment->mergeDelta(dmContext(), tableColumns());
+    row_bytes = segment->stable->avgRowBytes(*tableColumns());
+    ASSERT_EQ(row_bytes, 17);
+
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1023, pack_rows, /*max_block_rows*/ 1024, *tableColumns(), segment->stable);
+    ASSERT_EQ(clipped_block_rows, pack_rows);
+
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 102400, pack_rows, /*max_block_rows*/ 1024, *tableColumns(), segment->stable);
+    ASSERT_EQ(clipped_block_rows, 1024);
+
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 4096, pack_rows, /*max_block_rows*/ 3000, *tableColumns(), segment->stable);
+    ASSERT_EQ(clipped_block_rows, pack_rows);
+
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1023, pack_rows, /*max_block_rows*/ 1024, {}, segment->stable);
+    ASSERT_EQ(clipped_block_rows, pack_rows);
+
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 102400, pack_rows, /*max_block_rows*/ 1024, {}, segment->stable);
+    ASSERT_EQ(clipped_block_rows, 1024);
+}
+CATCH
+
 TEST_F(SegmentTest, WriteRead2)
 try
 {
@@ -998,6 +1037,8 @@ enum SegmentTestMode
     V1_BlockOnly,
     V2_BlockOnly,
     V2_FileOnly,
+    V3_BlockOnly,
+    V3_FileOnly,
 };
 
 String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
@@ -1011,6 +1052,10 @@ String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
         return "V2_BlockOnly";
     case SegmentTestMode::V2_FileOnly:
         return "V2_FileOnly";
+    case SegmentTestMode::V3_BlockOnly:
+        return "V3_BlockOnly";
+    case SegmentTestMode::V3_FileOnly:
+        return "V3_FileOnly";
     default:
         return "Unknown";
     }
@@ -1034,6 +1079,10 @@ public:
         case SegmentTestMode::V2_BlockOnly:
         case SegmentTestMode::V2_FileOnly:
             setStorageFormat(2);
+            break;
+        case SegmentTestMode::V3_BlockOnly:
+        case SegmentTestMode::V3_FileOnly:
+            setStorageFormat(3);
             break;
         }
 
@@ -1076,9 +1125,11 @@ try
             {
             case SegmentTestMode::V1_BlockOnly:
             case SegmentTestMode::V2_BlockOnly:
+            case SegmentTestMode::V3_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
             case SegmentTestMode::V2_FileOnly:
+            case SegmentTestMode::V3_FileOnly:
             {
                 auto delegate = dmContext().path_pool->getStableDiskDelegator();
                 auto file_provider = dmContext().db_context.getFileProvider();
@@ -1171,7 +1222,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(SegmentTestMode, //
                         SegmentTest2,
-                        testing::Values(SegmentTestMode::V1_BlockOnly, SegmentTestMode::V2_BlockOnly, SegmentTestMode::V2_FileOnly),
+                        testing::Values(SegmentTestMode::V1_BlockOnly, SegmentTestMode::V2_BlockOnly, SegmentTestMode::V2_FileOnly, SegmentTestMode::V3_BlockOnly, SegmentTestMode::V3_FileOnly),
                         testModeToString);
 
 enum class SegmentWriteType

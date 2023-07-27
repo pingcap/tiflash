@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
+#include <Operators/FilterTransformOp.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -176,17 +177,24 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     return {storage, column_names, query_info};
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions, bool keep_order, std::vector<int> runtime_filter_ids, int rf_max_wait_time_ms)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
+    Context & context,
+    Int64 table_id,
+    const FilterConditions * filter_conditions,
+    bool keep_order,
+    std::vector<int> runtime_filter_ids,
+    int rf_max_wait_time_ms)
 {
+    static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
+
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
-            pushed_down_filters, // Not care now
+            empty_pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             runtime_filter_ids,
             rf_max_wait_time_ms,
@@ -203,10 +211,10 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     }
     else
     {
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            google::protobuf::RepeatedPtrField<tipb::Expr>(),
-            pushed_down_filters, // Not care now
+            empty_filters,
+            empty_pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             runtime_filter_ids,
             rf_max_wait_time_ms,
@@ -217,25 +225,66 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     }
 }
 
-
 void MockStorage::buildExecFromDeltaMerge(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     Int64 table_id,
     size_t concurrency,
-    bool keep_order)
+    bool keep_order,
+    const FilterConditions * filter_conditions,
+    std::vector<int> runtime_filter_ids,
+    int rf_max_wait_time_ms)
 {
+    static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
+
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
-    // Currently don't support test for late materialization
-    storage->read(
-        exec_status_,
-        group_builder,
-        column_names,
-        query_info,
-        context,
-        context.getSettingsRef().max_block_size,
-        concurrency);
+    if (filter_conditions && filter_conditions->hasValue())
+    {
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            filter_conditions->conditions,
+            empty_pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
+        // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
+        auto build_ret = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
+        storage->read(
+            exec_context_,
+            group_builder,
+            column_names,
+            query_info,
+            context,
+            context.getSettingsRef().max_block_size,
+            concurrency);
+        auto log = Logger::get("test for late materialization");
+        auto input_header = group_builder.getCurrentHeader();
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_context_, log->identifier(), input_header, std::get<0>(build_ret), std::get<1>(build_ret)));
+        });
+        executeExpression(exec_context_, group_builder, std::get<2>(build_ret), log);
+    }
+    else
+    {
+        static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            empty_filters,
+            empty_pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
+        storage->read(
+            exec_context_,
+            group_builder,
+            column_names,
+            query_info,
+            context,
+            context.getSettingsRef().max_block_size,
+            concurrency);
+    }
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)

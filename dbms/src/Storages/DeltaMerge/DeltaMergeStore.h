@@ -46,7 +46,7 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 class StoragePathPool;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
 
 namespace DM
@@ -373,7 +373,7 @@ public:
     ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
     /// `sorted_ranges` should be already sorted and merged.
     void read(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         const DB::Settings & db_settings,
@@ -382,6 +382,8 @@ public:
         size_t num_streams,
         UInt64 max_version,
         const PushDownFilterPtr & filter,
+        const RuntimeFilteList & runtime_filter_list,
+        const int rf_max_wait_time_ms,
         const String & tracing_id,
         bool keep_order,
         bool is_fast_scan = false,
@@ -419,6 +421,7 @@ public:
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
+    /// This function is only used for test.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -685,15 +688,17 @@ private:
                                           const SegmentIdSet & read_segments = {},
                                           bool try_split_task = true);
 
-private:
-    void dropAllSegments(bool keep_first_segment);
-    String getLogTracingId(const DMContext & dm_ctx);
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
 public:
 #endif
+    void dropAllSegments(bool keep_first_segment);
+    String getLogTracingId(const DMContext & dm_ctx);
+    // Returns segment that contains start_key and whether 'segments' is empty.
+    std::pair<SegmentPtr, bool> getSegmentByStartKeyInner(const RowKeyValueRef & start_key);
+    std::pair<SegmentPtr, bool> getSegmentByStartKey(const RowKeyValueRef & start_key, bool create_if_empty, bool throw_if_notfound);
+    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

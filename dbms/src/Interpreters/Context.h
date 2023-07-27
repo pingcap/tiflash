@@ -271,7 +271,7 @@ public:
 
     /// Get an object that protects the table from concurrently executing multiple DDL operations.
     /// If such an object already exists, an exception is thrown.
-    std::unique_ptr<DDLGuard> getDDLGuard(const String & database, const String & table, const String & message) const;
+    std::unique_ptr<DDLGuard> getDDLGuard(const String & table, const String & message) const;
     /// If the table already exists, it returns nullptr, otherwise guard is created.
     std::unique_ptr<DDLGuard> getDDLGuardIfTableDoesntExist(const String & database, const String & table, const String & message) const;
 
@@ -504,6 +504,8 @@ public:
 
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
+
+    void mockConfigLoaded() { is_config_loaded = true; }
 
 private:
     /** Check if the current client has access to the specified database.

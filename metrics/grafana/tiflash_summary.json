@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1684914232042,
+  "iteration": 1689824531144,
   "links": [],
   "panels": [
     {
@@ -4013,7 +4013,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:78",
               "format": "s",
               "label": null,
               "logBase": 1,
@@ -4022,7 +4021,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:79",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -4837,6 +4835,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Executed DDL jobs per minute",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -4850,17 +4849,17 @@
             "y": 5
           },
           "hiddenSeries": false,
-          "id": 17,
+          "id": 19,
           "legend": {
             "alignAsTable": false,
             "avg": false,
-            "current": true,
+            "current": false,
             "max": false,
             "min": false,
             "rightSide": false,
             "show": true,
             "total": false,
-            "values": true
+            "values": false
           },
           "lines": true,
           "linewidth": 1,
@@ -4880,18 +4879,41 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(tiflash_schema_version{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "avg(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{type}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "total",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type,instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "total-{{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Schema Version",
+          "title": "Schema Internal DDL OPM",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4908,11 +4930,11 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             },
             {
@@ -4979,18 +5001,11 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(increase(tiflash_schema_apply_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "{{type}}",
-              "refId": "A"
-            },
-            {
               "expr": "avg(increase(tiflash_schema_trigger_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "triggle-by-{{type}}",
-              "refId": "B"
+              "refId": "A"
             }
           ],
           "thresholds": [],
@@ -4998,128 +5013,6 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "Schema Apply OPM",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": null,
-              "format": "opm",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Executed DDL jobs per minute",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 12
-          },
-          "hiddenSeries": false,
-          "id": 19,
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "avg(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "{{type}}",
-              "refId": "A"
-            },
-            {
-              "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "total",
-              "refId": "B"
-            },
-            {
-              "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type,instance)",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "{{type}} - {{instance}}",
-              "refId": "C"
-            },
-            {
-              "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "total - {{instance}}",
-              "refId": "D"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Schema Internal DDL OPM",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -5172,7 +5065,7 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 12,
+            "x": 0,
             "y": 12
           },
           "hiddenSeries": false,
@@ -5212,35 +5105,37 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "999",
+              "legendFormat": "999-{{type}}",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "99",
+              "legendFormat": "99-{{type}}",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "95",
+              "legendFormat": "95-{{type}}",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", keyspace!=\"\"}[1m])) by (le, type, keyspace))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "80",
+              "legendFormat": "80-{{type}}",
               "refId": "D"
             },
             {
-              "expr": "sum(tiflash_schema_applying{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_sync_schema_applying{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"$type\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "applying-{{instance}}",
@@ -6343,7 +6238,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The number of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
+          "description": "OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -6384,24 +6279,39 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/max-fsync/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
+              "exemplar": true,
               "expr": "sum(rate(tiflash_system_profile_event_FileFSync{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{instance}}",
+              "legendFormat": "ops-fsync-{{instance}}",
               "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1, sum(rate(tiflash_system_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"fsync\"}[$__rate_interval])) by (le, instance))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "max-fsync-{{instance}}",
+              "refId": "B"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "FSync OPS",
+          "title": "FSync Status",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -6426,7 +6336,7 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "s",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -7090,7 +7000,6 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:417",
               "alias": "/%/",
               "yaxis": 2
             }
@@ -7176,7 +7085,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:387",
               "decimals": 0,
               "format": "short",
               "label": null,
@@ -7186,7 +7094,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:388",
               "format": "s",
               "label": null,
               "logBase": 1,
@@ -7786,7 +7693,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -7948,7 +7855,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 86
+            "y": 7
           },
           "hiddenSeries": false,
           "id": 62,
@@ -8067,7 +7974,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 94
+            "y": 15
           },
           "height": "",
           "hiddenSeries": false,
@@ -8186,7 +8093,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 94
+            "y": 15
           },
           "height": "",
           "hiddenSeries": false,
@@ -8303,7 +8210,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 102
+            "y": 23
           },
           "height": "",
           "hiddenSeries": false,
@@ -8425,7 +8332,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 111
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 90,
@@ -8605,7 +8512,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "disk_size-{{instance}}",
+              "legendFormat": "blob_disk_size-{{instance}}",
               "refId": "A"
             },
             {
@@ -8614,7 +8521,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "valid_size-{{instance}}",
+              "legendFormat": "blob_valid_size-{{instance}}",
               "refId": "B"
             },
             {
@@ -8622,7 +8529,7 @@
               "expr": "sum((tiflash_system_asynchronous_metric_BlobValidBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) / (tiflash_system_asynchronous_metric_BlobDiskBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "valid_rate-{{instance}}",
+              "legendFormat": "blob_valid_rate-{{instance}}",
               "refId": "C"
             },
             {
@@ -8927,7 +8834,7 @@
               "exemplar": true,
               "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
-              "hide": true,
+              "hide": false,
               "interval": "",
               "intervalFactor": 1,
               "legendFormat": "{{type}}-999",
@@ -8936,7 +8843,7 @@
             {
               "exemplar": true,
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "hide": false,
+              "hide": true,
               "interval": "",
               "legendFormat": "{{type}}-99",
               "refId": "C"
@@ -9290,11 +9197,11 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "StoragePool Pages",
+          "title": "Numer of Pages",
           "tooltip": {
             "msResolution": false,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -9415,7 +9322,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "StoragePool Runmode",
+          "title": "Number of Tables",
           "tooltip": {
             "msResolution": false,
             "shared": true,
@@ -9724,7 +9631,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(increase(tiflash_storage_page_command_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance, type)",
+              "expr": "sum(rate(tiflash_storage_page_command_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance, type)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -9740,7 +9647,7 @@
           "title": "PS Command OPS By Instance",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -9809,7 +9716,7 @@
             "y": 9
           },
           "hiddenSeries": false,
-          "id": 166,
+          "id": 167,
           "legend": {
             "alignAsTable": false,
             "avg": false,
@@ -10456,7 +10363,7 @@
           "tooltip": {
             "msResolution": false,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "cumulative"
           },
           "type": "graph",
@@ -11302,6 +11209,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "95%",
               "refId": "C",
@@ -11341,7 +11249,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             },
             {
@@ -11390,7 +11298,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 108
+            "y": 10
           },
           "hiddenSeries": false,
           "id": 99,
@@ -11543,7 +11451,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 108
+            "y": 10
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12023,7 +11931,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Checkpoint Upload keys by type (all)",
+          "title": "Checkpoint Upload keys speed by type (all)",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -12039,7 +11947,7 @@
           },
           "yaxes": [
             {
-              "format": "short",
+              "format": "ops",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -12868,7 +12776,7 @@
             "y": 59
           },
           "hiddenSeries": false,
-          "id": 199,
+          "id": 201,
           "legend": {
             "alignAsTable": true,
             "avg": false,
@@ -12899,7 +12807,6 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:110",
               "alias": "/sum/",
               "yaxis": 2
             }
@@ -12964,7 +12871,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:121",
               "format": "cps",
               "label": null,
               "logBase": 1,
@@ -12973,13 +12879,120 @@
               "show": true
             },
             {
-              "$$hashKey": "object:122",
               "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Memory Usage of Storage Tasks",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 59
+          },
+          "hiddenSeries": false,
+          "id": 233,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_MemoryTrackingQueryStorageTask{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "MemoryTrackingQueryStorageTask-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_MemoryTrackingFetchPages{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "MemoryTrackingFetchPages-{{instance}}",
+              "refId": "D"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Memory Usage of Storage Tasks",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": false
             }
           ],
           "yaxis": {
@@ -13019,7 +13032,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 52
+            "y": 12
           },
           "hiddenSeries": false,
           "id": 178,
@@ -13137,7 +13150,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 52
+            "y": 12
           },
           "hiddenSeries": false,
           "id": 179,
@@ -13259,7 +13272,7 @@
           "title": "S3 OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -13311,7 +13324,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 60
+            "y": 20
           },
           "hiddenSeries": false,
           "id": 182,
@@ -13429,7 +13442,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 60
+            "y": 20
           },
           "hiddenSeries": false,
           "id": 180,
@@ -13556,7 +13569,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 68
+            "y": 28
           },
           "hiddenSeries": false,
           "id": 185,
@@ -13683,7 +13696,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 68
+            "y": 28
           },
           "hiddenSeries": false,
           "id": 186,
@@ -13785,7 +13798,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 76
+            "y": 36
           },
           "hiddenSeries": false,
           "id": 188,
@@ -13904,7 +13917,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 12
       },
       "id": 202,
       "panels": [
@@ -13925,7 +13938,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 13
           },
           "hiddenSeries": false,
           "id": 224,
@@ -14025,7 +14038,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 13
           },
           "hiddenSeries": false,
           "id": 226,
@@ -14133,7 +14146,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 77
+            "y": 21
           },
           "hiddenSeries": false,
           "id": 228,
@@ -14236,7 +14249,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 77
+            "y": 21
           },
           "hiddenSeries": false,
           "id": 222,
@@ -14368,7 +14381,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:1556",
               "format": "s",
               "label": null,
               "logBase": 1,
@@ -14377,7 +14389,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:1557",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -14411,7 +14422,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 85
+            "y": 29
           },
           "hiddenSeries": false,
           "id": 230,
@@ -14524,7 +14535,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:1556",
               "format": "s",
               "label": null,
               "logBase": 1,
@@ -14533,7 +14543,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:1557",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -14568,7 +14577,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 85
+            "y": 29
           },
           "hiddenSeries": false,
           "id": 218,
@@ -14655,7 +14664,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:469",
               "decimals": 1,
               "format": "percentunit",
               "label": null,
@@ -14665,7 +14673,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:470",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -14700,7 +14707,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 93
+            "y": 37
           },
           "hiddenSeries": false,
           "id": 220,
@@ -14787,7 +14794,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:469",
               "decimals": 1,
               "format": "percentunit",
               "label": null,
@@ -14797,7 +14803,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:470",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -14832,7 +14837,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 37
           },
           "hiddenSeries": false,
           "id": 216,
@@ -14864,7 +14869,6 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:398",
               "alias": "Limit",
               "color": "#F2495C",
               "hideTooltip": true,
@@ -14920,7 +14924,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:469",
               "decimals": 1,
               "format": "percentunit",
               "label": null,
@@ -14930,7 +14933,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:470",
               "format": "short",
               "label": null,
               "logBase": 1,

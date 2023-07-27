@@ -59,4 +59,13 @@ createReadBufferFromFileBaseByFileProvider(
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size,
     int flags_ = -1);
+
+
+std::unique_ptr<ReadBufferFromFileBase>
+createReadBufferFromData(
+    String && data,
+    const String & file_name,
+    size_t estimated_size,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size);
 } // namespace DB

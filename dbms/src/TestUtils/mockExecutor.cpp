@@ -18,6 +18,7 @@
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/ExpandBinder.h>
+#include <Debug/MockExecutor/ExpandBinder2.h>
 #include <Debug/MockExecutor/JoinBinder.h>
 #include <Debug/MockExecutor/LimitBinder.h>
 #include <Debug/MockExecutor/ProjectBinder.h>
@@ -104,7 +105,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context, DAGRequestType type)
 {
     // build tree struct base executor
-    MPPInfo mpp_info(properties.start_ts, properties.query_ts, properties.server_id, properties.local_query_id, -1, -1, {}, mock_context.receiver_source_task_ids_map);
+    MPPInfo mpp_info(properties.start_ts, properties.gather_id, properties.query_ts, properties.server_id, properties.local_query_id, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
@@ -396,11 +397,28 @@ DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set
 
 DAGRequestBuilder & DAGRequestBuilder::appendRuntimeFilter(mock::MockRuntimeFilter & rf)
 {
-    mock::JoinBinder * join = dynamic_cast<mock::JoinBinder *>(root.get());
+    auto * join = dynamic_cast<mock::JoinBinder *>(root.get());
     if (join)
     {
         join->addRuntimeFilter(rf);
     }
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::expand2(std::vector<MockAstVec> level_projection_expressions, std::vector<String> output_names, std::vector<tipb::FieldType> fts)
+{
+    assert(root);
+    std::vector<std::shared_ptr<DB::IAST>> expression_list_vec;
+    for (const auto & one_level_proj : level_projection_expressions)
+    {
+        auto exp_list = std::make_shared<ASTExpressionList>();
+        for (const auto & proj_expr : one_level_proj)
+        {
+            exp_list->children.push_back(proj_expr);
+        }
+        expression_list_vec.push_back(exp_list);
+    }
+    root = mock::compileExpand2(root, getExecutorIndex(), expression_list_vec, output_names, fts);
     return *this;
 }
 
@@ -612,13 +630,13 @@ DAGRequestBuilder MockDAGRequestContext::scan(
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids)
 {
-    auto dagRequestBuilder = scan(db_name, table_name);
-    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dagRequestBuilder.getRoot().get());
+    auto dag_request_builder = scan(db_name, table_name);
+    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dag_request_builder.getRoot().get());
     if (table_scan)
     {
         table_scan->setRuntimeFilterIds(rf_ids);
     }
-    return dagRequestBuilder;
+    return dag_request_builder;
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)

@@ -16,16 +16,15 @@
 
 #include <Common/CapacityLimits.h>
 #include <Common/Exception.h>
+#include <Common/GRPCQueue.h>
 #include <Common/Logger.h>
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/StringRef.h>
@@ -207,7 +206,7 @@ public:
 
     bool isWritable() const override
     {
-        return !send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:
@@ -221,32 +220,33 @@ private:
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
         , queue(
+              log_,
               queue_limits,
-              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
-              call_,
-              log_)
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue, GRPCKickFunc && func)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(
+              log_,
               queue_limits,
-              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
-              func)
-    {}
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
+    {
+        queue.setKickFuncForTest(std::move(func));
+    }
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        return queue.push(std::move(data));
+        return queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
     bool forcePush(TrackedMppDataPacketPtr && data) override
     {
-        return queue.forcePush(std::move(data));
+        return queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     bool finish() override
@@ -256,7 +256,7 @@ public:
 
     bool isWritable() const override
     {
-        return !queue.isFull();
+        return queue.isWritable();
     }
 
     void cancelWith(const String & reason) override
@@ -269,9 +269,9 @@ public:
         return queue.getCancelReason();
     }
 
-    GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
+    MPMCQueueResult popWithTag(TrackedMppDataPacketPtr & data, GRPCKickTag * new_tag)
     {
-        return queue.pop(data, new_tag);
+        return queue.popWithTag(data, new_tag);
     }
 
     void subDataSizeMetric(size_t size)
@@ -354,11 +354,6 @@ private:
         if (unlikely(checkPacketErr(data)))
             return false;
 
-        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
-        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
-        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
-        data->switchMemTracker(local_request_handler.recv_mem_tracker);
-
         // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads
         // is very large and causes the time of transfering data by grpc threads becomes longer, because
         // grpc thread is hard to get chance to push data into MPMCQueue in ExchangeReceiver.
@@ -438,7 +433,7 @@ public:
 
     bool isWritable() const override
     {
-        return !send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:

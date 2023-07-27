@@ -48,12 +48,17 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     const PageStorageConfig & config,
     const FileProviderPtr & file_provider)
 {
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate_raft_data}},
+    };
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(
         name,
         file_provider,
         delegator,
-        PS::V3::BlobConfig::from(config));
+        PS::V3::BlobConfig::from(config),
+        page_type_and_config);
     if (S3::ClientFactory::instance().isEnabled())
     {
         storage->remote_reader = std::make_unique<PS::V3::S3PageReader>();
@@ -79,7 +84,7 @@ size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
     return page_directory->numPagesWithPrefix(prefix);
 }
 
-void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
+void UniversalPageStorage::write(UniversalWriteBatch && write_batch, PageType page_type, const WriteLimiterPtr & write_limiter) const
 {
     if (unlikely(write_batch.empty()))
         return;
@@ -96,7 +101,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
-    auto edit = blob_store->write(std::move(write_batch), write_limiter);
+    auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
     auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
     if (has_writes_from_remote)
     {
@@ -108,6 +113,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
 
 Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -132,6 +138,7 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
 
 UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -183,6 +190,7 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
 
 UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -446,10 +454,13 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     if (options.override_sequence)
         sequence = options.override_sequence.value();
 
+
+    // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
+    // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
+    // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
+    // But if we just upload manifest without reading page data, we can skip this step.
+    if (!options.only_upload_manifest)
     {
-        // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
-        // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
-        // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
         PS::V3::universal::PageDirectoryFactory factory;
         auto temp_page_directory = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
         edit_from_mem = temp_page_directory->dumpSnapshotToEdit();
@@ -491,7 +502,8 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     // get the remote file ids that need to be compacted
     const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(
         edit_from_mem,
-        compact_opts);
+        compact_opts,
+        options.only_upload_manifest);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
@@ -518,6 +530,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
+        RUNTIME_CHECK(!options.only_upload_manifest);
         page_directory->copyCheckpointInfoFromEdit(edit_from_mem);
     }
     auto copy_checkpoint_info_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;

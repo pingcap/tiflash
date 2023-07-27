@@ -46,22 +46,13 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
 
     auto & tmt_context = context->getTMTContext();
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_DEBUG(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    LOG_INFO(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
 
     // set schema ver and start ts
     auto schema_ver = request->schema_ver();
     context->setSetting("schema_version", schema_ver);
     auto start_ts = meta.start_ts();
     context->setSetting("read_tso", start_ts);
-
-    if (request->timeout_s() < 0)
-    {
-        throw TiFlashException(Errors::Coprocessor::BadRequest, "invalid timeout={}", request->timeout_s());
-    }
-    else if (request->timeout_s() > 0)
-    {
-        context->setSetting("disagg_task_snapshot_timeout", request->timeout_s());
-    } // use default timeout if it is 0
 
     // Parse the encoded plan into `dag_req`
     dag_req = getDAGRequestFromStringWithRetry(request->encoded_plan());
