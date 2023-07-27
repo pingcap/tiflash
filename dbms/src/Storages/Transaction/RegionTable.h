@@ -101,23 +101,6 @@ public:
     using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
 
-    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
-    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
-    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
-    struct SafeTsEntry
-    {
-        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
-            : leader_safe_ts(leader_safe_ts)
-            , self_safe_ts(self_safe_ts)
-        {}
-        std::atomic<UInt64> leader_safe_ts;
-        std::atomic<UInt64> self_safe_ts;
-    };
-    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
-    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
-
-    using TableToOptimize = std::unordered_set<TableID>;
-
     explicit RegionTable(Context & context_);
     void restore();
 
@@ -125,6 +108,9 @@ public:
 
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
+
+    /// extend range for possible InternalRegion or add one.
+    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
 
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
@@ -158,8 +144,21 @@ public:
                                                                     RegionVersion conf_version,
                                                                     const LoggerPtr & log);
 
-    /// extend range for possible InternalRegion or add one.
-    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
+public:
+    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
+    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
+    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
+    struct SafeTsEntry
+    {
+        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
+            : leader_safe_ts(leader_safe_ts)
+            , self_safe_ts(self_safe_ts)
+        {}
+        std::atomic<UInt64> leader_safe_ts;
+        std::atomic<UInt64> self_safe_ts;
+    };
+    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
+    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
 
     void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
 
@@ -179,11 +178,6 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
-
-    // Try write the committed kvs into cache of columnar DeltaMergeStore.
-    // Flush the cache if try_persist is set to true.
-    // The original name for this method is flushRegion.
-    RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region) const;
 
 private:
     TableMap tables;

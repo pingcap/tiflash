@@ -102,20 +102,6 @@ void RegionTable::shrinkRegionRange(const Region & region)
     internal_region.cache_bytes = region.dataSize();
 }
 
-RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region) const
-{
-    LOG_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
-
-    /// Write region data into corresponding storage.
-    RegionDataReadInfoList data_list_to_remove;
-    writeBlockByRegion(*context, region, data_list_to_remove, log);
-
-    size_t cache_size = region->dataSize();
-    LOG_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
-
-    return data_list_to_remove;
-}
-
 RegionTable::RegionTable(Context & context_)
     : context(&context_)
     , log(Logger::get())
@@ -286,7 +272,8 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     RegionDataReadInfoList data_list_to_remove;
     try
     {
-        data_list_to_remove = writeBlockByRegionAndFlush(region);
+        /// Write region data into corresponding storage.
+        writeBlockByRegion(*context, region, data_list_to_remove, log);
     }
     catch (const Exception & e)
     {
