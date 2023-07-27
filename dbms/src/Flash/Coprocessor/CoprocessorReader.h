@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -36,6 +37,103 @@
 #include <tipb/select.pb.h>
 
 #pragma GCC diagnostic pop
+
+
+namespace pingcap
+{
+namespace common
+{
+
+template <typename T>
+class CopIterMPMCQueue : public IMPMCQueue<T>
+{
+public:
+    explicit CopIterMPMCQueue(Int64 max_size)
+        : queue(max_size)
+    {}
+
+    ~CopIterMPMCQueue() override = default;
+
+    MPMCQueueResult tryPush(T && t) override
+    {
+        switch (queue.tryPush(std::move(t)))
+        {
+        case DB::MPMCQueueResult::OK:
+            return MPMCQueueResult::OK;
+        case DB::MPMCQueueResult::FINISHED:
+            return MPMCQueueResult::FINISHED;
+        case DB::MPMCQueueResult::CANCELLED:
+            return MPMCQueueResult::CANCELLED;
+        case DB::MPMCQueueResult::FULL:
+            return MPMCQueueResult::FULL;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    MPMCQueueResult push(T && t) override
+    {
+        switch (queue.push(std::move(t)))
+        {
+        case DB::MPMCQueueResult::OK:
+            return MPMCQueueResult::OK;
+        case DB::MPMCQueueResult::FINISHED:
+            return MPMCQueueResult::FINISHED;
+        case DB::MPMCQueueResult::CANCELLED:
+            return MPMCQueueResult::CANCELLED;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    MPMCQueueResult tryPop(T & t) override
+    {
+        switch (queue.tryPop(t))
+        {
+        case DB::MPMCQueueResult::OK:
+            return MPMCQueueResult::OK;
+        case DB::MPMCQueueResult::FINISHED:
+            return MPMCQueueResult::FINISHED;
+        case DB::MPMCQueueResult::CANCELLED:
+            return MPMCQueueResult::CANCELLED;
+        case DB::MPMCQueueResult::EMPTY:
+            return MPMCQueueResult::EMPTY;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    MPMCQueueResult pop(T & t) override
+    {
+        switch (queue.pop(t))
+        {
+        case DB::MPMCQueueResult::OK:
+            return MPMCQueueResult::OK;
+        case DB::MPMCQueueResult::FINISHED:
+            return MPMCQueueResult::FINISHED;
+        case DB::MPMCQueueResult::CANCELLED:
+            return MPMCQueueResult::CANCELLED;
+        default:
+            __builtin_unreachable();
+        }
+    }
+
+    bool cancel() override
+    {
+        return queue.cancel();
+    }
+
+    bool finish() override
+    {
+        return queue.finish();
+    }
+
+private:
+    DB::MPMCQueue<T> queue;
+};
+
+} // namespace common
+} // namespace pingcap
 
 
 namespace DB
@@ -86,7 +184,7 @@ public:
         bool enable_cop_stream_for_remote_read_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
+        , resp_iter(std::make_unique<pingcap::common::CopIterMPMCQueue<pingcap::coprocessor::ResponseIter::Result>>(100), std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
         , collected(false)
         , concurrency(concurrency_)
         , enable_cop_stream_for_remote_read(enable_cop_stream_for_remote_read_)
