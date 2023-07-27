@@ -131,7 +131,6 @@ public:
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
-    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist);
 
     void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;

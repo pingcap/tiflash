@@ -267,18 +267,6 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist)
-{
-    auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
-    if (!region)
-    {
-        LOG_WARNING(log, "region not found, region_id={}", region_id);
-        return {};
-    }
-
-    return tryWriteBlockByRegionAndFlush(region, try_persist);
-}
-
 RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist)
 {
     RegionID region_id = region->id();
