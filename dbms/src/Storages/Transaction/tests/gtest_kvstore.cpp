@@ -35,15 +35,16 @@ try
     }
     {
         // test CompactLog
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
         auto region = kvs.getRegion(1);
         region->markCompactLog();
         kvs.setRegionCompactLogConfig(100000, 1000, 1000);
+
+        raft_cmdpb::AdminRequest request;
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
         // CompactLog always returns true now, even if we can't do a flush.
         // We use a tryFlushData to pre-filter.
+        raft_cmdpb::AdminResponse response;
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
@@ -67,7 +68,15 @@ TEST_F(RegionKVStoreTest, ReadIndex)
 
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
-        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 2, 3}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}, {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {1, 2, 3},
+            {{
+                {RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)},
+                {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)},
+                {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)},
+            }});
     }
     {
         // `read_index_worker_manager` is not set, fallback to v1.
