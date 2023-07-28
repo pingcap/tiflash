@@ -51,7 +51,7 @@ public:
 
 private:
     RSResult check(size_t pack_index, const Field & value, const IDataType * raw_type) const;
-    void updateBloomFilter(BloomFilterPtr & bloom_filter, const IColumn & column, size_t size, const IDataType * type);
+    static void updateBloomFilter(BloomFilterPtr & bloom_filter, const IColumn & column, size_t size, const IDataType * type);
     std::vector<BloomFilterPtr> bloom_filter_vec; // 一个 dmfile 的一个 column 对应一个 bloom_filter_vec（目前先是以前支持 index 的现在也支持），vec 长度等于 pack numbers，也就是一个 pack 一个
     double false_positive_probability;
 };
