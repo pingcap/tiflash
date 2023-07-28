@@ -104,9 +104,9 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 
 std::thread DynamicThreadPool::newDynamcThread(TaskPtr & task)
 {
+    alive_dynamic_threads.fetch_add(1);
     try
     {
-        alive_dynamic_threads.fetch_add(1);
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_new_dynamic_thread);
         return ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
     }
