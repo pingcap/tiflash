@@ -50,12 +50,19 @@ using JoinPtr = std::shared_ptr<Join>;
 struct RestoreInfo
 {
     JoinPtr join;
+    size_t stream_index;
     BlockInputStreamPtr scan_hash_map_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
 
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && scan_hash_map_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+    RestoreInfo(
+        const JoinPtr & join_,
+        size_t stream_index_,
+        BlockInputStreamPtr && scan_hash_map_stream_,
+        BlockInputStreamPtr && build_stream_,
+        BlockInputStreamPtr && probe_stream_)
         : join(join_)
+        , stream_index(stream_index_)
         , scan_hash_map_stream(std::move(scan_hash_map_stream_))
         , build_stream(std::move(build_stream_))
         , probe_stream(std::move(probe_stream_))
@@ -204,11 +211,9 @@ public:
 
     std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
-    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list, size_t stream_index);
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
-
-    void finalizeRuntimeFilter();
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -241,22 +246,16 @@ public:
         active_probe_threads = probe_concurrency;
     }
 
-    void wakeUpAllWaitingThreads()
-    {
-        std::unique_lock lk(build_probe_mutex);
-        skip_wait = true;
-        probe_cv.notify_all();
-        build_cv.notify_all();
-        for (const auto & rf : runtime_filter_list)
-        {
-            rf->cancel(log, "Join has been cancelled.");
-        }
-    }
+    void wakeUpAllWaitingThreads();
 
-    void finishOneBuild();
+    // Return true if it is the last build thread.
+    bool finishOneBuild(size_t stream_index);
+    void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
-    void finishOneProbe();
+    // Return true if it is the last probe thread.
+    bool finishOneProbe(size_t stream_index);
+    void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isAllProbeFinished() const;
 
@@ -272,8 +271,18 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+    // std::unordered_map<partition_index, Blocks>
+    using MarkedSpillData = std::unordered_map<size_t, Blocks>;
+
+    MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index) const;
+    bool hasBuildSideMarkedSpillData(size_t stream_index) const;
+    void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
+
+    MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
+    bool hasProbeSideMarkedSpillData(size_t stream_index) const;
+    void flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -306,11 +315,13 @@ private:
 
     mutable std::condition_variable build_cv;
     size_t build_concurrency;
-    std::atomic<size_t> active_build_threads;
+    size_t active_build_threads;
+    std::atomic_bool build_finished{false};
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    std::atomic<size_t> active_probe_threads;
+    size_t active_probe_threads;
+    std::atomic_bool probe_finished{false};
 
     bool skip_wait = false;
     bool meet_error = false;
@@ -398,6 +409,10 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+    // the index of vector is the stream_index.
+    std::vector<MarkedSpillData> build_side_marked_spilled_data;
+    std::vector<MarkedSpillData> probe_side_marked_spilled_data;
+
 private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
@@ -448,21 +463,30 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void spillAllBuildPartitions();
-    void spillAllProbePartitions();
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+
+    void markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
+    void markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
+
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
 
-
-    void spillMostMemoryUsedPartitionIfNeed();
+    void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
-    void workAfterBuildFinish();
-    void workAfterProbeFinish();
+    void workAfterBuildFinish(size_t stream_index);
+    void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
+    void finalizeRuntimeFilter();
+    void cancelRuntimeFilter(const String & reason);
 
     void finalizeProfileInfo();
+
+    void finalizeNullAwareSemiFamilyBuild();
+
+    void finalizeCrossJoinBuild();
 };
 
 } // namespace DB

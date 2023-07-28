@@ -59,6 +59,7 @@ public:
     void SetUp() override
     {
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
+        DB::tests::TiFlashTestEnv::enableS3Config();
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         TiFlashStorageTestBasic::SetUp();
@@ -112,6 +113,7 @@ public:
         }
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
 protected:

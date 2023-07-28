@@ -16,6 +16,7 @@
 
 
 #include <Storages/DeltaMerge/Index/BloomFilter.h>
+
 #include "Columns/IColumn.h"
 #include "DataTypes/IDataType.h"
 #include "Storages/DeltaMerge/Index/RSResult.h"
@@ -31,8 +32,13 @@ using BloomFilterPtr = std::shared_ptr<BloomFilter>;
 class BloomFilterIndex
 {
 public:
-    explicit BloomFilterIndex(double false_positive_probability_ = 0.01): false_positive_probability(false_positive_probability_){}
-    explicit BloomFilterIndex(std::vector<BloomFilterPtr> & bloom_filter_vec_, double false_positive_probability_ = 0.01): bloom_filter_vec(bloom_filter_vec_), false_positive_probability(false_positive_probability_){}
+    explicit BloomFilterIndex(double false_positive_probability_ = 0.01)
+        : false_positive_probability(false_positive_probability_)
+    {}
+    explicit BloomFilterIndex(std::vector<BloomFilterPtr> & bloom_filter_vec_, double false_positive_probability_ = 0.01)
+        : bloom_filter_vec(bloom_filter_vec_)
+        , false_positive_probability(false_positive_probability_)
+    {}
 
     void addPack(const IColumn & column, const IDataType & type);
 
@@ -42,11 +48,12 @@ public:
 
     RSResult checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type) const;
     RSResult checkNullableEqual(size_t pack_index, const Field & value, const DataTypePtr & type) const;
+
 private:
-    RSResult check(size_t pack_index, const Field & value, const IDataType * raw_type) const; 
+    RSResult check(size_t pack_index, const Field & value, const IDataType * raw_type) const;
     void updateBloomFilter(BloomFilterPtr & bloom_filter, const IColumn & column, size_t size, const IDataType * type);
     std::vector<BloomFilterPtr> bloom_filter_vec; // 一个 dmfile 的一个 column 对应一个 bloom_filter_vec（目前先是以前支持 index 的现在也支持），vec 长度等于 pack numbers，也就是一个 pack 一个
     double false_positive_probability;
-};    
-}
-}
+};
+} // namespace DM
+} // namespace DB

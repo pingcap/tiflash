@@ -18,7 +18,6 @@ mysql> alter table test.t set tiflash replica 1
 mysql> insert into test.t values (1, 'abc', 'abc '),(2, 'Abc', 'abc'),(3,'def', 'def ');
 func> wait_table test t
 
->> DBGInvoke __try_flush()
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value from test.t where value = 'ABC';
 +------+-------+
 | id   | value |

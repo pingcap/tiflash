@@ -76,7 +76,7 @@ try
 
     uint64_t store_id;
     std::vector<pingcap::kv::RegionVerID> region_ids;
-    std::shared_ptr<::mpp::DispatchTaskRequest> tiflash_storage_dispatch_req;
+    ::mpp::DispatchTaskRequest tiflash_storage_dispatch_req;
     std::tie(tiflash_storage_dispatch_req, region_ids, store_id) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task);
     ASSERT_EQ(region_ids.size(), 1);
     ASSERT_EQ(region_ids[0].id, 100);
@@ -84,11 +84,11 @@ try
 
     // Check if field number of DispatchTaskRequest and DAGRequest is correct.
     // In case we add/remove filed but forget to update build processing of StorageDisaggregated.
-    const auto * dispatch_req_desc = tiflash_storage_dispatch_req->GetDescriptor();
+    const auto * dispatch_req_desc = tiflash_storage_dispatch_req.GetDescriptor();
     ASSERT_EQ(dispatch_req_desc->field_count(), 6);
 
     ::tipb::DAGRequest sender_dag_req;
-    sender_dag_req.ParseFromString(tiflash_storage_dispatch_req->encoded_plan());
+    sender_dag_req.ParseFromString(tiflash_storage_dispatch_req.encoded_plan());
     const auto * sender_dag_req_desc = sender_dag_req.GetDescriptor();
     ASSERT_EQ(sender_dag_req_desc->field_count(), 17);
 

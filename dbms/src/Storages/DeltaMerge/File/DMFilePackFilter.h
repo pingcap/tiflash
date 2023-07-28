@@ -26,6 +26,8 @@
 #include <Storages/DeltaMerge/Index/BloomFilterIndex.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/S3/S3Common.h>
+
 namespace ProfileEvents
 {
 extern const Event DMFileFilterNoFilter;
@@ -251,7 +253,7 @@ private:
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
             auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(dmfile->getReadFileInfo(col_id, dmfile->colIndexFileName(file_name_base)));
-            if (!dmfile->configuration)
+            if (!dmfile->configuration) // v1
             {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
@@ -261,8 +263,46 @@ private:
                     read_limiter);
                 return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
-            else
+            else if (dmfile->useMetaV2()) // v3
             {
+                auto info = dmfile->merged_sub_file_infos.find(dmfile->colIndexFileName(file_name_base));
+                if (info == dmfile->merged_sub_file_infos.end())
+                {
+                    throw Exception(fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)), ErrorCodes::LOGICAL_ERROR);
+                }
+
+                auto file_path = dmfile->mergedPath(info->second.number);
+                auto encryp_path = dmfile->encryptionMergedPath(info->second.number);
+                auto offset = info->second.offset;
+                auto data_size = info->second.size;
+
+                auto buffer = ReadBufferFromFileProvider(
+                    file_provider,
+                    file_path,
+                    encryp_path,
+                    dmfile->getConfiguration()->getChecksumFrameLength(),
+                    read_limiter);
+                buffer.seek(offset);
+
+                String raw_data;
+                raw_data.resize(data_size);
+
+                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+
+                auto buf = createReadBufferFromData(std::move(raw_data),
+                                                    dmfile->colDataPath(file_name_base),
+                                                    dmfile->getConfiguration()->getChecksumFrameLength(),
+                                                    dmfile->configuration->getChecksumAlgorithm(),
+                                                    dmfile->configuration->getChecksumFrameLength());
+
+                auto header_size = dmfile->configuration->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+
+                return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
+            }
+            else
+            { // v2
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),

@@ -18,24 +18,23 @@
 
 namespace DB
 {
-// TODO support spill.
 HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const JoinPtr & join_,
-    size_t scan_hash_map_after_probe_stream_index_,
+    size_t op_index_,
     size_t max_block_size,
     const Block & input_header)
     : TransformOp(exec_context_, req_id)
     , join(join_)
     , probe_process_info(max_block_size)
-    , scan_hash_map_after_probe_stream_index(scan_hash_map_after_probe_stream_index_)
+    , op_index(op_index_)
 {
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
     if (needScanHashMapAfterProbe(join->getKind()))
-        scan_hash_map_after_probe_stream = join->createScanHashMapAfterProbeStream(input_header, scan_hash_map_after_probe_stream_index, join->getProbeConcurrency(), max_block_size);
+        scan_hash_map_after_probe_stream = join->createScanHashMapAfterProbeStream(input_header, op_index, join->getProbeConcurrency(), max_block_size);
 }
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
@@ -50,7 +49,54 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
     LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
 }
 
-void HashJoinProbeTransformOp::probeOnTransform(Block & block)
+OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
+{
+    while (true)
+    {
+        switch (status)
+        {
+        case ProbeStatus::PROBE:
+            if unlikely (probe_process_info.all_rows_joined_finish)
+            {
+                if (join->finishOneProbe(op_index))
+                {
+                    // TODO support spill.
+                    RUNTIME_CHECK(!join->hasProbeSideMarkedSpillData(op_index));
+                    join->finalizeProbe();
+                }
+                status = scan_hash_map_after_probe_stream
+                    ? ProbeStatus::WAIT_PROBE_FINISH
+                    : ProbeStatus::FINISHED;
+                break;
+            }
+            block = join->joinBlock(probe_process_info);
+            joined_rows += block.rows();
+            return OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
+            block = scan_hash_map_after_probe_stream->read();
+            if unlikely (!block)
+            {
+                scan_hash_map_after_probe_stream->readSuffix();
+                status = ProbeStatus::FINISHED;
+                break;
+            }
+            scan_hash_map_rows += block.rows();
+            return OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::WAIT_PROBE_FINISH:
+            if (join->isAllProbeFinished())
+            {
+                status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                scan_hash_map_after_probe_stream->readPrefix();
+                break;
+            }
+            return OperatorStatus::WAITING;
+        case ProbeStatus::FINISHED:
+            return OperatorStatus::HAS_OUTPUT;
+        }
+    }
+}
+
+OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
@@ -58,86 +104,18 @@ void HashJoinProbeTransformOp::probeOnTransform(Block & block)
     {
         join->checkTypes(block);
         probe_process_info.resetBlock(std::move(block), 0);
-        block = join->joinBlock(probe_process_info);
+        assert(!probe_process_info.all_rows_joined_finish);
     }
-}
 
-OperatorStatus HashJoinProbeTransformOp::onProbeFinish(Block & block)
-{
-    assert(status == ProbeStatus::PROBE);
-    join->finishOneProbe();
-    if (scan_hash_map_after_probe_stream)
-    {
-        if (!join->isAllProbeFinished())
-        {
-            status = ProbeStatus::WAIT_PROBE_FINISH;
-            return OperatorStatus::WAITING;
-        }
-        else
-        {
-            status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
-            scan_hash_map_after_probe_stream->readPrefix();
-            return scanHashMapData(block);
-        }
-    }
-    else
-    {
-        status = ProbeStatus::FINISHED;
-        return OperatorStatus::HAS_OUTPUT;
-    }
-}
-
-OperatorStatus HashJoinProbeTransformOp::scanHashMapData(Block & block)
-{
-    assert(status == ProbeStatus::READ_SCAN_HASH_MAP_DATA);
-    assert(scan_hash_map_after_probe_stream);
-    block = scan_hash_map_after_probe_stream->read();
-    if (!block)
-    {
-        scan_hash_map_after_probe_stream->readSuffix();
-        status = ProbeStatus::FINISHED;
-    }
-    else
-    {
-        scan_hash_map_rows += block.rows();
-    }
-    return OperatorStatus::HAS_OUTPUT;
-}
-
-OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(Block & block)
-{
-    assert(status == ProbeStatus::PROBE);
-    if unlikely (!block)
-        return onProbeFinish(block);
-
-    joined_rows += block.rows();
-    return OperatorStatus::HAS_OUTPUT;
-}
-
-OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
-{
-    assert(status == ProbeStatus::PROBE);
-    probeOnTransform(block);
-    return handleProbedBlock(block);
+    return onOutput(block);
 }
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
-    switch (status)
-    {
-    case ProbeStatus::PROBE:
-        if (probe_process_info.all_rows_joined_finish)
-            return OperatorStatus::NEED_INPUT;
+    if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
+        return OperatorStatus::NEED_INPUT;
 
-        block = join->joinBlock(probe_process_info);
-        return handleProbedBlock(block);
-    case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
-        return scanHashMapData(block);
-    case ProbeStatus::FINISHED:
-        return OperatorStatus::HAS_OUTPUT;
-    default:
-        throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
-    }
+    return onOutput(block);
 }
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
@@ -147,6 +125,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         if (join->isAllProbeFinished())
         {
             status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+            scan_hash_map_after_probe_stream->readPrefix();
             return OperatorStatus::HAS_OUTPUT;
         }
         else

@@ -18,11 +18,13 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
+
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+
 #include "Encryption/createWriteBufferFromFileBaseByFileProvider.h"
 
 namespace DB
@@ -46,7 +48,6 @@ protected:
         file_provider = db_context->getFileProvider();
         write_limiter = db_context->getWriteLimiter();
         read_limiter = db_context->getReadLimiter();
-        
     }
 
 private:
@@ -67,38 +68,39 @@ try
     parameters.compute_optimal_parameters();
 
     BloomFilter filter(parameters);
-    for (int i = 0; i < 8192; i++){
+    for (int i = 0; i < 8192; i++)
+    {
         filter.insert(i);
     }
 
     auto encryp_file_path = EncryptionPath("bloom-filter-encryp", ".idx");
     auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                    "bloom-filter.idx",
-                                                    encryp_file_path,
-                                                    false,
-                                                    write_limiter,
-                                                    DB::ChecksumAlgo::XXH3,
-                                                    1048576ULL);
+                                                           "bloom-filter.idx",
+                                                           encryp_file_path,
+                                                           false,
+                                                           write_limiter,
+                                                           DB::ChecksumAlgo::XXH3,
+                                                           1048576ULL);
     filter.write(*buf);
     buf->sync();
 
     auto read_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
-                                                    "bloom-filter.idx",
-                                                    encryp_file_path,
-                                                    1048576ULL,
-                                                    read_limiter,
-                                                    DB::ChecksumAlgo::XXH3,
-                                                    1048576ULL);
+                                                               "bloom-filter.idx",
+                                                               encryp_file_path,
+                                                               1048576ULL,
+                                                               read_limiter,
+                                                               DB::ChecksumAlgo::XXH3,
+                                                               1048576ULL);
 
     auto read_bloom_filter = BloomFilter::read(*read_buf);
     ASSERT(read_bloom_filter->equal(filter));
 
-    for (int i = 0; i < 8192; i++){
+    for (int i = 0; i < 8192; i++)
+    {
         ASSERT(filter.contains(i));
     }
-
-
-}CATCH
+}
+CATCH
 
 
 } // namespace tests

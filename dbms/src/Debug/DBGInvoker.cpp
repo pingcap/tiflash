@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/ReadIndexStressTest.h>
@@ -66,8 +67,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("create_tidb_tables", MockTiDBTable::dbgFuncCreateTiDBTables);
     regSchemalessFunc("rename_tidb_tables", MockTiDBTable::dbgFuncRenameTiDBTables);
 
-    regSchemalessFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
-
     regSchemalessFunc("raft_insert_row", dbgFuncRaftInsertRow);
     regSchemalessFunc("raft_insert_row_full", dbgFuncRaftInsertRowFull);
     regSchemalessFunc("raft_insert_rows", dbgFuncRaftInsertRows);
@@ -77,7 +76,6 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("put_region", dbgFuncPutRegion);
 
-    regSchemalessFunc("try_flush", dbgFuncTryFlush);
     regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
