@@ -22,14 +22,15 @@
 #include <IO/WriteBufferFromOStream.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Index/BloomFilterIndex.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-
 namespace DB
 {
 namespace DM
 {
 namespace detail
 {
+
 static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
 {
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None;
@@ -53,7 +54,8 @@ public:
                size_t max_compress_block_size,
                FileProviderPtr & file_provider,
                const WriteLimiterPtr & write_limiter_,
-               bool do_index)
+               bool do_index,
+               bool do_bloom_filter_index)
             : plain_file(
                 WriteBufferByFileProviderBuilder(
                     dmfile->configuration.has_value(),
@@ -70,6 +72,7 @@ public:
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(*plain_file, compression_settings))
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
+            , bloom_filter_index(do_bloom_filter_index ? std::make_shared<BloomFilterIndex>() : nullptr)
             , mark_file(WriteBufferByFileProviderBuilder(
                             dmfile->configuration.has_value(),
                             file_provider,
@@ -103,6 +106,7 @@ public:
         WriteBufferPtr compressed_buf;
 
         MinMaxIndexPtr minmaxes;
+        BloomFilterIndexPtr bloom_filter_index;
         WriteBufferFromFileBasePtr mark_file;
     };
     using StreamPtr = std::unique_ptr<Stream>;
@@ -157,7 +161,7 @@ private:
     /// Add streams with specified column id. Since a single column may have more than one Stream,
     /// for example Nullable column has a NullMap column, we would track them with a mapping
     /// FileNameBase -> Stream.
-    void addStreams(ColId col_id, DataTypePtr type, bool do_index);
+    void addStreams(ColId col_id, DataTypePtr type, bool do_index, bool do_bloom_filter_index);
 
     WriteBufferFromFileBasePtr createMetaFile();
     WriteBufferFromFileBasePtr createMetaV2File();

@@ -863,6 +863,16 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
 
     // build rough set operator
     const DM::RSOperatorPtr rs_operator = buildRSOperator(dag_query, columns_to_read, context, tracing_logger);
+    if (rs_operator != nullptr)
+    {
+        LOG_INFO(Logger::get("hyy"), "rs_operator: {}", rs_operator->toDebugString());
+    }
+    else
+    {
+        LOG_INFO(Logger::get("hyy"), "rs_operator empty");
+    }
+
+
     // build push down filter
     const auto & columns_to_read_info = dag_query->source_columns;
     const auto & pushed_down_filters = dag_query->pushed_down_filters;

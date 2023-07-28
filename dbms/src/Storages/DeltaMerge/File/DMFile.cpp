@@ -67,6 +67,7 @@ inline constexpr static const char * FOLDER_PREFIX_DROPPED = ".del.dmf_";
 inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
 inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
 inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
+inline constexpr static const char * BLOOM_FILTER_INDEX_FILE_SUFFIX = ".bfidx";
 
 inline String getNGCPath(const String & prefix)
 {
@@ -208,6 +209,10 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
         return column_indices.count(col_id) != 0;
     }
 }
+size_t DMFile::colBloomFilterIndexSize(ColId id) const
+{
+    return colBloomFilterIndexSizeByName(getFileNameBase(id));
+}
 
 size_t DMFile::colIndexSize(ColId id)
 {
@@ -264,6 +269,11 @@ EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) 
     return EncryptionPath(encryptionBasePath(), file_name_base + details::INDEX_FILE_SUFFIX);
 }
 
+EncryptionPath DMFile::encryptionBloomFilterIndexPath(const FileNameBase & file_name_base) const
+{
+    return EncryptionPath(encryptionBasePath(), file_name_base + details::BLOOM_FILTER_INDEX_FILE_SUFFIX);
+}
+
 EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), file_name_base + details::MARK_FILE_SUFFIX);
@@ -306,6 +316,10 @@ String DMFile::colDataFileName(const FileNameBase & file_name_base)
 String DMFile::colIndexFileName(const FileNameBase & file_name_base)
 {
     return file_name_base + details::INDEX_FILE_SUFFIX;
+}
+String DMFile::colBloomFilterIndexFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::BLOOM_FILTER_INDEX_FILE_SUFFIX;
 }
 String DMFile::colMarkFileName(const FileNameBase & file_name_base)
 {

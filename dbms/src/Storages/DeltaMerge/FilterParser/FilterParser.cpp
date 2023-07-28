@@ -80,6 +80,52 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     return false;
 }
 
+inline bool isRoughSetEqualFilterSupportType(const Int32 field_type)
+{
+    switch (field_type)
+    {
+    case TiDB::TypeTiny:
+    case TiDB::TypeShort:
+    case TiDB::TypeLong:
+    case TiDB::TypeLongLong:
+    case TiDB::TypeInt24:
+    case TiDB::TypeYear:
+        return true;
+    // For these date-like types, they store UTC time and ignore time_zone
+    case TiDB::TypeNewDate:
+    case TiDB::TypeDate:
+    case TiDB::TypeTime:
+    case TiDB::TypeDatetime:
+    case TiDB::TypeTimestamp: // For timestamp, should take time_zone into consideration while parsing `literal`
+        return true;
+    case TiDB::TypeVarString:
+    case TiDB::TypeVarchar:
+    case TiDB::TypeString:
+        return true;
+    // For these types, should take collation into consideration. Disable them.
+    case TiDB::TypeJSON:
+    case TiDB::TypeTinyBlob:
+    case TiDB::TypeMediumBlob:
+    case TiDB::TypeLongBlob:
+    case TiDB::TypeBlob:
+        // case TiDB::TypeVarString:
+        // case TiDB::TypeString:
+        return false;
+    // Unknown.
+    case TiDB::TypeDecimal:
+    case TiDB::TypeNewDecimal:
+    case TiDB::TypeFloat:
+    case TiDB::TypeDouble:
+    case TiDB::TypeNull:
+    case TiDB::TypeBit:
+    case TiDB::TypeEnum:
+    case TiDB::TypeSet:
+    case TiDB::TypeGeometry:
+        return false;
+    }
+    return false;
+}
+
 ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
 {
     assert(isColumnExpr(expr));
@@ -148,11 +194,23 @@ inline RSOperatorPtr parseTiCompareExpr( //
                 return createUnsupported(expr.ShortDebugString(), "ColumnRef with no field type is not supported", false);
 
             auto field_type = child.field_type().tp();
-            if (!isRoughSetFilterSupportType(field_type))
-                return createUnsupported(
-                    expr.ShortDebugString(),
-                    "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
-                    false);
+            // 对 = 特殊处理一下
+            if (filter_type == FilterParser::RSFilterType::Equal)
+            {
+                if (!isRoughSetEqualFilterSupportType(field_type))
+                    return createUnsupported(
+                        expr.ShortDebugString(),
+                        "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
+                        false);
+            }
+            else
+            {
+                if (!isRoughSetFilterSupportType(field_type))
+                    return createUnsupported(
+                        expr.ShortDebugString(),
+                        "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
+                        false);
+            }
 
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr = creator(id);

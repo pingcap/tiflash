@@ -32,7 +32,21 @@ public:
     RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
     {
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        return rsindex.minmax->checkEqual(pack_id, value, rsindex.type);
+        auto res = RSResult::Some;
+        if (rsindex.minmax != nullptr)
+        {
+            auto minmax_res = rsindex.minmax->checkEqual(pack_id, value, rsindex.type);
+            LOG_INFO(Logger::get("hyy"), "equal roughCheck minmax with minmax_res = {}", static_cast<int>(minmax_res));
+            res = res && minmax_res;
+        }
+
+        if (rsindex.bloom_filter_index != nullptr)
+        {
+            auto bloom_filter_index_res = rsindex.bloom_filter_index->checkEqual(pack_id, value, rsindex.type);
+            LOG_INFO(Logger::get("hyy"), "equal roughCheck bloom_filter with minmax_res = {}", static_cast<int>(bloom_filter_index_res));
+            return res && bloom_filter_index_res;
+        }
+        return res;
     }
 };
 

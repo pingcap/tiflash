@@ -23,9 +23,9 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/BloomFilterIndex.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-
 namespace ProfileEvents
 {
 extern const Event DMFileFilterNoFilter;
@@ -235,7 +235,18 @@ private:
         const auto & type = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
+        Poco::File f(dmfile->colIndexPath(file_name_base));
+        Poco::File f2(dmfile->colBloomFilterIndexPath(file_name_base));
+        if (!f.exists() && !f2.exists())
+        {
+            return;
+        }
+
         auto load = [&]() {
+            if (Poco::File f(dmfile->colIndexPath(file_name_base)); !f.exists())
+            {
+                return std::make_shared<MinMaxIndex>(*type);
+            }
             auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
@@ -278,18 +289,46 @@ private:
             if (minmax_index == nullptr)
                 minmax_index = load();
         }
-        indexes.emplace(col_id, RSIndex(type, minmax_index));
+
+        // bloom filter index
+        auto load_bloom_filter_index = [&]() {
+            auto bloom_filter_index_file_size = dmfile->colBloomFilterIndexSize(col_id);
+            if (bloom_filter_index_file_size == 0)
+                return std::make_shared<BloomFilterIndex>();
+            auto bloom_filter_index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
+                                                                                     dmfile->colBloomFilterIndexPath(file_name_base),
+                                                                                     dmfile->encryptionBloomFilterIndexPath(file_name_base),
+                                                                                     bloom_filter_index_file_size,
+                                                                                     read_limiter,
+                                                                                     dmfile->configuration->getChecksumAlgorithm(),
+                                                                                     dmfile->configuration->getChecksumFrameLength());
+            auto header_size = dmfile->configuration->getChecksumHeaderLength();
+            auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+            auto frame_count = bloom_filter_index_file_size / frame_total_size + (bloom_filter_index_file_size % frame_total_size != 0);
+            return BloomFilterIndex::read(*bloom_filter_index_buf, bloom_filter_index_file_size - header_size * frame_count);
+        };
+
+        if (Poco::File f(dmfile->colBloomFilterIndexPath(file_name_base)); f.exists())
+        {
+            BloomFilterIndexPtr bloom_filter_index;
+            bloom_filter_index = load_bloom_filter_index();
+            indexes.emplace(col_id, RSIndex(type, minmax_index, bloom_filter_index));
+        }
+        else
+        {
+            indexes.emplace(col_id, RSIndex(type, minmax_index));
+        }
     }
 
     void tryLoadIndex(const ColId col_id)
     {
         if (param.indexes.count(col_id))
             return;
-
-        if (!dmfile->isColIndexExist(col_id))
-            return;
+        // if (!dmfile->isColIndexExist(col_id))
+        //     return;
 
         Stopwatch watch;
+        // 前三列可以不加 bloom filter ，没有意义
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
 
         scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();

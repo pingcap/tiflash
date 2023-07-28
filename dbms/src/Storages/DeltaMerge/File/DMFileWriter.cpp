@@ -15,8 +15,8 @@
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Index/BloomFilter.h>
 #include <Storages/S3/S3Common.h>
-
 #ifndef NDEBUG
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -48,7 +48,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
-        addStreams(cd.id, cd.type, do_index);
+        bool do_bloom_filter_index = cd.id != EXTRA_HANDLE_COLUMN_ID && cd.id != TAG_COLUMN_ID && cd.id != VERSION_COLUMN_ID && (type->isInteger() || type->isDateOrDateTime() || type->isStringOrFixedString());
+        addStreams(cd.id, cd.type, do_index, do_bloom_filter_index);
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
 }
@@ -97,7 +98,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
                                      options.max_compress_block_size);
 }
 
-void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
+void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index, bool do_bloom_filter_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
@@ -109,7 +110,8 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            IDataType::isNullMap(substream_path) ? false : do_index);
+            IDataType::isNullMap(substream_path) ? false : do_index,
+            IDataType::isNullMap(substream_path) ? false : do_bloom_filter_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -206,6 +208,12 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 stream->minmaxes->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
+            // 前三列不用管这个
+            if (stream->bloom_filter_index)
+            {
+                stream->bloom_filter_index->addPack(column, type);
+            }
+
             /// There could already be enough data to compress into the new block.
             if (stream->compressed_buf->offset() >= options.min_compress_block_size)
                 stream->compressed_buf->next();
@@ -289,6 +297,29 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             data_bytes = stream->plain_file->getMaterializedBytes();
             mark_bytes = stream->mark_file->getMaterializedBytes();
         }
+        if (stream->bloom_filter_index)
+        {
+            // 不用支持 v1
+            auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                   dmfile->colBloomFilterIndexPath(stream_name),
+                                                                   dmfile->encryptionBloomFilterIndexPath(stream_name),
+                                                                   false,
+                                                                   write_limiter,
+                                                                   dmfile->configuration->getChecksumAlgorithm(),
+                                                                   dmfile->configuration->getChecksumFrameLength());
+            stream->bloom_filter_index->write(*buf);
+            buf->sync();
+            // Ignore data written in index file when the dmfile is empty.
+            // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+            // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+            // and we cannot change the index file format for empty dmfile because of backward compatibility.
+            index_bytes = buf->getMaterializedBytes();
+            bytes_written += is_empty_file ? 0 : index_bytes;
+#ifndef NDEBUG
+            examine_buffer_size(*buf, *this->file_provider);
+#endif
+        }
+
         if (stream->minmaxes)
         {
             if (!dmfile->configuration)
