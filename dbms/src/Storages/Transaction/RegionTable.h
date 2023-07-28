@@ -91,7 +91,7 @@ public:
 
     struct Table : boost::noncopyable
     {
-        Table(const TableID table_id_)
+        explicit Table(const TableID table_id_)
             : table_id(table_id_)
         {}
         TableID table_id;
@@ -116,41 +116,10 @@ public:
     using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
     using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
 
-    using DirtyRegions = std::unordered_set<RegionID>;
     using TableToOptimize = std::unordered_set<TableID>;
 
-    struct FlushThresholds
-    {
-        using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
-
-        FlushThresholds(FlushThresholdsData && data_)
-            : data(std::make_shared<FlushThresholdsData>(std::move(data_)))
-        {}
-
-        void setFlushThresholds(const FlushThresholdsData & flush_thresholds_)
-        {
-            auto flush_thresholds = std::make_shared<FlushThresholdsData>(flush_thresholds_);
-            {
-                std::lock_guard lock(mutex);
-                data = std::move(flush_thresholds);
-            }
-        }
-
-        auto getData() const
-        {
-            std::lock_guard lock(mutex);
-            return data;
-        }
-
-    private:
-        std::shared_ptr<const FlushThresholdsData> data;
-        mutable std::mutex mutex;
-    };
-
-    RegionTable(Context & context_);
+    explicit RegionTable(Context & context_);
     void restore();
-
-    void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
     void updateRegion(const Region & region);
 
@@ -158,10 +127,6 @@ public:
     void shrinkRegionRange(const Region & region);
 
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
-
-    // Find all regions with data, call writeBlockByRegionAndFlush with try_persist = true.
-    // This function is only for debug.
-    bool tryFlushRegions();
 
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
@@ -220,16 +185,11 @@ private:
     // Flush the cache if try_persist is set to true.
     // The original name for this method is flushRegion.
     RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const;
-    bool shouldFlush(const InternalRegion & region) const;
-    RegionID pickRegionToFlush();
 
 private:
     TableMap tables;
     RegionInfoMap regions;
     SafeTsMap safe_ts_map;
-    DirtyRegions dirty_regions;
-
-    FlushThresholds flush_thresholds;
 
     Context * const context;
 

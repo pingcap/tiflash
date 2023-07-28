@@ -100,26 +100,6 @@ void RegionTable::shrinkRegionRange(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
     internal_region.cache_bytes = region.dataSize();
-    if (internal_region.cache_bytes)
-        dirty_regions.insert(internal_region.region_id);
-}
-
-bool RegionTable::shouldFlush(const InternalRegion & region) const
-{
-    if (region.pause_flush)
-        return false;
-    if (!region.cache_bytes)
-        return false;
-    auto period_time = Clock::now() - region.last_flush_time;
-    for (const auto & [th_bytes, th_duration] : *flush_thresholds.getData())
-    {
-        if (region.cache_bytes >= th_bytes && period_time >= th_duration)
-        {
-            LOG_INFO(log, "region_id={} cache_size={} seconds_since_last={}", region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
-            return true;
-        }
-    }
-    return false;
 }
 
 RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const
@@ -152,23 +132,8 @@ RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWi
     return data_list_to_remove;
 }
 
-static const Int64 FTH_BYTES_1 = 1; // 1 B
-static const Int64 FTH_BYTES_2 = 1024 * 1024; // 1 MB
-static const Int64 FTH_BYTES_3 = 1024 * 1024 * 10; // 10 MBs
-static const Int64 FTH_BYTES_4 = 1024 * 1024 * 50; // 50 MBs
-
-static const Seconds FTH_PERIOD_1(60 * 60); // 1 hour
-static const Seconds FTH_PERIOD_2(60 * 5); // 5 minutes
-static const Seconds FTH_PERIOD_3(60); // 1 minute
-static const Seconds FTH_PERIOD_4(5); // 5 seconds
-
 RegionTable::RegionTable(Context & context_)
-    : flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
-        {FTH_BYTES_1, FTH_PERIOD_1},
-        {FTH_BYTES_2, FTH_PERIOD_2},
-        {FTH_BYTES_3, FTH_PERIOD_3},
-        {FTH_BYTES_4, FTH_PERIOD_4}})
-    , context(&context_)
+    : context(&context_)
     , log(Logger::get())
 {}
 
@@ -213,8 +178,6 @@ void RegionTable::updateRegion(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.cache_bytes = region.dataSize();
-    if (internal_region.cache_bytes)
-        dirty_regions.insert(internal_region.region_id);
 }
 
 namespace
@@ -371,10 +334,6 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
         internal_region.cache_bytes = region->dataSize();
-        if (internal_region.cache_bytes)
-            dirty_regions.insert(region_id);
-        else
-            dirty_regions.erase(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -384,43 +343,6 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
         std::rethrow_exception(first_exception);
 
     return data_list_to_remove;
-}
-
-RegionID RegionTable::pickRegionToFlush()
-{
-    std::lock_guard lock(mutex);
-
-    for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
-    {
-        auto region_id = *dirty_it;
-        if (auto it = regions.find(region_id); it != regions.end())
-        {
-            if (shouldFlush(doGetInternalRegion(it->second, region_id)))
-            {
-                // The dirty flag should only be removed after data is flush successfully.
-                return region_id;
-            }
-
-            dirty_it++;
-        }
-        else
-        {
-            // Region{region_id} is removed, remove its dirty flag
-            dirty_it = dirty_regions.erase(dirty_it);
-        }
-    }
-    return InvalidRegionID;
-}
-
-bool RegionTable::tryFlushRegions()
-{
-    if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
-    {
-        tryWriteBlockByRegionAndFlush(region_to_flush, true);
-        return true;
-    }
-
-    return false;
 }
 
 void RegionTable::handleInternalRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
@@ -446,11 +368,6 @@ std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const
         }
     });
     return regions;
-}
-
-void RegionTable::setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_)
-{
-    flush_thresholds.setFlushThresholds(flush_thresholds_);
 }
 
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
