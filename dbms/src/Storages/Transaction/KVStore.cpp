@@ -174,15 +174,6 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     return true;
 }
 
-void KVStore::tryPersistRegion(RegionID region_id) const
-{
-    auto region = getRegion(region_id);
-    if (region)
-    {
-        persistRegion(*region, std::nullopt, "");
-    }
-}
-
 void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
 {
     {
@@ -564,7 +555,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
             try
             {
-                tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region, false);
+                tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
             }
             catch (...)
             {
