@@ -202,17 +202,13 @@ void appendWindowDescription(
 }
 
 void setAuxiliaryColumnInfoImpl(
-    WindowDescription & window_desc,
     const String & aux_col_name,
     const Block & tmp_block,
-    bool is_begin)
+    Int32 & range_auxiliary_column_index,
+    TypeIndex & aux_col_type)
 {
     if (!aux_col_name.empty())
     {
-        // Prepare something
-        Int32 & range_auxiliary_column_index = is_begin ? window_desc.frame.begin_range_auxiliary_column_index : window_desc.frame.end_range_auxiliary_column_index;
-        TypeIndex & aux_col_type = is_begin ? window_desc.begin_aux_col_type : window_desc.end_aux_col_type;
-
         // Set auxiliary columns' indexes
         size_t aux_col_idx = tmp_block.getPositionByName(aux_col_name);
         range_auxiliary_column_index = aux_col_idx;
@@ -241,8 +237,8 @@ void setAuxiliaryColumnInfo(
         return;
 
     const Block & tmp_block = actions->getSampleBlock();
-    setAuxiliaryColumnInfoImpl(window_desc, begin_aux_col_name, tmp_block, true);
-    setAuxiliaryColumnInfoImpl(window_desc, end_aux_col_name, tmp_block, false);
+    setAuxiliaryColumnInfoImpl(begin_aux_col_name, tmp_block, window_desc.frame.begin_range_auxiliary_column_index, window_desc.begin_aux_col_type);
+    setAuxiliaryColumnInfoImpl(end_aux_col_name, tmp_block, window_desc.frame.end_range_auxiliary_column_index, window_desc.end_aux_col_type);
 }
 
 void setOrderByColumnTypeAndDirectionForRangeFrame(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
@@ -251,16 +247,15 @@ void setOrderByColumnTypeAndDirectionForRangeFrame(WindowDescription & window_de
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
 
-    if (!window_desc.order_by.empty())
-    {
-        RUNTIME_CHECK_MSG(window_desc.order_by.size() == 1, "Number of order by should not be larger than 1 in range frame");
-        const Block & sample_block = actions->getSampleBlock();
-        const String & order_by_col_name = window_desc.order_by[0].column_name;
-        const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
+    RUNTIME_CHECK_MSG(!window_desc.order_by.empty(), "Order by column should not be empty when the frame type is range");
+    RUNTIME_CHECK_MSG(window_desc.order_by.size() == 1, "Number of order by should not be larger than 1 in range frame");
 
-        window_desc.order_by_col_type = order_by_col_type_and_name.type->getTypeId();
-        window_desc.is_desc = (window_desc.order_by[0].direction == -1);
-    }
+    const Block & sample_block = actions->getSampleBlock();
+    const String & order_by_col_name = window_desc.order_by[0].column_name;
+    const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
+
+    window_desc.order_by_col_type = order_by_col_type_and_name.type->getTypeId();
+    window_desc.is_desc = (window_desc.order_by[0].direction == -1);
 }
 
 // Add a function generating a new auxiliary column that help the implementation of range frame type
@@ -273,17 +268,12 @@ std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return std::make_pair("", "");
 
-    String begin_aux_col_name;
-    String end_aux_col_name;
+    RUNTIME_CHECK_MSG(window.frame().start().has_frame_range(), "start's tipb::WindowFrameBound must be set when the frame type is range");
+    RUNTIME_CHECK_MSG(window.frame().end().has_frame_range(), "end's tipb::WindowFrameBound must be set when the frame type is range");
 
-    // For begin frame
-    if (window.frame().start().has_frame_range())
-        begin_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions);
-    // For end frame
-    if (window.frame().end().has_frame_range())
-        end_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions);
-
-    return std::make_pair(begin_aux_col_name, end_aux_col_name);
+    return std::make_pair(
+        DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions),
+        DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions));
 }
 
 WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer, const tipb::Window & window)
@@ -299,7 +289,7 @@ WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer
     return window_description;
 }
 
-void initBeforeWindow(
+void buildActionsBeforeWindow(
     DAGExpressionAnalyzer * analyzer,
     WindowDescription & window_desc,
     ExpressionActionsChain & chain,
@@ -329,7 +319,7 @@ void initBeforeWindow(
     setAuxiliaryColumnInfo(actions, window_desc, aux_col_names.first, aux_col_names.second, window);
 }
 
-void initAfterWindow(
+void buildActionsAfterWindow(
     DAGExpressionAnalyzer * const analyze,
     WindowDescription & window_desc,
     ExpressionActionsChain & chain,
@@ -786,8 +776,8 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
 
     WindowDescription window_description = createAndInitWindowDesc(this, window);
     setOrderByColumnTypeAndDirectionForRangeFrame(window_description, step.actions, window);
-    initBeforeWindow(this, window_description, chain, window);
-    initAfterWindow(this, window_description, chain, window, source_size);
+    buildActionsBeforeWindow(this, window_description, chain, window);
+    buildActionsAfterWindow(this, window_description, chain, window, source_size);
 
     return window_description;
 }

@@ -19,21 +19,39 @@
 mysql> drop table if exists test.first_range;
 mysql> create table test.first_range(p int not null, o int not null, v int not null);
 mysql> insert into test.first_range (p, o, v) values (0, 0, 0), (1, 1, 1), (1, 2, 2), (1, 4, 4), (1, 8, 8), (2, 0, 0), (2, 3, 3), (2, 10, 10), (2, 13, 13), (2, 15, 15), (3, 1, 1), (3, 3, 3), (3, 5, 5), (3, 9, 9), (3, 15, 15), (3, 20, 20), (3, 31, 31);
-mysql> alter table first_range set tiflash replica 1;
+mysql> alter table first_range set tiflasfirst_range_d32h replica 1;
 
 mysql> drop table if exists test.first_range_f;
 mysql> create table test.first_range_f(p int not null, o double not null, v int not null);
 mysql> insert into test.first_range_f (p, o, v) values (0, 0.1, 0), (1, 1.0, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
 mysql> alter table first_range_f set tiflash replica 1;
 
-mysql> drop table if exists test.first_range_d;
-mysql> create table test.first_range_d(p int not null, o decimal(5,1) not null, v int not null);
-mysql> insert into test.first_range_d (p, o, v) values (0, 0.1, 0), (1, 1.0, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
-mysql> alter table first_range_d set tiflash replica 1;
+mysql> drop table if exists test.first_range_d32;
+mysql> create table test.first_range_d32(p int not null, o decimal(7,1) not null, v int not null);
+mysql> insert into test.first_range_d32 (p, o, v) values (0, 0.1, 0), (1, 1.0, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table first_range_d32 set tiflash replica 1;
+
+mysql> drop table if exists test.first_range_d64;
+mysql> create table test.first_range_d64(p int not null, o decimal(17,1) not null, v int not null);
+mysql> insert into test.first_range_d64 (p, o, v) values (0, 0.1, 0), (1, 1.0, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table first_range_d64 set tiflash replica 1;
+
+mysql> drop table if exists test.first_range_d128;
+mysql> create table test.first_range_d128(p int not null, o decimal(37,1) not null, v int not null);
+mysql> insert into test.first_range_d128 (p, o, v) values (0, 0.1, 0), (1, 1.0, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table first_range_d128 set tiflash replica 1;
+
+mysql> drop table if exists test.first_range_d256;
+mysql> create table test.first_range_d256(p int not null, o decimal(64,1) not null, v int not null);
+mysql> insert into test.first_range_d256 (p, o, v) values (0, 0.1, 0), (1, 1.0, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table first_range_d256 set tiflash replica 1;
 
 func> wait_table test first_range
 func> wait_table test first_range_f
-func> wait_table test first_range_d
+func> wait_table test first_range_d32
+func> wait_table test first_range_d64
+func> wait_table test first_range_d128
+func> wait_table test first_range_d256
 
 mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 3 preceding and 0 following) as a from test.first_range;
 +---+----+----+----+
@@ -173,7 +191,7 @@ mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partitio
 | 0 |  0.1 |  0 |  0 |
 +---+------+----+----+
 
-mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 3 preceding and 0 following) as a from test.first_range_d;
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 3 preceding and 0 following) as a from test.first_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -196,7 +214,7 @@ mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partitio
 | 1 |  8.1 |  8 |  8 |
 +---+------+----+----+
 
-mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3E0 preceding and 0 following) as a from test.first_range_d;
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3E0 preceding and 0 following) as a from test.first_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -219,7 +237,7 @@ mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partitio
 | 3 | 31.1 | 31 | 31 |
 +---+------+----+----+
 
-mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3 preceding and 0 following) as a from test.first_range_d;
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3 preceding and 0 following) as a from test.first_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -242,9 +260,77 @@ mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partitio
 | 0 |  0.1 |  0 |  0 |
 +---+------+----+----+
 
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3 preceding and 0 following) as a from test.first_range_d64;
++---+------+----+----+
+| p | o    | v  | a  |
++---+------+----+----+
+| 3 |  1.1 |  1 |  1 |
+| 3 |  2.9 |  3 |  1 |
+| 3 |  5.1 |  5 |  3 |
+| 3 |  9.1 |  9 |  9 |
+| 3 | 15.0 | 15 | 15 |
+| 3 | 20.1 | 20 | 20 |
+| 3 | 31.1 | 31 | 31 |
+| 2 |  0.0 |  0 |  0 |
+| 2 |  3.1 |  3 |  3 |
+| 2 | 10.0 | 10 | 10 |
+| 2 | 13.1 | 13 | 13 |
+| 2 | 15.1 | 15 | 13 |
+| 1 |  1.0 |  1 |  1 |
+| 1 |  2.1 |  2 |  1 |
+| 1 |  4.1 |  4 |  2 |
+| 1 |  8.1 |  8 |  8 |
+| 0 |  0.1 |  0 |  0 |
++---+------+----+----+
+
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3 preceding and 0 following) as a from test.first_range_d128;
++---+------+----+----+
+| p | o    | v  | a  |
++---+------+----+----+
+| 3 |  1.1 |  1 |  1 |
+| 3 |  2.9 |  3 |  1 |
+| 3 |  5.1 |  5 |  3 |
+| 3 |  9.1 |  9 |  9 |
+| 3 | 15.0 | 15 | 15 |
+| 3 | 20.1 | 20 | 20 |
+| 3 | 31.1 | 31 | 31 |
+| 2 |  0.0 |  0 |  0 |
+| 2 |  3.1 |  3 |  3 |
+| 2 | 10.0 | 10 | 10 |
+| 2 | 13.1 | 13 | 13 |
+| 2 | 15.1 | 15 | 13 |
+| 1 |  1.0 |  1 |  1 |
+| 1 |  2.1 |  2 |  1 |
+| 1 |  4.1 |  4 |  2 |
+| 1 |  8.1 |  8 |  8 |
+| 0 |  0.1 |  0 |  0 |
++---+------+----+----+
+
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o range between 2.3 preceding and 0 following) as a from test.first_range_d256;
++---+------+----+----+
+| p | o    | v  | a  |
++---+------+----+----+
+| 3 |  1.1 |  1 |  1 |
+| 3 |  2.9 |  3 |  1 |
+| 3 |  5.1 |  5 |  3 |
+| 3 |  9.1 |  9 |  9 |
+| 3 | 15.0 | 15 | 15 |
+| 3 | 20.1 | 20 | 20 |
+| 3 | 31.1 | 31 | 31 |
+| 2 |  0.0 |  0 |  0 |
+| 2 |  3.1 |  3 |  3 |
+| 2 | 10.0 | 10 | 10 |
+| 2 | 13.1 | 13 | 13 |
+| 2 | 15.1 | 15 | 13 |
+| 1 |  1.0 |  1 |  1 |
+| 1 |  2.1 |  2 |  1 |
+| 1 |  4.1 |  4 |  2 |
+| 1 |  8.1 |  8 |  8 |
+| 0 |  0.1 |  0 |  0 |
++---+------+----+----+
 
 # last_value tests
-mysql> drop table if exists test.last_range;
+mysql> drop table if exists test.last_last_range_d32range;
 mysql> create table test.last_range(p int not null,o int not null,v int not null);
 mysql> insert into test.last_range (p, o, v) values (0, 0, 0), (1, 1, 1), (1, 2, 2), (1, 4, 4), (1, 8, 8), (2, 0, 0), (2, 3, 3), (2, 10, 10), (2, 13, 13), (2, 15, 15), (3, 1, 1), (3, 3, 3), (3, 5, 5), (3, 9, 9), (3, 15, 15), (3, 20, 20), (3, 31, 31);
 mysql> alter table test.last_range set tiflash replica 1;
@@ -254,14 +340,32 @@ mysql> create table test.last_range_f(p int not null, o double not null, v int n
 mysql> insert into test.last_range_f (p, o, v) values (0, 0.1, 0), (1, 1.2, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
 mysql> alter table test.last_range_f set tiflash replica 1;
 
-mysql> drop table if exists test.last_range_d;
-mysql> create table test.last_range_d(p int not null, o decimal(5,1) not null, v int not null);
-mysql> insert into test.last_range_d (p, o, v) values (0, 0.1, 0), (1, 1.2, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
-mysql> alter table test.last_range_d set tiflash replica 1;
+mysql> drop table if exists test.last_range_d32;
+mysql> create table test.last_range_d32(p int not null, o decimal(7,1) not null, v int not null);
+mysql> insert into test.last_range_d32 (p, o, v) values (0, 0.1, 0), (1, 1.2, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table test.last_range_d32 set tiflash replica 1;
+
+mysql> drop table if exists test.last_range_d64;
+mysql> create table test.last_range_d64(p int not null, o decimal(17,1) not null, v int not null);
+mysql> insert into test.last_range_d64 (p, o, v) values (0, 0.1, 0), (1, 1.2, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table test.last_range_d64 set tiflash replica 1;
+
+mysql> drop table if exists test.last_range_d128;
+mysql> create table test.last_range_d128(p int not null, o decimal(37,1) not null, v int not null);
+mysql> insert into test.last_range_d128 (p, o, v) values (0, 0.1, 0), (1, 1.2, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table test.last_range_d128 set tiflash replica 1;
+
+mysql> drop table if exists test.last_range_d256;
+mysql> create table test.last_range_d256(p int not null, o decimal(64,1) not null, v int not null);
+mysql> insert into test.last_range_d256 (p, o, v) values (0, 0.1, 0), (1, 1.2, 1), (1, 2.1, 2), (1, 4.1, 4), (1, 8.1, 8), (2, 0.0, 0), (2, 3.1, 3), (2, 10.0, 10), (2, 13.1, 13), (2, 15.1, 15), (3, 1.1, 1), (3, 2.9, 3), (3, 5.1, 5), (3, 9.1, 9), (3, 15.0, 15), (3, 20.1, 20), (3, 31.1, 31);
+mysql> alter table test.last_range_d256 set tiflash replica 1;
 
 func> wait_table test last_range
 func> wait_table test last_range_f
-func> wait_table test last_range_d
+func> wait_table test last_range_d32
+func> wait_table test last_range_d64
+func> wait_table test last_range_d128
+func> wait_table test last_range_d256
 
 mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 3 following) as a from test.last_range;
 +---+----+----+----+
@@ -401,7 +505,7 @@ mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition
 | 2 | 15.1 | 15 | 15 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 3 following) as a from test.last_range_d;
+use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 3 following) as a from test.last_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -424,7 +528,7 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 0 |  0.1 |  0 |  0 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3E0 following) as a from test.last_range_d;
+use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3E0 following) as a from test.last_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -447,7 +551,76 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 3 | 31.1 | 31 | 31 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d;
+use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d32;
++---+------+----+----+
+| p | o    | v  | a  |
++---+------+----+----+
+| 1 |  1.2 |  1 |  2 |
+| 1 |  2.1 |  2 |  4 |
+| 1 |  4.1 |  4 |  4 |
+| 1 |  8.1 |  8 |  8 |
+| 0 |  0.1 |  0 |  0 |
+| 3 |  1.1 |  1 |  3 |
+| 3 |  2.9 |  3 |  5 |
+| 3 |  5.1 |  5 |  5 |
+| 3 |  9.1 |  9 |  9 |
+| 3 | 15.0 | 15 | 15 |
+| 3 | 20.1 | 20 | 20 |
+| 3 | 31.1 | 31 | 31 |
+| 2 |  0.0 |  0 |  0 |
+| 2 |  3.1 |  3 |  3 |
+| 2 | 10.0 | 10 | 10 |
+| 2 | 13.1 | 13 | 15 |
+| 2 | 15.1 | 15 | 15 |
++---+------+----+----+
+
+use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d64;
++---+------+----+----+
+| p | o    | v  | a  |
++---+------+----+----+
+| 1 |  1.2 |  1 |  2 |
+| 1 |  2.1 |  2 |  4 |
+| 1 |  4.1 |  4 |  4 |
+| 1 |  8.1 |  8 |  8 |
+| 0 |  0.1 |  0 |  0 |
+| 3 |  1.1 |  1 |  3 |
+| 3 |  2.9 |  3 |  5 |
+| 3 |  5.1 |  5 |  5 |
+| 3 |  9.1 |  9 |  9 |
+| 3 | 15.0 | 15 | 15 |
+| 3 | 20.1 | 20 | 20 |
+| 3 | 31.1 | 31 | 31 |
+| 2 |  0.0 |  0 |  0 |
+| 2 |  3.1 |  3 |  3 |
+| 2 | 10.0 | 10 | 10 |
+| 2 | 13.1 | 13 | 15 |
+| 2 | 15.1 | 15 | 15 |
++---+------+----+----+
+
+use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d128;
++---+------+----+----+
+| p | o    | v  | a  |
++---+------+----+----+
+| 1 |  1.2 |  1 |  2 |
+| 1 |  2.1 |  2 |  4 |
+| 1 |  4.1 |  4 |  4 |
+| 1 |  8.1 |  8 |  8 |
+| 0 |  0.1 |  0 |  0 |
+| 3 |  1.1 |  1 |  3 |
+| 3 |  2.9 |  3 |  5 |
+| 3 |  5.1 |  5 |  5 |
+| 3 |  9.1 |  9 |  9 |
+| 3 | 15.0 | 15 | 15 |
+| 3 | 20.1 | 20 | 20 |
+| 3 | 31.1 | 31 | 31 |
+| 2 |  0.0 |  0 |  0 |
+| 2 |  3.1 |  3 |  3 |
+| 2 | 10.0 | 10 | 10 |
+| 2 | 13.1 | 13 | 15 |
+| 2 | 15.1 | 15 | 15 |
++---+------+----+----+
+
+use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d256;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+

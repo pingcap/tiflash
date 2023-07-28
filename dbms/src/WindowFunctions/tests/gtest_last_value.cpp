@@ -88,7 +88,7 @@ public:
     {
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
-        mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::CurrentRow, false, 0);
+        mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, static_cast<Int64>(0));
         mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
 
         {
@@ -172,8 +172,8 @@ public:
     {
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
-        mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::CurrentRow, false, 0);
-        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+        mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, static_cast<Int64>(0));
+        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, static_cast<Int64>(0));
 
         {
             // Int type const column
