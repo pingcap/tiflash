@@ -30,20 +30,6 @@ namespace ErrorCodes
 extern const int BAD_ARGUMENTS;
 }
 
-void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: bytes, seconds", ErrorCodes::BAD_ARGUMENTS);
-
-    auto bytes = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    auto seconds = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
-
-    TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
-
-    output(fmt::format("set flush threshold to ({} bytes, {} seconds)", bytes, seconds));
-}
-
 void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 4)
@@ -51,11 +37,11 @@ void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer outp
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    auto & handle_field = typeid_cast<const ASTLiteral &>(*args[3]).value;
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
+    const auto & handle_field = typeid_cast<const ASTLiteral &>(*args[3]).value;
     HandleID handle_id = 0;
     if (handle_field.getType() == Field::Types::Int64 || handle_field.getType() == Field::Types::UInt64)
-        handle_id = (HandleID)safeGet<UInt64>(handle_field);
+        handle_id = static_cast<HandleID>(safeGet<UInt64>(handle_field));
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 4, args.end(), context);
@@ -72,13 +58,13 @@ void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    auto & handle_field = typeid_cast<const ASTLiteral &>(*args[3]).value;
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
+    const auto & handle_field = typeid_cast<const ASTLiteral &>(*args[3]).value;
     HandleID handle_id = 0;
     if (handle_field.getType() == Field::Types::Int64 || handle_field.getType() == Field::Types::UInt64)
-        handle_id = (HandleID)safeGet<UInt64>(handle_field);
-    Timestamp tso = (Timestamp)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
-    UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value);
+        handle_id = static_cast<HandleID>(safeGet<UInt64>(handle_field));
+    auto tso = static_cast<Timestamp>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value));
+    auto del = static_cast<UInt8>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value));
 
     using TsoDel = std::tuple<Timestamp, UInt8>;
     std::optional<TsoDel> extra_data = TsoDel{tso, del};
@@ -106,8 +92,8 @@ void dbgFuncRaftDeleteRow(Context & context, const ASTs & args, DBGInvoker::Prin
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
+    auto handle_id = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value));
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::remove(table->table_info, region_id, handle_id, context);
@@ -122,8 +108,8 @@ void dbgInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer out
     const Int64 concurrent_num = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const Int64 flush_num = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     const Int64 batch_num = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
-    const UInt64 min_strlen = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value);
-    const UInt64 max_strlen = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[6]).value);
+    const auto min_strlen = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value);
+    const auto max_strlen = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[6]).value);
 
     if (min_strlen < 1)
     {

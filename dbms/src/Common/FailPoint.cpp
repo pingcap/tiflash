@@ -28,7 +28,6 @@ namespace DB
 {
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
-    M(exception_between_alter_data_and_meta)                      \
     M(exception_drop_table_during_remove_meta)                    \
     M(exception_between_rename_table_data_and_metadata)           \
     M(exception_between_create_database_meta_and_directory)       \
