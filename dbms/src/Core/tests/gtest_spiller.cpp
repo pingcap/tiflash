@@ -159,6 +159,7 @@ try
         GTEST_ASSERT_EQ(std::strstr(e.message().c_str(), "exception_during_spill") != nullptr, true);
         GTEST_ASSERT_EQ(spiller.hasSpilledData(), false);
     }
+    FailPointHelper::disableFailPoint("exception_during_spill");
 }
 CATCH
 
