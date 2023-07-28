@@ -101,13 +101,12 @@ RegionTable::RegionTable(Context & context_)
 
 void RegionTable::restore()
 {
-    LOG_INFO(log, "Start to restore");
+    LOG_INFO(log, "RegionTable restore start");
 
     const auto & tmt = context->getTMTContext();
-
     tmt.getKVStore()->traverseRegions([this](const RegionID, const RegionPtr & region) { updateRegion(*region); });
 
-    LOG_INFO(log, "Restore {} tables", tables.size());
+    LOG_INFO(log, "RegionTable restore end, n_tables={}", tables.size());
 }
 
 void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
@@ -132,7 +131,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     // Remove from table map.
     tables.erase(it);
 
-    LOG_INFO(log, "remove table from RegionTable success, table_id={}", table_id);
+    LOG_INFO(log, "remove table from RegionTable success, keyspace={} table_id={}", keyspace_id, table_id);
 }
 
 void RegionTable::updateRegion(const Region & region)
@@ -167,8 +166,12 @@ void removeObsoleteDataInStorage(
             return;
 
         /// Now we assume that these won't block for long time.
-        auto rowkey_range
-            = DM::RowKeyRange::fromRegionRange(handle_range, ks_table_id.second, ks_table_id.second, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+        auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+            handle_range,
+            ks_table_id.second,
+            ks_table_id.second,
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
         dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
         dm_storage->flushCache(*context, rowkey_range, /*try_until_succeed*/ true); // flush to disk
     }
@@ -335,15 +338,15 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
 
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto table_id = region_range_keys.getMappedTableID();
-    auto ks_tbl_id = KeyspaceTableID{keyspace_id, table_id};
     auto new_handle_range = region_range_keys.rawKeys();
 
     if (auto it = regions.find(region_id); it != regions.end())
     {
+        auto ks_tbl_id = KeyspaceTableID{keyspace_id, table_id};
         RUNTIME_CHECK_MSG(
             ks_tbl_id == it->second,
             "{}: table id not match the previous one"
-            ", region_id={} keyspace={} table_id={}, old_keyspace={} old_table_id={}",
+            ", region_id={} keyspace={} table_id={} old_keyspace={} old_table_id={}",
             __PRETTY_FUNCTION__,
             region_id,
             keyspace_id,
@@ -356,7 +359,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
-            LOG_INFO(log, "internal region has larger range, table_id={} region_id={}", table_id, region_id);
+            LOG_INFO(log, "internal region has larger range, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
         }
         else
         {
@@ -372,7 +375,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     {
         auto & table = getOrCreateTable(keyspace_id, table_id);
         insertRegion(table, region_range_keys, region_id);
-        LOG_INFO(log, "table {} insert internal region_id={}", table_id, region_id);
+        LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
     }
 }
 
