@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/dbgTools.h>
+
 #include "kvstore_helper.h"
 
 namespace DB
@@ -315,7 +317,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
     auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
-    auto & ori_source_range = source_region->getRange()->comparableKeys();
+    const auto & ori_source_range = source_region->getRange()->comparableKeys();
     RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
     RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
     auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, regionRangeToEncodeKeys(new_source_range, new_target_range), old_epoch);
@@ -662,7 +664,7 @@ TEST_F(RegionKVStoreTest, Writes)
             }
             try
             {
-                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 6, 6, ctx.getTMTContext()),
+                ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(request), 1, 6, 6, ctx.getTMTContext()),
                           EngineStoreApplyRes::None);
                 ASSERT_TRUE(false);
             }
@@ -684,7 +686,7 @@ TEST_F(RegionKVStoreTest, Writes)
                     auto key = RecordKVFormat::genKey(1, 2333, 1);
                     RegionBench::setupPutRequest(request.add_requests(), ColumnFamilyName::Default, key, "v1");
                 }
-                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 6, 6, ctx.getTMTContext()),
+                ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(request), 1, 6, 6, ctx.getTMTContext()),
                           EngineStoreApplyRes::None);
                 ASSERT_TRUE(false);
             }
@@ -700,7 +702,7 @@ TEST_F(RegionKVStoreTest, Writes)
                 {
                     RegionBench::setupPutRequest(request.add_requests(), ColumnFamilyName::Default, std::string("k1"), "v1");
                 }
-                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 6, 6, ctx.getTMTContext()),
+                ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(request), 1, 6, 6, ctx.getTMTContext()),
                           EngineStoreApplyRes::None);
                 ASSERT_TRUE(false);
             }
@@ -712,7 +714,7 @@ TEST_F(RegionKVStoreTest, Writes)
             {
                 raft_cmdpb::RaftCmdRequest request;
                 request.add_requests()->set_cmd_type(::raft_cmdpb::CmdType::Invalid);
-                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 10, 6, ctx.getTMTContext()),
+                ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(request), 1, 10, 6, ctx.getTMTContext()),
                           EngineStoreApplyRes::None);
                 ASSERT_TRUE(false);
             }
@@ -730,20 +732,20 @@ TEST_F(RegionKVStoreTest, Writes)
                 RegionBench::setupDelRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key);
             }
             raft_cmdpb::RaftCmdRequest first_request = request;
-            ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(first_request), 1, 7, 6, ctx.getTMTContext()),
+            ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(first_request), 1, 7, 6, ctx.getTMTContext()),
                       EngineStoreApplyRes::None);
 
             RegionBench::setupDelRequest(request.add_requests(), ColumnFamilyName::Write, TiKVKey("illegal key"));
             // index <= appliedIndex(), ignore
             raft_cmdpb::RaftCmdRequest second_request;
-            ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(second_request), 1, 7, 6, ctx.getTMTContext()),
+            ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(second_request), 1, 7, 6, ctx.getTMTContext()),
                       EngineStoreApplyRes::None);
             try
             {
                 //
                 request.clear_requests();
                 RegionBench::setupDelRequest(request.add_requests(), ColumnFamilyName::Write, TiKVKey("illegal key"));
-                ASSERT_EQ(kvs.handleWriteRaftCmd(std::move(request), 1, 9, 6, ctx.getTMTContext()),
+                ASSERT_EQ(RegionBench::applyWriteRaftCmd(kvs, std::move(request), 1, 9, 6, ctx.getTMTContext()),
                           EngineStoreApplyRes::None);
                 ASSERT_TRUE(false);
             }
@@ -757,7 +759,7 @@ TEST_F(RegionKVStoreTest, Writes)
         ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[]");
 
         ASSERT_EQ(
-            kvs.handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest{}, 8192, 7, 6, ctx.getTMTContext()),
+            RegionBench::applyWriteRaftCmd(kvs, raft_cmdpb::RaftCmdRequest{}, 8192, 7, 6, ctx.getTMTContext()),
             EngineStoreApplyRes::NotFound);
     }
     {

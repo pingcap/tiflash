@@ -40,7 +40,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 return false;
             },
             false,
-            /*interval_ms*/ 5 * 60 * 1000);
+            /*interval_ms=*/5 * 60 * 1000);
 
         // compute node does not contain long-live tables and segments
         auto & global_settings = global_context.getSettingsRef();

@@ -232,52 +232,11 @@ RegionManager::RegionWriteLock KVStore::genRegionMgrWriteLock(const KVStoreTaskL
 }
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
-    raft_cmdpb::RaftCmdRequest && request,
+    const WriteCmdsView & cmds,
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
     TMTContext & tmt) const
-{
-    std::vector<BaseBuffView> keys;
-    std::vector<BaseBuffView> vals;
-    std::vector<WriteCmdType> cmd_types;
-    std::vector<ColumnFamilyType> cmd_cf;
-    keys.reserve(request.requests_size());
-    vals.reserve(request.requests_size());
-    cmd_types.reserve(request.requests_size());
-    cmd_cf.reserve(request.requests_size());
-
-    for (const auto & req : request.requests())
-    {
-        auto type = req.cmd_type();
-
-        switch (type)
-        {
-        case raft_cmdpb::CmdType::Put:
-            keys.push_back({req.put().key().data(), req.put().key().size()});
-            vals.push_back({req.put().value().data(), req.put().value().size()});
-            cmd_types.push_back(WriteCmdType::Put);
-            cmd_cf.push_back(NameToCF(req.put().cf()));
-            break;
-        case raft_cmdpb::CmdType::Delete:
-            keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
-            vals.push_back({nullptr, 0});
-            cmd_types.push_back(WriteCmdType::Del);
-            cmd_cf.push_back(NameToCF(req.delete_().cf()));
-            break;
-        default:
-            throw Exception(fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-    return handleWriteRaftCmd(
-        WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
-        region_id,
-        index,
-        term,
-        tmt);
-}
-
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 

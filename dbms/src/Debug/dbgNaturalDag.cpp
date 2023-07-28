@@ -230,7 +230,7 @@ void NaturalDag::buildTables(Context & context)
                 UInt64 commit_ts = pd_client->getTS();
                 raft_cmdpb::RaftCmdRequest request;
                 RegionBench::addRequestsToRaftCmd(request, pair.first, pair.second, prewrite_ts, commit_ts, false);
-                tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region.id, MockTiKV::instance().getRaftIndex(region.id), MockTiKV::instance().getRaftTerm(region.id), tmt);
+                RegionBench::applyWriteRaftCmd(*tmt.getKVStore(), std::move(request), region.id, MockTiKV::instance().getRaftIndex(region.id), MockTiKV::instance().getRaftTerm(region.id), tmt);
             }
         }
     }
