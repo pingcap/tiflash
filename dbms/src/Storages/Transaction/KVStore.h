@@ -92,7 +92,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
+    void gcPersistedRegion(Seconds gc_persist_period = Seconds(60 * 5));
 
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 

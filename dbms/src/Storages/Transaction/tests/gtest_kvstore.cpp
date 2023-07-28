@@ -31,7 +31,7 @@ try
     }
     {
         tryPersistRegion(kvs, 1);
-        kvs.gcRegionPersistedCache(Seconds{0});
+        kvs.gcPersistedRegion(Seconds{0});
     }
     {
         // test CompactLog
@@ -637,7 +637,7 @@ TEST_F(RegionKVStoreTest, Writes)
     {
         // Test gc region persister
         tryPersistRegion(kvs, 1);
-        kvs.gcRegionPersistedCache(Seconds{0});
+        kvs.gcPersistedRegion(Seconds{0});
     }
     {
         // Check region range

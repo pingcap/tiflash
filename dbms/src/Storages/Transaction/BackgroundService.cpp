@@ -36,7 +36,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         // compute node does not contains region
         single_thread_task_handle = background_pool.addTask(
             [this] {
-                tmt.getKVStore()->gcRegionPersistedCache();
+                tmt.getKVStore()->gcPersistedRegion();
                 return false;
             },
             false,

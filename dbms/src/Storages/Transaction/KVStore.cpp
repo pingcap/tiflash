@@ -174,7 +174,7 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     return true;
 }
 
-void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
+void KVStore::gcPersistedRegion(Seconds gc_persist_period)
 {
     {
         decltype(bg_gc_region_data) tmp;
