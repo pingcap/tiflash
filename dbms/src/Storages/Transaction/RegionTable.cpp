@@ -94,14 +94,6 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & regi
     return insertRegion(table, region);
 }
 
-void RegionTable::shrinkRegionRange(const Region & region)
-{
-    std::lock_guard lock(mutex);
-    auto & internal_region = getOrInsertRegion(region);
-    internal_region.range_in_table = region.getRange()->rawKeys();
-    internal_region.cache_bytes = region.dataSize();
-}
-
 RegionTable::RegionTable(Context & context_)
     : context(&context_)
     , log(Logger::get())
@@ -327,6 +319,14 @@ std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const
         }
     });
     return regions;
+}
+
+void RegionTable::shrinkRegionRange(const Region & region)
+{
+    std::lock_guard lock(mutex);
+    auto & internal_region = getOrInsertRegion(region);
+    internal_region.range_in_table = region.getRange()->rawKeys();
+    internal_region.cache_bytes = region.dataSize();
 }
 
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
