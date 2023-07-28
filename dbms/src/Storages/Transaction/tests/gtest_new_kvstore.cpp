@@ -502,6 +502,23 @@ try
                 // Found existing key ...
                 EXPECT_THROW(proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt), Exception);
             }
+            {
+                // Test of cancel prehandled.
+                MockSSTReader::getMockSSTData().clear();
+                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                default_cf.insert(31, "v");
+                default_cf.insert(32, "v");
+                default_cf.finish_file();
+                default_cf.freeze();
+                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                write_cf.insert(31, "v");
+                write_cf.insert(32, "v");
+                write_cf.finish_file();
+                write_cf.freeze();
+
+                kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+                auto r = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt, true);
+            }
         }
     }
 }

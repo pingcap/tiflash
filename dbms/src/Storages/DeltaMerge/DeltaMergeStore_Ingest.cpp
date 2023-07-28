@@ -508,6 +508,28 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     }
 }
 
+void DeltaMergeStore::cleanIngestFiles(const Context & db_context,
+                                       const DB::Settings & db_settings,
+                                       const std::vector<DM::ExternalDTFileInfo> & external_files)
+{
+    auto dm_context = newDMContext(db_context, db_settings);
+    auto delegate = dm_context->path_pool->getStableDiskDelegator();
+    auto file_provider = dm_context->db_context.getFileProvider();
+
+    for (auto & f : external_files)
+    {
+        auto file_parent_path = delegate.getDTFilePath(f.id);
+        auto file = DM::DMFile::restore(
+            file_provider,
+            f.id,
+            f.id,
+            file_parent_path,
+            DM::DMFile::ReadMetaMode::memoryAndDiskSize());
+        removePreIngestFile(f.id, false);
+        file->remove(file_provider);
+    }
+}
+
 UInt64 DeltaMergeStore::ingestFiles(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,

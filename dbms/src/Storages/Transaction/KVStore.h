@@ -135,6 +135,8 @@ public:
         TMTContext & tmt);
     template <typename RegionPtrWrap>
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    template <typename RegionPtrWrap>
+    void releasePreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);

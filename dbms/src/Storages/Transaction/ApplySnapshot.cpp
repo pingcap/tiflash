@@ -465,6 +465,20 @@ template void KVStore::checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFile
 template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TMTContext &);
 template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, RegionPtr, UInt64, TMTContext &);
 
+template <>
+void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles & s, TMTContext & tmt)
+{
+    auto & storage = tmt.getStorages();
+    auto table_id = s.base->getMappedTableID();
+    auto ks_id = s.base->getKeyspaceID();
+    auto istore = storage.get(ks_id, table_id);
+    if (istore->engineType() != TiDB::StorageEngine::DT)
+    {
+        return;
+    }
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(istore);
+    dm_storage->cleanIngestFiles(s.external_files, dm_storage->global_context.getSettingsRef());
+}
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
 {
