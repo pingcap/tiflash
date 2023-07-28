@@ -148,7 +148,7 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
-                    "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
+                    "tryFlushRegionCacheInStorage can not get table for region{} with table_id={}, ignored",
                     region.toString(),
                     table_id);
         return true;
@@ -200,7 +200,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
 
 void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock)
 {
-    LOG_INFO(log, "Start to remove [region {}]", region_id);
+    LOG_INFO(log, "Start to remove region_id={}", region_id);
 
     {
         auto manage_lock = genRegionMgrWriteLock(task_lock);
@@ -218,11 +218,11 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
 
     RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     region_persister->drop(region_id, region_lock);
-    LOG_INFO(log, "Persisted [region {}] deleted", region_id);
+    LOG_INFO(log, "Persisted region_id={} deleted", region_id);
 
     region_table.removeRegion(region_id, remove_data, region_lock);
 
-    LOG_INFO(log, "Remove [region {}] done", region_id);
+    LOG_INFO(log, "Remove region_id={} done", region_id);
 }
 
 KVStoreTaskLock KVStore::genTaskLock() const
@@ -314,7 +314,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_INFO(log, "[region {}] is not found, might be removed already", region_id);
+        LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
         return;
     }
     LOG_INFO(log, "Handle destroy {}", region->toString());
@@ -371,16 +371,16 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         /// The triggered CompactLog will be handled by `handleUselessAdminRaftCmd`,
         /// and result in a `EngineStoreApplyRes::NotFound`.
         /// Proxy will print this message and continue: `region not found in engine-store, maybe have exec `RemoveNode` first`.
-        LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
+        LOG_WARNING(log, "[region_id={} term={} index={}] not exist when flushing, maybe have exec `RemoveNode` first", region_id, term, index);
         return true;
     }
     if (force_persist)
     {
         auto & curr_region = *curr_region_ptr;
-        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData by force, index {} term {}", curr_region.toString(false), index, term);
+        LOG_DEBUG(log, "flush region due to tryFlushRegionData by force, region_id={} term={} index={}", curr_region.id(), term, index);
         if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
         {
-            throw Exception("Force flush region " + std::to_string(region_id) + " failed", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Force flush region failed, region_id={}", region_id);
         }
         return true;
     }
@@ -418,7 +418,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (can_flush && flush_if_possible)
     {
-        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
+        LOG_DEBUG(log, "flush region due to tryFlushRegionData, region_id={} term={} index={}", curr_region.id(), term, index);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     return can_flush;
@@ -534,7 +534,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
         if (curr_region_ptr == nullptr)
         {
             LOG_WARNING(log,
-                        "[region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
+                        "region not found, might be removed already, region_id={} term={} index={} cmd={}",
                         curr_region_id,
                         term,
                         index,
@@ -747,7 +747,7 @@ void WaitCheckRegionReady(
                 if (region_error.has_region_not_found() || region_error.has_epoch_not_match())
                     need_retry = false;
                 LOG_DEBUG(log,
-                          "neglect error region {} not found {} epoch not match {}",
+                          "neglect error region_id={} not found {} epoch not match {}",
                           region_id,
                           region_error.has_region_not_found(),
                           region_error.has_epoch_not_match());

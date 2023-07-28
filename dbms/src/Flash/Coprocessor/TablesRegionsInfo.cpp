@@ -84,7 +84,7 @@ static void insertRegionInfoToTablesRegionInfo(
         if (region_info.key_ranges.empty())
         {
             throw TiFlashException(Errors::Coprocessor::BadRequest,
-                                   "Income key ranges is empty for region: {}",
+                                   "Income key ranges is empty for region_id={}",
                                    region_info.region_id);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated

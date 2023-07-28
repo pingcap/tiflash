@@ -178,7 +178,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
     }
     catch (LockException & e)
     {
-        LOG_WARNING(log, "LockException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(log, "LockException: region_id={}, message: {}", cop_request->context().region_id(), e.message());
         GET_METRIC(tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         if constexpr (is_stream)
         {
@@ -196,7 +196,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
     }
     catch (const RegionException & e)
     {
-        LOG_WARNING(log, "RegionException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(log, "RegionException: region_id={}, message: {}", cop_request->context().region_id(), e.message());
         [[maybe_unused]] coprocessor::Response stream_response;
         coprocessor::Response * response;
         if constexpr (is_stream)

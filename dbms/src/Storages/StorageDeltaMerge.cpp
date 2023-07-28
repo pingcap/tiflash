@@ -1225,7 +1225,7 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     if (!decoding_schema_snapshot || decoding_schema_changed)
     {
         auto & store = getAndMaybeInitStore();
-        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_version++);
+        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_epoch++);
         cache_blocks.clear();
         decoding_schema_changed = false;
     }
@@ -1271,10 +1271,10 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     }
 }
 
-void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block_ptr)
+void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block_ptr)
 {
     std::lock_guard lock{decode_schema_mutex};
-    if (!decoding_schema_snapshot || block_decoding_schema_version < decoding_schema_snapshot->decoding_schema_version)
+    if (!decoding_schema_snapshot || block_decoding_schema_epoch < decoding_schema_snapshot->decoding_schema_epoch)
         return;
     if (cache_blocks.size() >= max_cached_blocks_num)
         return;
