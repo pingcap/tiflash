@@ -14,9 +14,15 @@
 
 #include <Common/DynamicThreadPool.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/FailPoint.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_new_dynamic_thread[];
+} // namespace FailPoints
+
 DynamicThreadPool::~DynamicThreadPool()
 {
     for (auto & queue : fixed_queues)
@@ -91,6 +97,7 @@ bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 {
     alive_dynamic_threads.fetch_add(1);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_new_dynamic_thread);
     std::thread t = ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
     t.detach();
 }
