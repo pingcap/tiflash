@@ -57,21 +57,16 @@ inline RSResult checkEqual(const Field & v, const DataTypePtr & type, const T & 
 }
 
 template <typename T>
-inline RSResult checkIn(const std::vector<Field> & values, const DataTypePtr & type, const T & min, const T & max, const UInt8 has_null)
+inline RSResult checkIn(const std::vector<Field> & values, const DataTypePtr & type, const T & min, const T & max)
 {
     RSResult result = None;
     for (const auto & v : values)
     {
         if (result == All)
             break;
+        // skip null value
         if (v.isNull())
-        {
-            if (has_null)
-                result = result || Some;
-            else
-                result = result || None;
             continue;
-        }
         result = result || checkEqual(v, type, min, max);
     }
     return result;

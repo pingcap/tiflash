@@ -306,20 +306,20 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
     RSResults results(pack_count, RSResult::Some);
     const auto * raw_type = type.get();
 
-#define DISPATCH(TYPE)                                                                                         \
-    if (typeid_cast<const DataType##TYPE *>(raw_type))                                                         \
-    {                                                                                                          \
-        auto & minmaxes_data = toColumnVectorData<TYPE>(column_nullable.getNestedColumnPtr());                 \
-        for (size_t i = start_pack; i < start_pack + pack_count; ++i)                                          \
-        {                                                                                                      \
-            bool min_is_null = null_map.getElement(i * 2);                                                     \
-            if (min_is_null)                                                                                   \
-                continue;                                                                                      \
-            auto min = minmaxes_data[i * 2];                                                                   \
-            auto max = minmaxes_data[i * 2 + 1];                                                               \
-            results[i - start_pack] = RoughCheck::checkIn<TYPE>(values, type, min, max, (*has_null_marks)[i]); \
-        }                                                                                                      \
-        return results;                                                                                        \
+#define DISPATCH(TYPE)                                                                         \
+    if (typeid_cast<const DataType##TYPE *>(raw_type))                                         \
+    {                                                                                          \
+        auto & minmaxes_data = toColumnVectorData<TYPE>(column_nullable.getNestedColumnPtr()); \
+        for (size_t i = start_pack; i < start_pack + pack_count; ++i)                          \
+        {                                                                                      \
+            bool min_is_null = null_map.getElement(i * 2);                                     \
+            if (min_is_null)                                                                   \
+                continue;                                                                      \
+            auto min = minmaxes_data[i * 2];                                                   \
+            auto max = minmaxes_data[i * 2 + 1];                                               \
+            results[i - start_pack] = RoughCheck::checkIn<TYPE>(values, type, min, max);       \
+        }                                                                                      \
+        return results;                                                                        \
     }
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
@@ -333,7 +333,7 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkIn<DataTypeDate::FieldType>(values, type, min, max, (*has_null_marks)[i]);
+            results[i - start_pack] = RoughCheck::checkIn<DataTypeDate::FieldType>(values, type, min, max);
         }
         return results;
     }
@@ -347,7 +347,7 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkIn<DataTypeDateTime::FieldType>(values, type, min, max, (*has_null_marks)[i]);
+            results[i - start_pack] = RoughCheck::checkIn<DataTypeDateTime::FieldType>(values, type, min, max);
         }
         return results;
     }
@@ -363,7 +363,7 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkIn<DataTypeMyTimeBase::FieldType>(values, type, min, max, (*has_null_marks)[i]);
+            results[i - start_pack] = RoughCheck::checkIn<DataTypeMyTimeBase::FieldType>(values, type, min, max);
         }
         return results;
     }
@@ -384,7 +384,7 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = RoughCheck::checkIn<String>(values, type, min, max, (*has_null_marks)[i]);
+            results[i - start_pack] = RoughCheck::checkIn<String>(values, type, min, max);
         }
         return results;
     }
@@ -491,19 +491,19 @@ RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::
     {
         return checkNullableIn(start_pack, pack_count, values, removeNullable(type));
     }
-#define DISPATCH(TYPE)                                                                      \
-    if (typeid_cast<const DataType##TYPE *>(raw_type))                                      \
-    {                                                                                       \
-        auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);                          \
-        for (size_t i = start_pack; i < start_pack + pack_count; ++i)                       \
-        {                                                                                   \
-            if (!(*has_value_marks)[i])                                                     \
-                continue;                                                                   \
-            auto min = minmaxes_data[i * 2];                                                \
-            auto max = minmaxes_data[i * 2 + 1];                                            \
-            results[i - start_pack] = RoughCheck::checkIn<TYPE>(values, type, min, max, 0); \
-        }                                                                                   \
-        return results;                                                                     \
+#define DISPATCH(TYPE)                                                                   \
+    if (typeid_cast<const DataType##TYPE *>(raw_type))                                   \
+    {                                                                                    \
+        auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);                       \
+        for (size_t i = start_pack; i < start_pack + pack_count; ++i)                    \
+        {                                                                                \
+            if (!(*has_value_marks)[i])                                                  \
+                continue;                                                                \
+            auto min = minmaxes_data[i * 2];                                             \
+            auto max = minmaxes_data[i * 2 + 1];                                         \
+            results[i - start_pack] = RoughCheck::checkIn<TYPE>(values, type, min, max); \
+        }                                                                                \
+        return results;                                                                  \
     }
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
@@ -516,7 +516,7 @@ RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkIn<DataTypeDate::FieldType>(values, type, min, max, 0);
+            results[i - start_pack] = RoughCheck::checkIn<DataTypeDate::FieldType>(values, type, min, max);
         }
         return results;
     }
@@ -529,7 +529,7 @@ RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkIn<DataTypeDateTime::FieldType>(values, type, min, max, 0);
+            results[i - start_pack] = RoughCheck::checkIn<DataTypeDateTime::FieldType>(values, type, min, max);
         }
         return results;
     }
@@ -544,7 +544,7 @@ RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkIn<DataTypeMyTimeBase::FieldType>(values, type, min, max, 0);
+            results[i - start_pack] = RoughCheck::checkIn<DataTypeMyTimeBase::FieldType>(values, type, min, max);
         }
         return results;
     }
@@ -564,7 +564,7 @@ RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = RoughCheck::checkIn<String>(values, type, min, max, 0);
+            results[i - start_pack] = RoughCheck::checkIn<String>(values, type, min, max);
         }
         return results;
     }
