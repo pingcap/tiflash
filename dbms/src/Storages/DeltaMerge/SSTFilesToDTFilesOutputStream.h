@@ -77,6 +77,8 @@ public:
         FileConvertJobType job_type_,
         UInt64 split_after_rows_,
         UInt64 split_after_size_,
+        UInt64 region_id_,
+        std::shared_ptr<std::atomic_bool> abort_flag_,
         Context & context);
     ~SSTFilesToDTFilesOutputStream();
 
@@ -114,6 +116,8 @@ private:
     const FileConvertJobType job_type;
     const UInt64 split_after_rows;
     const UInt64 split_after_size;
+    UInt64 region_id;
+    std::shared_ptr<std::atomic_bool> abort_flag;
     Context & context;
     LoggerPtr log;
 

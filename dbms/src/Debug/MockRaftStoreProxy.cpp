@@ -785,8 +785,7 @@ RegionPtr MockRaftStoreProxy::snapshot(
     uint64_t index,
     uint64_t term,
     std::optional<uint64_t> deadline_index,
-    bool cancel_after_prehandle
-)
+    bool cancel_after_prehandle)
 {
     auto region = getRegion(region_id);
     auto old_kv_region = kvs.getRegion(region_id);
@@ -821,8 +820,9 @@ RegionPtr MockRaftStoreProxy::snapshot(
         tmt);
 
     auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)};
-    if(cancel_after_prehandle) {
-        kvstore->releasePreHandledSnapshot(rg, tmt);
+    if (cancel_after_prehandle)
+    {
+        kvs.releasePreHandledSnapshot(rg, tmt);
         return kvs.getRegion(region_id);
     }
     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(rg, tmt);

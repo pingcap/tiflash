@@ -505,14 +505,14 @@ try
             {
                 // Test of cancel prehandled.
                 MockSSTReader::getMockSSTData().clear();
+                auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+                auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
                 MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
-                default_cf.insert(31, "v");
-                default_cf.insert(32, "v");
+                default_cf.insert_raw(k1, value_default1);
                 default_cf.finish_file();
                 default_cf.freeze();
                 MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
-                write_cf.insert(31, "v");
-                write_cf.insert(32, "v");
+                write_cf.insert_raw(k1, value_write1);
                 write_cf.finish_file();
                 write_cf.freeze();
 

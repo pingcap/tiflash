@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -35,6 +36,12 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char pause_after_prehandling_dtfiles[];
+} // namespace FailPoints
+
 namespace DM
 {
 
@@ -47,6 +54,8 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     FileConvertJobType job_type_,
     UInt64 split_after_rows_,
     UInt64 split_after_size_,
+    UInt64 region_id_,
+    std::shared_ptr<std::atomic_bool> abort_flag_,
     Context & context_)
     : child(std::move(child_))
     , storage(std::move(storage_))
@@ -54,6 +63,8 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , job_type(job_type_)
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
+    , region_id(region_id_)
+    , abort_flag(abort_flag_)
     , context(context_)
     , log(Logger::get(log_prefix_))
 {
@@ -222,6 +233,12 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
     size_t cur_deleted_rows = 0;
     while (true)
     {
+        LOG_INFO(log, "!!!!! SSTFilesToDTFilesOutputStream {}", (uint64_t)abort_flag.get());
+        if (abort_flag->load(std::memory_order_seq_cst))
+        {
+            break;
+        }
+        FAIL_POINT_PAUSE(FailPoints::pause_after_prehandling_dtfiles);
         Block block = child->read();
         if (!block)
             break;

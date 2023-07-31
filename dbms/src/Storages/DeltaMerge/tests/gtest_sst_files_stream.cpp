@@ -29,6 +29,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_after_prehandling_dtfiles[];
+} // namespace FailPoints
 namespace DM
 {
 namespace tests
@@ -175,6 +179,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(100, 100, /*block_size=*/5));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -183,6 +188,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 0,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -202,6 +209,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/5));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -210,6 +218,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 0,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -231,6 +241,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1000));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -239,6 +250,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 1,
         /* split_after_size */ 1,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -261,6 +274,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -269,6 +283,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -297,6 +313,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -305,6 +322,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -329,6 +348,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -337,6 +357,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 10000,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -361,6 +383,7 @@ try
     auto blocks2 = prepareBlocks(130, 150, /*block_size=*/10);
     blocks1.insert(blocks1.end(), blocks2.begin(), blocks2.end());
     auto mock_stream = makeMockChild(blocks1);
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
@@ -370,6 +393,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 20,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -400,6 +425,7 @@ try
     auto blocks2 = prepareBlocks(0, 30, /*block_size=*/20);
     blocks1.insert(blocks1.end(), blocks2.begin(), blocks2.end());
     auto mock_stream = makeMockChild(blocks1);
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
@@ -409,6 +435,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 20,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     EXPECT_THROW({
@@ -429,6 +457,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -437,6 +466,8 @@ try
         FileConvertJobType::ApplySnapshot,
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
+        0,
+        abort_flag,
         *db_context);
 
     stream->writePrefix();
@@ -460,6 +491,59 @@ try
         ASSERT_TRUE(delegator.getDTFilePath(file.id, /*throw_on_not_exists*/ false).empty());
         auto file_path = file_id_to_path[file.id];
         ASSERT_FALSE(Poco::File(file_path).exists());
+    }
+}
+CATCH
+
+TEST_F(SSTFilesToDTFilesOutputStreamTest, UpperLayerCancel)
+try
+{
+    auto table_lock = storage->lockStructureForShare("foo_query_id");
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+
+    auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
+    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
+        mock_stream,
+        storage,
+        schema_snapshot,
+        FileConvertJobType::ApplySnapshot,
+        /* split_after_rows */ 10,
+        /* split_after_size */ 0,
+        0,
+        abort_flag,
+        *db_context);
+
+    FailPointHelper::enableFailPoint(FailPoints::pause_after_prehandling_dtfiles);
+    stream->writePrefix();
+    auto t = std::thread([&]() {
+        stream->write();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    abort_flag->store(true, std::memory_order_seq_cst);
+    FailPointHelper::disableFailPoint(FailPoints::pause_after_prehandling_dtfiles);
+    t.join();
+    stream->writeSuffix();
+    auto files = stream->outputFiles();
+    ASSERT_EQ(1, files.size());
+    auto delegator = storage->getAndMaybeInitStore()->path_pool->getStableDiskDelegator();
+    std::vector<std::string> fps;
+    for (const auto & file : files)
+    {
+        auto parent_path = delegator.getDTFilePath(file.id);
+        auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
+        fps.push_back(file_path);
+    }
+    storage->cleanIngestFiles(files, db_context->getSettingsRef());
+
+    for (const auto & file : files)
+    {
+        ASSERT_TRUE(delegator.getDTFilePath(file.id, /*throw_on_not_exists*/ false).empty());
+    }
+    for (const auto & f : fps)
+    {
+        ASSERT_FALSE(Poco::File(f).exists());
     }
 }
 CATCH

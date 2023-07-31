@@ -137,6 +137,7 @@ public:
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     template <typename RegionPtrWrap>
     void releasePreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
@@ -256,6 +257,33 @@ private:
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
+    struct PreHandlingTrace : MutexLockWrap
+    {
+        std::map<uint64_t, std::shared_ptr<std::atomic_bool>> tasks;
+
+        std::shared_ptr<std::atomic_bool> registerTask(uint64_t region_id)
+        {
+            // Automaticlly override the old one.
+            auto b = std::make_shared<std::atomic_bool>(false);
+            tasks[region_id] = b;
+            return b;
+        }
+        std::optional<std::shared_ptr<std::atomic_bool>> deregisterTask(uint64_t region_id)
+        {
+            auto it = tasks.find(region_id);
+            if (it != tasks.end())
+            {
+                std::shared_ptr<std::atomic_bool> b = it->second;
+                tasks.erase(it);
+                return b;
+            }
+            else
+            {
+                return std::nullopt;
+            }
+        }
+    };
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -286,6 +314,8 @@ private:
     ReadIndexWorkerManager * read_index_worker_manager{nullptr};
 
     std::atomic_int64_t read_index_event_flag{0};
+
+    PreHandlingTrace prehandling_trace;
 
     StoreMeta store;
 };
