@@ -68,6 +68,7 @@ void UnorderedSourceOp::operatePrefixImpl()
         }
         else
         {
+            LOG_INFO(Logger::get("hyy"), "into operatePrefixImpl");
             // Check if the RuntimeFilters is ready immediately.
             RuntimeFilteList ready_rf_list;
             RFWaitTask::filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);

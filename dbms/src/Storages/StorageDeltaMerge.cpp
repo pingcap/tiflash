@@ -965,6 +965,15 @@ RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo
     auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
         query_info.dag_query->runtime_filter_ids);
     LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
+
+    if (!runtime_filter_list.empty())
+    {
+        for (auto & filter : runtime_filter_list)
+        {
+            LOG_DEBUG(log, "build runtime filter in local stream with source column name is {}, and print element", filter->getSourceColumnName());
+            filter->printInValuesSet();
+        }
+    }
     return runtime_filter_list;
 }
 

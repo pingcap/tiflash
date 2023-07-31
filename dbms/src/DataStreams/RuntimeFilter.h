@@ -77,6 +77,15 @@ public:
 
     const int id;
 
+    void printInValuesSet()
+    {
+        auto element = in_values_set->getUniqueSetElements();
+        for (const auto & e : element)
+        {
+            LOG_INFO(Logger::get("hyy"), "element is {} ", e.get<Int64>());
+        }
+    }
+
 private:
     bool updateStatus(RuntimeFilterStatus status_, const std::string & reason = "");
 
