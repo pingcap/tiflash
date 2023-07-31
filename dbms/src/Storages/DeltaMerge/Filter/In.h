@@ -72,14 +72,14 @@ public:
             if (rsindex.minmax != nullptr)
             {
                 auto minmax_res = rsindex.minmax->checkEqual(pack_id, value, rsindex.type);
-                LOG_INFO(Logger::get("hyy"), "in roughCheck minmax with minmax_res = {}", static_cast<int>(minmax_res));
+                //LOG_INFO(Logger::get("hyy"), "in roughCheck minmax with minmax_res = {}", static_cast<int>(minmax_res));
                 res_temp = res_temp && minmax_res;
             }
 
             if (rsindex.bloom_filter_index != nullptr)
             {
                 auto bloom_filter_index_res = rsindex.bloom_filter_index->checkEqual(pack_id, value, rsindex.type);
-                LOG_INFO(Logger::get("hyy"), "in roughCheck bloom_filter with minmax_res = {}", static_cast<int>(bloom_filter_index_res));
+                //LOG_INFO(Logger::get("hyy"), "in roughCheck bloom_filter with minmax_res = {}", static_cast<int>(bloom_filter_index_res));
                 res_temp = res_temp && bloom_filter_index_res;
             }
             res = res || res_temp;

@@ -35,14 +35,14 @@ void UnorderedInputStream::prepareRuntimeFilter()
             ready_rf_list.push_back(rf);
         }
     }
-    LOG_INFO(Logger::get("hyy"), "prepareRuntimeFilter ready_rf_list size is {} ", ready_rf_list.size());
+    //LOG_INFO(Logger::get("hyy"), "prepareRuntimeFilter ready_rf_list size is {} ", ready_rf_list.size());
     // append ready rfs into push down filter
     pushDownReadyRFList(ready_rf_list);
 }
 
 void UnorderedInputStream::pushDownReadyRFList(std::vector<RuntimeFilterPtr> readyRFList)
 {
-    LOG_INFO(Logger::get("hyy"), "into pushDownReadyRFList");
+    //LOG_INFO(Logger::get("hyy"), "into pushDownReadyRFList");
     for (const RuntimeFilterPtr & rf : readyRFList)
     {
         auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());

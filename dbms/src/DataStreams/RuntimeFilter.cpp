@@ -201,7 +201,7 @@ bool RuntimeFilter::updateStatus(RuntimeFilterStatus status_, const std::string 
 
 DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_to_read)
 {
-    LOG_INFO(Logger::get("hyy"), "into parseToRSOperator with rf_type is {}", rf_type);
+    //LOG_INFO(Logger::get("hyy"), "into parseToRSOperator with rf_type is {}", rf_type);
     switch (rf_type)
     {
     case tipb::IN:

@@ -1130,7 +1130,7 @@ void DeltaMergeStore::read(
 
     if (enable_read_thread)
     {
-        LOG_INFO(Logger::get("hyy"), "into enable_read_thread for read impl");
+        //LOG_INFO(Logger::get("hyy"), "into enable_read_thread for read impl");
         for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(
