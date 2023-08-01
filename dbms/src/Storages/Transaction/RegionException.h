@@ -30,8 +30,11 @@ public:
     enum class RegionReadStatus : UInt8
     {
         OK,
-        NOT_FOUND,
+        NOT_FOUND, // reported by KVStore
         EPOCH_NOT_MATCH,
+        NOT_LEADER,
+        NOT_FOUND_TIKV, // reported by Proxy/TiKV
+        OTHER,
     };
 
     using UnavailableRegions = std::unordered_set<RegionID>;
