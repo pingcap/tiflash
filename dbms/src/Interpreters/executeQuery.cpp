@@ -398,35 +398,6 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
         joinLines(query));
 }
 
-<<<<<<< HEAD
-void prepareForInputStream(
-    Context & context,
-    QueryProcessingStage::Enum stage,
-    const BlockInputStreamPtr & in)
-{
-    assert(in);
-    if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(in.get()))
-    {
-        stream->setProgressCallback(context.getProgressCallback());
-        stream->setProcessListElement(context.getProcessListElement());
-
-        /// Limits on the result, the quota on the result, and also callback for progress.
-        /// Limits apply only to the final result.
-        if (stage == QueryProcessingStage::Complete)
-        {
-            IProfilingBlockInputStream::LocalLimits limits;
-            limits.mode = IProfilingBlockInputStream::LIMITS_CURRENT;
-            const auto & settings = context.getSettingsRef();
-            limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
-
-            stream->setLimits(limits);
-            stream->setQuota(context.getQuota());
-        }
-    }
-}
-
-=======
->>>>>>> 80f8e9dc65 (fix issue #7810 (#7854))
 std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
