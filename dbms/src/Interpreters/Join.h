@@ -26,6 +26,7 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/HashJoinSpillContext.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/ProbeProcessInfo.h>
@@ -201,13 +202,13 @@ public:
 
     bool isRestoreJoin() const;
 
-    bool getPartitionSpilled(size_t partition_index);
+    bool getPartitionSpilled(size_t partition_index) const;
 
     bool hasPartitionSpilledWithLock();
 
     bool hasPartitionSpilled();
 
-    bool isSpilled() const { return is_spilled; }
+    bool isSpilled() const { return hash_join_spill_context->isSpilled(); }
 
     std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
@@ -296,6 +297,7 @@ public:
     const String flag_mapped_entry_helper_name;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+    HashJoinSpillContextPtr hash_join_spill_context;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -347,16 +349,8 @@ private:
 
     std::list<size_t> spilled_partition_indexes;
 
-    size_t max_bytes_before_external_join;
-    SpillConfig build_spill_config;
-    SpillConfig probe_spill_config;
     Int64 join_restore_concurrency;
-    bool is_spilled = false;
-    bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
-
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
 
     std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
@@ -463,8 +457,8 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks) const;
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks) const;
 
     void markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
     void markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);

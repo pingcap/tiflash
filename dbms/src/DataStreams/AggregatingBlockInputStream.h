@@ -40,7 +40,7 @@ public:
         const String & req_id)
         : log(Logger::get(req_id))
         , params(params_)
-        , aggregator(params, req_id)
+        , aggregator(params, req_id, 1)
         , final(final_)
     {
         children.push_back(input);
