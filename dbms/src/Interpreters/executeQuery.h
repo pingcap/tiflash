@@ -43,4 +43,10 @@ BlockIO executeQuery(
 
 BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
 
+<<<<<<< HEAD
 }
+=======
+void logQuery(const String & query, const Context & context, const LoggerPtr & logger);
+
+} // namespace DB
+>>>>>>> 80f8e9dc65 (fix issue #7810 (#7854))
