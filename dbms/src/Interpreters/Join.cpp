@@ -1988,7 +1988,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
                 probe_concurrency,
                 restore_join_build_concurrency);
             LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
-            
+
             auto restore_build_streams = hash_join_spill_context->getBuildSpiller()->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
             RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
             auto restore_probe_streams = hash_join_spill_context->getProbeSpiller()->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
