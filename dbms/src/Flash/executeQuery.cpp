@@ -92,7 +92,6 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
-    prepareForInputStream(context, QueryProcessingStage::Complete, res.in);
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 

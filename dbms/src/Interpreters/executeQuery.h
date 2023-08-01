@@ -61,9 +61,4 @@ void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in);
 
 void logQuery(const String & query, const Context & context, const LoggerPtr & logger);
 
-void prepareForInputStream(
-    Context & context,
-    QueryProcessingStage::Enum stage,
-    const BlockInputStreamPtr & in);
-
 } // namespace DB
