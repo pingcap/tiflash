@@ -201,10 +201,15 @@ bool RuntimeFilter::updateStatus(RuntimeFilterStatus status_, const std::string 
 
 DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_to_read)
 {
+    //LOG_INFO(Logger::get("hyy"), "into parseToRSOperator with rf_type is {}", rf_type);
     switch (rf_type)
     {
     case tipb::IN:
-        return DM::FilterParser::parseRFInExpr(rf_type, target_expr, columns_to_read, in_values_set->getUniqueSetElements());
+    {
+        auto res = DM::FilterParser::parseRFInExpr(rf_type, target_expr, columns_to_read, in_values_set->getUniqueSetElements());
+        LOG_INFO(Logger::get("hyy"), "parseToRSOperator res is {} ", res->toDebugString());
+        return res;
+    }
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
         // TODO

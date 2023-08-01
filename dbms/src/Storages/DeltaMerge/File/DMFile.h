@@ -375,13 +375,16 @@ public:
 
     using FileNameBase = String;
     size_t colIndexSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colIndexPath(file_name_base)).getSize(); }
+    size_t colBloomFilterIndexSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colBloomFilterIndexPath(file_name_base)).getSize(); }
     size_t colDataSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colDataPath(file_name_base)).getSize(); }
     size_t colIndexSize(ColId id);
     size_t colDataSize(ColId id, bool is_null_map);
+    size_t colBloomFilterIndexSize(ColId id) const;
 
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
     String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
     String colMarkPath(const FileNameBase & file_name_base) const { return subFilePath(colMarkFileName(file_name_base)); }
+    String colBloomFilterIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colBloomFilterIndexFileName(file_name_base)); }
 
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
@@ -391,6 +394,7 @@ public:
     String encryptionBasePath() const;
     EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionBloomFilterIndexPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMetaPath() const;
     EncryptionPath encryptionPackStatPath() const;
@@ -413,6 +417,7 @@ public:
     static String colDataFileName(const FileNameBase & file_name_base);
     static String colIndexFileName(const FileNameBase & file_name_base);
     static String colMarkFileName(const FileNameBase & file_name_base);
+    static String colBloomFilterIndexFileName(const FileNameBase & file_name_base);
 
     using OffsetAndSize = std::tuple<size_t, size_t>;
     OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);

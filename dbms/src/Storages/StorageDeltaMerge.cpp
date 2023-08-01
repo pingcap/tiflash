@@ -863,6 +863,16 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
 
     // build rough set operator
     const DM::RSOperatorPtr rs_operator = buildRSOperator(dag_query, columns_to_read, context, tracing_logger);
+    if (rs_operator != nullptr)
+    {
+        LOG_INFO(Logger::get("hyy"), "rs_operator: {}", rs_operator->toDebugString());
+    }
+    else
+    {
+        LOG_INFO(Logger::get("hyy"), "rs_operator empty");
+    }
+
+
     // build push down filter
     const auto & columns_to_read_info = dag_query->source_columns;
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
@@ -955,6 +965,15 @@ RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo
     auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
         query_info.dag_query->runtime_filter_ids);
     LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
+
+    if (!runtime_filter_list.empty())
+    {
+        for (auto & filter : runtime_filter_list)
+        {
+            LOG_DEBUG(log, "build runtime filter in local stream with source column name is {}, and print element", filter->getSourceColumnName());
+            filter->printInValuesSet();
+        }
+    }
     return runtime_filter_list;
 }
 
