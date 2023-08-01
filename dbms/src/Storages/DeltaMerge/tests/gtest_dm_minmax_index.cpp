@@ -15,11 +15,14 @@
 #include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 #include <Storages/DeltaMerge/Index/ValueComparison.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -31,12 +34,9 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 static const ColId DEFAULT_COL_ID = 0;
 static const String DEFAULT_COL_NAME = "2020-09-26";
 
@@ -1496,17 +1496,137 @@ try
 
     auto minmax = std::make_shared<MinMaxIndex>(has_null_marks, has_value_marks, std::move(minmaxes));
 
-    auto index = RSIndex(type, minmax);
-    auto col_id = 1;
-    param.indexes.emplace(col_id, index);
+    auto index = RSIndex(data_type, minmax);
+    param.indexes.emplace(DEFAULT_COL_ID, index);
 
     // make a euqal filter, check equal with 1
     auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
 
-    ASSERT_EQ(filter->roughCheck(0, param), RSResult::Some);
+    ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+TEST_F(DMMinMaxIndexTest, InOrNotInNULL)
+try
+{
+    RSCheckParam param;
+
+    auto type = std::make_shared<DataTypeInt64>();
+    auto data_type = makeNullable(type);
+
+    auto has_null_marks = std::make_shared<PaddedPODArray<UInt8>>(1);
+    auto has_value_marks = std::make_shared<PaddedPODArray<UInt8>>(1);
+    MutableColumnPtr minmaxes = data_type->createColumn();
+
+    auto column = data_type->createColumn();
+
+    column->insert(Field(static_cast<Int64>(1))); // insert value 1
+    column->insert(Field(static_cast<Int64>(2))); // insert value 2
+    column->insertDefault(); // insert null value
+
+    auto * col = column.get();
+    minmaxes->insertFrom(*col, 0); // insert min index
+    minmaxes->insertFrom(*col, 1); // insert max index
+
+    auto minmax = std::make_shared<MinMaxIndex>(has_null_marks, has_value_marks, std::move(minmaxes));
+
+    auto index = RSIndex(data_type, minmax);
+    param.indexes.emplace(DEFAULT_COL_ID, index);
+
+    {
+        // make a in filter, check in (NULL)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field()});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+    }
+    {
+        // make a in filter, check in (NULL, 1)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a in filter, check in (3)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+    }
+    {
+        // make a not in filter, check not in (NULL)
+        auto filter = createNotIn(attr("Nullable(Int64)"), {Field()});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+    }
+    {
+        // make a not in filter, check not in (NULL, 1)
+        auto filter = createNotIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a not in filter, check not in (3)
+        auto filter = createNotIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+    }
+}
+CATCH
+
+TEST_F(DMMinMaxIndexTest, TestParseIn)
+try
+{
+    // a in (1, 2)
+    tipb::Expr expr;
+    expr.set_sig(tipb::ScalarFuncSig::InInt);
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    {
+        tipb::Expr * col = expr.add_children();
+        col->set_tp(tipb::ExprType::ColumnRef);
+        {
+            WriteBufferFromOwnString ss;
+            encodeDAGInt64(1, ss);
+            col->set_val(ss.releaseStr());
+        }
+        auto * field_type = col->mutable_field_type();
+        field_type->set_tp(tipb::ExprType::Int64);
+        field_type->set_flag(0);
+    }
+    {
+        tipb::Expr * lit = expr.add_children();
+        lit->set_tp(tipb::ExprType::Int64);
+        {
+            WriteBufferFromOwnString ss;
+            encodeDAGInt64(1, ss);
+            lit->set_val(ss.releaseStr());
+        }
+    }
+    {
+        tipb::Expr * lit = expr.add_children();
+        lit->set_tp(tipb::ExprType::Int64);
+        {
+            WriteBufferFromOwnString ss;
+            encodeDAGInt64(2, ss);
+            lit->set_val(ss.releaseStr());
+        }
+    }
+
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    filters.Add()->CopyFrom(expr);
+    const ColumnDefines columns_to_read = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()}, ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    auto dag_query = std::make_unique<DAGQueryInfo>(
+        filters,
+        pushed_down_filters, // Not care now
+        std::vector<TiDB::ColumnInfo>{}, // Not care now
+        std::vector<int>{},
+        0,
+        context->getTimezoneInfo());
+    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> Attr {
+        auto iter = std::find_if(
+            columns_to_read.begin(),
+            columns_to_read.end(),
+            [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+        if (iter != columns_to_read.end())
+            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+    };
+    const auto op = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
+    ASSERT_EQ(op->toDebugString(), "{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]}");
+}
+CATCH
+
+} // namespace DB::DM::tests

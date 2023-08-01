@@ -18,10 +18,9 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
 {
     Attr handle_attr = {EXTRA_HANDLE_COLUMN_NAME,
@@ -41,5 +40,4 @@ inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
     }
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
