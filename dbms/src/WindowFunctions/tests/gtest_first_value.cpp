@@ -296,6 +296,39 @@ public:
         // TODO Support Float type const column
         // TODO Support Decimal type const column
     }
+
+    void testNullableOrderByColForRangeFrame()
+    {
+        MockWindowFrame mock_frame;
+        mock_frame.type = tipb::WindowFrameType::Ranges;
+        mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
+        mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, static_cast<Int64>(0));
+
+        {
+            // Int type const column
+            std::vector<Int64> frame_start_range{0, 1, 3, 10};
+            std::vector<std::vector<Int64>> res{
+                {1, 2, 3, 4, 5, 6, 7, 8, 9},
+                {1, 2, 3, 3, 5, 6, 6, 8, 8},
+                {1, 2, 3, 3, 5, 6, 6, 7, 8},
+                {1, 2, 3, 3, 5, 6, 6, 6, 6}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 2, 2, 2, 2, 2});
+            auto order_col = toNullableVec<Int64>(/*order*/ {0, {}, 1, 2, {}, 5, 6, 9, 10});
+            auto val_col = toVec<Int64>(/*value*/ {1, 2, 3, 4, 5, 6, 7, 8, 9});
+
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    FirstValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame,
+                    false);
+            }
+        }
+    }
 };
 
 TEST_F(FirstValue, firstValueWithRowsFrameType)
@@ -373,6 +406,7 @@ try
 {
     testIntOrderByColForRangeFrame();
     testFloatOrderByColForRangeFrame();
+    testNullableOrderByColForRangeFrame();
 
     // TODO This test is disabled as we can not assign decimal field's flen now
     // in MockStorage.cpp::mockColumnInfosToTiDBColumnInfos().

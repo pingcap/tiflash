@@ -194,6 +194,10 @@ private:
     template <typename T, bool is_begin, bool is_desc>
     RowNumber stepToFrameForRangeImpl();
 
+    // We should use this function when the current auxiliary column row is null.
+    template <bool is_begin>
+    RowNumber moveCursorAndFindRangeFrameBoundaryIfNull(RowNumber cursor);
+
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
@@ -203,7 +207,7 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
 
-    template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc>
+    template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc, bool is_order_by_col_nullable>
     RowNumber moveCursorAndFindFrameBoundaryImpl(RowNumber cursor, AuxColType current_row_aux_value);
 
 public:

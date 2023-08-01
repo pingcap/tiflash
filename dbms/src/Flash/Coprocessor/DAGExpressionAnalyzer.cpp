@@ -205,7 +205,8 @@ void setAuxiliaryColumnInfoImpl(
     const String & aux_col_name,
     const Block & tmp_block,
     Int32 & range_auxiliary_column_index,
-    TypeIndex & aux_col_type)
+    TypeIndex & aux_col_type,
+    bool & is_order_by_col_nullable)
 {
     if (!aux_col_name.empty())
     {
@@ -216,8 +217,17 @@ void setAuxiliaryColumnInfoImpl(
         // Set auxiliary columns' types
         const auto & col_and_name = tmp_block.getByName(aux_col_name);
         auto data_type = col_and_name.type;
-        RUNTIME_CHECK_MSG(!data_type->isNullable(), "Get an unexpected nullable column when the frame type is range");
-        aux_col_type = data_type->getTypeId();
+        if (data_type->isNullable())
+        {
+            is_order_by_col_nullable = true;
+            const auto & nullable_data_type = static_cast<const DataTypeNullable &>(*data_type);
+            aux_col_type = nullable_data_type.getNestedType()->getTypeId();
+        }
+        else
+        {
+            is_order_by_col_nullable = false;
+            aux_col_type = data_type->getTypeId();
+        }
     }
 }
 
@@ -237,8 +247,8 @@ void setAuxiliaryColumnInfo(
         return;
 
     const Block & tmp_block = actions->getSampleBlock();
-    setAuxiliaryColumnInfoImpl(begin_aux_col_name, tmp_block, window_desc.frame.begin_range_auxiliary_column_index, window_desc.begin_aux_col_type);
-    setAuxiliaryColumnInfoImpl(end_aux_col_name, tmp_block, window_desc.frame.end_range_auxiliary_column_index, window_desc.end_aux_col_type);
+    setAuxiliaryColumnInfoImpl(begin_aux_col_name, tmp_block, window_desc.frame.begin_range_auxiliary_column_index, window_desc.begin_aux_col_type, window_desc.is_begin_aux_col_nullable);
+    setAuxiliaryColumnInfoImpl(end_aux_col_name, tmp_block, window_desc.frame.end_range_auxiliary_column_index, window_desc.end_aux_col_type, window_desc.is_end_aux_col_nullable);
 }
 
 void setOrderByColumnTypeAndDirectionForRangeFrame(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
@@ -254,7 +264,17 @@ void setOrderByColumnTypeAndDirectionForRangeFrame(WindowDescription & window_de
     const String & order_by_col_name = window_desc.order_by[0].column_name;
     const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
 
-    window_desc.order_by_col_type = order_by_col_type_and_name.type->getTypeId();
+    if (order_by_col_type_and_name.type->isNullable())
+    {
+        window_desc.is_order_by_col_nullable = true;
+        const auto & nullable_data_type = static_cast<const DataTypeNullable &>(*order_by_col_type_and_name.type);
+        window_desc.order_by_col_type = nullable_data_type.getNestedType()->getTypeId();
+    }
+    else
+    {
+        window_desc.is_order_by_col_nullable = false;
+        window_desc.order_by_col_type = order_by_col_type_and_name.type->getTypeId();
+    }
     window_desc.is_desc = (window_desc.order_by[0].direction == -1);
 }
 

@@ -124,6 +124,11 @@ struct WindowDescription
     // only used for range frame type
     bool is_desc;
 
+    // only used for range frame type
+    bool is_order_by_col_nullable;
+    bool is_begin_aux_col_nullable;
+    bool is_end_aux_col_nullable;
+
     void setWindowFrame(const tipb::WindowFrame & frame_);
 
     void fillArgColumnNumbers();

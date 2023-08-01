@@ -83,11 +83,31 @@ bool isInRangeIntImpl(T current_row_aux_value, U cursor_value)
 }
 
 template <typename AuxColType, typename OrderByColType, bool is_start, bool is_desc>
-bool isInRangeNotIntImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
+bool isInRangeDecimalImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
     if constexpr (checkIfDecimalFieldType<AuxColType>() && checkIfDecimalFieldType<OrderByColType>())
         return isInRangeCommonImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
 
+    // When comparing Decimal and Int, we convert them to the Float first.
+    Float64 current_row_aux_value_float64;
+    Float64 cursor_value_float64;
+
+    if constexpr (checkIfDecimalFieldType<AuxColType>())
+        current_row_aux_value_float64 = current_row_aux_value.getValue().template toFloat<Float64>(current_row_aux_value.getScale());
+    else
+        current_row_aux_value_float64 = static_cast<Float64>(current_row_aux_value);
+
+    if constexpr (checkIfDecimalFieldType<OrderByColType>())
+        cursor_value_float64 = cursor_value.getValue().template toFloat<Float64>(cursor_value.getScale());
+    else
+        cursor_value_float64 = static_cast<Float64>(cursor_value);
+
+    return isInRangeCommonImpl<Float64, Float64, is_start, is_desc>(current_row_aux_value_float64, cursor_value_float64);
+}
+
+template <typename AuxColType, typename OrderByColType, bool is_start, bool is_desc>
+bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
+{
     Float64 current_row_aux_value_float64;
     Float64 cursor_value_float64;
 
@@ -120,14 +140,14 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
     }
     else if (CmpDataType == tipb::RangeCmpDataType::Float)
     {
-        return isInRangeNotIntImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
+        return isInRangeFloatImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
     }
     else
     {
         if constexpr (std::is_floating_point_v<OrderByColType> || std::is_floating_point_v<AuxColType>)
             throw Exception("Occurrence of float type at here is unexpected!");
 
-        return isInRangeNotIntImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
+        return isInRangeDecimalImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
     }
 }
 } // namespace
@@ -604,7 +624,6 @@ template <typename T, bool is_begin, bool is_desc>
 RowNumber WindowTransformAction::stepToFrameForRangeImpl()
 {
     RowNumber cursor;
-
     if constexpr (is_begin)
         cursor = prev_frame_start;
     else
@@ -616,9 +635,48 @@ RowNumber WindowTransformAction::stepToFrameForRangeImpl()
     else
         cur_row_aux_col_idx = window_description.frame.end_range_auxiliary_column_index;
 
+    bool is_col_nullable;
+    if constexpr (is_begin)
+        is_col_nullable = window_description.is_begin_aux_col_nullable;
+    else
+        is_col_nullable = window_description.is_end_aux_col_nullable;
+
     ColumnPtr cur_row_aux_column = inputAt(current_row)[cur_row_aux_col_idx];
     typename ActualCmpDataType<T>::Type current_row_aux_value = getValue<T>(cur_row_aux_column, current_row.row);
+
+    if (is_col_nullable && cur_row_aux_column->isNullAt(current_row.row))
+        return moveCursorAndFindRangeFrameBoundaryIfNull<is_begin>(cursor);
     return moveCursorAndFindRangeFrameBoundary<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(cursor, current_row_aux_value);
+}
+
+template <bool is_begin>
+RowNumber WindowTransformAction::moveCursorAndFindRangeFrameBoundaryIfNull(RowNumber cursor)
+{
+    if constexpr (is_begin)
+    {
+        while (cursor <= current_row)
+        {
+            const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
+            if (cursor_column->isNullAt(cursor.row))
+                return cursor;
+
+            advanceRowNumber(cursor);
+        }
+    }
+    else
+    {
+        while (cursor < partition_end)
+        {
+            const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
+            if (!cursor_column->isNullAt(cursor.row))
+                return cursor;
+
+            advanceRowNumber(cursor);
+        }
+    }
+
+
+    return cursor;
 }
 
 template <typename AuxColType, bool is_begin, bool is_desc>
@@ -671,20 +729,37 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrameBoundary(RowNumber c
     else
         cmp_data_type = window_description.frame.end_cmp_data_type;
 
-    switch (cmp_data_type)
+    if (window_description.is_order_by_col_nullable)
     {
-    case tipb::RangeCmpDataType::Int:
-        return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Int, is_begin, is_desc>(cursor, current_row_aux_value);
-    case tipb::RangeCmpDataType::Float:
-        return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Float, is_begin, is_desc>(cursor, current_row_aux_value);
-    case tipb::RangeCmpDataType::Decimal:
-        return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Decimal, is_begin, is_desc>(cursor, current_row_aux_value);
-    default:
-        throw Exception("Unexpected RangeCmpDataType!");
+        switch (cmp_data_type)
+        {
+        case tipb::RangeCmpDataType::Int:
+            return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Int, is_begin, is_desc, true>(cursor, current_row_aux_value);
+        case tipb::RangeCmpDataType::Float:
+            return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Float, is_begin, is_desc, true>(cursor, current_row_aux_value);
+        case tipb::RangeCmpDataType::Decimal:
+            return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Decimal, is_begin, is_desc, true>(cursor, current_row_aux_value);
+        default:
+            throw Exception("Unexpected RangeCmpDataType!");
+        }
+    }
+    else
+    {
+        switch (cmp_data_type)
+        {
+        case tipb::RangeCmpDataType::Int:
+            return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Int, is_begin, is_desc, false>(cursor, current_row_aux_value);
+        case tipb::RangeCmpDataType::Float:
+            return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Float, is_begin, is_desc, false>(cursor, current_row_aux_value);
+        case tipb::RangeCmpDataType::Decimal:
+            return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Decimal, is_begin, is_desc, false>(cursor, current_row_aux_value);
+        default:
+            throw Exception("Unexpected RangeCmpDataType!");
+        }
     }
 }
 
-template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc>
+template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc, bool is_order_by_col_nullable>
 RowNumber WindowTransformAction::moveCursorAndFindFrameBoundaryImpl(RowNumber cursor, AuxColType current_row_aux_value)
 {
     using ActualOrderByColType = typename ActualCmpDataType<OrderByColType>::Type;
@@ -692,6 +767,22 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameBoundaryImpl(RowNumber cu
     while (cursor < partition_end)
     {
         const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
+        if (is_order_by_col_nullable)
+        {
+            if (cursor_column->isNullAt(cursor.row))
+            {
+                if constexpr (is_begin)
+                {
+                    advanceRowNumber(cursor);
+                    continue;
+                }
+                else
+                {
+                    return cursor;
+                }
+            }
+        }
+
         ActualOrderByColType cursor_value = getValue<OrderByColType>(cursor_column, cursor.row);
 
         if constexpr (is_begin)
