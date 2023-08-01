@@ -79,6 +79,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(meta_))
+    , resource_group_name(meta_.resource_group_name())
 {
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();

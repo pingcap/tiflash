@@ -264,8 +264,9 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final
 {
 public:
-    explicit LocalAdmissionController(MPPTaskManagerPtr mpp_task_manager_)
-        : last_cleanup_resource_group_timepoint(std::chrono::steady_clock::now())
+    explicit LocalAdmissionController(MPPTaskManagerPtr mpp_task_manager_, ::pingcap::kv::Cluster * cluster_)
+        : cluster(cluster_)
+        , last_cleanup_resource_group_timepoint(std::chrono::steady_clock::now())
         , mpp_task_manager(mpp_task_manager_)
         , thread_manager(newThreadManager())
     {

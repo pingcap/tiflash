@@ -1717,7 +1717,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         tmt_context.setStatusRunning();
 
-        LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager());
+        LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
 
         try
         {
