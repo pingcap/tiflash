@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
@@ -21,6 +22,10 @@
 
 namespace DB::DM::Remote
 {
+namespace FailPoints
+{
+extern const char pause_when_reading_from_dt_stream[];
+} // namespace FailPoints
 
 void RNSegmentSourceOp::operateSuffixImpl()
 {
@@ -122,6 +127,7 @@ OperatorStatus RNSegmentSourceOp::executeIOImpl()
 
     FilterPtr filter_ignored = nullptr;
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
+    FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
     Block res = current_seg_task->getInputStream()->read(filter_ignored, false);
     duration_read_sec += w.elapsedSeconds();
     if likely (res)
