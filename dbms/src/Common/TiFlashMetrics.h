@@ -281,6 +281,9 @@ namespace DB
         F(type_flush_useful_admin, {{"type", "flush_useful_admin"}}),                                                                               \
         F(type_flush_passive, {{"type", "flush_passive"}}),                                                                                         \
         F(type_flush_proactive, {{"type", "flush_proactive"}}),                                                                                     \
+        F(type_flush_log_gap, {{"type", "flush_log_gap"}}),                                                                                         \
+        F(type_flush_size, {{"type", "flush_size"}}),                                                                                               \
+        F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                                       \
         F(type_exec_compact, {{"type", "exec_compact"}}))                                                                                           \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                              \

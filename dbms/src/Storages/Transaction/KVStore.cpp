@@ -480,15 +480,21 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
 
     bool can_flush = false;
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
-    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed)
-        || size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+
+    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
     {
-        // if rows or bytes more than threshold, flush cache and persist mem data.
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
+        can_flush = true;
+    }
+    if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+    {
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
         can_flush = true;
     }
     auto gap_threshold = region_compact_log_gap.load();
     if (index > truncated_index + gap_threshold)
     {
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
         can_flush = true;
     }
 

@@ -84,9 +84,9 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 enum class PersistRegionReason
 {
     Debug,
-    UselessAdminCommand,
+    UselessAdminCommand, // Does not include passive CompactLog
     AdminCommand,
-    Flush,
+    Flush, // passive CompactLog
     ProactiveFlush,
     ApplySnapshotPrevRegion,
     ApplySnapshotCurRegion,
