@@ -26,9 +26,7 @@ public:
     LocalAggregateTransform(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const Aggregator::Params & params_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_);
+        const Aggregator::Params & params_);
 
     String getName() const override
     {

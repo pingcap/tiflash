@@ -25,15 +25,11 @@ public:
     IOEventTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const EventPtr & event_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_)
+        const EventPtr & event_)
         : EventTask(
             exec_context_,
             req_id,
             event_,
-            resource_group_name_,
-            keyspace_id_,
             is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }

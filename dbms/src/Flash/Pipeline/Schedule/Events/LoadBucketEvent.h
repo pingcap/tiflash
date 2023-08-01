@@ -27,13 +27,9 @@ public:
     LoadBucketEvent(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        SharedSpilledBucketDataLoaderPtr loader_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_)
+        SharedSpilledBucketDataLoaderPtr loader_)
         : Event(exec_context_, req_id)
         , loader(std::move(loader_))
-        , resource_group_name(resource_group_name_)
-        , keyspace_id(keyspace_id_)
     {
         assert(loader);
     }
@@ -45,7 +41,5 @@ protected:
 
 private:
     SharedSpilledBucketDataLoaderPtr loader;
-    const String resource_group_name;
-    const KeyspaceID keyspace_id;
 };
 } // namespace DB

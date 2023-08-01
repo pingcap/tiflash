@@ -477,7 +477,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
         }
         scheduled = resource_group_scheduler->tryToSchedule(schedule_entry, *this);
         // Should always insert succees, query_id will not be duplicate.
-        auto insert_res = resource_group_query_ids.insert({schedule_entry.getMPPTaskId().query_id, resource_group_name});
+        auto insert_res = resource_group_query_ids.insert({schedule_entry.getMPPTaskId().gather_id.query_id, resource_group_name});
         assert(insert_res.second);
     }
     else

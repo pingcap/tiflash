@@ -25,13 +25,9 @@ public:
     FineGrainedPipelineEvent(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        PipelineExecPtr && pipeline_exec_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_)
+        PipelineExecPtr && pipeline_exec_)
         : Event(exec_context_, req_id)
         , pipeline_exec(std::move(pipeline_exec_))
-        , resource_group_name(resource_group_name_)
-        , keyspace_id(keyspace_id_)
     {
         RUNTIME_CHECK(pipeline_exec);
     }
@@ -42,8 +38,5 @@ protected:
 private:
     // The pipeline exec for executing the specific fine-grained partition.
     PipelineExecPtr pipeline_exec;
-
-    const String resource_group_name;
-    const KeyspaceID keyspace_id;
 };
 } // namespace DB

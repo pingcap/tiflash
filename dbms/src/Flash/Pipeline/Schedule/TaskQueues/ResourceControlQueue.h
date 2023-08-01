@@ -41,14 +41,18 @@ public:
 
     void finish() override;
 
+    void cancel(const String & query_id) override;
 private:
     // <resource_group_name, pipeline_tasks>
     using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
-    // <priority, iterator_of_MLFQ_of_pipeline_tasks, resource_group_name, keyspace_id>
+    // <priority, corresponding_task_queue, resource_group_name, keyspace_id>
     using ResourceGroupInfo = std::tuple<double, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
     using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
+
+    // <query_id, corresponding_task_queue>, just for cancel
+    // gjt todo
 
     // Index of ResourceGroupInfo.
     static constexpr auto InfoIndexPriority = 0;

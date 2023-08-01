@@ -27,10 +27,8 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
-        SpilledBucketInput & input_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_)
-        : IOEventTask(exec_context_, req_id, event_, resource_group_name_, keyspace_id_)
+        SpilledBucketInput & input_)
+        : IOEventTask(exec_context_, req_id, event_)
         , input(input_)
     {
     }

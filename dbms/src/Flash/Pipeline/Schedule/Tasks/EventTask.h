@@ -32,8 +32,6 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_,
         ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
 protected:

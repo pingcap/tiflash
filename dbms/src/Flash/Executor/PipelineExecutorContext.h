@@ -20,6 +20,7 @@
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
+#include <Storages/Transaction/Types.h>
 
 #include <atomic>
 #include <exception>
@@ -38,8 +39,10 @@ public:
         , mem_tracker(nullptr)
     {}
 
-    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
+    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_, const String & resource_group_name_, const KeyspaceID & keyspace_id_)
         : query_id(query_id_)
+        , resource_group_name(resource_group_name_)
+        , keyspace_id(keyspace_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
     {}
@@ -150,6 +153,16 @@ public:
         return query_id;
     }
 
+    const String & getResourceGroupName() const
+    {
+        return resource_group_name;
+    }
+
+    const KeyspaceID & getKeyspaceID() const
+    {
+        return keyspace_id;
+    }
+
     const MemoryTrackerPtr & getMemoryTracker() const
     {
         return mem_tracker;
@@ -165,6 +178,10 @@ private:
 
 private:
     const String query_id;
+
+    // For resource control.
+    const String resource_group_name;
+    const KeyspaceID keyspace_id = NullspaceID;
 
     LoggerPtr log;
 

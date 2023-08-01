@@ -26,9 +26,7 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
-        PipelineExecPtr && pipeline_exec_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_);
+        PipelineExecPtr && pipeline_exec_);
 
 protected:
     ExecTaskStatus executeImpl() override;

@@ -29,9 +29,7 @@ public:
         const String & req_id,
         const EventPtr & event_,
         AggregateContextPtr agg_context_,
-        size_t index_,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_);
+        size_t index_);
 
 protected:
     ExecTaskStatus executeIOImpl() override;

@@ -19,6 +19,6 @@ namespace DB
 {
 void FineGrainedPipelineEvent::scheduleImpl()
 {
-    addTask(std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec), resource_group_name, keyspace_id));
+    addTask(std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
 }
 } // namespace DB

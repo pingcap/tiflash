@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/toRU.h>
-#include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
@@ -177,7 +177,12 @@ void ResourceControlQueue<NestedQueueType>::finish()
     cv.notify_all();
 }
 
+template <typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id)
+{
+
+}
+
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;
-template class ResourceControlQueue<FIFOTaskQueue>;
 template class ResourceControlQueue<IOPriorityQueue>;
 } // namespace DB

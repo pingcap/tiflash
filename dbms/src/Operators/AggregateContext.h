@@ -42,13 +42,8 @@ struct ThreadData
 class AggregateContext
 {
 public:
-    explicit AggregateContext(
-        const String & req_id,
-        const String & resource_group_name_,
-        const KeyspaceID & keyspace_id_)
+    explicit AggregateContext(const String & req_id)
         : log(Logger::get(req_id))
-        , resource_group_name(resource_group_name_)
-        , keyspace_id(keyspace_id_)
     {
     }
 
@@ -78,9 +73,6 @@ public:
     Block readForConvergent(size_t index);
 
     Block getHeader() const;
-
-    String getResourceGroupName() const { return resource_group_name; }
-    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
     AggSpillContextPtr & getAggSpillContext() { return aggregator->getAggSpillContext(); }
 
@@ -117,9 +109,6 @@ private:
     const LoggerPtr log;
 
     std::optional<Stopwatch> build_watch;
-
-    const String resource_group_name;
-    const KeyspaceID keyspace_id;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

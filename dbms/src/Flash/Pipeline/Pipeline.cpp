@@ -248,7 +248,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
     {
         auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec), context.getDAGContext()->getResourceGroupName(), context.getDAGContext()->getKeyspaceID()));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else

@@ -49,7 +49,7 @@ class PipelineExecutorContext;
 class Task
 {
 public:
-    Task(PipelineExecutorContext & exec_context_, const String & req_id, const String & resource_group_name, const KeyspaceID & keyspace_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+    Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     // Only used for unit test.
     explicit Task(PipelineExecutorContext & exec_context_);
@@ -80,17 +80,10 @@ public:
         current_memory_tracker = nullptr;
     }
 
-    std::string getResourceGroupName() const
-    {
-        return resource_group_name;
-    }
-
-    KeyspaceID getKeyspaceID() const
-    {
-        return keyspace_id;
-    }
-
     const String & getQueryId() const;
+
+    const String & getResourceGroupName() const;
+    const KeyspaceID & getKeyspaceID() const;
 
 public:
     LoggerPtr log;
@@ -124,10 +117,6 @@ private:
     ExecTaskStatus task_status;
 
     bool is_finalized = false;
-
-    std::string resource_group_name;
-
-    KeyspaceID keyspace_id;
 };
 using TaskPtr = std::unique_ptr<Task>;
 

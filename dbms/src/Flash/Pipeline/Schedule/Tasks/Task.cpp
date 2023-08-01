@@ -70,13 +70,11 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-Task::Task(PipelineExecutorContext & exec_context_, const String & req_id, const String & resource_group_name, const KeyspaceID & keyspace_id, ExecTaskStatus init_status)
+Task::Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
     , exec_context(exec_context_)
     , mem_tracker_holder(exec_context_.getMemoryTracker())
     , mem_tracker_ptr(mem_tracker_holder.get())
-    , resource_group_name(resource_group_name_)
-    , keyspace_id(keyspace_id_)
     , task_status(init_status)
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
@@ -192,5 +190,15 @@ void Task::switchStatus(ExecTaskStatus to)
 const String & Task::getQueryId() const
 {
     return exec_context.getQueryId();
+}
+
+const String & Task::getResourceGroupName() const
+{
+    return exec_context.getResourceGroupName();
+}
+
+const KeyspaceID & Task::getKeyspaceID() const
+{
+    return exec_context.getKeyspaceID();
 }
 } // namespace DB

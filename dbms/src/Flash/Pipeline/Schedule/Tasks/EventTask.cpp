@@ -30,10 +30,8 @@ EventTask::EventTask(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const EventPtr & event_,
-    const String & resource_group_name_,
-    const KeyspaceID & keyspace_id_,
     ExecTaskStatus init_status)
-    : Task(exec_context_, req_id, init_status, resource_group_name_, keyspace_id_)
+    : Task(exec_context_, req_id, init_status)
     , event(event_)
 {
     RUNTIME_CHECK(event);

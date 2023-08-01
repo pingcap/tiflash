@@ -43,7 +43,8 @@ TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
     {
     // the default queue is io priority queue.
     case TaskQueueType::DEFAULT:
-        // gjt todo RCQ_IO_PRIORITY
+    case TaskQueueType::RCQ_IO_PRIORITY:
+        return std::make_unique<ResourceControlQueue<IOPriorityQueue>>();
     case TaskQueueType::IO_PRIORITY:
         return std::make_unique<IOPriorityQueue>();
     case TaskQueueType::MLFQ:

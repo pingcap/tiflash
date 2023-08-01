@@ -23,14 +23,10 @@ SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
     PipelineExecutorContext & exec_context_,
     const BlockInputStreams & bucket_streams,
     const String & req_id,
-    size_t max_queue_size_,
-    const String & resource_group_name_,
-    const KeyspaceID & keyspace_id_)
+    size_t max_queue_size_)
     : exec_context(exec_context_)
     , log(Logger::get(req_id))
     , max_queue_size(std::max(1, max_queue_size_))
-    , resource_group_name(resource_group_name_)
-    , keyspace_id(keyspace_id_)
 {
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
@@ -104,7 +100,7 @@ void SharedSpilledBucketDataLoader::loadBucket()
         return;
 
     RUNTIME_CHECK(!bucket_inputs.empty());
-    auto event = std::make_shared<LoadBucketEvent>(exec_context, log->identifier(), shared_from_this(), resource_group_name, keyspace_id);
+    auto event = std::make_shared<LoadBucketEvent>(exec_context, log->identifier(), shared_from_this());
     RUNTIME_CHECK(event->prepare());
     event->schedule();
 }

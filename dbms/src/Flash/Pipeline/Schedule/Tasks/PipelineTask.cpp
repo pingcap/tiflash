@@ -23,10 +23,8 @@ PipelineTask::PipelineTask(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const EventPtr & event_,
-    PipelineExecPtr && pipeline_exec_,
-    const String & resource_group_name_,
-    const KeyspaceID & keyspace_id_)
-    : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING, resource_group_name_, keyspace_id_)
+    PipelineExecPtr && pipeline_exec_)
+    : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
     , pipeline_exec_holder(std::move(pipeline_exec_))
     , pipeline_exec(pipeline_exec_holder.get())
 {

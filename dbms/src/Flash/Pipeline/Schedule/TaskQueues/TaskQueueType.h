@@ -23,6 +23,6 @@ enum class TaskQueueType
     MLFQ, // multi-level feedback queue
     IO_PRIORITY, // io priority queue
     RCQ_MLFQ, // resource control queue nesting MLFQ.
-    RCQ_FIFO, // resource control queue nesting FIFO.
+    RCQ_IO_PRIORITY, // resource control queue nesting IO_PRIORITY.
 };
 } // namespace DB
