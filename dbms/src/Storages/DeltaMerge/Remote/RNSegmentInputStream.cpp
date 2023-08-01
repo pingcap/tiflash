@@ -21,13 +21,13 @@
 
 #include <magic_enum.hpp>
 
-namespace DB::DM::Remote
-{
-namespace FailPoints
+namespace DB::FailPoints
 {
 extern const char pause_when_reading_from_dt_stream[];
-} // namespace FailPoints
+} // namespace DB::FailPoints
 
+namespace DB::DM::Remote
+{
 RNSegmentInputStream::~RNSegmentInputStream()
 {
     LOG_INFO(
