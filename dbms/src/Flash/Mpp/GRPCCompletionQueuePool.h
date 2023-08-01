@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/ThreadFactory.h>
-#include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
 
 #include <atomic>

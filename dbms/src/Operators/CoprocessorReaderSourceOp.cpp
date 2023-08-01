@@ -19,10 +19,10 @@
 namespace DB
 {
 CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
     CoprocessorReaderPtr coprocessor_reader_)
-    : SourceOp(exec_status_, req_id)
+    : SourceOp(exec_context_, req_id)
     , coprocessor_reader(coprocessor_reader_)
     , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, coprocessor_reader->getSourceNum()))
 {

@@ -20,14 +20,13 @@
 namespace DB
 {
 PipelineTask::PipelineTask(
-    MemoryTrackerPtr mem_tracker_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
-    PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_,
     const String & resource_group_name_,
     const KeyspaceID & keyspace_id_)
-    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_, resource_group_name_, keyspace_id_)
+    : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING, resource_group_name_, keyspace_id_)
     , pipeline_exec_holder(std::move(pipeline_exec_))
     , pipeline_exec(pipeline_exec_holder.get())
 {
@@ -69,7 +68,7 @@ void PipelineTask::doFinalizeImpl()
 #define UNEXPECTED_OP_STATUS(op_status, function_name) \
     throw Exception(fmt::format("Unexpected op state {} at {}", magic_enum::enum_name(op_status), (function_name)));
 
-ExecTaskStatus PipelineTask::doExecuteImpl()
+ExecTaskStatus PipelineTask::executeImpl()
 {
     assert(pipeline_exec);
     auto op_status = pipeline_exec->execute();
@@ -85,7 +84,7 @@ ExecTaskStatus PipelineTask::doExecuteImpl()
     }
 }
 
-ExecTaskStatus PipelineTask::doExecuteIOImpl()
+ExecTaskStatus PipelineTask::executeIOImpl()
 {
     assert(pipeline_exec);
     auto op_status = pipeline_exec->executeIO();
@@ -104,7 +103,7 @@ ExecTaskStatus PipelineTask::doExecuteIOImpl()
     }
 }
 
-ExecTaskStatus PipelineTask::doAwaitImpl()
+ExecTaskStatus PipelineTask::awaitImpl()
 {
     assert(pipeline_exec);
     auto op_status = pipeline_exec->await();

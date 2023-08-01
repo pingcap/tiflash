@@ -23,20 +23,19 @@ class PipelineTask : public EventTask
 {
 public:
     PipelineTask(
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
-        PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         PipelineExecPtr && pipeline_exec_,
         const String & resource_group_name_,
-        const KeyspaceID & key_space_id_);
+        const KeyspaceID & keyspace_id_);
 
 protected:
-    ExecTaskStatus doExecuteImpl() override;
+    ExecTaskStatus executeImpl() override;
 
-    ExecTaskStatus doExecuteIOImpl() override;
+    ExecTaskStatus executeIOImpl() override;
 
-    ExecTaskStatus doAwaitImpl() override;
+    ExecTaskStatus awaitImpl() override;
 
     void doFinalizeImpl() override;
 

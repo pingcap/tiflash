@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Core/Defines.h>
 #include <Core/Spiller.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -21,7 +22,6 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
 
 namespace DB
 {
@@ -159,6 +159,7 @@ try
         GTEST_ASSERT_EQ(std::strstr(e.message().c_str(), "exception_during_spill") != nullptr, true);
         GTEST_ASSERT_EQ(spiller.hasSpilledData(), false);
     }
+    FailPointHelper::disableFailPoint("exception_during_spill");
 }
 CATCH
 
@@ -235,6 +236,7 @@ try
         }
     }
     spiller.finishSpill();
+    ASSERT_TRUE(spiller.hasSpilledData());
     for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
@@ -271,6 +273,7 @@ try
             }
         }
         spiller->finishSpill();
+        ASSERT_TRUE(spiller->hasSpilledData());
         for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
         {
             size_t max_restore_streams = 2 + partition_id * 10;
@@ -301,6 +304,7 @@ try
         auto blocks_to_spill = blocks;
         spiller->spillBlocks(std::move(blocks_to_spill), 0);
         spiller->finishSpill();
+        ASSERT_TRUE(spiller->hasSpilledData());
         verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
         if (!spiller->releaseSpilledFileOnRestore())
             verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
@@ -331,6 +335,7 @@ try
         }
     }
     spiller.finishSpill();
+    ASSERT_TRUE(spiller.hasSpilledData());
     for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
@@ -367,6 +372,7 @@ try
             }
         }
         spiller->finishSpill();
+        ASSERT_TRUE(spiller->hasSpilledData());
         for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
         {
             size_t max_restore_streams = 2 + partition_id * 10;
@@ -395,6 +401,7 @@ try
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 20, 1, all_blocks, false);
     }
     /// append_dummy_read = true
@@ -409,6 +416,7 @@ try
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 20, 20, all_blocks, true);
     }
 }
@@ -431,6 +439,7 @@ try
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
     }
     /// case 2, one spill write to multiple files
@@ -441,6 +450,7 @@ try
         auto reference = all_blocks;
         spiller.spillBlocks(std::move(all_blocks), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 0, 20, reference);
     }
     /// case 3, spill empty blocks to existing spilled file
@@ -456,6 +466,7 @@ try
         auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 2, 1, reference);
     }
     /// case 4, spill empty blocks to new spilled file
@@ -502,14 +513,89 @@ try
     for (auto & type_and_name : constant_header)
         type_and_name.column = type_and_name.type->createColumnConst(1, Field(static_cast<Int64>(1)));
 
-    Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
-    spiller.spillBlocks({constant_header}, 0);
-    GTEST_FAIL();
+    {
+        Blocks blocks;
+        size_t rows = 10;
+        size_t block_num = 10;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = constant_header;
+            for (auto & col : block)
+                col.column = col.column->cloneResized(rows);
+            blocks.push_back(std::move(block));
+        }
+        auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock1", rand());
+        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        Spiller spiller(new_spill_config, false, 1, constant_header, logger);
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
+
+        Block expected_block = constant_header;
+        for (auto & col : expected_block)
+            col.column = col.column->cloneResized(rows * block_num);
+        verifyRestoreBlocks(spiller, 0, 100, 1, {expected_block});
+    }
+
+    {
+        Blocks blocks;
+        size_t block_num = DEFAULT_BLOCK_SIZE + 1;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = constant_header;
+            for (auto & col : block)
+                col.column = col.column->cloneResized(1);
+            blocks.push_back(std::move(block));
+        }
+        auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock2", rand());
+        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        Spiller spiller(new_spill_config, false, 1, constant_header, logger);
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
+
+        Blocks expected_blocks;
+        Block block1 = constant_header;
+        for (auto & col : block1)
+            col.column = col.column->cloneResized(new_spill_config.for_all_constant_block_size);
+        expected_blocks.push_back(std::move(block1));
+        Block block2 = constant_header;
+        for (auto & col : block2)
+            col.column = col.column->cloneResized(1);
+        expected_blocks.push_back(std::move(block2));
+        verifyRestoreBlocks(spiller, 0, 100, 2, expected_blocks);
+    }
+
+    {
+        Blocks blocks;
+        size_t block_num = DEFAULT_BLOCK_SIZE + 1;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = constant_header;
+            for (auto & col : block)
+                col.column = col.column->cloneResized(1);
+            blocks.push_back(std::move(block));
+        }
+        auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock3", rand());
+        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        Spiller spiller(new_spill_config, false, 1, constant_header, logger);
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
+
+        Blocks expected_blocks;
+        Block block1 = constant_header;
+        for (auto & col : block1)
+            col.column = col.column->cloneResized(new_spill_config.for_all_constant_block_size);
+        expected_blocks.push_back(std::move(block1));
+        Block block2 = constant_header;
+        for (auto & col : block2)
+            col.column = col.column->cloneResized(1);
+        expected_blocks.push_back(std::move(block2));
+        verifyRestoreBlocks(spiller, 0, 1, 1, expected_blocks);
+    }
 }
-catch (Exception & e)
-{
-    GTEST_ASSERT_EQ(e.message().find("Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns") != std::string::npos, true);
-}
+CATCH
 
 TEST_F(SpillerTest, SpillWithConstantSchemaAndNonConstantData)
 try

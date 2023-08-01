@@ -25,13 +25,12 @@ class LoadBucketEvent : public Event
 {
 public:
     LoadBucketEvent(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         SharedSpilledBucketDataLoaderPtr loader_,
         const String & resource_group_name_,
         const KeyspaceID & keyspace_id_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        : Event(exec_context_, req_id)
         , loader(std::move(loader_))
         , resource_group_name(resource_group_name_)
         , keyspace_id(keyspace_id_)

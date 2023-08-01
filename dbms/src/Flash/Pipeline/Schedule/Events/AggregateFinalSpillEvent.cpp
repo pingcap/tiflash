@@ -22,11 +22,7 @@ void AggregateFinalSpillEvent::scheduleImpl()
 {
     assert(agg_context);
     for (auto index : indexes)
-    {
-        auto agg_final_spill_task = std::make_unique<AggregateFinalSpillTask>(mem_tracker,
-                log->identifier(), exec_status, shared_from_this(), agg_context, index, agg_context->getResourceGroupName(), agg_context->getKeyspaceID());
-        addTask(std::move(agg_final_spill_task));
-    }
+        addTask(std::make_unique<AggregateFinalSpillTask>(exec_context, log->identifier(), shared_from_this(), agg_context, index, agg_context->getResourceGroupName(), agg_context->getKeyspaceID()));
 }
 
 void AggregateFinalSpillEvent::finishImpl()

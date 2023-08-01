@@ -273,6 +273,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
             .log = log,
         },
+        .only_upload_manifest = settings.remote_checkpoint_only_upload_manifest,
     };
 
     const auto write_stats = uni_page_storage->dumpIncrementalCheckpoint(opts);

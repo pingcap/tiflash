@@ -120,7 +120,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(log, "updateTableColumnInfo: TableName {} ordinary {} materialized {}", table_column_info->table_name, columns.ordinary.toString(), columns.materialized.toString());
+    LOG_INFO(log, "updateTableColumnInfo, table_name={} ordinary=\"{}\" materialized=\"{}\"", table_column_info->table_name, columns.ordinary.toString(), columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
     auto & handle_column_define = table_column_info->handle_column_define;
@@ -946,7 +946,7 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
-RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context)
+RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const
 {
     if (db_context.getDAGContext() == nullptr || query_info.dag_query == nullptr)
     {
@@ -959,7 +959,7 @@ RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo
 }
 
 void StorageDeltaMerge::read(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
     const SelectQueryInfo & query_info,
@@ -989,10 +989,12 @@ void StorageDeltaMerge::read(
 
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
+
     const auto & scan_context = mvcc_query_info.scan_context;
 
     store->read(
-        exec_status_,
+        exec_context_,
         group_builder,
         context,
         context.getSettingsRef(),
@@ -1001,6 +1003,8 @@ void StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         filter,
+        runtime_filter_list,
+        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -1221,7 +1225,7 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     if (!decoding_schema_snapshot || decoding_schema_changed)
     {
         auto & store = getAndMaybeInitStore();
-        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_version++);
+        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_epoch++);
         cache_blocks.clear();
         decoding_schema_changed = false;
     }
@@ -1267,10 +1271,10 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     }
 }
 
-void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block_ptr)
+void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block_ptr)
 {
     std::lock_guard lock{decode_schema_mutex};
-    if (!decoding_schema_snapshot || block_decoding_schema_version < decoding_schema_snapshot->decoding_schema_version)
+    if (!decoding_schema_snapshot || block_decoding_schema_epoch < decoding_schema_snapshot->decoding_schema_epoch)
         return;
     if (cache_blocks.size() >= max_cached_blocks_num)
         return;

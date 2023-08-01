@@ -66,7 +66,7 @@ public:
 
     LocalAggregateRestorerPtr buildLocalRestorer();
 
-    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorStatus & exec_status);
+    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorContext & exec_context);
 
     void initConvergent();
 
@@ -81,6 +81,9 @@ public:
 
     String getResourceGroupName() const { return resource_group_name; }
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
+    AggSpillContextPtr & getAggSpillContext() { return aggregator->getAggSpillContext(); }
+
 private:
     std::unique_ptr<Aggregator> aggregator;
     bool keys_size = false;

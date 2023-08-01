@@ -30,7 +30,7 @@ DataTypeMyDateTime::DataTypeMyDateTime(int fraction_)
 {
     fraction = fraction_;
     if (fraction < 0 || fraction > 6)
-        throw Exception("fraction must >= 0 and <= 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "fraction must >= 0 and <= 6, fraction={}", fraction_);
 }
 
 void DataTypeMyDateTime::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -132,7 +132,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             "MyDateTime data type can optionally have only one argument - fractional",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::UInt64)
         throw Exception("Parameter for MyDateTime data type must be uint literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 

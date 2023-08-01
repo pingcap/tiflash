@@ -76,10 +76,16 @@ static_assert(!std::is_same_v<ChecksumClass, Digest::City128>, "The checksum mus
   *********************/
 
 template <typename Trait>
-BlobStore<Trait>::BlobStore(const String & storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_)
+BlobStore<Trait>::BlobStore(
+    const String & storage_name,
+    const FileProviderPtr & file_provider_,
+    PSDiskDelegatorPtr delegator_,
+    const BlobConfig & config_,
+    const PageTypeAndConfig & page_type_and_config_)
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
+    , page_type_and_config(page_type_and_config_)
     , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
 {
@@ -132,6 +138,16 @@ void BlobStore<Trait>::reloadConfig(const BlobConfig & rhs)
     config.spacemap_type = rhs.spacemap_type;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
     config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
+    config.heavy_gc_valid_rate_raft_data = rhs.heavy_gc_valid_rate_raft_data;
+    auto reload_page_type_config = [this](PageType page_type, const PageTypeConfig & config) {
+        auto iter = page_type_and_config.find(page_type);
+        if (iter != page_type_and_config.end())
+        {
+            iter->second = config;
+        }
+    };
+    reload_page_type_config(PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate});
+    reload_page_type_config(PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate_raft_data});
 }
 
 template <typename Trait>
@@ -169,7 +185,7 @@ FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
+BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, PageType page_type, const WriteLimiterPtr & write_limiter)
 {
     PageEntriesEdit edit;
     for (auto & write : wb.getMutWrites())
@@ -179,7 +195,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const Write
         case WriteBatchWriteType::PUT:
         case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
-            const auto [blob_id, offset_in_file] = getPosFromStats(write.size);
+            const auto [blob_id, offset_in_file] = getPosFromStats(write.size, page_type);
             auto blob_file = getBlobFile(blob_id);
             ChecksumClass digest;
             // swap from WriteBatch instead of copying
@@ -351,7 +367,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const Write
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
+BlobStore<Trait>::write(typename Trait::WriteBatch && wb, PageType page_type, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -425,7 +441,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
     if (all_page_data_size > config.file_limit_size)
     {
         LOG_INFO(log, "handling large write, all_page_data_size={}", all_page_data_size);
-        return handleLargeWrite(std::move(wb), write_limiter);
+        return handleLargeWrite(std::move(wb), page_type, write_limiter);
     }
 
     char * buffer = static_cast<char *>(alloc(all_page_data_size));
@@ -443,7 +459,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
 
     size_t actually_allocated_size = all_page_data_size + replenish_size;
 
-    auto [blob_id, offset_in_file] = getPosFromStats(actually_allocated_size);
+    auto [blob_id, offset_in_file] = getPosFromStats(actually_allocated_size, page_type);
 
     size_t offset_in_allocated = 0;
 
@@ -637,15 +653,15 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries)
 }
 
 template <typename Trait>
-std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t size)
+std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t size, PageType page_type)
 {
     Stopwatch watch;
     BlobStatPtr stat;
 
-    auto lock_stat = [size, this, &stat]() {
+    auto lock_stat = [size, this, &stat, &page_type]() {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
-        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, lock_stats);
+        std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, page_type, lock_stats);
         if (stat == nullptr)
         {
             // No valid stat for putting data with `size`, create a new one
@@ -1062,11 +1078,11 @@ BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & pag
 
 
 template <typename Trait>
-std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
+typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats()
 {
     // Get a copy of stats map to avoid the big lock on stats map
     const auto stats_list = blob_stats.getStats();
-    std::vector<BlobFileId> blob_need_gc;
+    PageTypeAndBlobIds blob_need_gc;
     BlobStoreGCInfo blobstore_gc_info;
 
     fiu_do_on(FailPoints::force_change_all_blobs_to_read_only,
@@ -1132,10 +1148,25 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
             }
 
             // Check if GC is required
-            if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
+            // Raft related data contains raft log and other meta data.
+            // Raft log is written and deleted in a faster pace which is not suitable for full gc.
+            // But other meta data is written and deleted in a slower pace and cannot be completely deleted even if the region is removed, and full gc is needed.
+            // So we choose to also do full gc for raft related data but with a smaller threshold.
+            PageType page_type = PageTypeUtils::getPageType(stat->id);
+            auto heavy_gc_threhold = config.heavy_gc_valid_rate;
+            if (auto iter = page_type_and_config.find(page_type); iter != page_type_and_config.end())
+            {
+                heavy_gc_threhold = iter->second.heavy_gc_valid_rate;
+            }
+            bool do_full_gc = stat->sm_valid_rate <= heavy_gc_threhold;
+            if (do_full_gc)
             {
                 LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
-                blob_need_gc.emplace_back(stat->id);
+                if (blob_need_gc.find(page_type) == blob_need_gc.end())
+                {
+                    blob_need_gc.emplace(page_type, std::vector<BlobFileId>());
+                }
+                blob_need_gc[page_type].emplace_back(stat->id);
 
                 // Change current stat to read only
                 stat->changeToReadOnly();
@@ -1166,14 +1197,15 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
 }
 
 template <typename Trait>
-typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::gc(GcEntriesMap & entries_need_gc,
-                     const PageSize & total_page_size,
-                     const WriteLimiterPtr & write_limiter,
-                     const ReadLimiterPtr & read_limiter)
+void BlobStore<Trait>::gc(
+    PageType page_type,
+    const GcEntriesMap & entries_need_gc,
+    const PageSize & total_page_size,
+    PageEntriesEdit & edit,
+    const WriteLimiterPtr & write_limiter,
+    const ReadLimiterPtr & read_limiter)
 {
     std::vector<std::tuple<BlobFileId, BlobFileOffset, PageSize>> written_blobs;
-    PageEntriesEdit edit;
 
     if (total_page_size == 0)
     {
@@ -1251,7 +1283,7 @@ BlobStore<Trait>::gc(GcEntriesMap & entries_need_gc,
     BlobFileOffset offset_in_data = 0;
     BlobFileId blobfile_id;
     BlobFileOffset file_offset_begin;
-    std::tie(blobfile_id, file_offset_begin) = getPosFromStats(alloc_size);
+    std::tie(blobfile_id, file_offset_begin) = getPosFromStats(alloc_size, page_type);
 
     // blob_file_0, [<page_id_0, ver0, entry0>,
     //               <page_id_0, ver1, entry1>,
@@ -1288,7 +1320,7 @@ BlobStore<Trait>::gc(GcEntriesMap & entries_need_gc,
                 // Acquire a span from stats for remaining data
                 auto next_alloc_size = (remaining_page_size > alloc_size ? alloc_size : remaining_page_size);
                 remaining_page_size -= next_alloc_size;
-                std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size);
+                std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size, page_type);
             }
             assert(offset_in_data + entry.size <= alloc_size);
 
@@ -1314,7 +1346,18 @@ BlobStore<Trait>::gc(GcEntriesMap & entries_need_gc,
     {
         write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
     }
+}
 
+template <typename Trait>
+typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::gc(const PageTypeAndGcInfo & page_type_and_gc_info,
+                                                                const WriteLimiterPtr & write_limiter,
+                                                                const ReadLimiterPtr & read_limiter)
+{
+    PageEntriesEdit edit;
+    for (const auto & [page_type, entries_need_gc, total_page_size] : page_type_and_gc_info)
+    {
+        gc(page_type, entries_need_gc, total_page_size, edit, write_limiter, read_limiter);
+    }
     return edit;
 }
 

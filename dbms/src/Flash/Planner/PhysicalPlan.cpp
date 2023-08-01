@@ -24,6 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
+#include <Flash/Planner/Plans/PhysicalExpand2.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -50,13 +51,10 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->setFilterConditions(executor_id, selection);
     }
-    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest() && !context.getSettingsRef().enable_pipeline))
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
-        if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
-        {
-            return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
-        }
+        return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
     }
     return false;
 }
@@ -187,6 +185,12 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
         break;
     }
+    case tipb::ExecType::TypeExpand2:
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
@@ -279,22 +283,17 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorStatus & exec_status, Context & context)
+PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_context, Context & context)
 {
     RUNTIME_CHECK(root_node);
     PipelineBuilder builder{log->identifier()};
-    root_node->buildPipeline(builder, context, exec_status);
+    root_node->buildPipeline(builder, context, exec_context);
     root_node.reset();
     auto pipeline = builder.build();
-    auto to_string = [&]() -> String {
-        FmtBuffer buffer;
-        pipeline->toTreeString(buffer);
-        return buffer.toString();
-    };
     LOG_DEBUG(
         log,
         "build pipeline dag: \n{}",
-        to_string());
+        pipeline->toTreeString());
     return pipeline;
 }
 } // namespace DB

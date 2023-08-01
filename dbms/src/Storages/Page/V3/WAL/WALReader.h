@@ -48,6 +48,8 @@ private:
     bool error_happened = false;
 };
 
+using LogReaderPtr = std::unique_ptr<LogReader>;
+
 class WALStoreReader
 {
 public:
@@ -66,6 +68,21 @@ public:
                                     PSDiskDelegatorPtr & delegator,
                                     WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
                                     const ReadLimiterPtr & read_limiter = nullptr);
+
+    static LogReaderPtr createLogReader(
+        const LogFilename & filename,
+        FileProviderPtr & provider,
+        ReportCollector * reporter,
+        WALRecoveryMode recovery_mode,
+        const ReadLimiterPtr & read_limiter,
+        LoggerPtr logger);
+
+    static String getLastRecordInLogFile(
+        const LogFilename & filename,
+        FileProviderPtr & provider,
+        WALRecoveryMode recovery_mode,
+        const ReadLimiterPtr & read_limiter,
+        LoggerPtr logger);
 
     bool remained() const;
 

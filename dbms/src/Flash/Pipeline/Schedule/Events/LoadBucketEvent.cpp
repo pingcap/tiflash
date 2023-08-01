@@ -23,10 +23,7 @@ void LoadBucketEvent::scheduleImpl()
     assert(loader);
     auto load_inputs = loader->getNeedLoadInputs();
     for (const auto & input : load_inputs)
-    {
-        auto load_bucket_task = std::make_unique<LoadBucketTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), *input, resource_group_name, keyspace_id);
-        addTask(std::move(load_bucket_task));
-    }
+        addTask(std::make_unique<LoadBucketTask>(exec_context, log->identifier(), shared_from_this(), *input, resource_group_name, keyspace_id));
 }
 
 void LoadBucketEvent::finishImpl()

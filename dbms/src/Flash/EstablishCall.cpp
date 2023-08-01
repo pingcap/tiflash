@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/GRPCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
@@ -41,9 +41,9 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
-    // start processing requests. In this request, "this" acts are
+    // start processing requests. In this request, "asGRPCKickTag" acts are
     // the tag uniquely identifying the request.
-    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, asGRPCKickTag());
 }
 
 EstablishCallData::~EstablishCallData()
@@ -56,61 +56,71 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
-void EstablishCallData::proceed(bool ok)
+void EstablishCallData::execute(bool ok)
 {
-    if (state == WAITING_TUNNEL)
+    switch (state)
+    {
+    case NEW_REQUEST:
+    {
+        if unlikely (!ok)
+        {
+            delete this;
+            return;
+        }
+        spawn(service, cq, notify_cq, is_shutdown);
+        initRpc();
+        break;
+    }
+    case WAIT_TUNNEL:
     {
         /// ok == true means the alarm meet deadline, otherwise means alarm is cancelled
         /// here we don't care the alarm is cancelled or meet deadline, in both cases just
         /// try connect tunnel is ok
         tryConnectTunnel();
-        return;
+        break;
     }
-
-    if (unlikely(!ok))
+    case WAIT_WRITE:
+    case WAIT_POP_FROM_QUEUE:
     {
-        /// state == NEW_REQUEST means the server is shutdown and no new rpc has come.
-        if (state == NEW_REQUEST || state == FINISH)
-        {
-            delete this;
-            return;
-        }
-        unexpectedWriteDone();
-        return;
-    }
-
-    if (state == NEW_REQUEST)
-    {
-        spawn(service, cq, notify_cq, is_shutdown);
-        initRpc();
-    }
-    else if (state == PROCESSING)
-    {
-        if (unlikely(is_shutdown->load(std::memory_order_relaxed)))
+        if unlikely (is_shutdown->load(std::memory_order_relaxed))
         {
             unexpectedWriteDone();
-            return;
+            break;
+        }
+
+        // If ok is false,
+        // For WAIT_WRITE state, it means grpc write is failed.
+        // For WAIT_POP_FROM_QUEUE state, it means queue state is finished or cancelled so
+        // it is convenient to call trySendOneMsg(call pop queue inside) to handle it which
+        // is the same as the case that the pop function is not blocked and the queue is finished
+        // or cancelled.
+        if (!ok && state == WAIT_WRITE)
+        {
+            unexpectedWriteDone();
+            break;
         }
 
         trySendOneMsg();
+        break;
     }
-    else if (state == ERR_HANDLE)
+    case WAIT_WRITE_ERR:
     {
-        writeDone("state is ERR_HANDLE", grpc::Status::OK);
+        if unlikely (!ok)
+        {
+            unexpectedWriteDone();
+            break;
+        }
+        writeDone("state is WAIT_WRITE_ERR", grpc::Status::OK);
+        break;
     }
-    else
+    case FINISH:
     {
-        assert(state == FINISH);
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         // That's the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
         delete this;
-        return;
+        break;
     }
-}
-
-grpc_call * EstablishCallData::grpcCall()
-{
-    return ctx.c_call();
+    }
 }
 
 void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
@@ -118,13 +128,13 @@ void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncT
     assert(stopwatch != nullptr);
     async_tunnel_sender = async_tunnel_sender_;
     waiting_task_time_ms = stopwatch->elapsedMilliseconds();
+    setCall(ctx.c_call());
 }
 
 void EstablishCallData::startEstablishConnection()
 {
     stopwatch = std::make_unique<Stopwatch>();
 }
-
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
 {
@@ -174,7 +184,6 @@ void EstablishCallData::tryConnectTunnel()
             /// Connect the tunnel
             tunnel->connectAsync(this);
             /// Initialization is successful.
-            state = PROCESSING;
             /// Try to send one message.
             /// If there is no message, the pointer of this class will be saved in `async_tunnel_sender`.
             trySendOneMsg();
@@ -194,12 +203,12 @@ void EstablishCallData::tryConnectTunnel()
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
-    responder.Write(packet, this);
+    responder.Write(packet, asGRPCKickTag());
 }
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
-    state = ERR_HANDLE;
+    state = WAIT_WRITE_ERR;
     write(packet);
 }
 
@@ -243,7 +252,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
                 connection_id);
     }
 
-    responder.Finish(status, this);
+    responder.Finish(status, asGRPCKickTag());
 }
 
 void EstablishCallData::unexpectedWriteDone()
@@ -254,28 +263,33 @@ void EstablishCallData::unexpectedWriteDone()
 
 void EstablishCallData::trySendOneMsg()
 {
-    TrackedMppDataPacketPtr res;
-    switch (async_tunnel_sender->pop(res, this))
+    TrackedMppDataPacketPtr packet;
+    state = WAIT_POP_FROM_QUEUE;
+    auto res = async_tunnel_sender->popWithTag(packet, asGRPCKickTag());
+    switch (res)
     {
-    case GRPCSendQueueRes::OK:
-        async_tunnel_sender->subDataSizeMetric(res->getPacket().ByteSizeLong());
+    case MPMCQueueResult::OK:
+        async_tunnel_sender->subDataSizeMetric(packet->getPacket().ByteSizeLong());
         /// Note: has to switch the memory tracker before `write`
         /// because after `write`, `async_tunnel_sender` can be destroyed at any time
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
-        res->switchMemTracker(nullptr);
-        write(res->packet);
+        packet->switchMemTracker(nullptr);
+        state = WAIT_WRITE;
+        write(packet->packet);
         return;
-    case GRPCSendQueueRes::FINISHED:
+    case MPMCQueueResult::FINISHED:
         writeDone("", grpc::Status::OK);
         return;
-    case GRPCSendQueueRes::CANCELLED:
+    case MPMCQueueResult::CANCELLED:
         RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
-    case GRPCSendQueueRes::EMPTY:
+    case MPMCQueueResult::EMPTY:
         // No new message.
         return;
+    default:
+        RUNTIME_ASSERT(false, getLogger(), "Result {} is invalid", magic_enum::enum_name(res));
     }
 }
 
