@@ -15,7 +15,6 @@
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Common/Decimal.h>
 #include <Common/typeid_cast.h>
@@ -36,7 +35,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
-extern const int CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN;
 } // namespace ErrorCodes
 
 namespace
@@ -490,18 +488,36 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRowsFrame()
 
 void WindowTransformAction::stepToFrameStartWithOffsetBoundry()
 {
-    if (window_description.frame.type == WindowFrame::FrameType::Rows)
+    switch (window_description.frame.type)
+    {
+    case WindowFrame::FrameType::Rows:
         frame_start = stepToFrameStartForRowsFrame();
-    else
+        break;
+    case WindowFrame::FrameType::Ranges:
         frame_start = stepToFrameStartForRangeFrame();
+        break;
+    case WindowFrame::FrameType::Groups:
+    default:
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "window function only support frame type row and range.");
+    }
 }
 
 void WindowTransformAction::stepToFrameEndWithOffsetBoundary()
 {
-    if (window_description.frame.type == WindowFrame::FrameType::Rows)
+    switch (window_description.frame.type)
+    {
+    case WindowFrame::FrameType::Rows:
         std::tie(frame_end, frame_ended) = stepToFrameEndForRowsFrame();
-    else
+        break;
+    case WindowFrame::FrameType::Ranges:
         std::tie(frame_end, frame_ended) = stepToFrameEndForRangeFrame();
+        break;
+    case WindowFrame::FrameType::Groups:
+    default:
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "window function only support frame type row and range.");
+    }
 }
 
 RowNumber WindowTransformAction::stepToFrameStartForRangeFrame()
@@ -740,7 +756,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrameBoundary(RowNumber c
         case tipb::RangeCmpDataType::Decimal:
             return moveCursorAndFindFrameBoundaryImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Decimal, is_begin, is_desc, true>(cursor, current_row_aux_value);
         default:
-            throw Exception("Unexpected RangeCmpDataType!");
+            throw Exception(fmt::format("Unexpected RangeCmpDataType: {}", magic_enum::enum_name(cmp_data_type)));
         }
     }
     else
