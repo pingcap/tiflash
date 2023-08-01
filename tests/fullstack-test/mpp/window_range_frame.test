@@ -505,7 +505,7 @@ mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition
 | 2 | 15.1 | 15 | 15 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 3 following) as a from test.last_range_d32;
+mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 3 following) as a from test.last_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -528,7 +528,7 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 0 |  0.1 |  0 |  0 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3E0 following) as a from test.last_range_d32;
+mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3E0 following) as a from test.last_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -551,7 +551,7 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 3 | 31.1 | 31 | 31 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d32;
+mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d32;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -574,7 +574,7 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 2 | 15.1 | 15 | 15 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d64;
+mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d64;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -597,7 +597,7 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 2 | 15.1 | 15 | 15 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d128;
+mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d128;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
@@ -620,7 +620,7 @@ use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p o
 | 2 | 15.1 | 15 | 15 |
 +---+------+----+----+
 
-use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d256;
+mysql> use test; set tidb_enforce_mpp=1; select *, last_value(v) over (partition by p order by o range between 0 preceding and 2.3 following) as a from test.last_range_d256;
 +---+------+----+----+
 | p | o    | v  | a  |
 +---+------+----+----+
