@@ -516,7 +516,7 @@ void DeltaMergeStore::cleanIngestFiles(const Context & db_context,
     auto delegate = dm_context->path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
 
-    for (auto & f : external_files)
+    for (const auto & f : external_files)
     {
         auto file_parent_path = delegate.getDTFilePath(f.id);
         auto file = DM::DMFile::restore(
