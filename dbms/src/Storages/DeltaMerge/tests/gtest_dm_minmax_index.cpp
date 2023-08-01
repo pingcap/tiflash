@@ -1536,7 +1536,7 @@ try
     {
         // make a in filter, check in (NULL)
         auto filter = createIn(attr("Nullable(Int64)"), {Field()});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
     }
     {
         // make a in filter, check in (NULL, 1)
@@ -1551,7 +1551,7 @@ try
     {
         // make a not in filter, check not in (NULL)
         auto filter = createNotIn(attr("Nullable(Int64)"), {Field()});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
     }
     {
         // make a not in filter, check not in (NULL, 1)

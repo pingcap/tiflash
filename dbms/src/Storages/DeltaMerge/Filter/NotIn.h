@@ -51,6 +51,8 @@ public:
         RSResults res(pack_count, RSResult::Some);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res);
         res = rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
+        // Note: Actually NotIn is not always equal to !In, like check(not in (NULL)) == check(in (NULL)) == None
+        // But it is not a problem, because we will check NULL in the filter operator.
         std::transform(res.begin(), res.end(), res.begin(), [](RSResult result) { return !result; });
         return res;
     }
