@@ -483,7 +483,8 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(const Region
     }
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(istore);
     LOG_INFO(log, "Release prehandled snapshot, clean {} dmfiles [region_id={}] [table_id={}]", s.external_files.size(), s.base->id(), table_id);
-    dm_storage->cleanIngestFiles(s.external_files, dm_storage->global_context.getSettingsRef());
+    auto & context = tmt.getContext();
+    dm_storage->cleanIngestFiles(s.external_files, context.getSettingsRef());
 }
 
 void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
