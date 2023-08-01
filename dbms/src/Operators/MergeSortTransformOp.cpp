@@ -32,8 +32,8 @@ void MergeSortTransformOp::operatePrefixImpl()
     // For order by constants, generate LimitOperator instead of SortOperator.
     assert(!order_desc.empty());
 
-    if (max_bytes_before_external_sort > 0)
-        spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+    if (sort_spill_context->isSpillEnabled())
+        sort_spill_context->buildSpiller(header_without_constants);
 }
 
 void MergeSortTransformOp::operateSuffixImpl()
@@ -81,8 +81,8 @@ OperatorStatus MergeSortTransformOp::fromPartialToRestore()
     LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
     /// Create spilled sorted streams to merge.
-    spiller->finishSpill();
-    auto inputs_to_merge = spiller->restoreBlocks(0, 0);
+    sort_spill_context->getSpiller()->finishSpill();
+    auto inputs_to_merge = sort_spill_context->getSpiller()->restoreBlocks(0, 0);
 
     /// Rest of sorted_blocks in memory.
     if (!sorted_blocks.empty())
@@ -105,9 +105,8 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     // convert to restore phase.
     status = MergeSortStatus::SPILL;
     assert(!cached_handler);
-    if (!hasSpilledData())
-        LOG_INFO(log, "Begin spill in merge sort");
-    cached_handler = spiller->createCachedSpillHandler(
+    sort_spill_context->markSpill();
+    cached_handler = sort_spill_context->getSpiller()->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,
         [&]() { return exec_context.isCancelled(); });
@@ -136,6 +135,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
     {
         if unlikely (!block)
         {
+            sort_spill_context->finishSpillableStage();
             return hasSpilledData()
                 ? fromPartialToRestore()
                 : fromPartialToMerge(block);
@@ -146,7 +146,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
         sum_bytes_in_blocks += block.estimateBytesForSpill();
         sorted_blocks.emplace_back(std::move(block));
 
-        if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
+        if (sort_spill_context->updateRevocableMemory(sum_bytes_in_blocks))
             return fromPartialToSpill();
         else
             return OperatorStatus::NEED_INPUT;
