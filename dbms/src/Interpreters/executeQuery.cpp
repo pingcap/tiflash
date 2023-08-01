@@ -146,6 +146,18 @@ void onExceptionBeforeStart(const String & query, Context & context, time_t curr
     }
 }
 
+void prepareForInputStream(
+    Context & context,
+    const BlockInputStreamPtr & in)
+{
+    assert(in);
+    if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(in.get()))
+    {
+        stream->setProgressCallback(context.getProgressCallback());
+        stream->setProcessListElement(context.getProcessListElement());
+    }
+}
+
 std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     IQuerySource & query_src,
     Context & context,
@@ -386,6 +398,7 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
         joinLines(query));
 }
 
+<<<<<<< HEAD
 void prepareForInputStream(
     Context & context,
     QueryProcessingStage::Enum stage,
@@ -412,6 +425,8 @@ void prepareForInputStream(
     }
 }
 
+=======
+>>>>>>> 80f8e9dc65 (fix issue #7810 (#7854))
 std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
