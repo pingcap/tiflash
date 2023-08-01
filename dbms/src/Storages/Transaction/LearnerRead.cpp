@@ -300,7 +300,7 @@ LearnerReadSnapshot doLearnerRead(
                     region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
                 else if (region_error.has_not_leader())
                     region_status = RegionException::RegionReadStatus::NOT_LEADER;
-                else if (region_error.has_not_found())
+                else if (region_error.has_region_not_found())
                     region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
                 unavailable_regions.add(region_id, region_status);
             }
