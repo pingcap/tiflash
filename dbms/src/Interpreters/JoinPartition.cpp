@@ -291,15 +291,15 @@ void JoinPartition::releasePartitionPoolAndHashMap(std::unique_lock<std::mutex> 
     subMemoryUsage(released_bytes);
 }
 
-Blocks JoinPartition::trySpillBuildPartition(bool force, size_t max_cached_data_bytes, std::unique_lock<std::mutex> & partition_lock)
+Blocks JoinPartition::trySpillBuildPartition(std::unique_lock<std::mutex> & partition_lock)
 {
-    if (spill && ((force && build_partition.bytes) || build_partition.bytes >= max_cached_data_bytes))
+    if (isSpill() && build_partition.rows > 0)
     {
         auto ret = build_partition.original_blocks;
         releaseBuildPartitionBlocks(partition_lock);
         if unlikely (memory_usage > 0)
         {
-            memory_usage = 0;
+            subMemoryUsage(memory_usage);
             LOG_WARNING(log, "Incorrect memory usage after spill");
         }
         return ret;
@@ -309,15 +309,15 @@ Blocks JoinPartition::trySpillBuildPartition(bool force, size_t max_cached_data_
         return {};
     }
 }
-Blocks JoinPartition::trySpillProbePartition(bool force, size_t max_cached_data_bytes, std::unique_lock<std::mutex> & partition_lock)
+Blocks JoinPartition::trySpillProbePartition(std::unique_lock<std::mutex> & partition_lock)
 {
-    if (spill && ((force && probe_partition.bytes) || probe_partition.bytes >= max_cached_data_bytes))
+    if (isSpill() && probe_partition.rows > 0)
     {
         auto ret = probe_partition.blocks;
         releaseProbePartitionBlocks(partition_lock);
         if unlikely (memory_usage != 0)
         {
-            memory_usage = 0;
+            subMemoryUsage(memory_usage);
             LOG_WARNING(log, "Incorrect memory usage after spill");
         }
         return ret;
@@ -750,7 +750,7 @@ void insertBlockIntoMapsImpl(
 template <typename Map>
 Map & JoinPartition::getHashMap()
 {
-    assert(!spill);
+    assert(!isSpill());
     if (isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
         if (has_other_condition)
@@ -788,7 +788,7 @@ void JoinPartition::insertBlockIntoMaps(
     bool enable_join_spill)
 {
     auto & current_join_partition = join_partitions[stream_index];
-    assert(!current_join_partition->spill);
+    assert(!current_join_partition->isSpill());
     auto current_kind = current_join_partition->kind;
     if (isNullAwareSemiFamily(current_kind))
     {
@@ -1498,7 +1498,7 @@ void JoinPartition::probeBlock(
     const auto & current_partition = join_partitions[probe_process_info.partition_index];
     auto kind = current_partition->kind;
     auto strictness = current_partition->strictness;
-    assert(rows == 0 || !current_partition->spill);
+    assert(rows == 0 || !current_partition->isSpill());
 
 #define CALL(KIND, STRICTNESS, MAP, row_flagged_map)        \
     probeBlockImpl<KIND, STRICTNESS, MAP, row_flagged_map>( \
@@ -1643,7 +1643,7 @@ void JoinPartition::releasePartition()
     std::unique_lock partition_lock = lockPartition();
     releaseBuildPartitionBlocks(partition_lock);
     releaseProbePartitionBlocks(partition_lock);
-    if (!spill)
+    if (!isSpill())
     {
         releasePartitionPoolAndHashMap(partition_lock);
     }
