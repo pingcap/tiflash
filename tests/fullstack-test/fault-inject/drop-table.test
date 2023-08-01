@@ -29,7 +29,6 @@ mysql> select table_schema,table_name,replica_count,location_labels,available fr
 +--------------+------------+---------------+-----------------+-----------+
 | test         | t          |             1 | rack,host,abc   |         1 |
 +--------------+------------+---------------+-----------------+-----------+
->> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
 
 # Process crash when drop table metadata is done but not for its data dir.
