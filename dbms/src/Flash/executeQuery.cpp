@@ -169,7 +169,27 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
-    auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier());
+    std::unique_ptr<PipelineExecutor> executor;
+    /// if query level memory tracker has a limit, then setup auto spill trigger
+    if (memory_tracker->getLimit() != 0)
+    {
+        auto register_operator_spill_context = [&context](const OperatorSpillContextPtr & operator_spill_context) {
+            context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+        };
+        auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
+        auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
+        std::function<void()> auto_spill_trigger = [&dag_context, memory_tracker, auto_spill_trigger_threshold, auto_spill_target_threshold]() {
+            if (memory_tracker->get() > memory_tracker->getLimit() * auto_spill_trigger_threshold)
+            {
+                dag_context.triggerAutoSpill(static_cast<Int64>(memory_tracker->get() - memory_tracker->getLimit() * auto_spill_target_threshold));
+            }
+        };
+        executor = std::make_unique<PipelineExecutor>(memory_tracker, auto_spill_trigger, register_operator_spill_context, context, logger->identifier());
+    }
+    else
+    {
+        executor = std::make_unique<PipelineExecutor>(memory_tracker, nullptr, nullptr, context, logger->identifier());
+    }
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();

@@ -17,6 +17,7 @@
 #include <Core/SortDescription.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Operators/Operator.h>
 
@@ -39,6 +40,7 @@ public:
         , max_block_size(max_block_size_)
     {
         sort_spill_context = std::make_shared<SortSpillContext>(spill_config, max_bytes_before_external_sort, log);
+        exec_context.registerOperatorSpillContext(sort_spill_context);
     }
 
     String getName() const override

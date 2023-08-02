@@ -27,6 +27,9 @@
 
 namespace DB
 {
+class OperatorSpillContext;
+using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<OperatorSpillContext> & ptr)>;
+using AutoSpillTrigger = std::function<void()>;
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -38,10 +41,17 @@ public:
         , mem_tracker(nullptr)
     {}
 
-    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
+    PipelineExecutorContext(
+        const String & query_id_,
+        const String & req_id,
+        const MemoryTrackerPtr & mem_tracker_,
+        const AutoSpillTrigger & auto_spill_trigger_,
+        const RegisterOperatorSpillContext & register_operator_spill_context_)
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
+        , auto_spill_trigger(auto_spill_trigger_)
+        , register_operator_spill_context(register_operator_spill_context_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -155,6 +165,18 @@ public:
         return mem_tracker;
     }
 
+    void triggerAutoSpill() const
+    {
+        if (auto_spill_trigger != nullptr)
+            auto_spill_trigger();
+    }
+
+    void registerOperatorSpillContext(const std::shared_ptr<OperatorSpillContext> & operator_spill_context)
+    {
+        if (register_operator_spill_context != nullptr)
+            register_operator_spill_context(operator_spill_context);
+    }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -183,5 +205,9 @@ private:
     std::optional<ResultQueuePtr> result_queue;
 
     QueryProfileInfo query_profile_info;
+
+    AutoSpillTrigger auto_spill_trigger;
+
+    RegisterOperatorSpillContext register_operator_spill_context;
 };
 } // namespace DB

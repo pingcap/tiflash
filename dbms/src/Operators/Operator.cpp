@@ -67,7 +67,10 @@ OperatorStatus Operator::await()
     // [non-waiting, waiting, waiting, waiting, .., waiting, non-waiting]
 
     if (op_status != OperatorStatus::WAITING)
+    {
+        exec_context.triggerAutoSpill();
         profile_info.update();
+    }
     return op_status;
 }
 
@@ -79,6 +82,7 @@ OperatorStatus Operator::executeIO()
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    exec_context.triggerAutoSpill();
     profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
@@ -98,6 +102,7 @@ OperatorStatus SourceOp::read(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
+    exec_context.triggerAutoSpill();
     if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);
     else
@@ -119,6 +124,7 @@ OperatorStatus TransformOp::transform(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    exec_context.triggerAutoSpill();
     if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);
     else
@@ -141,6 +147,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    exec_context.triggerAutoSpill();
     if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);
     else
@@ -177,6 +184,7 @@ OperatorStatus SinkOp::write(Block && block)
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
+    exec_context.triggerAutoSpill();
     profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
