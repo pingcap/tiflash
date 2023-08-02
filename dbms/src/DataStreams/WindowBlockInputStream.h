@@ -166,49 +166,51 @@ public:
     void appendInfo(FmtBuffer & buffer) const;
 
 private:
-    void stepToFrameStartWithOffsetBoundry();
-    void stepToFrameEndWithOffsetBoundary();
+    // This is the function for Offset type boundary
+    void stepToFrameStart();
+    // This is the function for Offset type boundary
+    void stepToFrameEnd();
 
     // Used for calculating the frame start for rows frame type
-    RowNumber stepToFrameStartForRowsFrame();
+    RowNumber stepToStartForRowsFrame();
     // Used for calculating the frame end for rows frame type
-    std::tuple<RowNumber, bool> stepToFrameEndForRowsFrame();
+    std::tuple<RowNumber, bool> stepToEndForRowsFrame();
 
     // Used for calculating the frame start for range frame type
-    RowNumber stepToFrameStartForRangeFrame();
+    RowNumber stepToStartForRangeFrame();
     // Used for calculating the frame end for range frame type
-    std::tuple<RowNumber, bool> stepToFrameEndForRangeFrame();
+    std::tuple<RowNumber, bool> stepToEndForRangeFrame();
 
     template <bool is_desc>
-    RowNumber stepToFrameStartForRangeFrameOrderCase();
+    RowNumber stepToStartForRangeFrameOrderCase();
 
     template <bool is_desc>
-    std::tuple<RowNumber, bool> stepToFrameEndForRangeFrameOrderCase();
+    std::tuple<RowNumber, bool> stepToEndForRangeFrameOrderCase();
 
     template <typename T, bool is_desc>
-    RowNumber stepToFrameStartForRangeImpl();
+    RowNumber stepToStartForRangeImpl();
 
     template <typename T, bool is_desc>
-    RowNumber stepToFrameEndForRangeImpl();
+    RowNumber stepToEndForRangeImpl();
 
     template <typename T, bool is_begin, bool is_desc>
-    RowNumber stepToFrameForRangeImpl();
+    RowNumber stepForRangeImpl();
 
     // We should use this function when the current auxiliary column row is null.
     template <bool is_begin>
-    RowNumber moveCursorAndFindRangeFrameBoundaryIfNull(RowNumber cursor);
+    RowNumber moveCursorAndFindRangeFrameIfNull(RowNumber cursor);
 
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
     template <typename AuxColType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
+    RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
+    RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
     template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc, bool is_order_by_col_nullable>
-    RowNumber moveCursorAndFindFrameBoundaryImpl(RowNumber cursor, AuxColType current_row_aux_value);
+    RowNumber moveCursorAndFindFrameImpl(RowNumber cursor, AuxColType current_row_aux_value);
 
 public:
     LoggerPtr log;
