@@ -99,18 +99,22 @@ struct MPPTaskId
         : task_id(unknown_task_id)
         , gather_id(0, 0, 0, 0, 0){};
 
-    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, Int64 gather_id, UInt64 query_ts, UInt64 local_query_id)
+    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, Int64 gather_id, UInt64 query_ts, UInt64 local_query_id, const String & resource_group_name_ = "")
         : task_id(task_id_)
         , gather_id(gather_id, query_ts, local_query_id, server_id, start_ts)
+        , resource_group_name(resource_group_name_)
     {}
 
     explicit MPPTaskId(const mpp::TaskMeta & task_meta)
         : task_id(task_meta.task_id())
         , gather_id(task_meta)
+        , resource_group_name(task_meta.resource_group_name())
     {}
 
     Int64 task_id;
     MPPGatherId gather_id;
+    // This is not part of MPPTaskId, put here because we can identify each resource group for each MPPTask in log.
+    String resource_group_name;
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 

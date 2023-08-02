@@ -105,7 +105,7 @@ void MPPTaskManager::removeMPPGatherTaskSet(MPPQueryPtr & query, const MPPGather
     {
         const auto & query_id = gather_id.query_id;
         getScheduler(query_id)->deleteQuery(query_id, *this, on_abort, -1);
-        mpp_query_map.erase(gather_id.query_id);
+        mpp_query_map.erase(query_id);
         GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     }
 }

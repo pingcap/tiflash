@@ -126,7 +126,7 @@ private:
     double getPriority(uint64_t max_ru_per_sec) const
     {
         std::lock_guard lock(mu);
-        RUNTIME_ASSERT(user_priority == 1 || user_priority == 8 || user_priority == 16);
+        RUNTIME_CHECK_MSG(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue, "unexpected user_priority {}", user_priority);
         if (!burstable && bucket->peek() <= 0.0)
             return -1.0;
 
@@ -382,7 +382,7 @@ private:
 
     ::pingcap::kv::Cluster * cluster = nullptr;
 
-    const LoggerPtr log;
+    const LoggerPtr log = Logger::get("LocalAdmissionController");
 
     // No need to use lock, only be accessed by background thread.
     std::chrono::time_point<std::chrono::steady_clock> last_cleanup_resource_group_timepoint;

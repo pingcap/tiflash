@@ -68,10 +68,13 @@ void LocalAdmissionController::fetchTokensFromGAC()
         {
             double token_need_from_gac = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
             if (token_need_from_gac <= 0.0)
-                return;
+                continue;
             need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getKeyspaceID(), resource_group.second->getAndCleanConsumptionDelta()));
         }
     }
+
+    if (need_tokens.empty())
+        return;
 
     resource_manager::TokenBucketsRequest gac_req;
     gac_req.set_client_unique_id(unique_client_id);
@@ -92,19 +95,9 @@ void LocalAdmissionController::fetchTokensFromGAC()
         consumption->set_r_r_u(std::get<3>(ele));
     }
 
-    auto grpc_reader_writer = cluster->pd_client->acquireTokenBuckets();
-    bool succ = grpc_reader_writer->Write(gac_req);
-    if (!succ)
-    {
-        handleBackgroundError("write grpc stream failed when send TokenBucketsRequest to GAC");
-        return;
-    }
-    grpc_reader_writer->WritesDone();
-
-    resource_manager::TokenBucketsResponse resp;
-    while (grpc_reader_writer->Read(&resp))
+    auto resps = cluster->pd_client->acquireTokenBuckets(gac_req);
+    for (const auto & resp : resps)
         handleTokenBucketsResp(resp);
-    grpc_reader_writer->Finish();
 }
 
 void LocalAdmissionController::checkDegradeMode()

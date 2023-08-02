@@ -292,8 +292,8 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
-    String getResourceGroupName() { return resource_group_name; }
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
+    String getResourceGroupName() { return resource_group_name; }
 
     RU getReadRU() const;
 
