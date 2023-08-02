@@ -632,7 +632,6 @@ const TiDB::TableInfo & getTableInfo(Context & context, const String & database_
 } // namespace DB
 namespace DB
 {
-
 String mappedDatabase(Context & context, const String & database_name)
 {
     TMTContext & tmt = context.getTMTContext();
@@ -655,10 +654,12 @@ std::optional<String> mappedDatabaseWithOptional(Context & context, const String
 
 std::optional<QualifiedName> mappedTableWithOptional(Context & context, const String & database_name, const String & table_name)
 {
-    auto mapped_db = mappedDatabase(context, database_name);
+    auto mapped_db = mappedDatabaseWithOptional(context, database_name);
 
+    if (!mapped_db.has_value())
+        return std::nullopt;
     TMTContext & tmt = context.getTMTContext();
-    auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
+    auto storage = tmt.getStorages().getByName(mapped_db.value(), table_name, false);
     if (storage == nullptr)
     {
         return std::nullopt;

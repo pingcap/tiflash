@@ -62,7 +62,7 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
 
     auto mapped = mappedTableWithOptional(context, database_name, table_name);
     if (mapped == std::nullopt)
-        output(fmt::format("in dbgFuncMappedTable Table {}.{} not found.", database_name, table_name));
+        output(fmt::format("Table {}.{} not found.", database_name, table_name));
     else if (qualify)
         output(fmt::format("{}.{}", mapped->first, mapped->second));
     else
