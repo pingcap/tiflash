@@ -60,6 +60,7 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     {
         iter->second->submit(std::move(task));
     }
+    cv.notify_one();
 }
 
 template <typename NestedQueueType>

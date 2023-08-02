@@ -14,10 +14,12 @@
 
 #include <Common/Exception.h>
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/TokenBucket.h>
+#include <Flash/ResourceControl/MockLocalAdmissionController.h>
 
 #include <kvproto/resource_manager.pb.h>
 #include <pingcap/kv/Cluster.h>
@@ -130,7 +132,7 @@ private:
         if (!burstable && bucket->peek() <= 0.0)
             return -1.0;
 
-        uint64_t cpu_time_in_ms = cpu_time / 1000000;
+        uint64_t cpu_time_in_ms = toCPUTimeMillisecond(cpu_time);
         uint64_t ru_weight = getUserPriorityWeight(user_priority) * 1000 * max_ru_per_sec / user_ru_per_sec;
         uint64_t total_weight = cpu_time_in_ms + ru_weight;
         if unlikely (total_weight > MAX_WEIGHT)
@@ -307,7 +309,11 @@ public:
         return group->getRU() <= 0.0;
     }
 
+#ifndef DBMS_PUBLIC_GTEST
     static std::unique_ptr<LocalAdmissionController> global_instance;
+#else
+    static std::unique_ptr<MockLocalAdmissionController> global_instance;
+#endif
 
 private:
     // Get ResourceGroup by name, if not exist, fetch from PD.
