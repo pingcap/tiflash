@@ -316,20 +316,23 @@ private:
                 return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
             }
         };
-        MinMaxIndexPtr minmax_index;
-        if (index_cache && set_cache_if_miss)
-        {
-            minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
-        }
-        else
-        {
-            // try load from the cache first
-            if (index_cache)
-                minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
-            if (minmax_index == nullptr)
-                minmax_index = load();
-        }
+        MinMaxIndexPtr minmax_index = nullptr;
 
+        if (Poco::File f(dmfile->colIndexPath(file_name_base)); f.exists()){
+            if (index_cache && set_cache_if_miss)
+            {
+                minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
+            }
+            else
+            {
+                // try load from the cache first
+                if (index_cache)
+                    minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
+                if (minmax_index == nullptr)
+                    minmax_index = load();
+            }
+        }
+        
         // bloom filter index
         auto load_bloom_filter_index = [&]() {
             auto bloom_filter_index_file_size = dmfile->colBloomFilterIndexSize(col_id);

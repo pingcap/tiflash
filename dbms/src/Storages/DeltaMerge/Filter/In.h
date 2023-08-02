@@ -66,26 +66,33 @@ public:
 
 
         auto res = RSResult::None;
+        //int index = 0;
         for (auto & value : values)
         {
+            
             auto res_temp = RSResult::Some;
             if (rsindex.minmax != nullptr)
             {
                 auto minmax_res = rsindex.minmax->checkEqual(pack_id, value, rsindex.type);
-                //LOG_INFO(Logger::get("hyy"), "in roughCheck minmax with minmax_res = {}", static_cast<int>(minmax_res));
+                //LOG_INFO(Logger::get("hyy"), "in roughCheck minmax with minmax_res = {} for pack_id {} in value index {}", static_cast<int>(minmax_res), pack_id, index);
                 res_temp = res_temp && minmax_res;
             }
 
             if (rsindex.bloom_filter_index != nullptr)
             {
                 auto bloom_filter_index_res = rsindex.bloom_filter_index->checkEqual(pack_id, value, rsindex.type);
-                //LOG_INFO(Logger::get("hyy"), "in roughCheck bloom_filter with minmax_res = {}", static_cast<int>(bloom_filter_index_res));
+                //LOG_INFO(Logger::get("hyy"), "in roughCheck bloom_filter with bloom_filter_res = {} for pack_id {} in value index {}", static_cast<int>(bloom_filter_index_res), pack_id, index);
                 res_temp = res_temp && bloom_filter_index_res;
             }
             res = res || res_temp;
-            if (res == RSResult::All)
+            if (res == RSResult::All){
+                //LOG_INFO(Logger::get("hyy"), "in roughCheck res for pack_id {} is {}", pack_id, static_cast<int>(res));
                 return res;
+            }
+
+            //index+=1;
         }
+        //LOG_INFO(Logger::get("hyy"), "in roughCheck res for pack_id {} is {}", pack_id, static_cast<int>(res));
         return res;
     }
 };
