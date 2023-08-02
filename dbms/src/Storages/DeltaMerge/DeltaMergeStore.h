@@ -345,6 +345,17 @@ public:
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
+    /// Read all rows without MVCC filtering
+    void readRaw(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const ColumnDefines & columns_to_read,
+        size_t num_streams,
+        bool keep_order,
+        const SegmentIdSet & read_segments = {},
+        size_t extra_table_id_index = InvalidColumnID);
 
     /// Read rows in two modes:
     ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
