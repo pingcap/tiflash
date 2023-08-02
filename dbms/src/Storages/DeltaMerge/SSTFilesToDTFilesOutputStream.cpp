@@ -233,7 +233,6 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
     size_t cur_deleted_rows = 0;
     while (true)
     {
-        LOG_INFO(log, "!!!!! SSTFilesToDTFilesOutputStream {}", (uint64_t)abort_flag.get());
         if (abort_flag->load(std::memory_order_seq_cst))
         {
             break;
