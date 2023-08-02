@@ -397,6 +397,10 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
+            if(stream->isAbort()) {
+                LOG_INFO(log, "Cancel stream because of upper layer abort [region_id={}]", region_id);
+                stream->cancel();
+            }
             generated_ingest_ids = stream->outputFiles();
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
@@ -484,7 +488,7 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(const Region
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(istore);
     LOG_INFO(log, "Release prehandled snapshot, clean {} dmfiles [region_id={}] [table_id={}]", s.external_files.size(), s.base->id(), table_id);
     auto & context = tmt.getContext();
-    dm_storage->cleanIngestFiles(s.external_files, context.getSettingsRef());
+    dm_storage->cleanPreIngestFiles(s.external_files, context.getSettingsRef());
 }
 
 void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)

@@ -94,6 +94,9 @@ public:
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
 
+    bool isAbort() const {
+        return abort_flag->load(std::memory_order_seq_cst);
+    }
 private:
     /**
      * Generate a DMFilePtr and its DMFileBlockOutputStream.

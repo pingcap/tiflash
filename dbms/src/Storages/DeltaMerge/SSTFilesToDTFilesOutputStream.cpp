@@ -350,6 +350,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
             tryLogCurrentException(log, fmt::format("ignore exception while canceling SST files to DeltaTree files stream [file={}]", file->path()));
         }
     }
+    ingest_files.clear();
 }
 
 template <typename ChildStream>

@@ -291,7 +291,7 @@ public:
     void preIngestFile(const String & parent_path, PageIdU64 file_id, size_t file_size);
     void removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist);
 
-    void cleanIngestFiles(const Context & db_context,
+    void cleanPreIngestFiles(const Context & db_context,
                           const DB::Settings & db_settings,
                           const std::vector<DM::ExternalDTFileInfo> & external_files);
 

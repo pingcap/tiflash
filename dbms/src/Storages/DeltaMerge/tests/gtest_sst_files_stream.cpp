@@ -535,7 +535,7 @@ try
         auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
         fps.push_back(file_path);
     }
-    storage->cleanIngestFiles(files, db_context->getSettingsRef());
+    storage->cleanPreIngestFiles(files, db_context->getSettingsRef());
 
     for (const auto & file : files)
     {

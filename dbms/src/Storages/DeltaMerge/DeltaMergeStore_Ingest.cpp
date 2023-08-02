@@ -508,7 +508,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     }
 }
 
-void DeltaMergeStore::cleanIngestFiles(const Context & db_context,
+void DeltaMergeStore::cleanPreIngestFiles(const Context & db_context,
                                        const DB::Settings & db_settings,
                                        const std::vector<DM::ExternalDTFileInfo> & external_files)
 {

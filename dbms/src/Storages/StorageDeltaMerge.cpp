@@ -1088,11 +1088,11 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
 }
 
-void StorageDeltaMerge::cleanIngestFiles(
+void StorageDeltaMerge::cleanPreIngestFiles(
     const std::vector<DM::ExternalDTFileInfo> & external_files,
     const Settings & settings)
 {
-    getAndMaybeInitStore()->cleanIngestFiles(
+    getAndMaybeInitStore()->cleanPreIngestFiles(
         global_context,
         settings,
         external_files);
