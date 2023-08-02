@@ -242,7 +242,7 @@ private:
     LoggerPtr log;
 
     // As the placement-rules created for TiFlash, the Region peers
-    // in TiFlash must and only
+    // in TiFlash must and only response to one <keyspace, table_id>
     // The keyspace_id, table_id this region is belong to
     const KeyspaceID keyspace_id;
     const TableID mapped_table_id;
