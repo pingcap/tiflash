@@ -61,9 +61,10 @@ RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask(const RNReadSegme
     // FetchPagesRequest into multiples in future, then we need to change
     // the moment of calling `occupySpace`.
     auto page_cache = seg_task->meta.dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+    auto scan_context = seg_task->meta.dm_context->scan_context;
 
     Stopwatch w_occupy;
-    auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->meta.delta_tinycf_page_sizes);
+    auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->meta.delta_tinycf_page_sizes, scan_context);
     // This metric is per-segment.
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_cache_occupy).Observe(w_occupy.elapsedSeconds());
 
