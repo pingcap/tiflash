@@ -45,8 +45,8 @@ public:
         const String & query_id_,
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
-        const AutoSpillTrigger & auto_spill_trigger_,
-        const RegisterOperatorSpillContext & register_operator_spill_context_)
+        const AutoSpillTrigger & auto_spill_trigger_ = nullptr,
+        const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr)
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
