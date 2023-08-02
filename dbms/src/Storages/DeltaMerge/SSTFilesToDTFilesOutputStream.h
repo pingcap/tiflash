@@ -116,7 +116,7 @@ private:
     const FileConvertJobType job_type;
     const UInt64 split_after_rows;
     const UInt64 split_after_size;
-    UInt64 region_id;
+    const UInt64 region_id;
     std::shared_ptr<std::atomic_bool> abort_flag;
     Context & context;
     LoggerPtr log;
