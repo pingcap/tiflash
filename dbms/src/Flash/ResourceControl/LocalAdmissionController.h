@@ -124,7 +124,7 @@ private:
     }
 
     // Positive: Less number means higher priority.
-    // Negative means has no RU left, will not schedule this resource group at all.
+    // Negative means has no RU left, should not schedule this resource group at all.
     double getPriority(uint64_t max_ru_per_sec) const
     {
         std::lock_guard lock(mu);

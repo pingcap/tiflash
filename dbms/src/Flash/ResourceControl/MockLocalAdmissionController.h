@@ -35,7 +35,7 @@ public:
             __builtin_unreachable();
 
         iter->second.first += toCPUTimeMillisecond(cpu_time_ns);
-        iter->second.second -= toRU(cpu_time_ns)
+        iter->second.second -= toRU(cpu_time_ns);
     }
 
     double getPriority(const std::string &, const KeyspaceID &)
