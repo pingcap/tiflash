@@ -670,6 +670,13 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     }
 }
 
+void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+{
+    UNUSED(peer_id);
+    auto & kvstore = server->tmt->getKVStore();
+    kvstore->abortPreHandleSnapshot(region_id, *server->tmt);
+}
+
 void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
     if (static_cast<RawCppPtrTypeImpl>(type) != RawCppPtrTypeImpl::PreHandledSnapshotWithFiles)
