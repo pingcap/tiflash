@@ -22,8 +22,6 @@
 #include <Storages/Transaction/TiDB.h>
 #include <common/logger_useful.h>
 
-#include <cassert>
-
 
 namespace DB
 {
@@ -121,16 +119,16 @@ inline RSOperatorPtr parseTiCompareExpr( //
     const TimezoneInfo & timezone_info,
     const LoggerPtr & /*log*/)
 {
-    if (unlikely(expr.children_size() != 2))
+    if (unlikely(expr.children_size() != 2 && filter_type != FilterParser::RSFilterType::In && filter_type != FilterParser::RSFilterType::NotIn))
         return createUnsupported(expr.ShortDebugString(),
                                  tipb::ScalarFuncSig_Name(expr.sig()) + " with " + DB::toString(expr.children_size())
                                      + " children is not supported",
                                  false);
 
-    /// Only support `column` `op` `literal` now.
+    /// Only support `column` `op` `literal`, and `column` in (literal1, literal2, ...) now.
 
     Attr attr;
-    Field value;
+    std::vector<Field> values;
     OperandType left = OperandType::Unknown;
     OperandType right = OperandType::Unknown;
     bool is_timestamp_column = false;
@@ -163,7 +161,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         }
         else if (isLiteralExpr(child))
         {
-            value = decodeLiteral(child);
+            Field value = decodeLiteral(child);
             if (child_idx == 0)
                 left = OperandType::Literal;
             else if (child_idx == 1)
@@ -190,6 +188,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     value = Field(result_time);
                 }
             }
+            values.push_back(value);
         }
     }
 
@@ -232,22 +231,28 @@ inline RSOperatorPtr parseTiCompareExpr( //
     switch (filter_type_with_direction)
     {
     case FilterParser::RSFilterType::Equal:
-        op = createEqual(attr, value);
+        op = createEqual(attr, values[0]);
         break;
     case FilterParser::RSFilterType::NotEqual:
-        op = createNotEqual(attr, value);
+        op = createNotEqual(attr, values[0]);
         break;
     case FilterParser::RSFilterType::Greater:
-        op = createGreater(attr, value, -1);
+        op = createGreater(attr, values[0], -1);
         break;
     case FilterParser::RSFilterType::GreaterEqual:
-        op = createGreaterEqual(attr, value, -1);
+        op = createGreaterEqual(attr, values[0], -1);
         break;
     case FilterParser::RSFilterType::Less:
-        op = createLess(attr, value, -1);
+        op = createLess(attr, values[0], -1);
         break;
     case FilterParser::RSFilterType::LessEqual:
-        op = createLessEqual(attr, value, -1);
+        op = createLessEqual(attr, values[0], -1);
+        break;
+    case FilterParser::RSFilterType::In:
+        op = createIn(attr, values);
+        break;
+    case FilterParser::RSFilterType::NotIn:
+        op = createNotIn(attr, values);
         break;
     default:
         op = createUnsupported(expr.ShortDebugString(), "Unknown compare type: " + tipb::ExprType_Name(expr.tp()), false);
@@ -323,6 +328,8 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::GreaterEqual:
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
+        case FilterParser::RSFilterType::In:
+        case FilterParser::RSFilterType::NotIn:
             op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
             break;
 
@@ -365,11 +372,9 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
                     op = createUnsupported(child.ShortDebugString(), "child of is null is not column", false);
                 }
             }
+            break;
         }
-        break;
 
-        case FilterParser::RSFilterType::In:
-        case FilterParser::RSFilterType::NotIn:
         case FilterParser::RSFilterType::Like:
         case FilterParser::RSFilterType::NotLike:
         case FilterParser::RSFilterType::Unsupported:
@@ -733,7 +738,7 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::InString, FilterParser::RSFilterType::In},
     {tipb::ScalarFuncSig::InDecimal, FilterParser::RSFilterType::In},
     {tipb::ScalarFuncSig::InTime, FilterParser::RSFilterType::In},
-    // {tipb::ScalarFuncSig::InDuration, "in"},
+    {tipb::ScalarFuncSig::InDuration, FilterParser::RSFilterType::In},
     // {tipb::ScalarFuncSig::InJson, "in"},
 
     // {tipb::ScalarFuncSig::IfNullInt, "ifNull"},

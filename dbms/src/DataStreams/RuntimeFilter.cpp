@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -156,7 +155,8 @@ bool RuntimeFilter::await(int64_t ms_remaining)
             return isReady();
         }
         std::unique_lock<std::mutex> lock(inner_mutex);
-        return inner_cv.wait_for(lock, std::chrono::milliseconds(ms_remaining), [this] { return isReady(); });
+        inner_cv.wait_for(lock, std::chrono::milliseconds(ms_remaining), [this] { return isReady() || isFailed(); });
+        return isReady();
     }
     return true;
 }

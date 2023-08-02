@@ -22,6 +22,7 @@
 
 #include <chrono>
 #include <future>
+#include <thread>
 
 namespace DB
 {
@@ -84,6 +85,8 @@ private:
     bool scheduledToFixedThread(TaskPtr & task);
     bool scheduledToExistedDynamicThread(TaskPtr & task);
     void scheduledToNewDynamicThread(TaskPtr & task);
+
+    inline std::thread newDynamcThread(TaskPtr & task);
 
     void fixedWork(size_t index);
     void dynamicWork(TaskPtr initial_task);

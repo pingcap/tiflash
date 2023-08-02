@@ -74,6 +74,8 @@ public:
 
     Block getHeader() const;
 
+    AggSpillContextPtr & getAggSpillContext() { return aggregator->getAggSpillContext(); }
+
 private:
     std::unique_ptr<Aggregator> aggregator;
     bool keys_size = false;

@@ -147,14 +147,10 @@ private:
             {
                 handle_res[i] = RSResult::None;
             }
-            for (size_t i = 0; i < pack_count; ++i)
+            for (auto & handle_filter : handle_filters)
             {
-                for (auto & handle_filter : handle_filters)
-                {
-                    handle_res[i] = handle_res[i] || handle_filter->roughCheck(i, param);
-                    if (handle_res[i] == RSResult::All)
-                        break;
-                }
+                auto res = handle_filter->roughCheck(0, pack_count, param);
+                std::transform(handle_res.begin(), handle_res.end(), res.begin(), handle_res.begin(), [](RSResult a, RSResult b) { return a || b; });
             }
         }
 
@@ -178,7 +174,7 @@ private:
         {
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (static_cast<bool>(read_packs->count(i)));
+                use_packs[i] = (static_cast<bool>(use_packs[i])) && read_packs->contains(i);
             }
         }
 
@@ -197,10 +193,8 @@ private:
                 tryLoadIndex(attr.col_id);
             }
 
-            for (size_t i = 0; i < pack_count; ++i)
-            {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (filter->roughCheck(i, param) != None);
-            }
+            const auto check_results = filter->roughCheck(0, pack_count, param);
+            std::transform(use_packs.begin(), use_packs.end(), check_results.begin(), use_packs.begin(), [](UInt8 a, RSResult b) { return (static_cast<bool>(a)) && (b != None); });
         }
 
         for (auto u : use_packs)

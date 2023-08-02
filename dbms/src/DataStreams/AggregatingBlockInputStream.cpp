@@ -38,7 +38,10 @@ Block AggregatingBlockInputStream::readImpl()
         aggregator.setCancellationHook(hook);
         aggregator.initThresholdByAggregatedDataVariantsSize(1);
 
-        aggregator.execute(children.back(), *data_variants);
+        aggregator.execute(children.back(), *data_variants, 0);
+
+        /// no new spill can be triggered anymore
+        aggregator.getAggSpillContext()->finishSpillableStage();
 
         if (!aggregator.hasSpilledData())
         {
