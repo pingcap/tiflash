@@ -31,7 +31,7 @@ namespace DB
 using MPPDataPacket = mpp::MPPDataPacket;
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
-using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+using RequestAndRegionIDs = std::tuple<mpp::DispatchTaskRequest, std::vector<pingcap::kv::RegionVerID>, uint64_t>;
 
 
 class ExchangePacketReader
@@ -60,7 +60,7 @@ struct ExchangeRecvRequest
     Int64 source_index = -1;
     Int64 send_task_id = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = -2;
-    std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
+    mpp::EstablishMPPConnectionRequest req;
     bool is_local = false;
 
     String debugString() const;

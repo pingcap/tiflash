@@ -28,7 +28,6 @@ namespace DB
 {
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
-    M(exception_between_alter_data_and_meta)                      \
     M(exception_drop_table_during_remove_meta)                    \
     M(exception_between_rename_table_data_and_metadata)           \
     M(exception_between_create_database_meta_and_directory)       \
@@ -69,7 +68,8 @@ namespace DB
     M(force_owner_mgr_state)                                      \
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
-    M(force_remote_read_for_batch_cop_once)
+    M(force_remote_read_for_batch_cop_once)                       \
+    M(exception_new_dynamic_thread)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

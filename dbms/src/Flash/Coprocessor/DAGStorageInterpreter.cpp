@@ -99,8 +99,7 @@ MakeRegionQueryInfos(
     const std::unordered_set<RegionID> & region_force_retry,
     TMTContext & tmt,
     MvccQueryInfo & mvcc_info,
-    bool batch_cop [[maybe_unused]],
-    const LoggerPtr & log)
+    bool batch_cop [[maybe_unused]])
 {
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
@@ -112,8 +111,11 @@ MakeRegionQueryInfos(
             if (r.key_ranges.empty())
             {
                 throw TiFlashException(
-                    fmt::format("Income key ranges is empty for region: {}, version {}, conf_version {}", r.region_id, r.region_version, r.region_conf_version),
-                    Errors::Coprocessor::BadRequest);
+                    Errors::Coprocessor::BadRequest,
+                    "Income key ranges is empty, region_id={} version={} conf_version={}",
+                    r.region_id,
+                    r.region_version,
+                    r.region_conf_version);
             }
             if (region_force_retry.count(id))
             {
@@ -146,24 +148,26 @@ MakeRegionQueryInfos(
                     if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != physical_table_id)
                     {
                         throw TiFlashException(
-                            fmt::format(
-                                "Income key ranges is illegal for region: {}, version {}, conf_version {}, table id in key range is {}, table id in region is {}",
-                                r.region_id,
-                                r.region_version,
-                                r.region_conf_version,
-                                table_id_in_range,
-                                physical_table_id),
-                            Errors::Coprocessor::BadRequest);
+                            Errors::Coprocessor::BadRequest,
+                            "Income key ranges is illegal, region_id={} version={} conf_version={} key_range_table_id={} region_table_id={}",
+                            r.region_id,
+                            r.region_version,
+                            r.region_conf_version,
+                            table_id_in_range,
+                            physical_table_id);
                     }
                     if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     {
-                        LOG_WARNING(log, fmt::format("Income key ranges is illegal for region: {}, version {}, conf_version {}, request range: [{}, {}), region range: [{}, {})", r.region_id, r.region_version, r.region_conf_version, p.first->toDebugString(), p.second->toDebugString(), info.range_in_table.first->toDebugString(), info.range_in_table.second->toDebugString()));
                         throw TiFlashException(
-                            fmt::format("Income key ranges is illegal for region: {}, version {}, conf_version {}",
-                                        r.region_id,
-                                        r.region_version,
-                                        r.region_conf_version),
-                            Errors::Coprocessor::BadRequest);
+                            Errors::Coprocessor::BadRequest,
+                            "Income key ranges is illegal, region_id={} version={} conf_version={} request_range=[{}, {}) region_range=[{}, {}}",
+                            r.region_id,
+                            r.region_version,
+                            r.region_conf_version,
+                            p.first->toDebugString(),
+                            p.second->toDebugString(),
+                            info.range_in_table.first->toDebugString(),
+                            info.range_in_table.second->toDebugString());
                     }
                 }
                 info.required_handle_ranges = r.key_ranges;
@@ -735,8 +739,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
         {},
         tmt,
         *mvcc_query_info,
-        false,
-        log);
+        false);
 
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
@@ -766,8 +769,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
                 force_retry,
                 tmt,
                 *mvcc_query_info,
-                true,
-                log);
+                true);
             UNUSED(status);
 
             if (retry)

@@ -22,6 +22,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Interpreters/SortSpillContext.h>
 #include <Poco/TemporaryFile.h>
 
 
@@ -57,14 +58,11 @@ protected:
 private:
     bool hasSpilledData() const
     {
-        return max_bytes_before_external_sort > 0 && spiller->hasSpilledData();
+        return sort_spill_context->hasSpilledData();
     }
     SortDescription description;
     size_t max_merged_block_size;
     size_t limit;
-
-    size_t max_bytes_before_external_sort;
-    const SpillConfig spill_config;
 
     LoggerPtr log;
 
@@ -79,7 +77,7 @@ private:
     Block header_without_constants;
 
     /// Everything below is for external sorting.
-    std::unique_ptr<Spiller> spiller;
+    SortSpillContextPtr sort_spill_context;
 
     BlockInputStreams inputs_to_merge;
 };

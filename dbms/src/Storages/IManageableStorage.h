@@ -71,7 +71,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual bool flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/, [[maybe_unused]] bool try_until_succeed = true) { return true; }
+    virtual bool flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/, [[maybe_unused]] bool try_until_succeed) { return true; }
 
     // Get the statistics of this table.
     // Used by `manage table xxx status` in ch-client
@@ -175,9 +175,9 @@ public:
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     };
 
-    /// The `block_decoding_schema_version` is just an internal version for `DecodingStorageSchemaSnapshot`,
+    /// The `block_decoding_schema_epoch` is just an internal version for `DecodingStorageSchemaSnapshot`,
     /// And it has no relation with the table schema version.
-    virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_version */, BlockUPtr /* block */)
+    virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_epoch */, BlockUPtr /* block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
