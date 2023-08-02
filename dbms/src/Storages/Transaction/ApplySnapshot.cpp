@@ -397,7 +397,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
-            if(stream->isAbort()) {
+            if (stream->isAbort())
+            {
                 LOG_INFO(log, "Cancel stream because of upper layer abort [region_id={}]", region_id);
                 stream->cancel();
             }
