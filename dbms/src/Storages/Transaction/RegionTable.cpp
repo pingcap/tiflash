@@ -94,44 +94,6 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & regi
     return insertRegion(table, region);
 }
 
-void RegionTable::shrinkRegionRange(const Region & region)
-{
-    std::lock_guard lock(mutex);
-    auto & internal_region = getOrInsertRegion(region);
-    internal_region.range_in_table = region.getRange()->rawKeys();
-    internal_region.cache_bytes = region.dataSize();
-}
-
-RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const
-{
-    auto & tmt = context->getTMTContext();
-
-    LOG_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
-
-    /// Write region data into corresponding storage.
-    RegionDataReadInfoList data_list_to_remove;
-    {
-        writeBlockByRegion(*context, region, data_list_to_remove, log);
-    }
-
-    {
-        size_t cache_size = region->dataSize();
-
-        if (cache_size == 0)
-        {
-            if (try_persist)
-            {
-                KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
-                tmt.getKVStore()->tryPersistRegion(region->id());
-            }
-        }
-
-        LOG_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
-    }
-
-    return data_list_to_remove;
-}
-
 RegionTable::RegionTable(Context & context_)
     : context(&context_)
     , log(Logger::get())
@@ -139,13 +101,12 @@ RegionTable::RegionTable(Context & context_)
 
 void RegionTable::restore()
 {
-    LOG_INFO(log, "Start to restore");
+    LOG_INFO(log, "RegionTable restore start");
 
     const auto & tmt = context->getTMTContext();
-
     tmt.getKVStore()->traverseRegions([this](const RegionID, const RegionPtr & region) { updateRegion(*region); });
 
-    LOG_INFO(log, "Restore {} tables", tables.size());
+    LOG_INFO(log, "RegionTable restore end, n_tables={}", tables.size());
 }
 
 void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
@@ -170,7 +131,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     // Remove from table map.
     tables.erase(it);
 
-    LOG_INFO(log, "remove table from RegionTable success, table_id={}", table_id);
+    LOG_INFO(log, "remove table from RegionTable success, keyspace={} table_id={}", keyspace_id, table_id);
 }
 
 void RegionTable::updateRegion(const Region & region)
@@ -205,8 +166,12 @@ void removeObsoleteDataInStorage(
             return;
 
         /// Now we assume that these won't block for long time.
-        auto rowkey_range
-            = DM::RowKeyRange::fromRegionRange(handle_range, ks_table_id.second, ks_table_id.second, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+        auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+            handle_range,
+            ks_table_id.second,
+            ks_table_id.second,
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
         dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
         dm_storage->flushCache(*context, rowkey_range, /*try_until_succeed*/ true); // flush to disk
     }
@@ -267,19 +232,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist)
-{
-    auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
-    if (!region)
-    {
-        LOG_WARNING(log, "region not found, region_id={}", region_id);
-        return {};
-    }
-
-    return tryWriteBlockByRegionAndFlush(region, try_persist);
-}
-
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region)
 {
     RegionID region_id = region->id();
 
@@ -314,7 +267,8 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     RegionDataReadInfoList data_list_to_remove;
     try
     {
-        data_list_to_remove = writeBlockByRegionAndFlush(region, try_persist);
+        /// Write region data into corresponding storage.
+        writeBlockByRegion(*context, region, data_list_to_remove, log);
     }
     catch (const Exception & e)
     {
@@ -370,21 +324,29 @@ std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const
     return regions;
 }
 
+void RegionTable::shrinkRegionRange(const Region & region)
+{
+    std::lock_guard lock(mutex);
+    auto & internal_region = getOrInsertRegion(region);
+    internal_region.range_in_table = region.getRange()->rawKeys();
+    internal_region.cache_bytes = region.dataSize();
+}
+
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
 {
     std::lock_guard lock(mutex);
 
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto table_id = region_range_keys.getMappedTableID();
-    auto ks_tbl_id = KeyspaceTableID{keyspace_id, table_id};
     auto new_handle_range = region_range_keys.rawKeys();
 
     if (auto it = regions.find(region_id); it != regions.end())
     {
+        auto ks_tbl_id = KeyspaceTableID{keyspace_id, table_id};
         RUNTIME_CHECK_MSG(
             ks_tbl_id == it->second,
             "{}: table id not match the previous one"
-            ", region_id={} keyspace={} table_id={}, old_keyspace={} old_table_id={}",
+            ", region_id={} keyspace={} table_id={} old_keyspace={} old_table_id={}",
             __PRETTY_FUNCTION__,
             region_id,
             keyspace_id,
@@ -397,7 +359,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
-            LOG_INFO(log, "internal region has larger range, table_id={} region_id={}", table_id, region_id);
+            LOG_INFO(log, "internal region has larger range, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
         }
         else
         {
@@ -413,7 +375,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     {
         auto & table = getOrCreateTable(keyspace_id, table_id);
         insertRegion(table, region_range_keys, region_id);
-        LOG_INFO(log, "table {} insert internal region_id={}", table_id, region_id);
+        LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
     }
 }
 

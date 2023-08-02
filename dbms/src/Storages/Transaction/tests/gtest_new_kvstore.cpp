@@ -42,7 +42,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             const KVStore & kvs = reloadKVSFromDisk();
@@ -71,7 +71,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
@@ -103,7 +103,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
@@ -134,7 +134,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             MockRaftStoreProxy::FailCond cond;

@@ -28,7 +28,7 @@ try
         proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
     }
     {
-        kvs.tryPersistRegion(1);
+        tryPersistRegion(kvs, 1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -634,7 +634,7 @@ TEST_F(RegionKVStoreTest, Writes)
     }
     {
         // Test gc region persister
-        kvs.tryPersistRegion(1);
+        tryPersistRegion(kvs, 1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -1156,9 +1156,9 @@ TEST_F(RegionKVStoreTest, Restore)
             ASSERT_EQ(kvs.getRegion(0), nullptr);
             proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 2, 3}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}, {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
         }
-        kvs.tryPersistRegion(1);
-        kvs.tryPersistRegion(2);
-        kvs.tryPersistRegion(3);
+        tryPersistRegion(kvs, 1);
+        tryPersistRegion(kvs, 2);
+        tryPersistRegion(kvs, 3);
     }
     {
         KVStore & kvs = reloadKVSFromDisk();

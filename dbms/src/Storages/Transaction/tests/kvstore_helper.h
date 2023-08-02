@@ -165,6 +165,14 @@ protected:
         proxy_runner->join();
     }
 
+    static void tryPersistRegion(KVStore & kvs, RegionID region_id)
+    {
+        if (auto region = kvs.getRegion(region_id); region)
+        {
+            kvs.persistRegion(*region, std::nullopt, "");
+        }
+    }
+
 protected:
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
