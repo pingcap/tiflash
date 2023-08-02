@@ -311,7 +311,9 @@ struct Settings
     M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")                                                                   \
     M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
     M(SettingUInt64, ddl_sync_interval_seconds, 60, "The interval of background DDL sync schema in seconds")                                                                                                                            \
-    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")                                                                                                                            \
+    M(SettingFloat, auto_memory_revoke_trigger_threshold, 0.8, "Trigger auto memory revocation when the memory usage is above this percentage.")                                                                                        \
+    M(SettingFloat, auto_memory_revoke_target_threshold, 0.6, "When auto revoking memory, try to revoke enough that the memory usage is filled below the target percentage at the end.")
 
 
 // clang-format on

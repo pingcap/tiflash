@@ -32,6 +32,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/S3/S3Common.h>
 
+#include "DataStreams/IProfilingBlockInputStream.h"
+
 namespace ProfileEvents
 {
 extern const Event Query;
@@ -96,6 +98,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
     BlockIO res = interpreter->execute();
+    /// query level memory tracker
     MemoryTrackerPtr memory_tracker;
     if (likely(process_list_entry))
     {
@@ -106,6 +109,21 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
+    auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
+    auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
+    /// if query level memory tracker has a limit, then setup auto spill trigger
+    if (memory_tracker->getLimit() != 0)
+    {
+        std::function<void()> auto_spill_trigger = [&dag_context, memory_tracker, auto_spill_trigger_threshold, auto_spill_target_threshold]() {
+            if (memory_tracker->get() > memory_tracker->getLimit() * auto_spill_trigger_threshold)
+            {
+                dag_context.triggerAutoSpill(static_cast<Int64>(memory_tracker->get() - memory_tracker->getLimit() * auto_spill_target_threshold));
+            }
+        };
+        auto * stream = dynamic_cast<IProfilingBlockInputStream *>(res.in.get());
+        RUNTIME_ASSERT(stream != nullptr);
+        stream->setAutoSpillTrigger(auto_spill_trigger);
+    }
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 

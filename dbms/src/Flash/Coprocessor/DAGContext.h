@@ -24,6 +24,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
+#include <Core/OperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
@@ -308,6 +309,16 @@ public:
     }
     ExecutionMode getExecutionMode() const { return execution_mode; }
 
+    void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
+    {
+        operator_spill_contexts.registerOperatorSpillContext(operator_spill_context);
+    }
+
+    Int64 triggerAutoSpill(Int64 expected_released_memories)
+    {
+        return operator_spill_contexts.triggerAutoSpill(expected_released_memories);
+    }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -412,6 +423,8 @@ private:
     // - Stream: execute with block input stream
     // - Pipeline: execute with pipeline model
     ExecutionMode execution_mode = ExecutionMode::None;
+
+    OperatorSpillContexts operator_spill_contexts;
 };
 
 } // namespace DB

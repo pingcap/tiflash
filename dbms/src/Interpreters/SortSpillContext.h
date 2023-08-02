@@ -24,6 +24,7 @@ class SortSpillContext final : public OperatorSpillContext
 {
 private:
     std::atomic<Int64> revocable_memory;
+    std::atomic<bool> is_triggered_for_spill{false};
     SpillConfig spill_config;
     SpillerPtr spiller;
 
@@ -31,9 +32,13 @@ public:
     SortSpillContext(const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
     void buildSpiller(const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
+    void finishOneSpill();
     bool hasSpilledData() const { return spill_status != SpillStatus::NOT_SPILL && spiller->hasSpilledData(); }
     bool updateRevocableMemory(Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override { return revocable_memory; };
+    Int64 triggerSpill(Int64 expected_released_memories) override;
+    bool needFinalSpill() const { return is_triggered_for_spill; }
+    bool supportAutoTriggerSpill() const override { return true; }
 };
 
 using SortSpillContextPtr = std::shared_ptr<SortSpillContext>;

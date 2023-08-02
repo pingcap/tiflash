@@ -111,4 +111,8 @@ std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
     return ret;
 }
 
+Int64 HashJoinSpillContext::triggerSpill(Int64)
+{
+    throw Exception("Not supported yet");
+}
 } // namespace DB

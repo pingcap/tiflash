@@ -988,7 +988,8 @@ void InterpreterSelectQuery::executeOrder(Pipeline & pipeline)
         limit,
         settings.max_bytes_before_external_sort,
         SpillConfig(context.getTemporaryPath(), "sort", settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
-        /*req_id=*/"");
+        /*req_id=*/"",
+        [](const OperatorSpillContextPtr &) {});
 }
 
 

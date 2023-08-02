@@ -124,6 +124,7 @@ OperatorStatus MergeSortTransformOp::fromSpillToPartial()
     sum_bytes_in_blocks = 0;
     sorted_blocks.clear();
     status = MergeSortStatus::PARTIAL;
+    sort_spill_context->finishOneSpill();
     return OperatorStatus::NEED_INPUT;
 }
 
@@ -136,6 +137,8 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
         if unlikely (!block)
         {
             sort_spill_context->finishSpillableStage();
+            if (!sorted_blocks.empty() && sort_spill_context->needFinalSpill())
+                return fromPartialToSpill();
             return hasSpilledData()
                 ? fromPartialToRestore()
                 : fromPartialToMerge(block);

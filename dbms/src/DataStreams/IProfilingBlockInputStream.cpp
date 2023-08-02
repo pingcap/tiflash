@@ -116,6 +116,8 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     }
 #endif
 
+    if (auto_spill_trigger != nullptr)
+        auto_spill_trigger();
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     return res;
 }
@@ -391,10 +393,38 @@ bool IProfilingBlockInputStream::isCancelledOrThrowIfKilled() const
 
 void IProfilingBlockInputStream::setProgressCallback(const ProgressCallback & callback)
 {
+    std::unordered_set<void *> visited_nodes;
+    setProgressCallbackImpl(callback, visited_nodes);
+}
+
+void IProfilingBlockInputStream::setProgressCallbackImpl(const ProgressCallback & callback, std::unordered_set<void *> & visited_nodes)
+{
+    if (visited_nodes.find(this) != visited_nodes.end())
+        return;
+    visited_nodes.insert(this);
     progress_callback = callback;
 
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-        child.setProgressCallback(callback);
+        child.setProgressCallbackImpl(callback, visited_nodes);
+        return false;
+    });
+}
+
+void IProfilingBlockInputStream::setAutoSpillTrigger(const AutoSpillTrigger & callback)
+{
+    std::unordered_set<void *> visited_nodes;
+    setAutoSpillTriggerImpl(callback, visited_nodes);
+}
+
+void IProfilingBlockInputStream::setAutoSpillTriggerImpl(const AutoSpillTrigger & callback, std::unordered_set<void *> & visited_nodes)
+{
+    if (visited_nodes.find(this) != visited_nodes.end())
+        return;
+    visited_nodes.insert(this);
+    auto_spill_trigger = callback;
+
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+        child.setAutoSpillTriggerImpl(callback, visited_nodes);
         return false;
     });
 }
@@ -402,6 +432,8 @@ void IProfilingBlockInputStream::setProgressCallback(const ProgressCallback & ca
 
 void IProfilingBlockInputStream::setProcessListElement(ProcessListElement * elem)
 {
+    if (process_list_elem == elem)
+        return;
     process_list_elem = elem;
 
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {

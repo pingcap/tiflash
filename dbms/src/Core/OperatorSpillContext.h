@@ -29,6 +29,8 @@ enum class SpillStatus
 class OperatorSpillContext
 {
 protected:
+    /// minimum revocable operator memories that will trigger a spill
+    const static Int64 MIN_SPILL_THRESHOLD = 10ULL * 1024 * 1024;
     UInt64 operator_spill_threshold;
     std::atomic<bool> in_spillable_stage{true};
     std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
@@ -45,7 +47,7 @@ public:
         , log(log_)
     {}
     virtual ~OperatorSpillContext() = default;
-    bool isSpillEnabled() const { return enable_spill && operator_spill_threshold > 0; }
+    bool isSpillEnabled() const { return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0); }
     void disableSpill() { enable_spill = false; }
     void finishSpillableStage() { in_spillable_stage = false; }
     Int64 getTotalRevocableMemory()
@@ -65,5 +67,13 @@ public:
         }
     }
     bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
+    /// auto trigger spill means the operator will auto spill under the constraint of query/global level memory threshold,
+    /// so user does not need set operator_spill_threshold explicitly
+    virtual bool supportAutoTriggerSpill() const { return false; }
+    virtual Int64 triggerSpill(Int64 expected_released_memories) = 0;
 };
+
+using OperatorSpillContextPtr = std::shared_ptr<OperatorSpillContext>;
+using RegisterOperatorSpillContext = std::function<void(const OperatorSpillContextPtr & ptr)>;
+using AutoSpillTrigger = std::function<void()>;
 } // namespace DB

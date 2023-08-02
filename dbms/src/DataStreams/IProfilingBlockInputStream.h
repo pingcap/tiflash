@@ -38,6 +38,7 @@ class ProcessListElement;
 class IProfilingBlockInputStream;
 
 using ProfilingBlockInputStreamPtr = std::shared_ptr<IProfilingBlockInputStream>;
+using AutoSpillTrigger = std::function<void()>;
 
 
 /** Watches out at how the source of the blocks works.
@@ -85,6 +86,12 @@ public:
       * Note that the callback can be called from different threads.
       */
     void setProgressCallback(const ProgressCallback & callback);
+
+    /** Set auto spill trigger, the auto spill trigger will trigger auto spill based on
+     * query memory threshold or global memory threshold
+     * @param callback
+     */
+    void setAutoSpillTrigger(const AutoSpillTrigger & callback);
 
 
     /** In this method:
@@ -185,6 +192,7 @@ protected:
     std::atomic<bool> is_killed{false};
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
+    AutoSpillTrigger auto_spill_trigger;
 
     /// Additional information that can be generated during the work process.
 
@@ -247,6 +255,8 @@ private:
                 if (f(*p_child))
                     return;
     }
+    void setProgressCallbackImpl(const ProgressCallback & callback, std::unordered_set<void *> & visited_nodes);
+    void setAutoSpillTriggerImpl(const AutoSpillTrigger & callback, std::unordered_set<void *> & visited_nodes);
 };
 
 } // namespace DB

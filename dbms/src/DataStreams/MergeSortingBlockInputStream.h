@@ -41,7 +41,8 @@ public:
         size_t limit_,
         size_t max_bytes_before_external_sort_,
         const SpillConfig & spill_config_,
-        const String & req_id);
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     String getName() const override { return NAME; }
 
@@ -60,6 +61,8 @@ private:
     {
         return sort_spill_context->hasSpilledData();
     }
+
+    void spillCurrentBlocks();
     SortDescription description;
     size_t max_merged_block_size;
     size_t limit;

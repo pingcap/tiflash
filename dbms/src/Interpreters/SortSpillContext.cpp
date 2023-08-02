@@ -31,11 +31,33 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
     if (!in_spillable_stage)
         return false;
     revocable_memory = new_value;
-    if (enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold))
+    if (is_triggered_for_spill || (enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
     {
         revocable_memory = 0;
         return true;
     }
     return false;
+}
+
+Int64 SortSpillContext::triggerSpill(Int64 expected_released_memories)
+{
+    if (!in_spillable_stage || !isSpillEnabled())
+        return expected_released_memories;
+    auto total_revocable_memory = getTotalRevocableMemory();
+    if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
+    {
+        bool old_value = false;
+        if (is_triggered_for_spill.compare_exchange_strong(old_value, true))
+        {
+            expected_released_memories = std::max(expected_released_memories - total_revocable_memory, 0);
+            revocable_memory = 0;
+        }
+    }
+    return expected_released_memories;
+}
+
+void SortSpillContext::finishOneSpill()
+{
+    is_triggered_for_spill = false;
 }
 } // namespace DB

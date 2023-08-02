@@ -189,7 +189,13 @@ void orderStreams(
                 limit,
                 getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
                 SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
-                log->identifier());
+                log->identifier(),
+                [&](const OperatorSpillContextPtr & operator_spill_context) {
+                    if (context.getDAGContext() != nullptr)
+                    {
+                        context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                    }
+                });
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
@@ -207,7 +213,13 @@ void orderStreams(
             settings.max_bytes_before_external_sort,
             // todo use identifier_executor_id as the spill id
             SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
-            log->identifier());
+            log->identifier(),
+            [&](const OperatorSpillContextPtr & operator_spill_context) {
+                if (context.getDAGContext() != nullptr)
+                {
+                    context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                }
+            });
     }
 }
 

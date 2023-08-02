@@ -54,4 +54,9 @@ Int64 AggSpillContext::getTotalRevocableMemoryImpl()
         ret += x;
     return ret;
 }
+
+Int64 AggSpillContext::triggerSpill(Int64)
+{
+    throw Exception("Not supported yet");
+}
 } // namespace DB
