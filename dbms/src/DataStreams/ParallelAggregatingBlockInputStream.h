@@ -66,10 +66,10 @@ protected:
 private:
     const LoggerPtr log;
 
+    size_t max_threads;
     Aggregator::Params params;
     Aggregator aggregator;
     bool final;
-    size_t max_threads;
     Int64 max_buffered_bytes;
     size_t temporary_data_merge_threads;
 
