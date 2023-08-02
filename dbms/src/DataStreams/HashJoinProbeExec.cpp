@@ -163,8 +163,6 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
         {
             auto hash_join_build_stream = std::make_shared<HashJoinBuildBlockInputStream>(restore_info->build_stream, restore_info->join, restore_info->stream_index, log->identifier());
-            /// restored join should always enable spill
-            assert(restore_info->join && restore_info->join->isEnableSpill());
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
                 log->identifier(),
                 restore_info->join,

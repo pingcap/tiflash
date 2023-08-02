@@ -1910,12 +1910,13 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
         return;
     {
         std::unique_lock lk(build_probe_mutex);
+
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
         if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
             return;
-
 #endif
+
         for (const auto & partition_to_be_spilled : hash_join_spill_context->getPartitionsToSpill())
         {
             RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
