@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/FailPoint.h>
 #include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -24,6 +25,11 @@ namespace CurrentMetrics
 {
 extern const Metric DT_SegmentReadTasks;
 }
+
+namespace DB::FailPoints
+{
+extern const char pause_when_reading_from_dt_stream[];
+} // namespace DB::FailPoints
 
 namespace DB::DM
 {
@@ -286,6 +292,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
+    FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
     auto block = stream->read();
     if (block)
     {

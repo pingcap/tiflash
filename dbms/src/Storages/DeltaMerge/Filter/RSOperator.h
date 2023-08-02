@@ -19,10 +19,9 @@
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 using RSOperators = std::vector<RSOperatorPtr>;
@@ -52,9 +51,7 @@ public:
     virtual String name() = 0;
     virtual String toDebugString() = 0;
 
-    // TODO: implement a batch check version
-
-    virtual RSResult roughCheck(size_t pack_id, const RSCheckParam & param) = 0;
+    virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual Attrs getAttrs() = 0;
 
@@ -116,14 +113,13 @@ public:
     }
 };
 
-#define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex) \
-    auto it = param.indexes.find(attr.col_id);                             \
-    if (it == param.indexes.end())                                         \
-        return Some;                                                       \
-    auto rsindex = it->second;                                             \
-    if (!rsindex.type->equals(*attr.type))                                 \
-        return Some;
-
+#define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res) \
+    auto it = (param).indexes.find((attr).col_id);                                  \
+    if (it == (param).indexes.end())                                                \
+        return (res);                                                               \
+    auto(rsindex) = it->second;                                                     \
+    if (!(rsindex).type->equals(*(attr).type))                                      \
+        return (res);
 
 // logical
 RSOperatorPtr createNot(const RSOperatorPtr & op);
@@ -147,7 +143,4 @@ RSOperatorPtr createIsNull(const Attr & attr);
 //
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not);
 
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM
