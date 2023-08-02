@@ -196,7 +196,7 @@ private:
             Stopwatch watch;
             const auto check_results = filter->roughCheck(0, pack_count, param);
             std::transform(use_packs.begin(), use_packs.end(), check_results.begin(), use_packs.begin(), [](UInt8 a, RSResult b) { return (static_cast<bool>(a)) && (b != None); });
-            scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();
+            scan_context->total_dmfile_rough_set_index_check_time_ns += watch.elapsed();
         }
 
         for (auto u : use_packs)
@@ -328,7 +328,7 @@ private:
         Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 
-        scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();
+        scan_context->total_dmfile_rough_set_index_check_time_ns += watch.elapsed();
     }
 
 private:
