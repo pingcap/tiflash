@@ -319,7 +319,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
     // Note that `buildRemoteRequests` must be called after `buildLocalExec` because
     // `buildLocalExec` will setup `region_retry_from_local_region` and we must
     // retry those regions or there will be data lost.
-    auto remote_requests = buildRemoteRequests(mvcc_query_info->scan_context);
+    auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
         // This means RN is sending requests with stale region info, we simply reject the request
@@ -408,7 +408,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // Note that `buildRemoteRequests` must be called after `buildLocalStreams` because
     // `buildLocalStreams` will setup `region_retry_from_local_region` and we must
     // retry those regions or there will be data lost.
-    auto remote_requests = buildRemoteRequests(mvcc_query_info->scan_context);
+    auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
         // This means RN is sending requests with stale region info, we simply reject the request
