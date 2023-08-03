@@ -31,17 +31,12 @@
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
+#include <Common/SyncPoint/SyncPoint.h>
 
 #include <magic_enum.hpp>
 
 namespace DB
 {
-
-namespace FailPoints
-{
-extern const char pause_after_prehandling_dtfiles[];
-} // namespace FailPoints
-
 namespace DM
 {
 
@@ -237,7 +232,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
         {
             break;
         }
-        FAIL_POINT_PAUSE(FailPoints::pause_after_prehandling_dtfiles);
+        SYNC_FOR("before_SSTFilesToDTFilesOutputStream::handle_one");
         Block block = child->read();
         if (!block)
             break;

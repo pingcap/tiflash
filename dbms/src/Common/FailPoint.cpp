@@ -120,7 +120,6 @@ namespace DB
     M(pause_when_ingesting_to_dt_store)   \
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
-    M(pause_after_prehandling_dtfiles)    \
     M(pause_query_init)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \

@@ -24,15 +24,12 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <Common/SyncPoint/SyncPoint.h>
 
 #include <magic_enum.hpp>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_after_prehandling_dtfiles[];
-} // namespace FailPoints
 namespace DM
 {
 namespace tests
@@ -515,14 +512,14 @@ try
         abort_flag,
         *db_context);
 
-    FailPointHelper::enableFailPoint(FailPoints::pause_after_prehandling_dtfiles);
+    auto sp_gc = SyncPointCtl::enableInScope("before_SSTFilesToDTFilesOutputStream::handle_one");
     stream->writePrefix();
     auto t = std::thread([&]() {
         stream->write();
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     abort_flag->store(true, std::memory_order_seq_cst);
-    FailPointHelper::disableFailPoint(FailPoints::pause_after_prehandling_dtfiles);
+    sp_gc.disable();
     t.join();
     stream->writeSuffix();
     auto files = stream->outputFiles();
