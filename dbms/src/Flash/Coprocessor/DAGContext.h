@@ -204,6 +204,18 @@ public:
             warnings_.push_back(error);
         }
     }
+    void fillWarnings(tipb::SelectResponse & response)
+    {
+        std::vector<tipb::Error> warnings_vec;
+        consumeWarnings(warnings_vec);
+        for (auto & warning : warnings_vec)
+        {
+            auto * warn = response.add_warnings();
+            // TODO: consider using allocated warnings to prevent copy?
+            warn->CopyFrom(warning);
+        }
+        response.set_warning_count(getWarningCount());
+    }
     void clearWarnings()
     {
         warnings.clear();

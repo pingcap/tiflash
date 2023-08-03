@@ -149,13 +149,22 @@ try
         query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
         response_writer->flush();
 
+        tipb::SelectResponse last_response;
+        bool need_send = false;
         if (dag_context.collect_execution_summaries)
         {
             ExecutorStatisticsCollector statistics_collector(log->identifier());
             statistics_collector.initialize(&dag_context);
-            auto execution_summary_response = statistics_collector.genExecutionSummaryResponse();
-            streaming_writer->write(execution_summary_response);
+            statistics_collector.fillExecuteSummaries(last_response);
+            need_send = true;
         }
+        if (dag_context.getWarningCount() > 0)
+        {
+            dag_context.fillWarnings(last_response);
+            need_send = true;
+        }
+        if (need_send)
+            streaming_writer->write(last_response);
     }
     else if (Kind == CoprocessorKind::BatchCop)
     {
@@ -183,13 +192,22 @@ try
         query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
         response_writer->flush();
 
+        tipb::SelectResponse last_response;
+        bool need_send = false;
         if (dag_context.collect_execution_summaries)
         {
             ExecutorStatisticsCollector statistics_collector(log->identifier());
             statistics_collector.initialize(&dag_context);
-            auto execution_summary_response = statistics_collector.genExecutionSummaryResponse();
-            streaming_writer->write(execution_summary_response);
+            statistics_collector.fillExecuteSummaries(last_response);
+            need_send = true;
         }
+        if (dag_context.getWarningCount() > 0)
+        {
+            dag_context.fillWarnings(last_response);
+            need_send = true;
+        }
+        if (need_send)
+            streaming_writer->write(last_response);
     }
 
     auto cpu_ru = query_executor->collectRequestUnit();
