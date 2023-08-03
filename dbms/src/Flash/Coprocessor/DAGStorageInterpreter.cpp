@@ -389,7 +389,9 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
     dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 
     /// handle filter conditions for local and remote table scan.
-    if (filter_conditions.hasValue())
+    /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
+    /// todo add runtime filter in Filter input stream
+    if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
     {
         ::DB::executePushedDownFilter(exec_context, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
         dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
