@@ -43,6 +43,11 @@ public:
         if (operator_spill_context->supportAutoTriggerSpill())
             operator_spill_contexts.push_back(operator_spill_context);
     }
+    /// for tests
+    size_t operatorSpillContextCount()
+    {
+        return operator_spill_contexts.size();
+    }
 
 private:
     std::vector<OperatorSpillContextPtr> operator_spill_contexts;

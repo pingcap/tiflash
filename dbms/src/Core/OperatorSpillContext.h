@@ -31,8 +31,6 @@ enum class AutoSpillStatus
 class OperatorSpillContext
 {
 protected:
-    /// minimum revocable operator memories that will trigger a spill
-    const static Int64 MIN_SPILL_THRESHOLD = 10ULL * 1024 * 1024;
     UInt64 operator_spill_threshold;
     std::atomic<bool> in_spillable_stage{true};
     std::atomic<bool> is_spilled{false};
@@ -43,6 +41,8 @@ protected:
     virtual Int64 getTotalRevocableMemoryImpl() = 0;
 
 public:
+    /// minimum revocable operator memories that will trigger a spill
+    const static Int64 MIN_SPILL_THRESHOLD = 10ULL * 1024 * 1024;
     OperatorSpillContext(UInt64 operator_spill_threshold_, const String op_name_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
         , op_name(op_name_)
