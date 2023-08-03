@@ -53,8 +53,8 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
 
 void MergeSortingBlockInputStream::spillCurrentBlocks()
 {
-    sort_spill_context->markSpill();
-    auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
+    sort_spill_context->markSpilled();
+    auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), std::max(1, max_merged_block_size / 10), limit);
     auto is_cancelled_pred = [this]() {
         return this->isCancelled();
     };

@@ -16,6 +16,7 @@
 #include <Common/MemoryTracker.h>
 #include <Common/ProfileEvents.h>
 #include <Core/QueryProcessingStage.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
@@ -31,8 +32,6 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/S3/S3Common.h>
-
-#include "DataStreams/IProfilingBlockInputStream.h"
 
 namespace ProfileEvents
 {
@@ -116,7 +115,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     {
         if (memory_tracker->getLimit() != 0)
         {
-            std::function<void()> auto_spill_trigger = [&dag_context, memory_tracker, auto_spill_trigger_threshold, auto_spill_target_threshold]() {
+            auto auto_spill_trigger = [&dag_context, memory_tracker, auto_spill_trigger_threshold, auto_spill_target_threshold]() {
                 if (memory_tracker->get() > memory_tracker->getLimit() * auto_spill_trigger_threshold)
                 {
                     dag_context.triggerAutoSpill(static_cast<Int64>(memory_tracker->get() - memory_tracker->getLimit() * auto_spill_target_threshold));

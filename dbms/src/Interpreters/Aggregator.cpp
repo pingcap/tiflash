@@ -78,7 +78,7 @@ bool AggregatedDataVariants::tryMarkNeedSpill()
         convertToTwoLevel();
     }
     need_spill = true;
-    aggregator->agg_spill_context->markSpill();
+    aggregator->agg_spill_context->markSpilled();
     return true;
 }
 

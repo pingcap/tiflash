@@ -24,7 +24,7 @@ class SortSpillContext final : public OperatorSpillContext
 {
 private:
     std::atomic<Int64> revocable_memory;
-    std::atomic<bool> is_triggered_for_spill{false};
+    std::atomic<AutoSpillStatus> auto_spill_status{AutoSpillStatus::NO_NEED_AUTO_SPILL};
     SpillConfig spill_config;
     SpillerPtr spiller;
 
@@ -33,11 +33,11 @@ public:
     void buildSpiller(const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
     void finishOneSpill();
-    bool hasSpilledData() const { return spill_status != SpillStatus::NOT_SPILL && spiller->hasSpilledData(); }
+    bool hasSpilledData() const { return isSpilled() && spiller->hasSpilledData(); }
     bool updateRevocableMemory(Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override { return revocable_memory; };
     Int64 triggerSpill(Int64 expected_released_memories) override;
-    bool needFinalSpill() const { return is_triggered_for_spill; }
+    bool needFinalSpill() const { return auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL; }
     bool supportAutoTriggerSpill() const override { return true; }
 };
 

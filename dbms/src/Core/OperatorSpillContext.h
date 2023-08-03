@@ -20,10 +20,12 @@
 
 namespace DB
 {
-enum class SpillStatus
+enum class AutoSpillStatus
 {
-    NOT_SPILL,
-    SPILL,
+    /// auto spill is not needed or current auto spill already finished
+    NO_NEED_AUTO_SPILL,
+    /// auto spill is needed
+    NEED_AUTO_SPILL,
 };
 
 class OperatorSpillContext
@@ -33,7 +35,7 @@ protected:
     const static Int64 MIN_SPILL_THRESHOLD = 10ULL * 1024 * 1024;
     UInt64 operator_spill_threshold;
     std::atomic<bool> in_spillable_stage{true};
-    std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
+    std::atomic<bool> is_spilled{false};
     bool enable_spill = true;
     String op_name;
     LoggerPtr log;
@@ -58,15 +60,15 @@ public:
             return 0;
     }
     UInt64 getOperatorSpillThreshold() const { return operator_spill_threshold; }
-    void markSpill()
+    void markSpilled()
     {
-        SpillStatus init_value = SpillStatus::NOT_SPILL;
-        if (spill_status.compare_exchange_strong(init_value, SpillStatus::SPILL, std::memory_order_relaxed))
+        bool init_value = false;
+        if (is_spilled.compare_exchange_strong(init_value, true, std::memory_order_relaxed))
         {
             LOG_INFO(log, "Begin spill in {}", op_name);
         }
     }
-    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
+    bool isSpilled() const { return is_spilled; }
     /// auto trigger spill means the operator will auto spill under the constraint of query/global level memory threshold,
     /// so user does not need set operator_spill_threshold explicitly
     virtual bool supportAutoTriggerSpill() const { return false; }

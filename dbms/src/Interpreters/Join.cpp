@@ -1926,7 +1926,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
             LOG_INFO(log, fmt::format("Join with restore round: {}, used {} bytes, will spill partition: {}.", restore_round, getTotalByteCount(), partition_to_be_spilled));
 
             std::unique_lock partition_lock = partitions[partition_to_be_spilled]->lockPartition();
-            hash_join_spill_context->markPartitionSpill(partition_to_be_spilled);
+            hash_join_spill_context->markPartitionSpilled(partition_to_be_spilled);
             partitions[partition_to_be_spilled]->releasePartitionPoolAndHashMap(partition_lock);
             auto blocks_to_spill = partitions[partition_to_be_spilled]->trySpillBuildPartition(partition_lock);
             spilled_partition_indexes.push_back(partition_to_be_spilled);

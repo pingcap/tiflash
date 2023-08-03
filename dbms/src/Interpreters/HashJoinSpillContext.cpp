@@ -26,11 +26,11 @@ HashJoinSpillContext::HashJoinSpillContext(const SpillConfig & build_spill_confi
 void HashJoinSpillContext::init(size_t partition_num)
 {
     partition_revocable_memories = std::make_unique<std::vector<std::atomic<Int64>>>(partition_num);
-    partition_spill_status = std::make_unique<std::vector<std::atomic<SpillStatus>>>(partition_num);
+    partition_is_spilled = std::make_unique<std::vector<std::atomic<bool>>>(partition_num);
     for (auto & memory : *partition_revocable_memories)
         memory = 0;
-    for (auto & status : *partition_spill_status)
-        status = SpillStatus::NOT_SPILL;
+    for (auto & status : *partition_is_spilled)
+        status = false;
 }
 
 Int64 HashJoinSpillContext::getTotalRevocableMemoryImpl()
@@ -51,10 +51,10 @@ void HashJoinSpillContext::buildProbeSpiller(const Block & input_schema)
     probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, (*partition_revocable_memories).size(), input_schema, log);
 }
 
-void HashJoinSpillContext::markPartitionSpill(size_t partition_index)
+void HashJoinSpillContext::markPartitionSpilled(size_t partition_index)
 {
-    markSpill();
-    (*partition_spill_status)[partition_index] = SpillStatus::SPILL;
+    markSpilled();
+    (*partition_is_spilled)[partition_index] = true;
 }
 
 bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, Int64 new_value)
@@ -62,7 +62,7 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
     (*partition_revocable_memories)[partition_id] = new_value;
     /// this function only trigger spill if current partition is already chosen to spill
     /// the new partition to spill is chosen in getPartitionsToSpill
-    if ((*partition_spill_status)[partition_id] == SpillStatus::NOT_SPILL)
+    if (!(*partition_is_spilled)[partition_id])
         return false;
     auto force_spill = operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() > static_cast<Int64>(operator_spill_threshold);
     if (force_spill || (max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes))
