@@ -54,6 +54,11 @@ public:
         return cur_group[index];
     }
 
+    PipelineExecBuilder & getFirstBuilder()
+    {
+        return getCurBuilder(0);
+    }
+
     void addGroup() { groups.emplace_back(); }
 
     size_t groupCnt() const { return groups.size(); }

@@ -371,7 +371,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
     executeGeneratedColumnPlaceholder(exec_context, group_builder, remote_read_start_index, generated_column_infos, log);
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
-    const auto table_scan_output_header = group_builder.getCurrentHeader();
+    const auto table_scan_output_header = group_builder.getFirstBuilder().getCurrentHeader();
     for (const auto & col : table_scan_output_header)
         source_columns.emplace_back(col.name, col.type);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
