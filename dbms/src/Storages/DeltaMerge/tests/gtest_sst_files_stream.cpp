@@ -512,14 +512,14 @@ try
         abort_flag,
         *db_context);
 
-    auto sp_gc = SyncPointCtl::enableInScope("before_SSTFilesToDTFilesOutputStream::handle_one");
+    auto sp = SyncPointCtl::enableInScope("before_SSTFilesToDTFilesOutputStream::handle_one");
     stream->writePrefix();
     auto t = std::thread([&]() {
         stream->write();
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    sp.waitAndPause();
     abort_flag->store(true, std::memory_order_seq_cst);
-    sp_gc.disable();
+    sp.disable();
     t.join();
     stream->writeSuffix();
     auto files = stream->outputFiles();
