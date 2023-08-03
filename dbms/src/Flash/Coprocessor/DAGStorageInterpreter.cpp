@@ -371,6 +371,14 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
     executeGeneratedColumnPlaceholder(exec_context, group_builder, remote_read_start_index, generated_column_infos, log);
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
+    /// group_builder: 
+    /// case1: [local_builder, ..., local_builder, remote_builder, ..., remote_builder]
+    /// case2: [remote_builder, ..., remote_builder]
+    /// case3: [null_builder]
+    ///
+    /// for case1, the header of the analyzer will be the header of the local_builder, and after addExtraCast and pushDownFilter, it will be consistent with the storage_schema
+    /// for case2, the header of analyzer will be the header of remote_builder, which is consistent with storage_schema.
+    /// for case3, the header of analyzer will be the header of null_builder, which is consistent with storage_schema.
     const auto table_scan_output_header = group_builder.getFirstBuilder().getCurrentHeader();
     for (const auto & col : table_scan_output_header)
         source_columns.emplace_back(col.name, col.type);
