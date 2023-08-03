@@ -38,14 +38,14 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
-template <DAGDriverKind kind>
+template <CoprocessorKind kind>
 const tipb::DAGRequest & DAGDriver<kind>::dagRequest() const
 {
     return *context.getDAGContext()->dag_request;
 }
 
 template <>
-DAGDriver<DAGDriverKind::Cop>::DAGDriver(
+DAGDriver<CoprocessorKind::Cop>::DAGDriver(
     Context & context_,
     UInt64 start_ts,
     UInt64 schema_ver,
@@ -64,7 +64,7 @@ DAGDriver<DAGDriverKind::Cop>::DAGDriver(
 }
 
 template <>
-DAGDriver<DAGDriverKind::CopStream>::DAGDriver(
+DAGDriver<CoprocessorKind::CopStream>::DAGDriver(
     Context & context_,
     UInt64 start_ts,
     UInt64 schema_ver,
@@ -83,7 +83,7 @@ DAGDriver<DAGDriverKind::CopStream>::DAGDriver(
 }
 
 template <>
-DAGDriver<DAGDriverKind::BatchCop>::DAGDriver(
+DAGDriver<CoprocessorKind::BatchCop>::DAGDriver(
     Context & context_,
     UInt64 start_ts,
     UInt64 schema_ver,
@@ -101,7 +101,7 @@ DAGDriver<DAGDriverKind::BatchCop>::DAGDriver(
     context.getTimezoneInfo().resetByDAGRequest(dagRequest());
 }
 
-template <DAGDriverKind Kind>
+template <CoprocessorKind Kind>
 void DAGDriver<Kind>::execute()
 try
 {
@@ -119,7 +119,7 @@ try
     LOG_DEBUG(log, "Compile dag request cost {} ms", compile_time_ns / 1000000);
 
     BlockOutputStreamPtr dag_output_stream = nullptr;
-    if constexpr (Kind == DAGDriverKind::Cop)
+    if constexpr (Kind == CoprocessorKind::Cop)
     {
         auto response_writer = std::make_unique<UnaryDAGResponseWriter>(
             cop_response,
@@ -136,7 +136,7 @@ try
             statistics_collector.fillExecuteSummaries(*cop_response);
         }
     }
-    else if (Kind == DAGDriverKind::CopStream)
+    else if (Kind == CoprocessorKind::CopStream)
     {
         auto streaming_writer = std::make_shared<CopStreamWriter>(cop_writer);
         TiDB::TiDBCollators collators;
@@ -157,7 +157,7 @@ try
             streaming_writer->write(execution_summary_response);
         }
     }
-    else if (Kind == DAGDriverKind::BatchCop)
+    else if (Kind == CoprocessorKind::BatchCop)
     {
         if (!dag_context.retry_regions.empty())
         {
@@ -194,17 +194,17 @@ try
 
     auto cpu_ru = query_executor->collectRequestUnit();
     auto read_ru = dag_context.getReadRU();
-    if constexpr (Kind == DAGDriverKind::Cop)
+    if constexpr (Kind == CoprocessorKind::Cop)
     {
         LOG_INFO(log, "cop finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_cop).Increment(cpu_ru + read_ru);
     }
-    else if constexpr (Kind == DAGDriverKind::CopStream)
+    else if constexpr (Kind == CoprocessorKind::CopStream)
     {
         LOG_INFO(log, "cop stream finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_cop_stream).Increment(cpu_ru + read_ru);
     }
-    else if constexpr (Kind == DAGDriverKind::BatchCop)
+    else if constexpr (Kind == CoprocessorKind::BatchCop)
     {
         LOG_INFO(log, "batch cop finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(cpu_ru + read_ru);
@@ -217,15 +217,15 @@ try
     {
         auto process_info = context.getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-        if constexpr (Kind == DAGDriverKind::Cop)
+        if constexpr (Kind == CoprocessorKind::Cop)
         {
             GET_METRIC(tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
         }
-        else if constexpr (Kind == DAGDriverKind::CopStream)
+        else if constexpr (Kind == CoprocessorKind::CopStream)
         {
             GET_METRIC(tiflash_coprocessor_request_memory_usage, type_cop_stream).Observe(peak_memory);
         }
-        else if constexpr (Kind == DAGDriverKind::BatchCop)
+        else if constexpr (Kind == CoprocessorKind::BatchCop)
         {
             GET_METRIC(tiflash_coprocessor_request_memory_usage, type_batch).Observe(peak_memory);
         }
@@ -273,17 +273,17 @@ catch (...)
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 
-template <DAGDriverKind Kind>
+template <CoprocessorKind Kind>
 void DAGDriver<Kind>::recordError(Int32 err_code, const String & err_msg)
 {
-    if constexpr (Kind == DAGDriverKind::Cop)
+    if constexpr (Kind == CoprocessorKind::Cop)
     {
         cop_response->Clear();
         tipb::Error * error = cop_response->mutable_error();
         error->set_code(err_code);
         error->set_msg(err_msg);
     }
-    else if constexpr (Kind == DAGDriverKind::CopStream)
+    else if constexpr (Kind == CoprocessorKind::CopStream)
     {
         tipb::SelectResponse dag_response;
         tipb::Error * error = dag_response.mutable_error();
@@ -293,7 +293,7 @@ void DAGDriver<Kind>::recordError(Int32 err_code, const String & err_msg)
         err_response.set_data(dag_response.SerializeAsString());
         cop_writer->Write(err_response);
     }
-    else if constexpr (Kind == DAGDriverKind::BatchCop)
+    else if constexpr (Kind == CoprocessorKind::BatchCop)
     {
         tipb::SelectResponse dag_response;
         tipb::Error * error = dag_response.mutable_error();
@@ -305,8 +305,8 @@ void DAGDriver<Kind>::recordError(Int32 err_code, const String & err_msg)
     }
 }
 
-template class DAGDriver<DAGDriverKind::Cop>;
-template class DAGDriver<DAGDriverKind::CopStream>;
-template class DAGDriver<DAGDriverKind::BatchCop>;
+template class DAGDriver<CoprocessorKind::Cop>;
+template class DAGDriver<CoprocessorKind::CopStream>;
+template class DAGDriver<CoprocessorKind::BatchCop>;
 
 } // namespace DB

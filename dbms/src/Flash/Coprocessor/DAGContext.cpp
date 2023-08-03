@@ -41,8 +41,8 @@ bool strictSqlMode(UInt64 sql_mode)
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
 
-// for non-mpp(cop/batchCop)
-DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
+// for non-mpp(Cop/CopStream/BatchCop)
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, CoprocessorKind cop_kind_, LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -50,7 +50,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tab
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
     , is_mpp_task(false)
     , is_root_mpp_task(false)
-    , is_batch_cop(is_batch_cop_)
+    , cop_kind(cop_kind_)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
     , flags(dag_request->flags())
@@ -94,7 +94,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::Dis
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
     , is_mpp_task(false)
     , is_root_mpp_task(false)
-    , is_batch_cop(false)
+    , cop_kind(CoprocessorKind::Cop)
     , is_disaggregated_task(true)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))

@@ -135,6 +135,7 @@ private:
 } // namespace common
 } // namespace pingcap
 
+using CopIterQueue = pingcap::common::CopIterMPMCQueue<pingcap::coprocessor::ResponseIter::Result>;
 
 namespace DB
 {
@@ -181,10 +182,11 @@ public:
         bool has_enforce_encode_type_,
         int concurrency_,
         const pingcap::kv::LabelFilter & tiflash_label_filter_,
+        Int64 remote_read_queue_size,
         bool enable_cop_stream_for_remote_read_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::make_unique<pingcap::common::CopIterMPMCQueue<pingcap::coprocessor::ResponseIter::Result>>(100), std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
+        , resp_iter(std::make_unique<CopIterQueue>(remote_read_queue_size), std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
         , collected(false)
         , concurrency(concurrency_)
         , enable_cop_stream_for_remote_read(enable_cop_stream_for_remote_read_)

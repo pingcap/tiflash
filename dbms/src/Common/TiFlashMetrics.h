@@ -45,34 +45,34 @@ namespace DB
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
 // clang-format off
-#define APPLY_FOR_METRICS(M, F)                                                                                                                     \
-    M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_cop, {"type", "cop"}),                                          \
+#define APPLY_FOR_METRICS(M, F)                                                                                                                      \
+    M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_cop, {"type", "cop"}),                                           \
         F(type_cop_executing, {"type", "cop_executing"}), F(type_cop_stream, {"type", "cop_stream"}),                                               \
-        F(type_cop_stream_executing, {"type", "cop_stream_executing"}), F(type_batch, {"type", "batch"}),                                                         \
+        F(type_cop_stream_executing, {"type", "cop_stream_executing"}), F(type_batch, {"type", "batch"}),                                           \
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
         F(type_remote_read_constructed, {"type", "remote_read_constructed"}), F(type_remote_read_sent, {"type", "remote_read_sent"}),               \
         F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
-    M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_cop, {"type", "cop"}),                                \
+    M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_cop, {"type", "cop"}),                                 \
         F(type_cop_executing, {"type", "cop_executing"}), F(type_cop_stream, {"type", "cop_stream"}),                                               \
-        F(type_cop_stream_executing, {"type", "cop_stream_executing"}), F(type_batch, {"type", "batch"}),                                                         \
+        F(type_cop_stream_executing, {"type", "cop_stream_executing"}), F(type_batch, {"type", "batch"}),                                           \
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
         F(type_remote_read_executing, {"type", "remote_read_executing"}),                                                                           \
         F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                             \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                              \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                                  \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),                     \
         F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}),                                       \
         F(type_partition_ts, {"type", "partition_table_scan"}),                                                                                     \
         F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}),                                                           \
         F(type_expand, {"type", "expand"}))                                                                                                         \
-    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                                               \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
+    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                                                \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                             \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
-        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                                                                                                               \
+        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                                     \
@@ -80,30 +80,30 @@ namespace DB
         F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets{0.001, 2, 20}),                                               \
         F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                                \
-    M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                            \
+    M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                             \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                             \
-        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                                                                                            \
+        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                               \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                                         \
         F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                           \
         F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets{1024 * 1024, 2, 20}))                                                         \
-    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),                    \
+    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),                     \
         F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),                       \
         F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                           \
         F(reason_other_error, {"reason", "other_error"}))                                                                                           \
-    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                                       \
+    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                                        \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
-        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                                                                                                            \
+        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                               \
-    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter,                                                                  \
+    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter,                                                                   \
         F(type_cop, {{"type", "cop"}}),                                                                                                             \
-        F(type_cop_stream, {{"type", "cop_stream"}}),                                                                                                                                            \
+        F(type_cop_stream, {{"type", "cop_stream"}}),                                                                                               \
         F(type_batch_cop, {{"type", "batch_cop"}}),                                                                                                 \
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}),                                                                                 \
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                                       \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                           \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}),                                                                                     \
         F(type_disagg_establish_task, {{"type", "type_disagg_establish_task"}}))                                                                    \
-    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter,                                                               \
+    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter,                                                                \
         F(type_hash_original, {"type", "hash_original"}),                                                                                           \
         F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}),                                                             \
         F(type_hash_none_compression_local, {"type", "hash_none_compression_local"}),                                                               \

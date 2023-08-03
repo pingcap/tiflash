@@ -37,17 +37,9 @@ namespace DB
 {
 class Context;
 
-enum class DAGDriverKind
-{
-    Cop,
-    CopStream,
-    BatchCop,
-};
-
 /// An abstraction of driver running DAG request.
 /// Now is a naive native executor. Might get evolved to drive MPP-like computation.
-
-template <DAGDriverKind Kind>
+template <CoprocessorKind Kind>
 class DAGDriver
 {
 public:

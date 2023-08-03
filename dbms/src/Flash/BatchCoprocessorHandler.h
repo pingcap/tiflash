@@ -42,7 +42,7 @@ protected:
     const coprocessor::BatchRequest * cop_request;
     grpc::ServerWriter<coprocessor::BatchResponse> * writer;
 
-    Poco::Logger * log;
+    const LoggerPtr log;
 };
 
 using BatchCopHandlerPtr = std::shared_ptr<BatchCoprocessorHandler>;

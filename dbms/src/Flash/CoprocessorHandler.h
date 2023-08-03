@@ -73,7 +73,7 @@ protected:
     coprocessor::Response * cop_response = nullptr;
     grpc::ServerWriter<coprocessor::Response> * cop_writer = nullptr;
 
-    Poco::Logger * log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

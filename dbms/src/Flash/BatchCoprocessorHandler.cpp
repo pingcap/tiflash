@@ -41,9 +41,8 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , writer(writer_)
-{
-    log = (&Poco::Logger::get("BatchCoprocessorHandler"));
-}
+    , log(Logger::get("BatchCoprocessorHandler"))
+{}
 
 grpc::Status BatchCoprocessorHandler::execute()
 {
@@ -77,11 +76,11 @@ grpc::Status BatchCoprocessorHandler::execute()
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
-                /*is_batch_cop=*/true,
+                CoprocessorKind::BatchCop,
                 Logger::get("BatchCoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
-            DAGDriver<DAGDriverKind::BatchCop> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
+            DAGDriver<CoprocessorKind::BatchCop> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
             // batch execution;
             driver.execute();
             LOG_DEBUG(log, "Handle DAG request done");

@@ -133,12 +133,19 @@ enum class ExecutionMode
     Pipeline,
 };
 
+enum class CoprocessorKind
+{
+    Cop,
+    CopStream,
+    BatchCop,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
-    // for non-mpp(cop/batchCop)
-    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    // for non-mpp(Cop/CopStream/BatchCop)
+    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, CoprocessorKind cop_kind_, LoggerPtr log_);
 
     // for mpp
     DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
@@ -204,7 +211,9 @@ public:
     }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
-    bool isBatchCop() const { return is_batch_cop; }
+    bool isCop() const { return !is_mpp_task && cop_kind == CoprocessorKind::Cop; }
+    bool isCopStream() const { return !is_mpp_task && cop_kind == CoprocessorKind::CopStream; }
+    bool isBatchCop() const { return !is_mpp_task && cop_kind == CoprocessorKind::BatchCop; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
@@ -328,7 +337,7 @@ public:
     bool collect_execution_summaries{};
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
-    /* const */ bool is_batch_cop = false;
+    /* const */ CoprocessorKind cop_kind = CoprocessorKind::Cop;
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;

@@ -68,7 +68,7 @@ CoprocessorHandler<false>::CoprocessorHandler(
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_response(cop_response_)
-    , log(&Poco::Logger::get("CoprocessorHandler"))
+    , log(Logger::get("CoprocessorHandler"))
 {}
 
 template <>
@@ -79,7 +79,7 @@ CoprocessorHandler<true>::CoprocessorHandler(
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_writer(cop_writer_)
-    , log(&Poco::Logger::get("CoprocessorHandler(stream)"))
+    , log(Logger::get("CoprocessorHandler(stream)"))
 {}
 
 template <bool is_stream>
@@ -138,24 +138,31 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                 msg = "CoprocessorHandler(stream)";
             else
                 msg = "CoprocessorHandler";
+
+            CoprocessorKind kind;
+            if constexpr (is_stream)
+                kind = CoprocessorKind::CopStream;
+            else
+                kind = CoprocessorKind::Cop;
+
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
-                /*is_batch_cop=*/false,
+                kind,
                 Logger::get(msg));
             cop_context.db_context.setDAGContext(&dag_context);
 
             if constexpr (is_stream)
             {
-                DAGDriver<DAGDriverKind::CopStream> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), cop_writer);
+                DAGDriver<CoprocessorKind::CopStream> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), cop_writer);
                 driver.execute();
             }
             else
             {
                 tipb::SelectResponse dag_response;
-                DAGDriver<DAGDriverKind::Cop> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
+                DAGDriver<CoprocessorKind::Cop> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
                 driver.execute();
                 cop_response->set_data(dag_response.SerializeAsString());
             }
