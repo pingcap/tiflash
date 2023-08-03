@@ -18,8 +18,6 @@ mysql> alter table test.t set tiflash replica 1;
 mysql> insert into test.t values ('abc', 'ABC'),('Abc', 'abc'),('def', 'dEf'), ('a', 'A'), ('b', 'B'), ('c', 'C'), (NULL, NULL), ('a', NULL), (NULL, 'a'), ('', NULL), (NULL, ''), ('', '');
 func> wait_table test t
 
->> DBGInvoke __try_flush()
-
 mysql> set tidb_enforce_mpp=1; select a, b, strcmp(a, b) from test.t;
 +------+------+--------------+
 | a    | b    | strcmp(a, b) |

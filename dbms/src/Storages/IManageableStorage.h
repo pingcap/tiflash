@@ -71,7 +71,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual bool flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/, [[maybe_unused]] bool try_until_succeed = true) { return true; }
+    virtual bool flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/, [[maybe_unused]] bool try_until_succeed) { return true; }
 
     // Get the statistics of this table.
     // Used by `manage table xxx status` in ch-client

@@ -94,8 +94,6 @@ public:
 
     void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
 
-    void tryPersistRegion(RegionID region_id) const;
-
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
