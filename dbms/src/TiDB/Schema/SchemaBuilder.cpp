@@ -220,21 +220,19 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         break;
     }
     case SchemaActionType::ActionAlterTablePartitioning:
+    case SchemaActionType::ActionRemovePartitioning:
     {
         if (diff.table_id == diff.old_table_id)
         {
+            /// Only internal additions of new partitions
             applyPartitionDiff(diff.schema_id, diff.table_id);
         }
         else
         {
+            /// The new non-partitioned table will have a new id
+            applyDropTable(diff.schema_id, diff.old_table_id);
             applyCreateTable(diff.schema_id, diff.table_id);
         }
-        break;
-    }
-    case SchemaActionType::ActionRemovePartitioning:
-    {
-        /// The new non-partitioned table will have a new id
-        applyCreateTable(diff.schema_id, diff.table_id);
         break;
     }
     case SchemaActionType::ExchangeTablePartition:

@@ -33,7 +33,6 @@ mysql> set @@global.tidb_allow_mpp = 0;
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_name─┐
 │ test          │ t         │
-│ test          │ t         │
 └───────────────┴───────────┘
 
 mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
@@ -68,7 +67,6 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 
 mysql> show warnings;
 
-mysql> set @@global.tidb_enable_remove_partitioning = 1;
 mysql> alter table test.t remove partitioning;
 
 mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t;

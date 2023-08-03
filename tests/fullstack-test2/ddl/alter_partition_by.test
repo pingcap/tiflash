@@ -32,7 +32,6 @@ func> wait_table test t
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_name─┐
 │ test          │ t         │
-│ test          │ t         │
 └───────────────┴───────────┘
 
 mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
@@ -67,7 +66,6 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 
 mysql> show warnings;
 
-mysql> set @@global.tidb_enable_alter_partition_by=1;
 mysql> alter table test.t partition by range (a) (partition p0 values less than (500000), partition p500k values less than (1000000), partition p1M values less than (2000000));
 
 mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
@@ -119,4 +117,3 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 +----------+
 
 mysql> drop table test.t;
-
