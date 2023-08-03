@@ -21,6 +21,7 @@
 
 #include <atomic>
 
+
 namespace DB::DM
 {
 /// ScanContext is used to record statistical information in table scan for current query.
@@ -41,7 +42,7 @@ public:
     /// sum of skipped rows in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_dmfile_skipped_rows{0};
 
-    std::atomic<uint64_t> total_dmfile_rough_set_index_load_time_ns{0};
+    std::atomic<uint64_t> total_dmfile_rough_set_index_check_time_ns{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
     std::atomic<uint64_t> total_create_snapshot_time_ns{0};
 
@@ -49,6 +50,10 @@ public:
     std::atomic<uint64_t> total_local_region_num{0};
 
     std::atomic<uint64_t> total_user_read_bytes{0};
+    std::atomic<uint64_t> total_learner_read_ns{0};
+    std::atomic<uint64_t> total_disagg_read_cache_hit_size{0};
+    std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
+
 
     ScanContext() = default;
 
@@ -58,12 +63,15 @@ public:
         total_dmfile_skipped_packs = tiflash_scan_context_pb.total_dmfile_skipped_packs();
         total_dmfile_scanned_rows = tiflash_scan_context_pb.total_dmfile_scanned_rows();
         total_dmfile_skipped_rows = tiflash_scan_context_pb.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_load_time_ns = tiflash_scan_context_pb.total_dmfile_rough_set_index_load_time_ms() * 1000000;
+        total_dmfile_rough_set_index_check_time_ns = tiflash_scan_context_pb.total_dmfile_rough_set_index_check_time_ms() * 1000000;
         total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ms() * 1000000;
         total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
         total_local_region_num = tiflash_scan_context_pb.total_local_region_num();
         total_user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
+        total_learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
+        total_disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
+        total_disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
     }
 
     tipb::TiFlashScanContext serialize()
@@ -73,12 +81,16 @@ public:
         tiflash_scan_context_pb.set_total_dmfile_skipped_packs(total_dmfile_skipped_packs);
         tiflash_scan_context_pb.set_total_dmfile_scanned_rows(total_dmfile_scanned_rows);
         tiflash_scan_context_pb.set_total_dmfile_skipped_rows(total_dmfile_skipped_rows);
-        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_load_time_ms(total_dmfile_rough_set_index_load_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_check_time_ms(total_dmfile_rough_set_index_check_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_create_snapshot_time_ms(total_create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
         tiflash_scan_context_pb.set_total_local_region_num(total_local_region_num);
         tiflash_scan_context_pb.set_total_user_read_bytes(total_user_read_bytes);
+        tiflash_scan_context_pb.set_total_learner_read_ms(total_learner_read_ns / 1000000);
+        tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(total_disagg_read_cache_hit_size);
+        tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(total_disagg_read_cache_miss_size);
+
         return tiflash_scan_context_pb;
     }
 
@@ -88,12 +100,15 @@ public:
         total_dmfile_skipped_packs += other.total_dmfile_skipped_packs;
         total_dmfile_scanned_rows += other.total_dmfile_scanned_rows;
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows;
-        total_dmfile_rough_set_index_load_time_ns += other.total_dmfile_rough_set_index_load_time_ns;
+        total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ns;
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
         total_user_read_bytes += other.total_user_read_bytes;
+        total_learner_read_ns += other.total_learner_read_ns;
+        total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size;
+        total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -102,12 +117,15 @@ public:
         total_dmfile_skipped_packs += other.total_dmfile_skipped_packs();
         total_dmfile_scanned_rows += other.total_dmfile_scanned_rows();
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_load_time_ns += other.total_dmfile_rough_set_index_load_time_ms() * 1000000;
+        total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ms() * 1000000;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ms() * 1000000;
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
         total_local_region_num += other.total_local_region_num();
         total_remote_region_num += other.total_remote_region_num();
         total_user_read_bytes += other.total_user_read_bytes();
+        total_learner_read_ns += other.total_learner_read_ms() * 1000000;
+        total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
+        total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
 
     // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control
