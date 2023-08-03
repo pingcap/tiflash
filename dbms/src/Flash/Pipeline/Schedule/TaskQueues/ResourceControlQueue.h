@@ -78,7 +78,7 @@ private:
 
     // 1. Update cpu time of resource group.
     // 2. Reorder resource_group_infos.
-    void updateResourceGroupStatistic(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
+    void updateResourceGroupStatisticWithoutLock(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
 
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();

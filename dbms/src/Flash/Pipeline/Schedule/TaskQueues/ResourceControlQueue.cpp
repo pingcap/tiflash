@@ -66,32 +66,41 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
 template <typename NestedQueueType>
 bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 {
-    std::shared_ptr<NestedQueueType> task_queue;
-    {
-        std::unique_lock lock(mu);
+    std::unique_lock lock(mu);
 
-        // Wakeup when:
-        // 1. resource_groups not empty and
-        // 2. highest priority of resource group is greater than zero(a.k.a. RU > 0)
-        cv.wait(lock, [this, &task_queue] {
-            if unlikely (is_finished)
-                return true;
+    // Will wake up in these three situations:
+    // 1. Length of resource_group_infos is zero because they are all erased when task_queue is empty or finish.
+    // 2. Got a task successfully.
+    // 3. The highest priority is less than zero. Will wait again and will be notified when priority is updated.
+    cv.wait(lock, [this, &task] {
+       while (!resource_group_infos.empty())
+       {
+           ResourceGroupInfo group_info = resource_group_infos.top();
+           const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
+           const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
+           auto priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
+           std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
-            if (resource_group_infos.empty())
-                return false;
+           if (priority <= 0.0)
+               return false;
 
-            ResourceGroupInfo group_info = resource_group_infos.top();
-            const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-            const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
-            task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
-            return LocalAdmissionController::global_instance->getPriority(name, keyspace_id) > 0.0 && !task_queue->empty();
-        });
+           if (task_queue->empty() || !task_queue->take(task))
+           {
+               // Got here only when task_queue is empty or finished, we try next resource group.
+               // If new task of this resource gorup is submited, the resource_group info will be added again.
+               resource_group_infos.pop();
+               size_t erase_num = pipeline_tasks.erase(name);
+               RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
+           } else {
+               assert(task != nullptr);
+               break;
+           }
+       }
 
-        if unlikely (is_finished)
-            return false;
-    }
+       return task != nullptr || unlikely (is_finished);
+    });
 
-    return task_queue->take(task);
+    return task != nullptr;
 }
 
 template <typename NestedQueueType>
@@ -108,7 +117,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         UInt64 accumulated_cpu_time = inc_value;
         if (pipelineTaskTimeExceedYieldThreshold(accumulated_cpu_time))
         {
-            updateResourceGroupStatistic(name, keyspace_id, accumulated_cpu_time);
+            updateResourceGroupStatisticWithoutLock(name, keyspace_id, accumulated_cpu_time);
             accumulated_cpu_time = 0;
         }
         resource_group_statistic.insert({name, accumulated_cpu_time});
@@ -118,20 +127,20 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         iter->second += inc_value;
         if (pipelineTaskTimeExceedYieldThreshold(iter->second))
         {
-            updateResourceGroupStatistic(name, keyspace_id, iter->second);
+            updateResourceGroupStatisticWithoutLock(name, keyspace_id, iter->second);
             iter->second = 0;
         }
     }
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatistic(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
 {
     LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, toRU(consumed_cpu_time), consumed_cpu_time);
-    {
-        std::lock_guard lock(mu);
-        updateResourceGroupInfosWithoutLock();
-    }
+    updateResourceGroupInfosWithoutLock();
+
+    // Notify priority info is updated.
+    cv.notify_one();
 }
 
 template <typename NestedQueueType>
