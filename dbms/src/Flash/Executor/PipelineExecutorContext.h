@@ -39,7 +39,7 @@ public:
         , mem_tracker(nullptr)
     {}
 
-    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_, const String & resource_group_name_, const KeyspaceID & keyspace_id_)
+    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_, const String & resource_group_name_ = "", const KeyspaceID & keyspace_id_ = NullspaceID)
         : query_id(query_id_)
         , resource_group_name(resource_group_name_)
         , keyspace_id(keyspace_id_)

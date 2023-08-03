@@ -217,5 +217,7 @@ void LocalAdmissionController::handleBackgroundError(const std::string & err_msg
     LOG_ERROR(log, err_msg);
 }
 
-std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
+#ifndef DBMS_PUBLIC_GTEST
+auto LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController> ()
+#endif
 } // namespace DB

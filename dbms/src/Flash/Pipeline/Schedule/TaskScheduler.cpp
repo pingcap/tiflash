@@ -31,6 +31,12 @@ TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
 
 TaskScheduler::~TaskScheduler()
 {
+    if (!stopped)
+        stopAndWait();
+}
+
+void TaskScheduler::stopAndWait()
+{
     cpu_task_thread_pool.finish();
     io_task_thread_pool.finish();
     wait_reactor.finish();
@@ -38,6 +44,8 @@ TaskScheduler::~TaskScheduler()
     cpu_task_thread_pool.waitForStop();
     io_task_thread_pool.waitForStop();
     wait_reactor.waitForStop();
+
+    stopped = true;
 }
 
 void TaskScheduler::submit(TaskPtr && task)
