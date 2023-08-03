@@ -67,40 +67,45 @@ template <typename NestedQueueType>
 bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 {
     std::unique_lock lock(mu);
+    while (true)
+    {
+        while (!resource_group_infos.empty())
+        {
+            ResourceGroupInfo group_info = resource_group_infos.top();
+            const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
+            const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
+            auto priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
+            std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
-    // Will wake up in these three situations:
-    // 1. Length of resource_group_infos is zero because they are all erased when task_queue is empty or finish.
-    // 2. Got a task successfully.
-    // 3. The highest priority is less than zero. Will wait again and will be notified when priority is updated.
-    cv.wait(lock, [this, &task] {
-       while (!resource_group_infos.empty())
-       {
-           ResourceGroupInfo group_info = resource_group_infos.top();
-           const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-           const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
-           auto priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
-           std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
+            if (priority <= 0.0)
+            {
+                break;
+            }
 
-           if (priority <= 0.0)
-               return false;
+            if (task_queue->empty() || !task_queue->take(task))
+            {
+                // Got here only when task_queue is empty or finished, we try next resource group.
+                // If new task of this resource gorup is submited, the resource_group info will be added again.
+                resource_group_infos.pop();
+                size_t erase_num = pipeline_tasks.erase(name);
+                RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
+            } else {
+                assert(task != nullptr);
+                break;
+            }
+        }
 
-           if (task_queue->empty() || !task_queue->take(task))
-           {
-               // Got here only when task_queue is empty or finished, we try next resource group.
-               // If new task of this resource gorup is submited, the resource_group info will be added again.
-               resource_group_infos.pop();
-               size_t erase_num = pipeline_tasks.erase(name);
-               RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
-           } else {
-               assert(task != nullptr);
-               break;
-           }
-       }
+        if (task != nullptr)
+            return true;
 
-       return task != nullptr || unlikely (is_finished);
-    });
+        if unlikely (is_finished)
+            return false;
 
-    return task != nullptr;
+        // When got here means:
+        // 1. Highest priority is less than zero.
+        // 2. All task_queues of all resource groups are empty.
+        cv.wait(lock);
+    }
 }
 
 template <typename NestedQueueType>
@@ -149,7 +154,9 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock(
     ResourceGroupInfoQueue new_resource_group_infos{compator};
     while (!resource_group_infos.empty())
     {
-        const auto & group_info = resource_group_infos.top();
+        ResourceGroupInfo group_info = resource_group_infos.top();
+        resource_group_infos.pop();
+
         const auto & name = std::get<InfoIndexResourceGroupName>(group_info);
         const auto & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
         auto new_priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);

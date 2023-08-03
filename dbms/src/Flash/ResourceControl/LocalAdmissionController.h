@@ -32,7 +32,7 @@ namespace DB
 {
 class LocalAdmissionController;
 
-class ResourceGroup final
+class ResourceGroup final : private boost::noncopyable
 {
 public:
     explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_, KeyspaceID keyspace_id_)
@@ -263,7 +263,7 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 // 4. Degrade Mode:
 //   1. If cannot get resp from GAC for a while, will enter degrade mode.
 //   2. LAC runs as an independent token bucket whose refill rate is RU_PER_SEC in degrade mode.
-class LocalAdmissionController final
+class LocalAdmissionController final : private boost::noncopyable
 {
 public:
     explicit LocalAdmissionController(MPPTaskManagerPtr mpp_task_manager_, ::pingcap::kv::Cluster * cluster_)

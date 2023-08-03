@@ -24,7 +24,7 @@ namespace DB
 {
 
 // This is only for ResourceControlQueue gtest.
-class MockLocalAdmissionController final
+class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
     MockLocalAdmissionController() = default;

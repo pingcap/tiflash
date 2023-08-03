@@ -69,8 +69,6 @@ public:
 
     void cancel(const String & query_id);
 
-    void stopAndWait();
-
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
@@ -81,7 +79,5 @@ private:
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
-
-    bool stopped = false;
 };
 } // namespace DB
