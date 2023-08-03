@@ -39,18 +39,14 @@ extern const int NOT_IMPLEMENTED;
 }
 
 CoprocessorContext::CoprocessorContext(
-    Context & db_context_,
-    const kvrpcpb::Context & kv_context_,
-    const grpc::ServerContext & grpc_server_context_)
+    Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_)
     : db_context(db_context_)
     , kv_context(kv_context_)
     , grpc_server_context(grpc_server_context_)
 {}
 
 CoprocessorHandler::CoprocessorHandler(
-    CoprocessorContext & cop_context_,
-    const coprocessor::Request * cop_request_,
-    coprocessor::Response * cop_response_)
+    CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * cop_response_)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_response(cop_response_)
@@ -77,7 +73,9 @@ grpc::Status CoprocessorHandler::execute()
 
     try
     {
-        RUNTIME_CHECK_MSG(!cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+        RUNTIME_CHECK_MSG(
+            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(),
+            "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
         {
@@ -91,15 +89,13 @@ grpc::Status CoprocessorHandler::execute()
             LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
             if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
                 throw TiFlashException(
-                    "DAG request with rpn expression is not supported in TiFlash",
-                    Errors::Coprocessor::Unimplemented);
+                    "DAG request with rpn expression is not supported in TiFlash", Errors::Coprocessor::Unimplemented);
             tipb::SelectResponse dag_response;
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
             const std::unordered_set<UInt64> bypass_lock_ts(
-                cop_context.kv_context.resolved_locks().begin(),
-                cop_context.kv_context.resolved_locks().end());
+                cop_context.kv_context.resolved_locks().begin(), cop_context.kv_context.resolved_locks().end());
             table_regions_info.local_regions.emplace(
                 cop_context.kv_context.region_id(),
                 RegionInfo(
@@ -118,7 +114,11 @@ grpc::Status CoprocessorHandler::execute()
                 Logger::get("CoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
-            DAGDriver driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
+            DAGDriver driver(
+                cop_context.db_context,
+                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(),
+                cop_request->schema_ver(),
+                &dag_response);
             driver.execute();
             cop_response->set_data(dag_response.SerializeAsString());
             LOG_DEBUG(log, "Handle DAG request done");
@@ -127,8 +127,9 @@ grpc::Status CoprocessorHandler::execute()
         case COP_REQ_TYPE_ANALYZE:
         case COP_REQ_TYPE_CHECKSUM:
         default:
-            throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
-                                   Errors::Coprocessor::Unimplemented);
+            throw TiFlashException(
+                "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
+                Errors::Coprocessor::Unimplemented);
         }
         return grpc::Status::OK;
     }

@@ -198,17 +198,7 @@ bool LogIterator::readLevel(size_t limit, const char * s, size_t & level_start, 
 }
 
 bool LogIterator::readDate(
-    size_t limit,
-    const char * s,
-    int & y,
-    int & m,
-    int & d,
-    int & H,
-    int & M,
-    int & S,
-    int & MS,
-    int & TZH,
-    int & TZM)
+    size_t limit, const char * s, int & y, int & m, int & d, int & H, int & M, int & S, int & MS, int & TZH, int & TZM)
 {
     if (31 >= limit)
         return false;
@@ -276,7 +266,18 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
         int timezone_hour, timezone_min;
         std::tm time{};
         int year, month, day, hour, minute, second;
-        if (LogIterator::readDate(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+        if (LogIterator::readDate(
+                line.size(),
+                line.data(),
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                milli_second,
+                timezone_hour,
+                timezone_min)
             && LogIterator::readLevel(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             loglevel_start = line.data() + loglevel_s;
@@ -388,7 +389,8 @@ int64_t readApproxiTimestamp(const char * start, const char * date_format)
 
 // if name ends with date format and timestamp < start-time, return true.
 // otherwise(can NOT tell ts) return false.
-bool filterLogEndDatetime(const std::string & path, const std::string & example, const char * date_format, const int64_t start_time)
+bool filterLogEndDatetime(
+    const std::string & path, const std::string & example, const char * date_format, const int64_t start_time)
 {
     if (path.size() > example.size())
     {
@@ -405,9 +407,7 @@ static const std::string gz_suffix = ".gz";
 
 // if timestamp of log file could be told, return whether it can be filtered.
 bool FilterFileByDatetime(
-    const std::string & path,
-    const std::vector<std::string> & ignore_log_file_prefixes,
-    const int64_t start_time)
+    const std::string & path, const std::vector<std::string> & ignore_log_file_prefixes, const int64_t start_time)
 {
     static const std::string date_format_example = "0000-00-00-00:00:00.000";
     static const char * date_format = "%d-%d-%d-%d:%d:%d.%d";
@@ -425,7 +425,8 @@ bool FilterFileByDatetime(
         if (path.size() <= gz_suffix.size() + date_format_example.size())
             return false;
 
-        auto date_str = std::string(path.end() - gz_suffix.size() - date_format_example.size(), path.end() - gz_suffix.size());
+        auto date_str
+            = std::string(path.end() - gz_suffix.size() - date_format_example.size(), path.end() - gz_suffix.size());
 
         if (auto ts = readApproxiTimestamp(date_str.data(), date_format); ts == -1)
         {
