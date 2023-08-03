@@ -1087,6 +1087,7 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
         auto region_rowkey_range = std::get<2>(region.second);
         auto region_id = region.first;
         auto region_ptr = std::get<3>(region.second);
+        auto applied_index = std::get<1>(region.second);
         {
             auto region_task_lock = region_manager.genRegionTaskLock(region_id);
             if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
@@ -1108,17 +1109,35 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
                 // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
                 // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
                 Stopwatch watch2;
-                watch2.restart();
                 storage->flushCache(tmt.getContext(), std::get<2>(region.second));
                 total_dm_flush_millis += watch2.elapsedSecondsFromLastTime();
             }
             fiu_do_on(FailPoints::proactive_flush_between_persist_cache_and_region, return;);
             {
                 Stopwatch watch2;
-                watch2.restart();
-                persistRegion(*region_ptr, std::make_optional(&region_task_lock), PersistRegionReason::ProactiveFlush, reason.c_str());
-                total_kvs_flush_count += 1;
-                total_kvs_flush_millis += watch2.elapsedMilliseconds();
+                int skip_reason = 0;
+                if (region_ptr->lastCompactLogTime() + Seconds{region_compact_log_period.load(std::memory_order_relaxed)} > Clock::now())
+                {
+                    skip_reason = 1;
+                }
+                else if (region_ptr->lastCompactLogApplied() + 15 < applied_index)
+                {
+                    skip_reason = 2;
+                }
+                if (skip_reason)
+                {
+                    LOG_INFO(log, "skip flush region {} for skip reason {}, region range:[{},{}], flushed segment range:[{},{}]", region_id, skip_reason, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
+                }
+                else
+                {
+                    persistRegion(*region_ptr, std::make_optional(&region_task_lock), PersistRegionReason::ProactiveFlush, reason.c_str());
+                    // So proxy can get the current compact state of this region of TiFlash's side.
+                    region_ptr->markCompactLog();
+                    region_ptr->cleanApproxMemCacheInfo();
+                    // TODO this metric is not necessary.
+                    total_kvs_flush_count += 1;
+                    total_kvs_flush_millis += watch2.elapsedMilliseconds();
+                }
             }
         }
     }
@@ -1157,10 +1176,7 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         LOG_INFO(log, "region {} has been removed, ignore", region_id);
         return;
     }
-    if (region->lastCompactLogTime() + Seconds{region_compact_log_period.load(std::memory_order_relaxed)} > Clock::now())
-    {
-        return;
-    }
+
     if (is_background)
     {
         GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_bg).Increment();
@@ -1170,10 +1186,6 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
     }
     auto f = [&]() {
-        // So proxy can get the current compact state of this region of TiFlash's side.
-
-        region->markCompactLog();
-        region->cleanApproxMemCacheInfo();
         // We will notify even if `flush_state.applied_index` is greater than `compact_index`,
         // since this greater `applied_index` may not trigger a compact log.
         // We will maintain the biggest on Proxy's side.

@@ -494,11 +494,17 @@ std::string Region::dataInfo() const
 void Region::markCompactLog() const
 {
     last_compact_log_time = Clock::now();
+    last_compact_log_applied = appliedIndex();
 }
 
 Timepoint Region::lastCompactLogTime() const
 {
     return last_compact_log_time;
+}
+
+UInt64 Region::lastCompactLogApplied() const
+{
+    return last_compact_log_applied;
 }
 
 Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need_value)
