@@ -106,14 +106,13 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
-        buildProjection(pipeline);
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
-        buildProjection(pipeline);
     }
+    buildProjection(pipeline);
 }
 
 void PhysicalTableScan::buildPipeline(
@@ -126,14 +125,13 @@ void PhysicalTableScan::buildPipeline(
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
         disaggregated_tiflash_interpreter.execute(exec_context, pipeline_exec_builder);
-        buildProjection(exec_context, pipeline_exec_builder);
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
         storage_interpreter.execute(exec_context, pipeline_exec_builder);
-        buildProjection(exec_context, pipeline_exec_builder);
     }
+    buildProjection(exec_context, pipeline_exec_builder);
 
     PhysicalPlanNode::buildPipeline(builder, context, exec_context);
 }
@@ -159,11 +157,12 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline)
 
 void PhysicalTableScan::buildProjection(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, group_builder.getCurrentHeader());
+    auto header = group_builder.getCurrentHeader();
+    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, header);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
-    ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(group_builder.getCurrentHeader());
+    ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(header);
     schema_actions->add(ExpressionAction::project(schema_project_cols));
     executeExpression(exec_context, group_builder, schema_actions, log);
 }

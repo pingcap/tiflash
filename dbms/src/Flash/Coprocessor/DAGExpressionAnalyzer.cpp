@@ -56,7 +56,6 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(const Block & sample_block, const Context & context_)
     : context(context_)
 {
-    NamesAndTypes source_columns;
     source_columns.reserve(sample_block.columns());
     for (const auto & col : sample_block)
         source_columns.emplace_back(col.name, col.type);
