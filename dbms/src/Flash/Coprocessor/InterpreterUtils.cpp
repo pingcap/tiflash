@@ -431,8 +431,9 @@ void executeGeneratedColumnPlaceholder(
     if (generated_column_infos.empty())
         return;
 
+    auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
+        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), input_header, generated_column_infos));
     });
 }
 
