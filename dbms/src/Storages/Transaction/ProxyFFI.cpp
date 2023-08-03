@@ -673,19 +673,12 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
 void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
 {
     UNUSED(peer_id);
-    UNUSED(server);
-    UNUSED(region_id);
-    return;
     auto & kvstore = server->tmt->getKVStore();
     kvstore->abortPreHandleSnapshot(region_id, *server->tmt);
 }
 
 void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
-    UNUSED(server);
-    UNUSED(res);
-    UNUSED(type);
-    return;
     if (static_cast<RawCppPtrTypeImpl>(type) != RawCppPtrTypeImpl::PreHandledSnapshotWithFiles)
     {
         LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
