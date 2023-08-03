@@ -60,10 +60,6 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
-#include "Flash/Coprocessor/DAGExpressionAnalyzer.h"
-#include "Flash/Coprocessor/DAGPipeline.h"
-#include "Flash/Pipeline/Exec/PipelineExecBuilder.h"
-
 namespace DB
 {
 namespace FailPoints
