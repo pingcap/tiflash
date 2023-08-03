@@ -53,6 +53,15 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
     , context(context_)
 {}
 
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(const Block & sample_block, const Context & context_)
+    : context(context_)
+{
+    NamesAndTypes source_columns;
+    source_columns.reserve(sample_block.columns());
+    for (const auto & col : sample_block)
+        source_columns.emplace_back(col.name, col.type);
+}
+
 extern const String count_second_stage;
 extern const String sum_on_partial_result;
 

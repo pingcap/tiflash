@@ -90,8 +90,6 @@ public:
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
     static const String ExecIDPrefixForTiFlashStorageSender;
-    // Members will be transferred to DAGQueryBlockInterpreter after execute
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
@@ -179,5 +177,7 @@ private:
     const FilterConditions & filter_conditions;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
+
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 };
 } // namespace DB

@@ -44,17 +44,12 @@ public:
     {
         auto stage = QueryProcessingStage::Enum::FetchColumns;
         pipeline.streams = storage->read(Names(), SelectQueryInfo(), context, stage, 0, max_streams);
-        analyzer = std::move(storage->analyzer);
     }
 
     void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
     {
         storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
-        analyzer = std::move(storage->analyzer);
     }
-
-    // Members will be transferred to DAGQueryBlockInterpreter after execute
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
     Context & context;
