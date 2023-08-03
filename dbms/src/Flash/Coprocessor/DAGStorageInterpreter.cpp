@@ -371,7 +371,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
     executeGeneratedColumnPlaceholder(exec_context, group_builder, remote_read_start_index, generated_column_infos, log);
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
-    /// group_builder: 
+    /// group_builder:
     /// case1: [local_builder, ..., local_builder, remote_builder, ..., remote_builder]
     /// case2: [remote_builder, ..., remote_builder]
     /// case3: [null_builder]
