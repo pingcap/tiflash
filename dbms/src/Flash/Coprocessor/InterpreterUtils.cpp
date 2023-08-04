@@ -372,7 +372,6 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
 }
 
 void executePushedDownFilter(
-    size_t remote_read_streams_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
@@ -380,11 +379,8 @@ void executePushedDownFilter(
 {
     auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
+    for (auto & stream : pipeline.streams)
     {
-        auto & stream = pipeline.streams[i];
         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
         // todo link runtime filter
         stream->setExtraInfo("push down filter");
@@ -397,18 +393,14 @@ void executePushedDownFilter(
 void executePushedDownFilter(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log)
 {
     auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
-    assert(remote_read_sources_start_index <= group_builder.concurrency());
     auto input_header = group_builder.getCurrentHeader();
-
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    for (size_t i = 0; i < group_builder.concurrency(); ++i)
     {
         auto & builder = group_builder.getCurBuilder(i);
         builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_context, log->identifier(), input_header, before_where, filter_column_name));
@@ -418,38 +410,31 @@ void executePushedDownFilter(
 }
 
 void executeGeneratedColumnPlaceholder(
-    size_t remote_read_streams_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline)
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
-    {
-        auto & stream = pipeline.streams[i];
+    pipeline.transform([&](auto & stream) {
         stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
         stream->setExtraInfo("generated column placeholder above table scan");
-    }
+    });
 }
 
 void executeGeneratedColumnPlaceholder(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log)
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_sources_start_index <= group_builder.concurrency());
 
-    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
-    {
-        auto & builder = group_builder.getCurBuilder(i);
-        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
-    }
+    auto input_header = group_builder.getCurrentHeader();
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), input_header, generated_column_infos));
+    });
 }
 
 } // namespace DB

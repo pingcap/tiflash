@@ -372,7 +372,7 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
     if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(filter_conditions, analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
@@ -386,7 +386,7 @@ void StorageDisaggregated::filterConditions(
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_context, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
         context.getDAGContext()->addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
@@ -422,11 +422,10 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
-        for (auto & stream : pipeline.streams)
-        {
+        pipeline.transform([&](auto & stream) {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
-        }
+        });
     }
 }
 
