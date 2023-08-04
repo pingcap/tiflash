@@ -400,7 +400,13 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             type = ThreadType::BG_Flush;
             break;
         case TaskType::FlushDTAndKVStore:
-            triggerCompactLog(task.dm_context, task.segment->getRowKeyRange(), true);
+        {
+            // TODO(proactive flush)
+            // auto & tmt = task.dm_context->db_context.getTMTContext();
+            // auto & kv_store = tmt.getKVStore();
+            // kv_store->proactiveFlushCacheAndRegion(tmt, task.segment->getRowKeyRange(), keyspace_id, physical_table_id, true);
+            break;
+        }
         case TaskType::PlaceIndex:
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
@@ -919,14 +925,6 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
         LOG_DEBUG(log, "Finish GC, gc_segments_num={}", gc_segments_num);
 
     return gc_segments_num;
-}
-
-void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const RowKeyRange & range, bool is_background) const
-{
-    auto & tmt = dm_context->db_context.getTMTContext();
-    auto & kv_store = tmt.getKVStore();
-
-    kv_store->proactiveFlushCacheAndRegion(tmt, range, keyspace_id, physical_table_id, is_background);
 }
 } // namespace DM
 } // namespace DB
