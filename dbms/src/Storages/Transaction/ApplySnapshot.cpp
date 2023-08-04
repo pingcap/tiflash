@@ -314,8 +314,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
 std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
-    uint64_t /*index*/,
-    uint64_t /*term*/,
+    uint64_t index,
+    uint64_t term,
     DM::FileConvertJobType job_type,
     TMTContext & tmt)
 {
