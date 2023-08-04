@@ -213,7 +213,8 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
-    void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
+    // TODO(proactive flush)
+    // void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
     void notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background, bool lock_held = true);
 #ifndef DBMS_PUBLIC_GTEST
 private:

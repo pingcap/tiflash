@@ -1005,14 +1005,4 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 
     return region_persister->getFileUsageStatistics();
 }
-
-void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
-{
-    // TODO(proactive flush)
-    UNUSED(tmt);
-    UNUSED(rowkey_range);
-    UNUSED(keyspace_id);
-    UNUSED(table_id);
-    UNUSED(is_background);
-}
 } // namespace DB
