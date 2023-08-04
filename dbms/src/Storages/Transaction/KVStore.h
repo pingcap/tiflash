@@ -234,7 +234,7 @@ public:
         bool lock_held = true);
 
     RaftLogEagerGcTasks::Hints getRaftLogGcHints();
-    void applyRaftLogTaskRes(const RaftLogRemoveTaskRes & res) const;
+    void applyRaftLogTaskRes(const RaftLogGcTasksRes & res) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

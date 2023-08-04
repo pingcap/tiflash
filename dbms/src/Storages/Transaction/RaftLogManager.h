@@ -40,8 +40,8 @@ private:
 };
 
 // RegionID -> truncated index
-using RaftLogRemoveTaskRes = std::unordered_map<RegionID, UInt64>;
+using RaftLogGcTasksRes = std::unordered_map<RegionID, UInt64>;
 
-RaftLogRemoveTaskRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints);
+RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints);
 
 } // namespace DB

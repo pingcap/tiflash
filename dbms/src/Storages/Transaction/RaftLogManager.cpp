@@ -39,9 +39,9 @@ bool RaftLogEagerGcTasks::updateHint(RegionID region_id, UInt64 first_index, UIn
     if (auto hint_iter = tasks.find(region_id); hint_iter != tasks.end())
     {
         if (applied_index > hint_iter->second.applied_index
-            && applied_index - hint_iter->second.applied_index > threshold)
+            && applied_index - hint_iter->second.applied_index >= threshold)
         {
-            LOG_DEBUG(Logger::get(), "update hint, region_id={} applied_index={} hint_applied_index={} diff={}", region_id, applied_index, hint_iter->second.applied_index, applied_index - hint_iter->second.applied_index);
+            // LOG_DEBUG(Logger::get(), "update hint, region_id={} applied_index={} hint_applied_index={} diff={}", region_id, applied_index, hint_iter->second.applied_index, applied_index - hint_iter->second.applied_index);
             // task hint is updated
             hint_iter->second.first_index = std::min(hint_iter->second.first_index, first_index);
             hint_iter->second.applied_index = std::max(hint_iter->second.applied_index, applied_index);
@@ -52,7 +52,7 @@ bool RaftLogEagerGcTasks::updateHint(RegionID region_id, UInt64 first_index, UIn
     }
 
     // new task hint created
-    LOG_DEBUG(Logger::get(), "create hint, region_id={} first_index={} applied_index={}", region_id, first_index, applied_index);
+    // LOG_DEBUG(Logger::get(), "create hint, region_id={} first_index={} applied_index={}", region_id, first_index, applied_index);
     tasks[region_id] = RaftLogEagerGcHint{
         .first_index = first_index,
         .applied_index = applied_index,
@@ -82,7 +82,7 @@ RegionGcTask getRegionTask(
     UInt64 threshold,
     const LoggerPtr & logger)
 {
-    LOG_DEBUG(logger, "Load persisted region apply state, region_id={} state={}", region_id, region_state.ShortDebugString());
+    // LOG_DEBUG(logger, "Load persisted region apply state, region_id={} state={}", region_id, region_state.ShortDebugString());
     if (region_state.applied_index() <= 1)
         return RegionGcTask{.skip = true, .first_index = 0, .applied_index = 0};
 
@@ -93,7 +93,7 @@ RegionGcTask getRegionTask(
     {
         LOG_DEBUG(
             logger,
-            "Skip eager remove, region_id={} persist_first_index={} persist_applied_index={} hint_first_index={} hint_applied_index={}",
+            "Skip eager gc, region_id={} persist_first_index={} persist_applied_index={} hint_first_index={} hint_applied_index={}",
             region_id,
             region_state.truncated_state().index(),
             region_state.applied_index(),
@@ -104,7 +104,7 @@ RegionGcTask getRegionTask(
     return task;
 }
 
-RaftLogRemoveTaskRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints)
+RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints)
 {
     auto write_node_ps = global_ctx.tryGetWriteNodePageStorage();
     if (!write_node_ps)
@@ -115,7 +115,7 @@ RaftLogRemoveTaskRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcT
     LoggerPtr logger = Logger::get();
 
     Stopwatch watch;
-    RaftLogRemoveTaskRes eager_truncated_indexes;
+    RaftLogGcTasksRes eager_truncated_indexes;
     size_t num_skip = 0;
     size_t total_num_raft_log_removed = 0;
     for (const auto & [region_id, hint] : hints)
@@ -150,14 +150,21 @@ RaftLogRemoveTaskRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcT
         total_num_raft_log_removed += num_raft_log_removed;
         LOG_INFO(
             logger,
-            "Eager remove raft log, region_id={} first_index={} applied_index={} n_removed={} cost={:.3f}s",
+            "Eager raft log gc, region_id={} first_index={} applied_index={} n_removed={} cost={:.3f}s",
             region_id,
             region_task.first_index,
             region_task.applied_index,
             num_raft_log_removed,
             watch.elapsedSecondsFromLastTime());
     }
-    LOG_INFO(logger, "Eager remove raft log, n_hints={} n_regions={} n_removed_logs={} cost={:.3f}s", hints.size(), hints.size() - num_skip, total_num_raft_log_removed, watch.elapsedSeconds());
+    LOG_INFO(
+        logger,
+        "Eager raft log gc round done, "
+        "n_hints={} n_regions={} n_removed_logs={} cost={:.3f}s",
+        hints.size(),
+        hints.size() - num_skip,
+        total_num_raft_log_removed,
+        watch.elapsedSeconds());
     return eager_truncated_indexes;
 }
 
