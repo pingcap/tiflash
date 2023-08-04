@@ -1267,11 +1267,11 @@ void DeltaMergeStore::waitForDeleteRange(const DB::DM::DMContextPtr &, const DB:
 
 bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type, InputType input_type)
 {
-    bool should_trigger_kvstore_flush = false;
-    fiu_do_on(FailPoints::skip_check_segment_update, { return should_trigger_kvstore_flush; });
+    bool should_trigger_foreground_kvstore_flush = false;
+    fiu_do_on(FailPoints::skip_check_segment_update, { return should_trigger_foreground_kvstore_flush; });
 
     if (segment->hasAbandoned())
-        return should_trigger_kvstore_flush;
+        return should_trigger_foreground_kvstore_flush;
     const auto & delta = segment->getDelta();
 
     size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);
@@ -1404,7 +1404,7 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 // Raft Snapshot will always trigger to a KVStore fg flush.
                 // Raft IngestSST will trigger a KVStore fg flush at best effort,
                 // which means if the write cf has remained value, we still need to hold the sst file and wait for the next SST.
-                should_trigger_kvstore_flush = true;
+                should_trigger_foreground_kvstore_flush = true;
             }
         }
         else if (should_background_flush)
@@ -1429,7 +1429,7 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,
     // give up adding more tasks on this version of delta.
     if (segment->getDelta()->isUpdating())
-        return should_trigger_kvstore_flush;
+        return should_trigger_foreground_kvstore_flush;
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
         // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
@@ -1520,19 +1520,19 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     if (thread_type == ThreadType::Write)
     {
         if (try_fg_split(segment))
-            return should_trigger_kvstore_flush;
+            return should_trigger_foreground_kvstore_flush;
 
         if (SegmentPtr new_segment = try_fg_merge_delta(); new_segment)
         {
             // After merge delta, we better check split immediately.
             if (try_bg_split(new_segment))
-                return should_trigger_kvstore_flush;
+                return should_trigger_foreground_kvstore_flush;
         }
     }
     else if (thread_type == ThreadType::BG_MergeDelta)
     {
         if (try_bg_split(segment))
-            return should_trigger_kvstore_flush;
+            return should_trigger_foreground_kvstore_flush;
     }
 
     if (dm_context->enable_logical_split)
@@ -1540,24 +1540,24 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         // Logical split point is calculated based on stable. Always try to merge delta into the stable
         // before logical split is good for calculating the split point.
         if (try_bg_merge_delta())
-            return should_trigger_kvstore_flush;
+            return should_trigger_foreground_kvstore_flush;
         if (try_bg_split(segment))
-            return should_trigger_kvstore_flush;
+            return should_trigger_foreground_kvstore_flush;
     }
     else
     {
         // During the physical split delta will be merged, so we prefer physical split over merge delta.
         if (try_bg_split(segment))
-            return should_trigger_kvstore_flush;
+            return should_trigger_foreground_kvstore_flush;
         if (try_bg_merge_delta())
-            return should_trigger_kvstore_flush;
+            return should_trigger_foreground_kvstore_flush;
     }
     if (try_bg_compact())
-        return should_trigger_kvstore_flush;
+        return should_trigger_foreground_kvstore_flush;
     if (try_place_delta_index())
-        return should_trigger_kvstore_flush;
+        return should_trigger_foreground_kvstore_flush;
 
-    return should_trigger_kvstore_flush;
+    return should_trigger_foreground_kvstore_flush;
     // The segment does not need any updates for now.
 }
 

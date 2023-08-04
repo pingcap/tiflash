@@ -1105,6 +1105,7 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
         auto region_id = region_compact_info.first;
         auto region_ptr = region_compact_info.second.region_ptr;
         auto applied_index = region_compact_info.second.applied_index;
+        auto last_flushed_applied = region_ptr->lastCompactLogApplied();
         {
             auto region_task_lock = region_manager.genRegionTaskLock(region_id);
             enum class SkipReason
@@ -1128,26 +1129,32 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
                 region_compact_info.second.skip_flush = true;
                 continue;
             }
-            if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
+            // Both flushCache and persistRegion should be protected by region task lock.
+            // We can avoid flushCache with a region lock held, if we save some meta info before flushing cache in memory.
+            // After flushCache, we will persist region and notify Proxy with the previously stored meta info.
+            // Meanwhile, other write/admin cmds may be executed, we have to handle the following cases:
+            // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
+            // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
+            // Merely persisting applied_index is not enough, consider some cmds leads to modification of other meta data.
+
+            if (rowkey_range.getStart() <= region_rowkey_range.getStart()
+                && region_rowkey_range.getEnd() <= rowkey_range.getEnd()
+                && last_flushed_applied >= applied_index)
             {
                 // `region_rowkey_range` belongs to rowkey_range.
                 // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
-                // This segment has flushed, and the region is locked.
-                // However, write may come between we lock regions.
-                LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}]", region_compact_info.first, region_compact_info.second.applied_index, region_compact_info.second.applied_term);
+                // This segment has been flushed, and the region is locked.
+                // However, writes may come between we lock regions.
+
+                // TODO We can save the applied_index of every region, before the last time we flushCache.
+                // And we will persistRegion according to this applied_index, following the upper note.
+                storage->flushCache(tmt.getContext(), region_rowkey_range);
+                LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}] [last_flushed_applied={}]", region_compact_info.first, region_compact_info.second.applied_index, region_compact_info.second.applied_term, last_flushed_applied);
             }
             else
             {
-                LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}]", region_compact_info.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
-                // Both flushCache and persistRegion should be protected by region task lock.
-                // We can avoid flushCache with a region lock held, if we save some meta info before flushing cache.
-                // Merely store applied_index is not enough, considering some cmds leads to modification of other meta data.
-                // After flushCache, we will persist region and notify Proxy with the previously stored meta info.
-                // However, this solution still involves region task lock in this function.
-                // Meanwhile, other write/admin cmds may be executed, they requires we acquire lock here:
-                // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
-                // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
                 Stopwatch watch2;
+                LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}] [last_flushed_applied={}]", region_compact_info.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString(), last_flushed_applied);
                 storage->flushCache(tmt.getContext(), region_rowkey_range);
                 total_dm_flush_millis += watch2.elapsedSecondsFromLastTime();
             }
