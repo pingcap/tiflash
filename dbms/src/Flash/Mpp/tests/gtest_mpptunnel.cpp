@@ -19,10 +19,11 @@
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -66,6 +67,7 @@ class MockFailedWriter : public PacketWriter
 };
 
 class MockAsyncCallData : public IAsyncCallData
+    , public GRPCKickTag
 {
 public:
     MockAsyncCallData() = default;
@@ -75,18 +77,10 @@ public:
         async_tunnel_sender = async_tunnel_sender_;
     }
 
-    grpc_call * grpcCall() override
+    std::optional<GRPCKickFunc> getGRPCKickFuncForTest() override
     {
-        return nullptr;
-    }
-
-    std::optional<GRPCSendKickFunc> getGRPCSendKickFuncForTest() override
-    {
-        return [&](KickSendTag * tag) {
+        return [&](GRPCKickTag *) {
             {
-                void * t;
-                bool s;
-                tag->FinalizeResult(&t, &s);
                 std::unique_lock<std::mutex> lock(mu);
                 has_msg = true;
             }
@@ -95,25 +89,28 @@ public:
         };
     }
 
+    void execute(bool) override {}
+
     void run()
     {
         while (true)
         {
-            TrackedMppDataPacketPtr res;
-            switch (async_tunnel_sender->pop(res, this))
+            TrackedMppDataPacketPtr packet;
+            auto res = async_tunnel_sender->popWithTag(packet, this);
+            switch (res)
             {
-            case GRPCSendQueueRes::OK:
+            case MPMCQueueResult::OK:
                 if (write_failed)
                 {
                     async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
                     return;
                 }
-                write_packet_vec.push_back(res->packet.data());
+                write_packet_vec.push_back(packet->packet.data());
                 break;
-            case GRPCSendQueueRes::FINISHED:
+            case MPMCQueueResult::FINISHED:
                 async_tunnel_sender->consumerFinish("");
                 return;
-            case GRPCSendQueueRes::CANCELLED:
+            case MPMCQueueResult::CANCELLED:
                 assert(!async_tunnel_sender->getCancelReason().empty());
                 if (write_failed)
                 {
@@ -123,13 +120,17 @@ public:
                 write_packet_vec.push_back(async_tunnel_sender->getCancelReason());
                 async_tunnel_sender->consumerFinish("");
                 return;
-            case GRPCSendQueueRes::EMPTY:
+            case MPMCQueueResult::EMPTY:
+            {
                 std::unique_lock<std::mutex> lock(mu);
                 cv.wait(lock, [&] {
                     return has_msg;
                 });
                 has_msg = false;
                 break;
+            }
+            default:
+                __builtin_unreachable();
             }
         }
     }
@@ -149,9 +150,8 @@ public:
     explicit MockExchangeReceiver(Int32 conn_num)
         : live_connections(conn_num)
         , live_local_connections(0)
-        , mock_async_request_handler_wait_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
-        , received_message_queue(mock_async_request_handler_wait_queue, Logger::get(), 10, false, 0)
         , data_size_in_queue(0)
+        , received_message_queue(10, Logger::get(), &data_size_in_queue, false, 0)
         , log(Logger::get())
     {
     }
@@ -198,7 +198,8 @@ public:
                     this->connectionLocalDone();
                 },
                 []() {},
-                ReceiverChannelWriter(&received_message_queue, "", log, &data_size_in_queue, ReceiverMode::Local));
+                "",
+                &received_message_queue);
             tunnel->connectLocalV2(0, local_request_handler, true);
         }
     }
@@ -207,11 +208,12 @@ public:
     {
         while (true)
         {
-            auto pop_result = received_message_queue.pop<true>(0);
-            switch (pop_result.first)
+            ReceivedMessagePtr data;
+            auto pop_result = received_message_queue.pop<true>(0, data);
+            switch (pop_result)
             {
             case DB::MPMCQueueResult::OK:
-                received_msgs.push_back(pop_result.second);
+                received_msgs.push_back(data);
                 break;
             default:
                 return;
@@ -232,11 +234,10 @@ private:
     std::condition_variable cv;
     Int32 live_connections;
     Int32 live_local_connections;
-    AsyncRequestHandlerWaitQueuePtr mock_async_request_handler_wait_queue;
+    std::atomic<Int64> data_size_in_queue;
     ReceivedMessageQueue received_message_queue;
     String err_msg;
     std::vector<std::shared_ptr<ReceivedMessage>> received_msgs;
-    std::atomic<Int64> data_size_in_queue;
     LoggerPtr log;
 };
 
@@ -650,14 +651,14 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
-    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
-    ReceivedMessageQueue received_message_queue(mock_ptr, Logger::get(), 1, false, 0);
+    ReceivedMessageQueue received_message_queue(1, Logger::get(), nullptr, false, 0);
 
     LocalRequestHandler local_req_handler(
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(&received_message_queue, "", Logger::get(), nullptr, ReceiverMode::Local));
+        "",
+        &received_message_queue);
     tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
@@ -671,13 +672,13 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
-    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
-    ReceivedMessageQueue queue(mock_ptr, Logger::get(), 1, false, 0);
+    ReceivedMessageQueue queue(1, Logger::get(), nullptr, false, 0);
     LocalRequestHandler local_req_handler(
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(&queue, "", Logger::get(), nullptr, ReceiverMode::Local));
+        "",
+        &queue);
     tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }

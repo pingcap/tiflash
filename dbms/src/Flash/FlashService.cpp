@@ -478,7 +478,9 @@ grpc::Status FlashService::CancelMPPTask(
 
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+    /// `CancelMPPTask` cancels the current mpp gather. In TiDB side, each gather has its own mpp coordinator, when TiDB cancel
+    /// a query, it will cancel all the coordinators
+    task_manager->abortMPPGather(MPPGatherId(request->meta()), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -521,7 +523,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(MPPQueryId(request->meta()), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
+    task_manager->abortMPPGather(MPPGatherId(request->meta()), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -643,7 +645,16 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
-    // TODO metrics
+
+    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_establish_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_establish_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_disagg_establish_task).Increment(response->ByteSizeLong());
+    });
+
     auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
         return status;
@@ -715,7 +726,7 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         record_other_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
-    LOG_DEBUG(
+    LOG_INFO(
         logger,
         "Handle EstablishDisaggTask request done, resp_err={}",
         response->has_error() ? response->error().ShortDebugString() : "(null)");
@@ -746,13 +757,21 @@ grpc::Status FlashService::FetchDisaggPages(
 
     RUNTIME_CHECK_MSG(context->getSharedContextDisagg()->isDisaggregatedStorageMode(), "FetchDisaggPages should only be called on write node");
 
+    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages).Observe(watch.elapsedSeconds());
+    });
+
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
     // get the keyspace from meta, it is now used for debugging
     const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, keyspace={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
+    LOG_INFO(logger, "Fetching pages, keyspace={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
@@ -773,11 +792,11 @@ grpc::Status FlashService::FetchDisaggPages(
         for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
-        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids);
+        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids, context->getSettingsRef().dt_fetch_pages_packet_limit_size);
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 
-        LOG_DEBUG(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
+        LOG_INFO(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)

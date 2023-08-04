@@ -20,7 +20,7 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1);
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1, int query_ts = -1, int gather_id = -1);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
@@ -90,6 +90,9 @@ public:
 
     static ::testing::AssertionResult assertQueryCancelled(const MPPQueryId & query_id);
     static ::testing::AssertionResult assertQueryActive(const MPPQueryId & query_id);
+
+    static ::testing::AssertionResult assertGatherCancelled(const MPPGatherId & gather_id);
+    static ::testing::AssertionResult assertGatherActive(const MPPGatherId & gather_id);
 
     static String queryInfo(size_t server_id);
 

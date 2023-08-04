@@ -94,6 +94,9 @@ enum TestMode
     V2_BlockOnly,
     V2_FileOnly,
     V2_Mix,
+    V3_BlockOnly,
+    V3_FileOnly,
+    V3_Mix
 };
 
 // Read write test suit for DeltaMergeStore.
@@ -117,6 +120,11 @@ public:
         case TestMode::V2_FileOnly:
         case TestMode::V2_Mix:
             setStorageFormat(2);
+            break;
+        case TestMode::V3_BlockOnly:
+        case TestMode::V3_FileOnly:
+        case TestMode::V3_Mix:
+            setStorageFormat(3);
             break;
         }
     }

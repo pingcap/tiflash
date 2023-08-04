@@ -21,7 +21,7 @@ void AggregateFinalSpillEvent::scheduleImpl()
 {
     assert(agg_context);
     for (auto index : indexes)
-        addTask(std::make_unique<AggregateFinalSpillTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), agg_context, index));
+        addTask(std::make_unique<AggregateFinalSpillTask>(exec_context, log->identifier(), shared_from_this(), agg_context, index));
 }
 
 void AggregateFinalSpillEvent::finishImpl()

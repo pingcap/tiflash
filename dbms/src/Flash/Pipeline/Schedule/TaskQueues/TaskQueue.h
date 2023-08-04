@@ -36,13 +36,15 @@ public:
 
     // Update the execution metrics of the task taken from the queue.
     // Used to adjust the priority of tasks within a queue.
-    virtual void updateStatistics(const TaskPtr & task, size_t inc_value) = 0;
+    virtual void updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, UInt64 inc_ns) = 0;
 
     virtual bool empty() const = 0;
 
     // After finish is called, the submitted task will be finalized directly and will not be taken.
     // And the tasks in the queue can still be taken normally.
     virtual void finish() = 0;
+
+    virtual void cancel(const String & query_id) = 0;
 
 protected:
     LoggerPtr logger = Logger::get();

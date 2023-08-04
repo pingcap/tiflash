@@ -43,6 +43,8 @@ Children getChildren(const tipb::Executor & executor)
         return Children{&executor.limit().child()};
     case tipb::ExecType::TypeExpand:
         return Children{&executor.expand().child()};
+    case tipb::ExecType::TypeExpand2:
+        return Children{&executor.expand2().child()};
     case tipb::ExecType::TypeProjection:
         return Children{&executor.projection().child()};
     case tipb::ExecType::TypeExchangeSender:

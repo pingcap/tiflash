@@ -61,7 +61,7 @@ public:
 
     LocalAggregateRestorerPtr buildLocalRestorer();
 
-    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorStatus & exec_status);
+    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorContext & exec_context);
 
     void initConvergent();
 
@@ -73,6 +73,8 @@ public:
     Block readForConvergent(size_t index);
 
     Block getHeader() const;
+
+    AggSpillContextPtr & getAggSpillContext() { return aggregator->getAggSpillContext(); }
 
 private:
     std::unique_ptr<Aggregator> aggregator;

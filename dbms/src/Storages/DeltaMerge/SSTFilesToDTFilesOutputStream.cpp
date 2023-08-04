@@ -26,6 +26,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -158,7 +159,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
         return false;
     }
 
-    auto dt_file = DMFile::create(file_id, parent_path, storage->createChecksumConfig());
+    auto dt_file = DMFile::create(file_id, parent_path, storage->createChecksumConfig(), context.getGlobalContext().getSettingsRef().dt_small_file_size_threshold, context.getGlobalContext().getSettingsRef().dt_merged_file_max_size);
     dt_stream = std::make_unique<DMFileBlockOutputStream>(context, dt_file, *(schema_snap->column_defines));
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
@@ -168,8 +169,8 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
 
     LOG_DEBUG(
         log,
-        "Create new DTFile for snapshot data, region={} file_idx={} file={}",
-        child->getRegion()->toString(true),
+        "Create new DTFile for snapshot data, region_id={} file_idx={} file={}",
+        child->getRegion()->id(),
         ingest_files.size() - 1,
         dt_file->path());
 

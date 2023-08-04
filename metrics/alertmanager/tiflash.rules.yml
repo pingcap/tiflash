@@ -27,18 +27,6 @@ groups:
       value: '{{ $value }}'
       summary: TiFlash server is down
 
-  - alert: TiFlash_schema_error
-    expr: increase(tiflash_schema_apply_count{type="failed"}[15m]) > 0
-    for: 1m
-    labels:
-      env: ENV_LABELS_ENV
-      level: emergency
-      expr:  increase(tiflash_schema_apply_count{type="failed"}[15m]) > 0
-    annotations:
-      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
-      value: '{{ $value }}'
-      summary: TiFlash schema error
-
   - alert: TiFlash_schema_apply_duration
     expr: histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket[1m])) BY (le, instance)) > 20
     for: 1m

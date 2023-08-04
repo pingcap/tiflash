@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockExecutor/WindowBinder.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 #include <optional>
@@ -21,61 +23,14 @@
 
 namespace DB::tests
 {
-// TODO Tests with frame should be added
-class LastValue : public DB::tests::ExecutorTest
+class LastValue : public DB::tests::WindowTest
 {
-    static const size_t max_concurrency_level = 10;
-
 public:
-    static constexpr auto value_col_name = "first_value";
-    const ASTPtr value_col = col(value_col_name);
+    const ASTPtr value_col = col(VALUE_COL_NAME);
 
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-    }
-
-    void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
-        for (auto block_size : block_sizes)
-        {
-            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-            ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));
-        }
-    }
-
-    void executeFunctionAndAssert(
-        const ColumnWithTypeAndName & result,
-        const ASTPtr & function,
-        const ColumnsWithTypeAndName & input,
-        MockWindowFrame frame = MockWindowFrame())
-    {
-        ColumnsWithTypeAndName actual_input = input;
-        assert(actual_input.size() == 3);
-        TiDB::TP value_tp = dataTypeToTP(actual_input[2].type);
-
-        actual_input[0].name = "partition";
-        actual_input[1].name = "order";
-        actual_input[2].name = value_col_name;
-        context.addMockTable(
-            {"test_db", "test_table_for_last_value"},
-            {{"partition", TiDB::TP::TypeLongLong, actual_input[0].type->isNullable()},
-             {"order", TiDB::TP::TypeLongLong, actual_input[1].type->isNullable()},
-             {value_col_name, value_tp, actual_input[2].type->isNullable()}},
-            actual_input);
-
-        auto request = context
-                           .scan("test_db", "test_table_for_last_value")
-                           .sort({{"partition", false}, {"order", false}}, true)
-                           .window(function, {"order", false}, {"partition", false}, frame)
-                           .build(context);
-
-        ColumnsWithTypeAndName expect = input;
-        expect.push_back(result);
-        executeWithConcurrencyAndBlockSize(request, expect);
     }
 
     template <typename IntType>
@@ -83,8 +38,8 @@ public:
     {
         MockWindowFrame unbounded_type_frame{
             tipb::WindowFrameType::Rows,
-            std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
-            std::make_tuple(tipb::WindowBoundType::Following, true, 0)};
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0),
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0)};
 
         executeFunctionAndAssert(
             toVec<IntType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
@@ -108,8 +63,8 @@ public:
     {
         MockWindowFrame unbounded_type_frame{
             tipb::WindowFrameType::Rows,
-            std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
-            std::make_tuple(tipb::WindowBoundType::Following, true, 0)};
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0),
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0)};
 
         executeFunctionAndAssert(
             toVec<FloatType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
@@ -153,7 +108,7 @@ try
         // frame type: offset
         MockWindowFrame frame;
         frame.type = tipb::WindowFrameType::Rows;
-        frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
 
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
         std::vector<std::vector<String>> res_not_null{
@@ -171,7 +126,7 @@ try
 
         for (size_t i = 0; i < frame_start_offset.size(); ++i)
         {
-            frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
+            frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
             executeFunctionAndAssert(
                 toVec<String>(res_not_null[i]),
                 LastValue(value_col),

@@ -86,6 +86,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
@@ -291,16 +292,14 @@ struct TiFlashProxyConfig
         auto disaggregated_mode = getDisaggregatedMode(config);
 
         // tiflash_compute doesn't need proxy.
-        // todo: remove after AutoScaler is stable.
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
         {
-            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            LOG_INFO(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return;
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("flash.proxy", keys);
-
         if (!config.has("raft.pd_addr"))
         {
             LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
@@ -340,11 +339,11 @@ struct TiFlashProxyConfig
     }
 };
 
-pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const TiFlashRaftConfig & raft_config, const int api_version, const LoggerPtr & log)
+pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const int api_version, const LoggerPtr & log)
 {
     pingcap::ClusterConfig config;
-    config.tiflash_engine_key = raft_config.engine_key;
-    config.tiflash_engine_value = raft_config.engine_value;
+    config.tiflash_engine_key = "engine";
+    config.tiflash_engine_value = DEF_PROXY_LABEL;
     auto [ca_path, cert_path, key_path] = security_config->getPaths();
     config.ca_path = ca_path;
     config.cert_path = cert_path;
@@ -767,6 +766,10 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
+        RNWritePageCachePool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
     }
 
     if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
@@ -814,6 +817,12 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
         S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
         S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
         S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (RNWritePageCachePool::instance)
+    {
+        RNWritePageCachePool::instance->setMaxThreads(max_io_thread_count);
+        RNWritePageCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNWritePageCachePool::instance->setQueueSize(max_io_thread_count * 2);
     }
 }
 
@@ -934,9 +943,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (storage_config.format_version != 0)
     {
-        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
+        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier)
         {
-            LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
+            LOG_WARNING(log, "'storage.format_version' must be set to 100 when S3 is enabled!");
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.format_version' must be set to 5 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
@@ -948,8 +957,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
-            setStorageFormat(5);
-            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V5.identifier);
+            setStorageFormat(STORAGE_FORMAT_V100.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V100.identifier);
         }
         else
         {
@@ -969,6 +978,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     LOG_INFO(log, "Using api_version={}", storage_config.api_version);
+
+    // Set whether to use safe point v2.
+    PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
 
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
@@ -1242,6 +1254,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
     // adjust the thread pool size according to settings and logical cores num
     adjustThreadPoolSize(settings, server_info.cpu_info.logical_cores);
+    initStorageMemoryTracker(settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity), settings.bytes_that_rss_larger_than_limit);
 
     /// PageStorage run mode has been determined above
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
@@ -1318,18 +1331,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 FileCache::instance()->updateConfig(global_context->getSettingsRef());
             }
-            if (S3::ClientFactory::instance().isEnabled())
-            {
-                DM::DMFile::updateMergeFileConfig(global_context->getSettingsRef());
-            }
-
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
                 bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
                 if (updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
+                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
                     global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
                     LOG_DEBUG(log, "TMTContext updated security config");
                 }
@@ -1402,7 +1410,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         if (store_ident)
         {

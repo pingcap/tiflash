@@ -29,7 +29,7 @@
 
 namespace DB
 {
-struct MPPQueryTaskSet
+struct MPPGatherTaskSet
 {
     enum State
     {
@@ -40,8 +40,6 @@ struct MPPQueryTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
-    std::shared_ptr<ProcessListEntry> process_list_entry;
-    MPPTaskMap task_map;
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
@@ -53,8 +51,52 @@ struct MPPQueryTaskSet
     {
         return state == Normal || state == Aborted;
     }
-    ~MPPQueryTaskSet();
+    MPPTask * findMPPTask(const MPPTaskId & task_id) const;
+    bool isTaskRegistered(const MPPTaskId & task_id) const
+    {
+        return task_map.find(task_id) != task_map.end();
+    }
+    void registerTask(const MPPTaskId & task_id)
+    {
+        assert(task_map.find(task_id) == task_map.end());
+        task_map[task_id] = nullptr;
+    }
+    void makeTaskActive(const MPPTaskPtr & task)
+    {
+        assert(task_map.find(task->getId()) != task_map.end());
+        task_map[task->getId()] = task;
+    }
+    bool hasMPPTask() const { return !task_map.empty(); }
+    template <typename F>
+    void forEachMPPTask(F && f) const
+    {
+        for (const auto & it : task_map)
+            f(it);
+    }
+    void removeMPPTask(const MPPTaskId & task_id)
+    {
+        task_map.erase(task_id);
+    }
+
+private:
+    MPPTaskMap task_map;
 };
+using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
+
+struct MPPQuery
+{
+    explicit MPPQuery(bool has_meaningful_gather_id_)
+        : has_meaningful_gather_id(has_meaningful_gather_id_)
+    {}
+    MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
+    ~MPPQuery();
+
+    std::shared_ptr<ProcessListEntry> process_list_entry;
+    std::unordered_map<MPPGatherId, MPPGatherTaskSetPtr, MPPGatherIdHash> mpp_gathers;
+    bool has_meaningful_gather_id;
+};
+using MPPQueryPtr = std::shared_ptr<MPPQuery>;
+
 
 /// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
 static const size_t ABORTED_MPPGATHER_CACHE_SIZE = 1000;
@@ -68,7 +110,7 @@ private:
     size_t capacity;
 
 public:
-    AbortedMPPGatherCache(size_t capacity_)
+    explicit AbortedMPPGatherCache(size_t capacity_)
         : capacity(capacity_)
     {}
     /// return aborted_reason if the mpp gather is aborted, otherwise, return empty string
@@ -99,12 +141,10 @@ public:
     }
 };
 
-using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
-
-/// a map from the mpp query id to mpp query task set, we use
+/// a map from the mpp query id to mpp query, we use
 /// the query_ts + local_query_id + serverID as the query id, because TiDB can't guarantee
 /// the uniqueness of the start ts when stale read or set snapshot
-using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryTaskSetPtr, MPPQueryIdHash>;
+using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryPtr, MPPQueryIdHash>;
 
 struct MPPTaskMonitor
 {
@@ -177,11 +217,15 @@ public:
 
     void removeMonitoredTask(const String & task_unique_id) { monitor->removeMonitoredTask(task_unique_id); }
 
-    std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
+    std::pair<MPPGatherTaskSetPtr, String> getGatherTaskSetWithoutLock(const MPPGatherId & gather_id);
 
-    std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSet(const MPPQueryId & query_id);
+    std::pair<MPPGatherTaskSetPtr, String> getGatherTaskSet(const MPPGatherId & gather_id);
 
-    std::pair<bool, String> registerTask(MPPTaskPtr task);
+    /// registerTask make the task info stored in MPPTaskManager, but it is still not visible to other mpp tasks before makeTaskActive.
+    /// After registerTask, the related query_task_set can't be cleaned before unregisterTask is called
+    std::pair<bool, String> registerTask(MPPTask * task);
+
+    std::pair<bool, String> makeTaskActive(MPPTaskPtr task);
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
@@ -193,15 +237,18 @@ public:
 
     std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
 
-    void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
-
-    std::pair<std::shared_ptr<ProcessListEntry>, String> getOrCreateQueryProcessListEntry(const MPPQueryId & query_id, const ContextPtr & context);
+    void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 
     String toString();
 
+    MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
+
+    MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
+
 private:
-    MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
-    void removeMPPQueryTaskSet(const MPPQueryId & query_id, bool on_abort);
+    MPPQueryPtr addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id);
+    void removeMPPGatherTaskSet(MPPQueryPtr & mpp_query, const MPPGatherId & gather_id, bool on_abort);
+    std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> getMPPQueryAndGatherTaskSet(const MPPGatherId & gather_id);
 };
 
 } // namespace DB

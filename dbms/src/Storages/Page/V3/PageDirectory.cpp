@@ -103,7 +103,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
             assert(last_iter->second.isEntry());
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
-            if (unlikely(last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence))
+            if (unlikely(last_iter->second.being_ref_count.getLatestRefCount() != 1 && last_iter->first.sequence < ver.sequence))
             {
                 throw Exception(
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
@@ -151,7 +151,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
             assert(last_iter->second.isEntry());
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
-            if (unlikely(last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence))
+            if (unlikely(last_iter->second.being_ref_count.getLatestRefCount() != 1 && last_iter->first.sequence < ver.sequence))
             {
                 throw Exception(
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
@@ -218,7 +218,6 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         is_deleted = false;
         create_ver = ver;
         delete_ver = PageVersion(0);
-        being_ref_count = 1;
         RUNTIME_CHECK(entries.empty());
         entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
         // return the new created holder to caller to set the page_id
@@ -236,7 +235,6 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
                 is_deleted = false;
                 create_ver = ver;
                 delete_ver = PageVersion(0);
-                being_ref_count = 1;
                 entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
                 // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<typename Trait::PageId>();
@@ -402,15 +400,15 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         type = EditRecordType::VAR_EXTERNAL;
         is_deleted = false;
         create_ver = rec.version;
-        being_ref_count = rec.being_ref_count;
-        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
+        being_ref_count.restoreFrom(rec.version, rec.being_ref_count);
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.version, 1 /* meaningless */));
         external_holder = std::make_shared<typename Trait::PageId>(rec.page_id);
         return external_holder;
     }
     case EditRecordType::VAR_ENTRY:
     {
         type = EditRecordType::VAR_ENTRY;
-        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.version, rec.being_ref_count));
         return nullptr;
     }
     default:
@@ -531,9 +529,10 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     // (the checkpoint info) each page's data was dumped.
     // In this case, there is a living snapshot protecting the data.
 
-    // Pre-check: All ENTRY edit record must contain checkpoint info for copying.
     RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
-    RUNTIME_CHECK(edit.entry.checkpoint_info.has_value());
+    // The checkpoint_info from `edit` could be empty when we upload the manifest without any page data
+    if (!edit.entry.checkpoint_info.has_value())
+        return;
 
     auto page_lock = acquireLock();
 
@@ -613,12 +612,12 @@ bool VersionedPageEntries<Trait>::isVisible(UInt64 seq) const
 }
 
 template <typename Trait>
-Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & ver)
+Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, const PageVersion & ref_ver)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
-        if (auto iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1));
+        if (auto iter = MapUtils::findMutLess(entries, PageVersion(target_ver.sequence + 1));
             iter != entries.end())
         {
             // ignore all "delete"
@@ -631,23 +630,27 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & ver)
             // Then `iter` point to an entry or the `entries.begin()`, return if entry found
             if (iter->second.isEntry())
             {
-                if (unlikely(met_delete && iter->second.being_ref_count == 1))
+                auto ref_count_value = iter->second.being_ref_count.getLatestRefCount();
+                if (unlikely(met_delete && ref_count_value == 1))
                 {
-                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second, ver), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second, target_ver), ErrorCodes::LOGICAL_ERROR);
                 }
-                return ++iter->second.being_ref_count;
+                iter->second.being_ref_count.incrRefCount(ref_ver, 1);
+                return ref_count_value + 1;
             }
         } // fallthrough to FAIL
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        if (create_ver <= ver)
+        if (create_ver <= target_ver)
         {
             // We may add reference to an external id even if it is logically deleted.
-            return ++being_ref_count;
+            auto ref_count_value = being_ref_count.getLatestRefCount();
+            being_ref_count.incrRefCount(ref_ver, 1);
+            return ref_count_value + 1;
         }
     }
-    throw Exception(fmt::format("The entry to be added ref count is not found [ver={}] [state={}]", ver, toDebugString()), ErrorCodes::LOGICAL_ERROR);
+    throw Exception(fmt::format("The entry to be added ref count is not found [ver={}] [state={}]", target_ver, toDebugString()), ErrorCodes::LOGICAL_ERROR);
 }
 
 template <typename Trait>
@@ -708,7 +711,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
 {
     if (type == EditRecordType::VAR_EXTERNAL)
     {
-        return (being_ref_count == 1 && is_deleted && delete_ver.sequence <= lowest_seq);
+        return (being_ref_count.getLatestRefCount() == 1 && is_deleted && delete_ver.sequence <= lowest_seq);
     }
     else if (type == EditRecordType::VAR_REF)
     {
@@ -786,7 +789,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
         {
             if (last_entry_is_delete)
             {
-                if (iter->second.being_ref_count == 1)
+                if (iter->second.being_ref_count.getLatestRefCount() == 1)
                 {
                     if (entries_removed)
                     {
@@ -828,12 +831,8 @@ bool VersionedPageEntries<Trait>::derefAndClean(
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
     {
-        if (being_ref_count <= deref_count)
-        {
-            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
-        }
-        being_ref_count -= deref_count;
-        return (is_deleted && delete_ver.sequence <= lowest_seq && being_ref_count == 1);
+        being_ref_count.decrRefCountInSnap(lowest_seq, deref_count);
+        return (is_deleted && delete_ver.sequence <= lowest_seq && being_ref_count.getLatestRefCount() == 1);
     }
     else if (type == EditRecordType::VAR_ENTRY)
     {
@@ -856,11 +855,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             throw Exception(fmt::format("Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
         }
         assert(iter->second.isEntry());
-        if (iter->second.being_ref_count <= deref_count)
-        {
-            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second));
-        }
-        iter->second.being_ref_count -= deref_count;
+        iter->second.being_ref_count.decrRefCountInSnap(lowest_seq, deref_count);
 
         if (lowest_seq == 0)
             return false;
@@ -897,7 +892,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             return;
         auto iter = entries.find(create_ver);
         RUNTIME_CHECK(iter != entries.end());
-        edit.varExternal(page_id, create_ver, iter->second.entry, being_ref_count);
+        edit.varExternal(page_id, create_ver, iter->second.entry, being_ref_count.getRefCountInSnap(seq));
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -915,7 +910,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
         if (last_iter->second.isEntry())
         {
             const auto & entry = last_iter->second;
-            edit.varEntry(page_id, /*ver*/ last_iter->first, entry.entry, entry.being_ref_count);
+            edit.varEntry(page_id, /*ver*/ last_iter->first, entry.entry, entry.being_ref_count.getRefCountInSnap(seq));
             return;
         }
         else if (last_iter->second.isDelete())
@@ -929,11 +924,12 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
             if (prev_iter->second.isEntry())
             {
-                if (prev_iter->second.being_ref_count == 1)
+                auto ref_count_value = prev_iter->second.being_ref_count.getRefCountInSnap(seq);
+                if (ref_count_value == 1)
                     return;
                 // It is being ref by another id, should persist the item and delete
                 const auto & entry = prev_iter->second;
-                edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
+                edit.varEntry(page_id, prev_iter->first, entry.entry, ref_count_value);
                 edit.varDel(page_id, last_version);
             }
         }
@@ -1020,7 +1016,7 @@ SnapshotsStatistics PageDirectory<Trait>::getSnapshotsStat() const
 template <typename Trait>
 typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(const PageId & page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
+    GET_METRIC(tiflash_storage_page_command_count, type_read_page_dir).Increment();
     PageEntryV3 entry_got;
 
     // After two write batches applied: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}, the `mvcc_table_directory` is:
@@ -1115,7 +1111,7 @@ template <typename Trait>
 std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirectory<Trait>::PageIds>
 PageDirectory<Trait>::getByIDsImpl(const typename PageDirectory<Trait>::PageIds & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
+    GET_METRIC(tiflash_storage_page_command_count, type_read_page_dir).Increment();
     PageEntryV3 entry_got;
     PageIds page_not_found = {};
 
@@ -1441,7 +1437,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
         // Add the ref-count of being-ref entry
         if (auto resolved_iter = mvcc_table_directory.find(resolved_id); resolved_iter != mvcc_table_directory.end())
         {
-            resolved_iter->second->incrRefCount(resolved_ver);
+            resolved_iter->second->incrRefCount(resolved_ver, version);
         }
         else
         {
@@ -1563,6 +1559,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
+    SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
@@ -1818,59 +1815,50 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 }
 
 template <typename Trait>
-bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const WriteLimiterPtr & write_limiter, bool force)
+typename PageDirectory<Trait>::PageTypeAndGcInfo
+PageDirectory<Trait>::getEntriesByBlobIdsForDifferentPageTypes(const typename PageDirectory<Trait>::PageTypeAndBlobIds & page_type_and_blob_ids) const
 {
+    PageDirectory<Trait>::PageTypeAndGcInfo page_type_and_gc_info;
+    // Because raft related data should do full gc less frequently, so we get the gc info for different page types separately.
+    // TODO: get entries in a single traverse of PageDirectory
+    for (const auto & [page_type, blob_ids] : page_type_and_blob_ids)
+    {
+        auto [blob_versioned_entries, total_page_size] = getEntriesByBlobIds(blob_ids);
+        page_type_and_gc_info.emplace_back(page_type, std::move(blob_versioned_entries), total_page_size);
+    }
+
+    return page_type_and_gc_info;
+}
+
+template <typename Trait>
+bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
+{
+    auto identifier = fmt::format("{}.dump", wal->name());
+    auto snap = createSnapshot(identifier);
+
     // Only apply compact logs when files snapshot is valid
-    auto files_snap = wal->tryGetFilesSnapshot(max_persisted_log_files, force);
+    auto files_snap = wal->tryGetFilesSnapshot(
+        max_persisted_log_files,
+        snap->sequence,
+        details::getMaxSequenceForRecord<Trait>,
+        force);
     if (!files_snap.isValid())
         return false;
 
-    // To prevent writes from affecting dumping snapshot (and vice versa), old log files
-    // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
-    // The main reason write affect dumping snapshot is that we can not get a read-only
-    // `being_ref_count` by the function `createSnapshot()`.
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
-    auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
-    auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
 
     Stopwatch watch;
-    auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
-    // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
-    // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
-    auto collapsed_dir = [&]() {
-        // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
-        // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
-        static_assert(std::is_same_v<Trait, u128::PageDirectoryTrait> || std::is_same_v<Trait, universal::PageDirectoryTrait>,
-                      "unknown impl");
-        if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
-        {
-            u128::PageDirectoryFactory factory;
-            return factory.createFromReader(
-                identifier,
-                std::move(snapshot_reader),
-                /* wal */ nullptr);
-        }
-        else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
-        {
-            universal::PageDirectoryFactory factory;
-            return factory.createFromReader(
-                identifier,
-                std::move(snapshot_reader),
-                /* wal */ nullptr);
-        }
-    }();
-    // The records persisted in `files_snap` is older than or equal to all records in `edit`
-    auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
-    files_snap.num_records = edit_from_disk.size();
-    files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
+    auto edit = dumpSnapshotToEdit(snap);
+    files_snap.num_records = edit.size();
+    files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();
     if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
     {
-        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit), write_limiter);
         return done_any_io;
     }
     else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
-        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit_from_disk), write_limiter);
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit), write_limiter);
         return done_any_io;
     }
 }
@@ -1882,14 +1870,6 @@ size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & 
     const auto & records = edit.getRecords();
     if (records.empty())
         return num_copied;
-
-    // Pre-check: All ENTRY edit record must contain checkpoint info.
-    // We do the pre-check before copying any remote info to avoid partial completion.
-    for (const auto & rec : records)
-    {
-        if (rec.type == EditRecordType::VAR_ENTRY)
-            RUNTIME_CHECK_MSG(rec.entry.checkpoint_info.has_value(), "try to copy checkpoint from an edit with invalid record: {}", rec);
-    }
 
     for (const auto & rec : records)
     {
@@ -1958,6 +1938,8 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             }
         }
     }
+
+    SYNC_FOR("after_PageDirectory::doGC_getLowestSeq");
 
     PageEntriesV3 all_del_entries;
     typename MVCCMapType::iterator iter;

@@ -17,6 +17,7 @@
 #include <Core/SortDescription.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/SortSpillContext.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -25,20 +26,20 @@ class MergeSortTransformOp : public TransformOp
 {
 public:
     MergeSortTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id_,
         const SortDescription & order_desc_,
         size_t limit_,
         size_t max_block_size_,
-        size_t max_bytes_before_external_sort_,
-        const SpillConfig & spill_config_)
-        : TransformOp(exec_status_, req_id_)
+        size_t max_bytes_before_external_sort,
+        const SpillConfig & spill_config)
+        : TransformOp(exec_context_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)
         , max_block_size(max_block_size_)
-        , max_bytes_before_external_sort(max_bytes_before_external_sort_)
-        , spill_config(spill_config_)
-    {}
+    {
+        sort_spill_context = std::make_shared<SortSpillContext>(spill_config, max_bytes_before_external_sort, log);
+    }
 
     String getName() const override
     {
@@ -70,7 +71,7 @@ private:
     OperatorStatus fromPartialToMerge(Block & block);
 
 private:
-    bool hasSpilledData() const { return max_bytes_before_external_sort > 0 && spiller->hasSpilledData(); }
+    bool hasSpilledData() const { return sort_spill_context->hasSpilledData(); }
     SortDescription order_desc;
     // 0 means no limit.
     size_t limit;
@@ -112,9 +113,7 @@ private:
 
     /// Everything below is for external sorting.
     size_t sum_bytes_in_blocks = 0;
-    size_t max_bytes_before_external_sort;
-    const SpillConfig spill_config;
-    std::unique_ptr<Spiller> spiller;
+    SortSpillContextPtr sort_spill_context;
     // Used for spill phase.
     // - `cached_handler.batchRead` is executed in `tryOutput` and `transform`.
     // - `cached_handler.spill` is executed in `executeIO`.

@@ -78,7 +78,9 @@
     M(DTFileCacheUsed)                          \
     M(PageCacheCapacity)                        \
     M(PageCacheUsed)                            \
-    M(ConnectionPoolSize)
+    M(ConnectionPoolSize)                       \
+    M(MemoryTrackingQueryStorageTask)           \
+    M(MemoryTrackingFetchPages)
 
 namespace CurrentMetrics
 {

@@ -155,11 +155,6 @@ private:
 
 } // namespace
 
-namespace pingcap::kv
-{
-PINGCAP_DEFINE_TRAITS(disaggregated, GetDisaggConfig, GetDisaggConfig);
-}
-
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
@@ -243,22 +238,28 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                 continue;
             }
 
-            auto get_config_req = std::make_shared<disaggregated::GetDisaggConfigRequest>();
-            auto rpc_call = pingcap::kv::RpcCall<disaggregated::GetDisaggConfigRequest>(get_config_req);
             try
             {
-                kv_cluster->rpc_client->sendRequest(send_address, rpc_call, /*timeout=*/2);
-                const auto resp = rpc_call.getResp();
-                RUNTIME_CHECK(resp->has_s3_config(), resp->ShortDebugString());
+                pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(GetDisaggConfig)> rpc(kv_cluster->rpc_client, send_address);
 
-                if (resp->s3_config().endpoint().empty() || resp->s3_config().bucket().empty() || resp->s3_config().root().empty())
+                grpc::ClientContext client_context;
+                rpc.setClientContext(client_context, /*timeout=*/2);
+                disaggregated::GetDisaggConfigRequest req;
+                disaggregated::GetDisaggConfigResponse resp;
+                auto status = rpc.call(&client_context, req, &resp);
+                if (!status.ok())
+                    throw Exception(rpc.errMsg(status));
+
+                RUNTIME_CHECK(resp.has_s3_config(), resp.ShortDebugString());
+
+                if (resp.s3_config().endpoint().empty() || resp.s3_config().bucket().empty() || resp.s3_config().root().empty())
                 {
                     LOG_WARNING(
                         log,
                         "invalid settings, store_id={} address={} resp={}",
                         store.id(),
                         send_address,
-                        resp->ShortDebugString());
+                        resp.ShortDebugString());
                     continue;
                 }
 
@@ -267,8 +268,8 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                     "get disagg config from write node, store_id={} address={} resp={}",
                     store.id(),
                     send_address,
-                    resp->ShortDebugString());
-                return *resp;
+                    resp.ShortDebugString());
+                return resp;
             }
             catch (...)
             {

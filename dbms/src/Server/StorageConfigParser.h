@@ -20,14 +20,10 @@
 #include <tuple>
 #include <vector>
 
-namespace Poco
-{
-class Logger;
-namespace Util
+namespace Poco::Util
 {
 class LayeredConfiguration;
-}
-} // namespace Poco
+} // namespace Poco::Util
 
 namespace DB
 {
@@ -119,6 +115,7 @@ struct StorageS3Config
     void parse(const String & content);
     void enable(bool check_requirements, const LoggerPtr & log);
     bool isS3Enabled() const;
+    void disable() { is_enabled = false; }
 
     String toString() const;
 };

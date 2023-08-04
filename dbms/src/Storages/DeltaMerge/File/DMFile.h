@@ -17,6 +17,7 @@
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Settings.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
@@ -228,7 +229,7 @@ public:
 
     // Normally, we use STORAGE_FORMAT_CURRENT to determine whether use meta v2.
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, UInt64 small_file_size_threshold = 128 * 1024, UInt64 merged_file_max_size = 16 * 1024 * 1024, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -335,10 +336,8 @@ public:
     }
 
     static String metav2FileName() { return "meta"; }
-    std::vector<std::pair<String, UInt64>> listFilesForUpload();
+    std::vector<String> listFilesForUpload();
     void switchToRemote(const S3::DMFileOID & oid);
-
-    static void updateMergeFileConfig(const Settings & settings);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -349,6 +348,8 @@ public:
            UInt64 page_id_,
            String parent_path_,
            Status status_,
+           UInt64 small_file_size_threshold_ = 128 * 1024,
+           UInt64 merged_file_max_size_ = 16 * 1024 * 1024,
            DMConfigurationOpt configuration_ = std::nullopt,
            DMFileFormat::Version version_ = STORAGE_FORMAT_CURRENT.dm_file)
         : file_id(file_id_)
@@ -358,6 +359,8 @@ public:
         , configuration(std::move(configuration_))
         , log(Logger::get())
         , version(version_)
+        , small_file_size_threshold(small_file_size_threshold_)
+        , merged_file_max_size(merged_file_max_size_)
     {
     }
 
@@ -465,13 +468,9 @@ public:
     void finalizeDirName();
     bool useMetaV2() const { return version == DMFileFormat::V3; }
 
-    std::vector<std::pair<String, UInt64>> listColumnFilesWithSize();
-    static void listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle);
-
-    void finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
     UInt64 getFileSize(ColId col_id, const String & filename) const;
-    S3::S3RandomAccessFile::ReadFileInfo getReadFileInfo(ColId col_id, const String & filename) const;
-    S3::S3RandomAccessFile::ReadFileInfo getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const;
+    UInt64 getReadFileSize(ColId col_id, const String & filename) const;
+    UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;
 
     // The id to construct the file path on disk.
     UInt64 file_id;
@@ -496,12 +495,22 @@ public:
         UInt64 number = 0;
         UInt64 size = 0;
     };
+
+    struct MergedFileWriter
+    {
+        MergedFile file_info;
+        std::unique_ptr<WriteBufferFromWritableFile> buffer;
+    };
     PaddedPODArray<MergedFile> merged_files;
     // Filename -> MergedSubFileInfo
     std::unordered_map<String, MergedSubFileInfo> merged_sub_file_infos;
 
-    inline static std::atomic<UInt64> small_file_size_threshold = 128 * 1024; // 128KB
-    inline static std::atomic<UInt64> merged_file_max_size = 1 * 1024 * 1024; // 1MB
+    UInt64 small_file_size_threshold;
+    UInt64 merged_file_max_size;
+
+    void finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
+    // check if the size of merged file is larger then the threshold. If so, create a new merged file.
+    void checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
 
     friend class DMFileWriter;
     friend class DMFileWriterRemote;

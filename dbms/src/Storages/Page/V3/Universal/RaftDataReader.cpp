@@ -72,4 +72,35 @@ std::optional<UniversalPageId> RaftDataReader::getLowerBound(const UniversalPage
     auto snapshot = uni_ps.getSnapshot(fmt::format("lower_bound_r_{}", page_id));
     return uni_ps.page_directory->getLowerBound(page_id, snapshot);
 }
+
+std::optional<UInt64> RaftDataReader::tryParseRegionId(const UniversalPageId & page_id)
+{
+    auto page_id_type = UniversalPageIdFormat::getUniversalPageIdType(page_id);
+    if (page_id_type != StorageType::KVEngine && page_id_type != StorageType::RaftEngine)
+    {
+        return {};
+    }
+    // 11 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id)
+    if (page_id.size() < 11)
+    {
+        return {};
+    }
+    auto v = *(reinterpret_cast<const UInt64 *>(page_id.data() + 3));
+    return toBigEndian(v);
+}
+
+std::optional<UInt64> RaftDataReader::tryParseRaftLogIndex(const UniversalPageId & page_id)
+{
+    auto page_id_type = UniversalPageIdFormat::getUniversalPageIdType(page_id);
+    if (page_id_type != StorageType::KVEngine && page_id_type != StorageType::RaftEngine)
+    {
+        return {};
+    }
+    // 20 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
+    if (page_id.size() < 20)
+    {
+        return {};
+    }
+    return UniversalPageIdFormat::getU64ID(page_id);
+}
 } // namespace DB

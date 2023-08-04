@@ -17,7 +17,7 @@
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/SortHelper.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/MergeSortTransformOp.h>
 
 #include <magic_enum.hpp>
@@ -32,18 +32,8 @@ void MergeSortTransformOp::operatePrefixImpl()
     // For order by constants, generate LimitOperator instead of SortOperator.
     assert(!order_desc.empty());
 
-    if (max_bytes_before_external_sort > 0)
-    {
-        if (Spiller::supportSpill(header_without_constants))
-        {
-            spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
-        }
-        else
-        {
-            max_bytes_before_external_sort = 0;
-            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
-        }
-    }
+    if (sort_spill_context->isSpillEnabled())
+        sort_spill_context->buildSpiller(header_without_constants);
 }
 
 void MergeSortTransformOp::operateSuffixImpl()
@@ -91,8 +81,8 @@ OperatorStatus MergeSortTransformOp::fromPartialToRestore()
     LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
     /// Create spilled sorted streams to merge.
-    spiller->finishSpill();
-    auto inputs_to_merge = spiller->restoreBlocks(0, 0);
+    sort_spill_context->getSpiller()->finishSpill();
+    auto inputs_to_merge = sort_spill_context->getSpiller()->restoreBlocks(0, 0);
 
     /// Rest of sorted_blocks in memory.
     if (!sorted_blocks.empty())
@@ -106,7 +96,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToRestore()
     /// merge the spilled data and memory data.
     merge_impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, order_desc, max_block_size, limit);
     merge_impl->readPrefix();
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_IN;
 }
 
 OperatorStatus MergeSortTransformOp::fromPartialToSpill()
@@ -115,16 +105,15 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     // convert to restore phase.
     status = MergeSortStatus::SPILL;
     assert(!cached_handler);
-    if (!hasSpilledData())
-        LOG_INFO(log, "Begin spill in merge sort");
-    cached_handler = spiller->createCachedSpillHandler(
+    sort_spill_context->markSpill();
+    cached_handler = sort_spill_context->getSpiller()->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,
-        [&]() { return exec_status.isCancelled(); });
+        [&]() { return exec_context.isCancelled(); });
     // fallback to partial phase.
     if (!cached_handler->batchRead())
         return fromSpillToPartial();
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_OUT;
 }
 
 OperatorStatus MergeSortTransformOp::fromSpillToPartial()
@@ -146,6 +135,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
     {
         if unlikely (!block)
         {
+            sort_spill_context->finishSpillableStage();
             return hasSpilledData()
                 ? fromPartialToRestore()
                 : fromPartialToMerge(block);
@@ -156,7 +146,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
         sum_bytes_in_blocks += block.estimateBytesForSpill();
         sorted_blocks.emplace_back(std::move(block));
 
-        if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
+        if (sort_spill_context->updateRevocableMemory(sum_bytes_in_blocks))
             return fromPartialToSpill();
         else
             return OperatorStatus::NEED_INPUT;
@@ -176,7 +166,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
     {
         assert(cached_handler);
         return cached_handler->batchRead()
-            ? OperatorStatus::IO
+            ? OperatorStatus::IO_OUT
             : fromSpillToPartial();
     }
     case MergeSortStatus::MERGE:
@@ -192,7 +182,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
             block = restored_result.output();
             return OperatorStatus::HAS_OUTPUT;
         }
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
     default:
         throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));

@@ -140,7 +140,7 @@ grpc::Status CoprocessorHandler::execute()
     }
     catch (LockException & e)
     {
-        LOG_WARNING(log, "LockException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(log, "LockException: region_id={}, message: {}", cop_request->context().region_id(), e.message());
         cop_response->Clear();
         GET_METRIC(tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         cop_response->set_allocated_locked(e.locks[0].second.release());
@@ -149,7 +149,7 @@ grpc::Status CoprocessorHandler::execute()
     }
     catch (const RegionException & e)
     {
-        LOG_WARNING(log, "RegionException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(log, "RegionException: region_id={}, message: {}", cop_request->context().region_id(), e.message());
         cop_response->Clear();
         errorpb::Error * region_err;
         switch (e.status)

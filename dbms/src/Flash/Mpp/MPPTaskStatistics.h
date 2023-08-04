@@ -57,6 +57,8 @@ public:
 
     tipb::SelectResponse genExecutionSummaryResponse();
 
+    tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
+
 private:
     void recordInputBytes(DAGContext & dag_context);
 

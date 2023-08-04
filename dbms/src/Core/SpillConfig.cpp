@@ -27,7 +27,15 @@ bool needReplace(char c)
     return std::isspace(c) || String::npos != forbidden_or_unusual_chars.find(c);
 }
 } // namespace
-SpillConfig::SpillConfig(const DB::String & spill_dir_, const DB::String & spill_id_, size_t max_cached_data_bytes_in_spiller_, size_t max_spilled_rows_per_file_, size_t max_spilled_bytes_per_file_, const FileProviderPtr & file_provider_)
+SpillConfig::SpillConfig(
+    const DB::String & spill_dir_,
+    const DB::String & spill_id_,
+    size_t max_cached_data_bytes_in_spiller_,
+    size_t max_spilled_rows_per_file_,
+    size_t max_spilled_bytes_per_file_,
+    const FileProviderPtr & file_provider_,
+    UInt64 for_all_constant_max_streams_,
+    UInt64 for_all_constant_block_size_)
     : spill_dir(spill_dir_)
     , spill_id(spill_id_)
     , spill_id_as_file_name_prefix(spill_id)
@@ -35,6 +43,8 @@ SpillConfig::SpillConfig(const DB::String & spill_dir_, const DB::String & spill
     , max_spilled_rows_per_file(max_spilled_rows_per_file_)
     , max_spilled_bytes_per_file(max_spilled_bytes_per_file_)
     , file_provider(file_provider_)
+    , for_all_constant_max_streams(std::max(1, for_all_constant_max_streams_))
+    , for_all_constant_block_size(std::max(1, for_all_constant_block_size_))
 {
     RUNTIME_CHECK_MSG(!spill_dir.empty(), "Spiller dir must be non-empty");
     RUNTIME_CHECK_MSG(!spill_id.empty(), "Spiller id must be non-empty");

@@ -43,8 +43,15 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
+extern const char exception_before_mpp_make_non_root_mpp_task_active[];
+extern const char exception_before_mpp_make_root_mpp_task_active[];
 extern const char exception_before_mpp_register_non_root_mpp_task[];
 extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
@@ -54,6 +61,7 @@ extern const char force_no_local_region_for_mpp_task[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
+
 
 namespace
 {
@@ -66,6 +74,18 @@ void injectFailPointBeforeRegisterTunnel(bool is_root_task)
     else
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
+    }
+}
+
+void injectFailPointBeforeMakeMPPTaskPublic(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_root_mpp_task_active);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_non_root_mpp_task_active);
     }
 }
 
@@ -113,6 +133,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , log(Logger::get(id.toString()))
     , mpp_task_statistics(id, meta.address())
 {
+    assert(manager != nullptr);
     current_memory_tracker = nullptr;
     mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
@@ -165,7 +186,7 @@ void MPPTask::abortQueryExecutor()
 void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries)
+    if (dag_context->collect_execution_summaries && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
         tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
@@ -207,7 +228,9 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
 
-        tunnel_set_local->registerTunnel(MPPTaskId(task_meta), tunnel);
+        MPPTaskId task_id(task_meta);
+        RUNTIME_CHECK_MSG(id.gather_id.gather_id == task_id.gather_id.gather_id, "MPP query has different gather id, should be something wrong in TiDB side");
+        tunnel_set_local->registerTunnel(task_id, tunnel);
         injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
@@ -313,12 +336,9 @@ void MPPTask::unregisterTask()
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
-void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
+void MPPTask::initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry)
 {
     /// all the mpp tasks of the same mpp query shares the same process list entry
-    auto [query_process_list_entry, aborted_reason] = task_manager->getOrCreateQueryProcessListEntry(id.query_id, context);
-    if (!aborted_reason.empty())
-        throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
     assert(query_process_list_entry != nullptr);
     process_list_entry_holder.process_list_entry = query_process_list_entry;
     dag_context->setProcessListEntry(query_process_list_entry);
@@ -383,19 +403,23 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context->setDAGContext(dag_context.get());
 
-    auto task_manager = tmt_context.getMPPTaskManager();
-    initProcessListEntry(task_manager);
+    injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
+    auto [result, reason] = manager->registerTask(this);
+    if (!result)
+    {
+        throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::Internal);
+    }
 
     injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
-    LOG_DEBUG(log, "begin to register the task {}", id.toString());
+    LOG_DEBUG(log, "begin to make the task {} public", id.toString());
 
-    injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
-    auto [result, reason] = task_manager->registerTask(shared_from_this());
+    injectFailPointBeforeMakeMPPTaskPublic(dag_context->isRootMPPTask());
+    std::tie(result, reason) = manager->makeTaskActive(shared_from_this());
     if (!result)
     {
-        throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(fmt::format("Failed to make MPP Task {} public, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);
     }
 
     mpp_task_statistics.initializeExecutorDAG(dag_context.get());
@@ -523,6 +547,7 @@ void MPPTask::runImpl()
 
     if (err_msg.empty())
     {
+        reportStatus("");
         if (switchStatus(RUNNING, FINISHED))
             LOG_DEBUG(log, "finish task");
         else
@@ -540,14 +565,17 @@ void MPPTask::runImpl()
     }
     else
     {
+        /// trim the stack trace to avoid too many useless information
+        String trimmed_err_msg = err_msg;
+        trimStackTrace(trimmed_err_msg);
+        /// tidb replaces root tasks' error message with the first error message it received, if root task completed successfully, error messages will be ignored.
+        reportStatus(trimmed_err_msg);
         if (status == RUNNING)
         {
             LOG_ERROR(log, "task running meets error: {}", err_msg);
-            /// trim the stack trace to avoid too many useless information in log
-            trimStackTrace(err_msg);
             try
             {
-                handleError(err_msg);
+                handleError(trimmed_err_msg);
             }
             catch (...)
             {
@@ -562,12 +590,68 @@ void MPPTask::runImpl()
     unregisterTask();
 }
 
+// TODO: include warning messages in report also when MPPDataPacket support warnings
+void MPPTask::reportStatus(const String & err_msg)
+{
+    if (!ReportStatusToCoordinator(meta.mpp_version(), meta.coordinator_address()))
+        return;
+
+    bool report_execution_summary = dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary());
+    // Only report status when err happened or need to report execution summary
+    if (err_msg.empty() && !report_execution_summary)
+        return;
+
+    try
+    {
+        mpp::ReportTaskStatusRequest req;
+        mpp::TaskMeta * req_meta = req.mutable_meta();
+        req_meta->CopyFrom(meta);
+
+        if (report_execution_summary)
+        {
+            tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
+            if unlikely (!execution_info.SerializeToString(req.mutable_data()))
+            {
+                LOG_ERROR(log, "Failed to serialize TiFlash execution info");
+                return;
+            }
+        }
+
+        if (!err_msg.empty())
+        {
+            mpp::Error * err = req.mutable_error();
+            err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+            err->set_msg(err_msg);
+        }
+
+        auto * cluster = context->getTMTContext().getKVCluster();
+        pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(ReportMPPTaskStatus)> rpc(cluster->rpc_client, meta.coordinator_address());
+        grpc::ClientContext client_context;
+        rpc.setClientContext(client_context, /*timeout=*/3);
+        mpp::ReportTaskStatusResponse resp;
+        auto rpc_status = rpc.call(&client_context, req, &resp);
+        if (!rpc_status.ok())
+        {
+            throw Exception(rpc.errMsg(rpc_status));
+        }
+        if (resp.has_error())
+        {
+            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
+        }
+    }
+    catch (...)
+    {
+        std::string local_err_msg = getCurrentExceptionMessage(true);
+        LOG_ERROR(log, "Failed to ReportMPPTaskStatus to {}, due to {}", meta.coordinator_address(), local_err_msg);
+    }
+}
+
 void MPPTask::handleError(const String & error_msg)
 {
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-    manager->abortMPPQuery(id.query_id, updated_msg, AbortType::ONERROR);
-    if (!registered)
-        // if the task is not registered, need to cancel it explicitly
+    manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
+    if (!is_public)
+        // if the task is not public, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
 }
 

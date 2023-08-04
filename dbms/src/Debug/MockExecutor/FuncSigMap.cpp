@@ -18,7 +18,11 @@ namespace DB::tests
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"plusint", tipb::ScalarFuncSig::PlusInt},
+    {"plusreal", tipb::ScalarFuncSig::PlusReal},
+    {"plusdecimal", tipb::ScalarFuncSig::PlusDecimal},
     {"minusint", tipb::ScalarFuncSig::MinusInt},
+    {"minusreal", tipb::ScalarFuncSig::MinusReal},
+    {"minusdecimal", tipb::ScalarFuncSig::MinusDecimal},
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"notEquals", tipb::ScalarFuncSig::NEInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},

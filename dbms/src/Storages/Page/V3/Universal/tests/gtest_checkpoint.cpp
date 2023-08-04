@@ -953,10 +953,23 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        DB::tests::TiFlashTestEnv::enableS3Config();
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        auto & settings = global_context.getSettingsRef();
+        old_remote_checkpoint_only_upload_manifest = settings.remote_checkpoint_only_upload_manifest;
+        settings.remote_checkpoint_only_upload_manifest = false;
         uni_ps_service = newService();
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+    }
+
+    void TearDown() override
+    {
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        auto & settings = global_context.getSettingsRef();
+        settings.remote_checkpoint_only_upload_manifest = old_remote_checkpoint_only_upload_manifest;
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
     static UniversalPageStorageServicePtr newService()
@@ -1002,6 +1015,8 @@ protected:
     std::shared_ptr<S3::TiFlashS3Client> s3_client;
     UInt64 tag = 0;
     UInt64 store_id = 2;
+
+    bool old_remote_checkpoint_only_upload_manifest;
 
     LoggerPtr log;
 };

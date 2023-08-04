@@ -35,7 +35,10 @@ namespace DB::PS::V3
   * BlobStats methods *
   *********************/
 
-BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig & config_)
+BlobStats::BlobStats(
+    LoggerPtr log_,
+    PSDiskDelegatorPtr delegator_,
+    BlobConfig & config_)
     : log(std::move(log_))
     , delegator(delegator_)
     , config(config_)
@@ -90,20 +93,15 @@ std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(String blob_name)
 
 void BlobStats::restore()
 {
-    BlobFileId max_restored_file_id = 0;
-
     for (auto & [path, stats] : stats_map)
     {
         (void)path;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
-            max_restored_file_id = std::max(stat->id, max_restored_file_id);
+            cur_max_id = std::max(stat->id, cur_max_id);
         }
     }
-
-    // restore `roll_id`
-    roll_id = max_restored_file_id + 1;
 }
 
 std::lock_guard<std::mutex> BlobStats::lock() const
@@ -113,15 +111,6 @@ std::lock_guard<std::mutex> BlobStats::lock() const
 
 BlobStats::BlobStatPtr BlobStats::createStat(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> & guard)
 {
-    // New blob file id won't bigger than roll_id
-    if (blob_file_id > roll_id)
-    {
-        throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [roll_id={}]",
-                                    blob_file_id,
-                                    roll_id),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-
     for (auto & [path, stats] : stats_map)
     {
         (void)path;
@@ -137,15 +126,7 @@ BlobStats::BlobStatPtr BlobStats::createStat(BlobFileId blob_file_id, UInt64 max
     }
 
     // Create a stat without checking the file_id exist or not
-    auto stat = createStatNotChecking(blob_file_id, max_caps, guard);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
-
-    return stat;
+    return createStatNotChecking(blob_file_id, max_caps, guard);
 }
 
 BlobStats::BlobStatPtr BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
@@ -203,14 +184,16 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
     eraseStat(std::move(stat), lock);
 }
 
-std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &)
+std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, PageType page_type, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
 
     // No stats exist
     if (stats_map.empty())
     {
-        return std::make_pair(nullptr, roll_id);
+        auto next_id = PageTypeUtils::nextFileID(page_type, cur_max_id);
+        cur_max_id = next_id;
+        return std::make_pair(nullptr, next_id);
     }
 
     // If the stats_map size changes, or stats_map_path_index is out of range,
@@ -226,6 +209,9 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)
         {
+            if (PageTypeUtils::getPageType(stat->id) != page_type)
+                continue;
+
             auto defer_lock = stat->defer_lock();
             if (defer_lock.try_lock() && stat->isNormal() && stat->sm_max_caps >= buf_size)
             {
@@ -245,7 +231,9 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
     stats_map_path_index += path_iter_idx + 1;
 
     // Can not find a suitable stat under all paths
-    return std::make_pair(nullptr, roll_id);
+    auto next_id = PageTypeUtils::nextFileID(page_type, cur_max_id);
+    cur_max_id = next_id;
+    return std::make_pair(nullptr, next_id);
 }
 
 BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)
@@ -358,5 +346,4 @@ void BlobStats::BlobStat::recalculateCapacity()
 {
     sm_max_caps = smap->updateAccurateMaxCapacity();
 }
-
 } // namespace DB::PS::V3

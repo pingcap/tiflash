@@ -181,7 +181,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
     auto & service = context.getSchemaSyncService();
     Timestamp gc_safe_point = 0;
     if (args.empty())
-        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), NullspaceID);
     else
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     service->gc(gc_safe_point, NullspaceID);

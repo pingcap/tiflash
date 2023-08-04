@@ -108,6 +108,9 @@ public:
 
     bool isEnabled() const;
 
+    void disable() { config.disable(); }
+    void enable() { config.enable(false, log); }
+
     void init(const StorageS3Config & config_, bool mock_s3_ = false);
 
     void setKVCluster(pingcap::kv::Cluster * kv_cluster_)

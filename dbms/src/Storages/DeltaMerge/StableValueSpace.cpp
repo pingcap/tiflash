@@ -564,5 +564,53 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
     return ret;
 }
 
+static size_t defaultValueBytes(const Field & f)
+{
+    switch (f.getType())
+    {
+    case Field::Types::Decimal32:
+        return 4;
+    case Field::Types::UInt64:
+    case Field::Types::Int64:
+    case Field::Types::Float64:
+    case Field::Types::Decimal64:
+        return 8;
+    case Field::Types::UInt128:
+    case Field::Types::Int128:
+    case Field::Types::Decimal128:
+        return 16;
+    case Field::Types::Int256:
+    case Field::Types::Decimal256:
+        return 32;
+    case Field::Types::String:
+        return f.get<String>().size();
+    default: // Null, Array, Tuple. In fact, it should not be Array or Tuple here.
+        // But we don't throw exceptions here because it is not the critical path.
+        return 1;
+    }
+}
+
+size_t StableValueSpace::avgRowBytes(const ColumnDefines & read_columns)
+{
+    size_t avg_bytes = 0;
+    if (likely(!files.empty()))
+    {
+        const auto & file = files.front();
+        for (const auto & col : read_columns)
+        {
+            if (file->isColumnExist(col.id))
+            {
+                const auto & stat = file->getColumnStat(col.id);
+                avg_bytes += stat.avg_size;
+            }
+            else
+            {
+                avg_bytes += defaultValueBytes(col.default_value);
+            }
+        }
+    }
+    return avg_bytes;
+}
+
 } // namespace DM
 } // namespace DB

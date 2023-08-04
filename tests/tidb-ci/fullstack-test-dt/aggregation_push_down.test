@@ -167,7 +167,7 @@ mysql> analyze table test.t;
 
 func> wait_table test t
 
-mysql> use test;  set @@tidb_allow_mpp=0; select  avg(value)  from test.t group by value;
+mysql> use test;  set @@tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select  avg(value)  from test.t group by value;
 +------------+
 | avg(value) |
 +------------+
@@ -181,7 +181,7 @@ mysql> use test;  set @@tidb_allow_mpp=1;  set @@tidb_enforce_mpp=1; select  avg
 |     9.0000 |
 +------------+
 
-mysql> use test;  set @@tidb_allow_mpp=0; select  avg(value)  from test.t;
+mysql> use test;  set @@tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select  avg(value)  from test.t;
 +------------+
 | avg(value) |
 +------------+

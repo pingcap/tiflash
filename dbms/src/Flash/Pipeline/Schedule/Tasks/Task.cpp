@@ -14,7 +14,9 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
@@ -24,6 +26,9 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_pipeline_model_task_construct_failpoint[];
+extern const char random_pipeline_model_task_run_failpoint[];
+extern const char random_pipeline_model_cancel_failpoint[];
+extern const char exception_during_query_run[];
 } // namespace FailPoints
 
 namespace
@@ -48,12 +53,12 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
     }
 #endif
 
-    // It is impossible for any task to change to init status.
     switch (to)
     {
         M(ExecTaskStatus::WAITING, type_to_waiting)
         M(ExecTaskStatus::RUNNING, type_to_running)
-        M(ExecTaskStatus::IO, type_to_io)
+        M(ExecTaskStatus::IO_IN, type_to_io)
+        M(ExecTaskStatus::IO_OUT, type_to_io)
         M(ExecTaskStatus::FINISHED, type_to_finished)
         M(ExecTaskStatus::ERROR, type_to_error)
         M(ExecTaskStatus::CANCELLED, type_to_cancelled)
@@ -65,23 +70,23 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-Task::Task()
-    : log(Logger::get())
-    , mem_tracker_holder(nullptr)
-    , mem_tracker_ptr(nullptr)
-{
-    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
-}
-
-Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
+Task::Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
-    , mem_tracker_holder(std::move(mem_tracker_))
+    , exec_context(exec_context_)
+    , mem_tracker_holder(exec_context_.getMemoryTracker())
     , mem_tracker_ptr(mem_tracker_holder.get())
+    , task_status(init_status)
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
+    addToStatusMetrics(task_status);
+
+    exec_context.incActiveRefCount();
+}
+
+Task::Task(PipelineExecutorContext & exec_context_)
+    : Task(exec_context_, "")
+{
 }
 
 Task::~Task()
@@ -93,31 +98,58 @@ Task::~Task()
             "Task should be finalized before destructing, but not, the status at this time is {}. The possible reason is that an error was reported during task creation",
             magic_enum::enum_name(task_status));
     }
+
+    // In order to ensure that `PipelineExecutorContext` will not be destructed before `Task` is destructed.
+    exec_context.decActiveRefCount();
 }
+
+#define EXECUTE(function)                                                                   \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_context.cancel());   \
+    if unlikely (exec_context.isCancelled())                                                \
+    {                                                                                       \
+        switchStatus(ExecTaskStatus::CANCELLED);                                            \
+        return task_status;                                                                 \
+    }                                                                                       \
+    try                                                                                     \
+    {                                                                                       \
+        auto status = (function());                                                         \
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);               \
+        switchStatus(status);                                                               \
+        return task_status;                                                                 \
+    }                                                                                       \
+    catch (...)                                                                             \
+    {                                                                                       \
+        LOG_WARNING(log, "error occurred and cancel the query");                            \
+        exec_context.onErrorOccurred(std::current_exception());                             \
+        switchStatus(ExecTaskStatus::ERROR);                                                \
+        return task_status;                                                                 \
+    }
 
 ExecTaskStatus Task::execute()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
-    switchStatus(executeImpl());
-    return task_status;
+    assert(task_status == ExecTaskStatus::RUNNING);
+    EXECUTE(executeImpl);
 }
 
 ExecTaskStatus Task::executeIO()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
-    switchStatus(executeIOImpl());
-    return task_status;
+    assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT);
+    EXECUTE(executeIOImpl);
 }
 
 ExecTaskStatus Task::await()
 {
-    assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
-    switchStatus(awaitImpl());
-    return task_status;
+    // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
+    // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.
+    assert(current_memory_tracker == nullptr);
+    assert(task_status == ExecTaskStatus::WAITING);
+    EXECUTE(awaitImpl);
 }
+
+#undef EXECUTE
 
 void Task::finalize()
 {
@@ -128,7 +160,14 @@ void Task::finalize()
         "finalize can only be called once.");
     is_finalized = true;
 
-    finalizeImpl();
+    try
+    {
+        finalizeImpl();
+    }
+    catch (...)
+    {
+        exec_context.onErrorOccurred(std::current_exception());
+    }
 
     profile_info.reportMetrics();
 #ifndef NDEBUG
@@ -146,5 +185,10 @@ void Task::switchStatus(ExecTaskStatus to)
         addToStatusMetrics(to);
         task_status = to;
     }
+}
+
+const String & Task::getQueryId() const
+{
+    return exec_context.getQueryId();
 }
 } // namespace DB

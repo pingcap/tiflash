@@ -91,7 +91,7 @@ public:
 
     struct Table : boost::noncopyable
     {
-        Table(const TableID table_id_)
+        explicit Table(const TableID table_id_)
             : table_id(table_id_)
         {}
         TableID table_id;
@@ -101,73 +101,23 @@ public:
     using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
 
-    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
-    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
-    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
-    struct SafeTsEntry
-    {
-        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
-            : leader_safe_ts(leader_safe_ts)
-            , self_safe_ts(self_safe_ts)
-        {}
-        std::atomic<UInt64> leader_safe_ts;
-        std::atomic<UInt64> self_safe_ts;
-    };
-    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
-    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
-
-    using DirtyRegions = std::unordered_set<RegionID>;
-    using TableToOptimize = std::unordered_set<TableID>;
-
-    struct FlushThresholds
-    {
-        using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
-
-        FlushThresholds(FlushThresholdsData && data_)
-            : data(std::make_shared<FlushThresholdsData>(std::move(data_)))
-        {}
-
-        void setFlushThresholds(const FlushThresholdsData & flush_thresholds_)
-        {
-            auto flush_thresholds = std::make_shared<FlushThresholdsData>(flush_thresholds_);
-            {
-                std::lock_guard lock(mutex);
-                data = std::move(flush_thresholds);
-            }
-        }
-
-        auto getData() const
-        {
-            std::lock_guard lock(mutex);
-            return data;
-        }
-
-    private:
-        std::shared_ptr<const FlushThresholdsData> data;
-        mutable std::mutex mutex;
-    };
-
-    RegionTable(Context & context_);
+    explicit RegionTable(Context & context_);
     void restore();
-
-    void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
     void updateRegion(const Region & region);
 
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
 
+    /// extend range for possible InternalRegion or add one.
+    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
+
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
-    // Find all regions with data, call writeBlockByRegionAndFlush with try_persist = true.
-    // This function is only for debug.
-    bool tryFlushRegions();
-
-    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the smae time.
+    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
-    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist);
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region);
 
     void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
@@ -194,8 +144,21 @@ public:
                                                                     RegionVersion conf_version,
                                                                     const LoggerPtr & log);
 
-    /// extend range for possible InternalRegion or add one.
-    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
+public:
+    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
+    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
+    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
+    struct SafeTsEntry
+    {
+        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
+            : leader_safe_ts(leader_safe_ts)
+            , self_safe_ts(self_safe_ts)
+        {}
+        std::atomic<UInt64> leader_safe_ts;
+        std::atomic<UInt64> self_safe_ts;
+    };
+    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
+    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
 
     void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
 
@@ -214,22 +177,12 @@ private:
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
-    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_tb_id, RegionID region_id);
-
-    // Try write the committed kvs into cache of columnar DeltaMergeStore.
-    // Flush the cache if try_persist is set to true.
-    // The original name for this method is flushRegion.
-    RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const;
-    bool shouldFlush(const InternalRegion & region) const;
-    RegionID pickRegionToFlush();
+    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
 
 private:
     TableMap tables;
     RegionInfoMap regions;
     SafeTsMap safe_ts_map;
-    DirtyRegions dirty_regions;
-
-    FlushThresholds flush_thresholds;
 
     Context * const context;
 

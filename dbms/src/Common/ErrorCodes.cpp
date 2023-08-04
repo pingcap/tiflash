@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -393,6 +395,13 @@ extern const int UNKNOWN_WINDOW_FUNCTION = 449;
 extern const int UNSUPPORTED_URI_SCHEME = 450;
 extern const int UNACCEPTABLE_URL = 450;
 extern const int TOO_MANY_REDIRECTS = 450;
+
+#if USE_QPL
+extern const int QPL_INIT_JOB_FAILED = 453;
+extern const int QPL_ACQUIRE_JOB_FAILED = 454;
+extern const int QPL_COMPRESS_DATA_FAILED = 455;
+extern const int QPL_DECOMPRESS_DATA_FAILED = 456;
+#endif
 
 extern const int KEEPER_EXCEPTION = 999;
 extern const int POCO_EXCEPTION = 1000;

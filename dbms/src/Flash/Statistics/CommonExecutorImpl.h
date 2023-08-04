@@ -66,7 +66,7 @@ struct ExpandImpl
 
     static bool isMatch(const tipb::Executor * executor)
     {
-        return executor->has_expand();
+        return executor->has_expand() || executor->has_expand2();
     }
 };
 using ExpandStatistics = ExecutorStatistics<ExpandImpl>;

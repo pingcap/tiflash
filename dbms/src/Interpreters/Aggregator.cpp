@@ -78,6 +78,7 @@ bool AggregatedDataVariants::tryMarkNeedSpill()
         convertToTwoLevel();
     }
     need_spill = true;
+    aggregator->agg_spill_context->markSpill();
     return true;
 }
 
@@ -235,7 +236,7 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_, const String & req_id)
+Aggregator::Aggregator(const Params & params_, const String & req_id, size_t concurrency)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
@@ -280,22 +281,23 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
 
     method_chosen = chooseAggregationMethod();
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
-    if (params.getMaxBytesBeforeExternalGroupBy() > 0)
+    agg_spill_context = std::make_shared<AggSpillContext>(concurrency, params.spill_config, params.getMaxBytesBeforeExternalGroupBy(), log);
+    if (agg_spill_context->isSpillEnabled())
     {
         /// init spiller if needed
         auto header = getHeader(false);
         bool is_convertible_to_two_level = AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen);
-        bool is_input_support_spill = Spiller::supportSpill(header);
-        if (is_convertible_to_two_level && is_input_support_spill)
+        if (is_convertible_to_two_level)
         {
             /// for aggregation, the input block is sorted by bucket number
             /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-            spiller = std::make_unique<Spiller>(params.spill_config, true, 1, header, log);
+            agg_spill_context->buildSpiller(header);
         }
         else
         {
             params.setMaxBytesBeforeExternalGroupBy(0);
-            LOG_WARNING(log, "Aggregation does not support spill, reason: {}", is_convertible_to_two_level ? "aggregator hash table does not support two level" : "input data contains only constant columns");
+            agg_spill_context->disableSpill();
+            LOG_WARNING(log, "Aggregation does not support spill because aggregator hash table does not support two level");
         }
     }
 }
@@ -745,7 +747,8 @@ bool Aggregator::executeOnBlock(
     const Block & block,
     AggregatedDataVariants & result,
     ColumnRawPtrs & key_columns,
-    AggregateColumns & aggregate_columns)
+    AggregateColumns & aggregate_columns,
+    size_t thread_num)
 {
     assert(!result.need_spill);
 
@@ -842,8 +845,7 @@ bool Aggregator::executeOnBlock(
 
     /** Flush data to disk if too much RAM is consumed.
       */
-    if (max_bytes_before_external_group_by && result_size > 0
-        && result_size_bytes > max_bytes_before_external_group_by)
+    if (agg_spill_context->updatePerThreadRevocableMemory(result.revocableBytes(), thread_num))
     {
         result.tryMarkNeedSpill();
     }
@@ -854,31 +856,25 @@ bool Aggregator::executeOnBlock(
 
 void Aggregator::finishSpill()
 {
-    assert(spiller != nullptr);
-    spiller->finishSpill();
+    assert(agg_spill_context->getSpiller() != nullptr);
+    agg_spill_context->getSpiller()->finishSpill();
 }
 
 BlockInputStreams Aggregator::restoreSpilledData()
 {
-    assert(spiller != nullptr);
-    return spiller->restoreBlocks(0);
+    assert(agg_spill_context->getSpiller() != nullptr);
+    return agg_spill_context->getSpiller()->restoreBlocks(0);
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
 {
     group_by_two_level_threshold = params.getGroupByTwoLevelThreshold();
     group_by_two_level_threshold_bytes = getAverageThreshold(params.getGroupByTwoLevelThresholdBytes(), aggregated_data_variants_size);
-    max_bytes_before_external_group_by = getAverageThreshold(params.getMaxBytesBeforeExternalGroupBy(), aggregated_data_variants_size);
 }
 
 void Aggregator::spill(AggregatedDataVariants & data_variants)
 {
     assert(data_variants.need_spill);
-    bool init_value = false;
-    if (spill_triggered.compare_exchange_strong(init_value, true, std::memory_order_relaxed))
-    {
-        LOG_INFO(log, "Begin spill in aggregator");
-    }
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                          \
     case AggregationMethodType(NAME):                                                    \
@@ -947,7 +943,7 @@ void Aggregator::spillImpl(
     AggregatedDataVariants & data_variants,
     Method & method)
 {
-    RUNTIME_ASSERT(spiller != nullptr, "spiller must not be nullptr in Aggregator when spilling");
+    RUNTIME_ASSERT(agg_spill_context->getSpiller() != nullptr, "spiller must not be nullptr in Aggregator when spilling");
     size_t max_temporary_block_size_rows = 0;
     size_t max_temporary_block_size_bytes = 0;
 
@@ -970,7 +966,7 @@ void Aggregator::spillImpl(
         blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
         update_max_sizes(blocks.back());
     }
-    spiller->spillBlocks(std::move(blocks), 0);
+    agg_spill_context->getSpiller()->spillBlocks(std::move(blocks), 0);
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
@@ -980,7 +976,7 @@ void Aggregator::spillImpl(
 }
 
 
-void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result)
+void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num)
 {
     if (is_cancelled())
         return;
@@ -1004,7 +1000,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, key_columns, aggregate_columns))
+        if (!executeOnBlock(block, result, key_columns, aggregate_columns, thread_num))
             break;
         if (result.need_spill)
             spill(result);
@@ -1014,7 +1010,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
     {
-        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns);
+        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, thread_num);
         if (result.need_spill)
             spill(result);
     }
@@ -2317,9 +2313,9 @@ Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index)
             return {};
 
         doLevelMerge(local_current_bucket_num, concurrency_index);
-        Block out_block = popBlocksListFront(two_level_merge_data);
-        if (likely(out_block))
-            return out_block;
+        Block block = popBlocksListFront(two_level_merge_data);
+        if (likely(block))
+            return block;
     }
 }
 

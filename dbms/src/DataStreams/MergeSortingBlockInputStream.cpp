@@ -30,14 +30,12 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     const SortDescription & description_,
     size_t max_merged_block_size_,
     size_t limit_,
-    size_t max_bytes_before_external_sort_,
-    const SpillConfig & spill_config_,
+    size_t max_bytes_before_external_sort,
+    const SpillConfig & spill_config,
     const String & req_id)
     : description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
-    , max_bytes_before_external_sort(max_bytes_before_external_sort_)
-    , spill_config(spill_config_)
     , log(Logger::get(req_id))
 {
     children.push_back(input);
@@ -45,18 +43,9 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     header_without_constants = header;
     SortHelper::removeConstantsFromBlock(header_without_constants);
     SortHelper::removeConstantsFromSortDescription(header, description);
-    if (max_bytes_before_external_sort > 0)
-    {
-        if (Spiller::supportSpill(header_without_constants))
-        {
-            spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
-        }
-        else
-        {
-            max_bytes_before_external_sort = 0;
-            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
-        }
-    }
+    sort_spill_context = std::make_shared<SortSpillContext>(spill_config, max_bytes_before_external_sort, log);
+    if (sort_spill_context->isSpillEnabled())
+        sort_spill_context->buildSpiller(header_without_constants);
 }
 
 
@@ -88,17 +77,14 @@ Block MergeSortingBlockInputStream::readImpl()
               *  will merge blocks that we have in memory at this moment and write merged stream to temporary (compressed) file.
               * NOTE. It's possible to check free space in filesystem.
               */
-            if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
+            if (sort_spill_context->updateRevocableMemory(sum_bytes_in_blocks))
             {
-                if (!hasSpilledData())
-                {
-                    LOG_INFO(log, "Begin spill in sort");
-                }
+                sort_spill_context->markSpill();
                 auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
                 auto is_cancelled_pred = [this]() {
                     return this->isCancelled();
                 };
-                spiller->spillBlocksUsingBlockInputStream(block_in, 0, is_cancelled_pred);
+                sort_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_in, 0, is_cancelled_pred);
                 blocks.clear();
                 if (is_cancelled)
                     break;
@@ -109,6 +95,7 @@ Block MergeSortingBlockInputStream::readImpl()
         if (isCancelledOrThrowIfKilled() || (blocks.empty() && !hasSpilledData()))
             return Block();
 
+        sort_spill_context->finishSpillableStage();
         if (!hasSpilledData())
         {
             impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
@@ -120,8 +107,8 @@ Block MergeSortingBlockInputStream::readImpl()
             LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
             /// Create sorted streams to merge.
-            spiller->finishSpill();
-            inputs_to_merge = spiller->restoreBlocks(0, 0);
+            sort_spill_context->getSpiller()->finishSpill();
+            inputs_to_merge = sort_spill_context->getSpiller()->restoreBlocks(0, 0);
 
             /// Rest of blocks in memory.
             if (!blocks.empty())

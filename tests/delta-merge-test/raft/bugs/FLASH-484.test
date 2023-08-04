@@ -14,7 +14,7 @@
 
 ## disable schema sync and automatic flush
 => DBGInvoke __enable_schema_sync_service('false')
-=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
 
 ## clean up
 => DBGInvoke __drop_tidb_table(default, test)

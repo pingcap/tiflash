@@ -77,7 +77,7 @@ struct MockWriter
         summary.scan_context->total_dmfile_skipped_packs = 2;
         summary.scan_context->total_dmfile_scanned_rows = 8000;
         summary.scan_context->total_dmfile_skipped_rows = 15000;
-        summary.scan_context->total_dmfile_rough_set_index_load_time_ns = 10;
+        summary.scan_context->total_dmfile_rough_set_index_check_time_ns = 10;
         summary.scan_context->total_dmfile_read_time_ns = 200;
         summary.scan_context->total_create_snapshot_time_ns = 5;
         summary.scan_context->total_local_region_num = 10;
@@ -217,9 +217,9 @@ struct MockReceiverContext
     struct MockAsyncGrpcExchangePacketReader
     {
         // Not implement benchmark for Async GRPC for now.
-        static void init(UnaryCallback<bool> *) { assert(0); }
-        static void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
-        static void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        static void init(GRPCKickTag *) { assert(0); }
+        static void read(TrackedMppDataPacketPtr &, GRPCKickTag *) { assert(0); }
+        static void finish(::grpc::Status &, GRPCKickTag *) { assert(0); }
         static std::shared_ptr<MockClientContext> getClientContext()
         {
             return std::make_shared<MockClientContext>();
@@ -277,7 +277,7 @@ struct MockReceiverContext
     static std::unique_ptr<AsyncReader> makeAsyncReader(
         const Request &,
         grpc::CompletionQueue *,
-        UnaryCallback<bool> *)
+        GRPCKickTag *)
     {
         return nullptr;
     }

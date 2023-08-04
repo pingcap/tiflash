@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/LocalAggregateTransform.h>
 
 #include <magic_enum.hpp>
@@ -29,14 +29,14 @@ constexpr size_t task_index = 0;
 } // namespace
 
 LocalAggregateTransform::LocalAggregateTransform(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
     const Aggregator::Params & params_)
-    : TransformOp(exec_status_, req_id)
+    : TransformOp(exec_context_, req_id)
     , params(params_)
     , agg_context(req_id)
 {
-    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
+    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -46,6 +46,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     case LocalAggStatus::build:
         if unlikely (!block)
         {
+            agg_context.getAggSpillContext()->finishSpillableStage();
             return agg_context.hasSpilledData()
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);
@@ -75,13 +76,14 @@ OperatorStatus LocalAggregateTransform::fromBuildToFinalSpillOrRestore()
     if (agg_context.needSpill(task_index, /*try_mark_need_spill=*/true))
     {
         status = LocalAggStatus::final_spill;
+        return OperatorStatus::IO_OUT;
     }
     else
     {
         restorer = agg_context.buildLocalRestorer();
         status = LocalAggStatus::restore;
+        return OperatorStatus::IO_IN;
     }
-    return OperatorStatus::IO;
 }
 
 OperatorStatus LocalAggregateTransform::tryFromBuildToSpill()
@@ -90,7 +92,7 @@ OperatorStatus LocalAggregateTransform::tryFromBuildToSpill()
     if (agg_context.needSpill(task_index))
     {
         status = LocalAggStatus::spill;
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_OUT;
     }
     return OperatorStatus::NEED_INPUT;
 }
@@ -107,7 +109,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     case LocalAggStatus::restore:
         return restorer->tryPop(block)
             ? OperatorStatus::HAS_OUTPUT
-            : OperatorStatus::IO;
+            : OperatorStatus::IO_IN;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
@@ -128,7 +130,7 @@ OperatorStatus LocalAggregateTransform::executeIOImpl()
         agg_context.spillData(task_index);
         restorer = agg_context.buildLocalRestorer();
         status = LocalAggStatus::restore;
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
     case LocalAggStatus::restore:
     {

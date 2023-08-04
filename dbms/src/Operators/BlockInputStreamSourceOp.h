@@ -28,7 +28,7 @@ class BlockInputStreamSourceOp : public SourceOp
 {
 public:
     BlockInputStreamSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const BlockInputStreamPtr & impl_);
 

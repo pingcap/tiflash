@@ -27,7 +27,10 @@ struct CPUImpl
 
     static constexpr bool is_cpu = true;
 
-    static constexpr auto TargetStatus = ExecTaskStatus::RUNNING;
+    static bool isTargetStatus(ExecTaskStatus status)
+    {
+        return status == ExecTaskStatus::RUNNING;
+    }
 
     static ExecTaskStatus exec(TaskPtr & task)
     {
@@ -43,7 +46,10 @@ struct IOImpl
 
     static constexpr bool is_cpu = false;
 
-    static constexpr auto TargetStatus = ExecTaskStatus::IO;
+    static bool isTargetStatus(ExecTaskStatus status)
+    {
+        return status == ExecTaskStatus::IO_IN || status == ExecTaskStatus::IO_OUT;
+    }
 
     static ExecTaskStatus exec(TaskPtr & task)
     {

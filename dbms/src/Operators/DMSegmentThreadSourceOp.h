@@ -31,7 +31,7 @@ class DMSegmentThreadSourceOp : public SourceOp
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const DM::DMContextPtr & dm_context_,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         DM::AfterSegmentRead after_segment_read_,

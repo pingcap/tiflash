@@ -94,9 +94,9 @@ struct MockReceiverContext
     struct MockAsyncGrpcExchangePacketReader
     {
         // Not implement benchmark for Async GRPC for now.
-        void init(UnaryCallback<bool> *) { assert(0); }
-        void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
-        void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        void init(GRPCKickTag *) { assert(0); }
+        void read(TrackedMppDataPacketPtr &, GRPCKickTag *) { assert(0); }
+        void finish(::grpc::Status &, GRPCKickTag *) { assert(0); }
     };
 
     using AsyncReader = MockAsyncGrpcExchangePacketReader;
@@ -139,7 +139,7 @@ struct MockReceiverContext
     std::unique_ptr<AsyncReader> makeAsyncReader(
         const Request &,
         grpc::CompletionQueue *,
-        UnaryCallback<bool> *) const
+        GRPCKickTag *) const
     {
         return nullptr;
     }

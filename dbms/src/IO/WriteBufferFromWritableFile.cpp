@@ -91,7 +91,6 @@ void WriteBufferFromWritableFile::sync()
 {
     next();
 
-    ProfileEvents::increment(ProfileEvents::FileFSync);
     int res = file->fsync();
     if (-1 == res)
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);

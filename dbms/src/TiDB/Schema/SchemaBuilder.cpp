@@ -85,7 +85,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
 
         for (const auto & part_def : table_info->partition.definitions)
         {
-            LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table_id);
+            LOG_DEBUG(log, "register table to table_id_map for partition table, logical_table_id={} physical_table_id={}", table_id, part_def.id);
             table_id_map.emplacePartitionTableID(part_def.id, table_id);
         }
     }
@@ -147,6 +147,8 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             applyRenamePhysicalTable(new_db_info, *new_table_info, storage);
         }
     }
+
+    GET_METRIC(tiflash_schema_internal_ddl_count, type_exchange_partition).Increment();
 }
 
 template <typename Getter, typename NameMapper>
@@ -405,6 +407,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterSchemaChange(alter_lock, updated_table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(updated_table_info), context);
 
+    GET_METRIC(tiflash_schema_internal_ddl_count, type_apply_partition).Increment();
     LOG_INFO(log, "Applied partition changes {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
@@ -473,7 +476,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     }
 
     const auto old_mapped_tbl_name = storage->getTableName();
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_column).Increment();
+    GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_table).Increment();
     LOG_INFO(
         log,
         "Renaming table {}.{} (display name: {}) to {}.",
@@ -892,50 +895,61 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     /// Create all databases.
     std::vector<DBInfoPtr> all_schemas = getter.listDBs();
 
-    // TODO:make parallel to speed up
-    std::unordered_set<String> db_set;
+    std::unordered_set<String> created_db_set;
 
+    //We can't use too large default_num_threads, otherwise, the lock grabbing time will be too much.
+    size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency());
+    auto sync_all_schema_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+    auto sync_all_schema_wait_group = sync_all_schema_thread_pool.waitGroup();
+
+    std::mutex created_db_set_mutex;
     for (const auto & db : all_schemas)
     {
-        std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-        if (databases.find(db->id) == databases.end())
-        {
-            shared_lock.unlock();
-            applyCreateSchema(db);
-            db_set.emplace(name_mapper.mapDatabaseName(*db));
-            LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
-        }
-    }
-
-    // TODO:make parallel to speed up
-    for (const auto & db : all_schemas)
-    {
-        std::vector<TableInfoPtr> tables = getter.listTables(db->id);
-        for (auto & table : tables)
-        {
-            LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
-
-            /// Ignore view and sequence.
-            if (table->is_view || table->is_sequence)
+        auto task = [this, db, &created_db_set, &created_db_set_mutex] {
             {
-                LOG_INFO(log, "Table {} is a view or sequence, ignoring.", name_mapper.debugCanonicalName(*db, *table));
-                continue;
-            }
-
-            table_id_map.emplaceTableID(table->id, db->id);
-            LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
-
-            applyCreatePhysicalTable(db, table);
-            if (table->isLogicalPartitionTable())
-            {
-                for (const auto & part_def : table->partition.definitions)
+                std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
+                if (databases.find(db->id) == databases.end())
                 {
-                    LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table->id);
-                    table_id_map.emplacePartitionTableID(part_def.id, table->id);
+                    shared_lock.unlock();
+                    applyCreateSchema(db);
+                    {
+                        std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
+                        created_db_set.emplace(name_mapper.mapDatabaseName(*db));
+                    }
+
+                    LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
                 }
             }
-        }
+
+            std::vector<TableInfoPtr> tables = getter.listTables(db->id);
+            for (auto & table : tables)
+            {
+                LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
+
+                /// Ignore view and sequence.
+                if (table->is_view || table->is_sequence)
+                {
+                    LOG_INFO(log, "Table {} is a view or sequence, ignoring.", name_mapper.debugCanonicalName(*db, *table));
+                    continue;
+                }
+
+                table_id_map.emplaceTableID(table->id, db->id);
+                LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
+
+                applyCreatePhysicalTable(db, table);
+                if (table->isLogicalPartitionTable())
+                {
+                    for (const auto & part_def : table->partition.definitions)
+                    {
+                        LOG_DEBUG(log, "register table to table_id_map for partition table, logical_table_id={} physical_table_id={}", table->id, part_def.id);
+                        table_id_map.emplacePartitionTableID(part_def.id, table->id);
+                    }
+                }
+            }
+        };
+        sync_all_schema_wait_group->schedule(task);
     }
+    sync_all_schema_wait_group->wait();
 
     // TODO:can be removed if we don't save the .sql
     /// Drop all unmapped tables.
@@ -962,7 +976,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         {
             continue;
         }
-        if (db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
+        if (created_db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
         {
             applyDropSchema(it->first);
             LOG_DEBUG(log, "DB {} dropped during sync all schemas", it->first);
@@ -1019,7 +1033,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     else
     {
         LOG_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id));
-
+        GET_METRIC(tiflash_schema_internal_ddl_count, type_modify_column).Increment();
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
 
         storage->alterSchemaChange(

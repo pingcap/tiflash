@@ -19,32 +19,28 @@
 
 #include <unordered_set>
 
-namespace Poco
+namespace Poco::Util
 {
-class Logger;
-namespace Util
-{
-class AbstractConfiguration;
-}
-} // namespace Poco
+class LayeredConfiguration;
+} // namespace Poco::Util
 
 namespace DB
 {
 struct TiFlashRaftConfig
 {
-    const std::string engine_key = "engine";
-    const std::string engine_value = "tiflash";
     Strings pd_addrs;
     std::unordered_set<std::string> ignore_databases{"system"};
 
     // The addr that is bound for flash service
     // Actually its value is read from "flash.service_addr"
     std::string flash_server_addr;
-    // The addr that other nodes connect to this tiflash
-    // Actually its value is read from "flash.proxy.advertise-engine-addr".
-    // If "flash.proxy.advertise-engine-addr" is not set, it will fall
-    // back to be the same as `flash_server_addr`.
-    std::string advertise_addr;
+    // The addr that other TiFlash nodes connect to this tiflash. Its value is set by
+    // following configurations. The previous configuration will override the later
+    // items.
+    //   - "flash.proxy.advertise-engine-addr".
+    //   - "flash.proxy.engine-addr"
+    //   - "flash_server_addr"
+    std::string advertise_engine_addr;
 
     bool for_unit_test = false;
 

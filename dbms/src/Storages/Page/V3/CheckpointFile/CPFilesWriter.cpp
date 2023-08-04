@@ -19,6 +19,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <fmt/core.h>
 
+#include <memory>
 #include <unordered_map>
 
 namespace DB::PS::V3
@@ -67,7 +68,8 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
 
 CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     universal::PageEntriesEdit & edits,
-    const CPFilesWriter::CompactOptions & options)
+    const CPFilesWriter::CompactOptions & options,
+    bool manifest_only)
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
@@ -132,6 +134,11 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         }
 
         assert(rec_edit.type == EditRecordType::VAR_ENTRY);
+        // No need to read and write page data for the manifest only checkpoint.
+        if (manifest_only)
+        {
+            continue;
+        }
         bool is_compaction = false;
         if (rec_edit.entry.checkpoint_info.has_value())
         {

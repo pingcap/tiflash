@@ -63,7 +63,7 @@ public:
         return std::make_pair(result, result);
     }
 
-    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr);
+    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr, bool enable_colors = true);
     static void setUpTestContext(Context & context, DAGContext * dag_context, MockStorage * mock_storage, const TestType & test_type);
 
     // If you want to run these tests, you should set this envrionment variablle
@@ -109,6 +109,9 @@ public:
     static bool isMockedS3Client() { return is_mocked_s3_client; }
     static bool createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client);
     static void deleteBucket(::DB::S3::TiFlashS3Client & s3_client);
+
+    static void disableS3Config();
+    static void enableS3Config();
 
     TiFlashTestEnv() = delete; // no instance allow
 

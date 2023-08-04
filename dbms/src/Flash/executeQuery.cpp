@@ -106,7 +106,6 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
-    prepareForInputStream(context, res.in);
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
@@ -175,16 +174,12 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
         RUNTIME_CHECK_MSG(
             TaskScheduler::instance,
             "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
-        RUNTIME_CHECK_MSG(
-            context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled(),
-            "The pipeline model does not support storage-computing separation with S3 mode, and an error is reported because the setting enforce_enable_pipeline is true.");
         auto res = executeAsPipeline(context, internal);
         RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
         return std::move(*res);
     }
     if (context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline
-        && (context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled()))
+        && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);

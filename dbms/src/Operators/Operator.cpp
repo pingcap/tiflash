@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/Operator.h>
 #include <Operators/OperatorHelper.h>
@@ -40,15 +40,15 @@ void Operator::operateSuffix()
     profile_info.update();
 }
 
-#define CHECK_IS_CANCELLED                                                               \
-    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel()); \
-    if (unlikely(exec_status.isCancelled()))                                             \
+#define CHECK_IS_CANCELLED                                                                \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_context.cancel()); \
+    if (unlikely(exec_context.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
 OperatorStatus Operator::await()
 {
-    // `exec_status.is_cancelled` has been checked by `EventTask`.
-    // If `exec_status.is_cancelled` is checked here, the overhead of `exec_status.is_cancelled` will be amplified by the high frequency of `await` calls.
+    // `exec_context.is_cancelled` has been checked by `EventTask`.
+    // If `exec_context.is_cancelled` is checked here, the overhead of `exec_context.is_cancelled` will be amplified by the high frequency of `await` calls.
 
     auto op_status = awaitImpl();
 #ifndef NDEBUG

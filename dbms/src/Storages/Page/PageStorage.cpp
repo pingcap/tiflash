@@ -740,7 +740,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
 
 void PageWriter::writeIntoUni(UniversalWriteBatch && write_batch, WriteLimiterPtr write_limiter) const
 {
-    uni_ps->write(std::move(write_batch), write_limiter);
+    uni_ps->write(std::move(write_batch), PageType::Normal, write_limiter);
 }
 
 PageStorageConfig PageWriter::getSettings() const

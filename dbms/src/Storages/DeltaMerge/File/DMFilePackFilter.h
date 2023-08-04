@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/S3/S3Common.h>
 
 namespace ProfileEvents
 {
@@ -146,14 +147,10 @@ private:
             {
                 handle_res[i] = RSResult::None;
             }
-            for (size_t i = 0; i < pack_count; ++i)
+            for (auto & handle_filter : handle_filters)
             {
-                for (auto & handle_filter : handle_filters)
-                {
-                    handle_res[i] = handle_res[i] || handle_filter->roughCheck(i, param);
-                    if (handle_res[i] == RSResult::All)
-                        break;
-                }
+                auto res = handle_filter->roughCheck(0, pack_count, param);
+                std::transform(handle_res.begin(), handle_res.end(), res.begin(), handle_res.begin(), [](RSResult a, RSResult b) { return a || b; });
             }
         }
 
@@ -177,7 +174,7 @@ private:
         {
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (static_cast<bool>(read_packs->count(i)));
+                use_packs[i] = (static_cast<bool>(use_packs[i])) && read_packs->contains(i);
             }
         }
 
@@ -196,10 +193,10 @@ private:
                 tryLoadIndex(attr.col_id);
             }
 
-            for (size_t i = 0; i < pack_count; ++i)
-            {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (filter->roughCheck(i, param) != None);
-            }
+            Stopwatch watch;
+            const auto check_results = filter->roughCheck(0, pack_count, param);
+            std::transform(use_packs.begin(), use_packs.end(), check_results.begin(), use_packs.begin(), [](UInt8 a, RSResult b) { return (static_cast<bool>(a)) && (b != None); });
+            scan_context->total_dmfile_rough_set_index_check_time_ns += watch.elapsed();
         }
 
         for (auto u : use_packs)
@@ -230,7 +227,8 @@ private:
                           const MinMaxIndexCachePtr & index_cache,
                           bool set_cache_if_miss,
                           ColId col_id,
-                          const ReadLimiterPtr & read_limiter)
+                          const ReadLimiterPtr & read_limiter,
+                          const ScanContextPtr & scan_context)
     {
         const auto & type = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
@@ -239,8 +237,8 @@ private:
             auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
-            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(dmfile->getReadFileInfo(col_id, dmfile->colIndexFileName(file_name_base)));
-            if (!dmfile->configuration)
+            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)), scan_context});
+            if (!dmfile->configuration) // v1
             {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
@@ -250,8 +248,46 @@ private:
                     read_limiter);
                 return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
-            else
+            else if (dmfile->useMetaV2()) // v3
             {
+                auto info = dmfile->merged_sub_file_infos.find(dmfile->colIndexFileName(file_name_base));
+                if (info == dmfile->merged_sub_file_infos.end())
+                {
+                    throw Exception(fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)), ErrorCodes::LOGICAL_ERROR);
+                }
+
+                auto file_path = dmfile->mergedPath(info->second.number);
+                auto encryp_path = dmfile->encryptionMergedPath(info->second.number);
+                auto offset = info->second.offset;
+                auto data_size = info->second.size;
+
+                auto buffer = ReadBufferFromFileProvider(
+                    file_provider,
+                    file_path,
+                    encryp_path,
+                    dmfile->getConfiguration()->getChecksumFrameLength(),
+                    read_limiter);
+                buffer.seek(offset);
+
+                String raw_data;
+                raw_data.resize(data_size);
+
+                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+
+                auto buf = createReadBufferFromData(std::move(raw_data),
+                                                    dmfile->colDataPath(file_name_base),
+                                                    dmfile->getConfiguration()->getChecksumFrameLength(),
+                                                    dmfile->configuration->getChecksumAlgorithm(),
+                                                    dmfile->configuration->getChecksumFrameLength());
+
+                auto header_size = dmfile->configuration->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+
+                return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
+            }
+            else
+            { // v2
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),
@@ -290,9 +326,9 @@ private:
             return;
 
         Stopwatch watch;
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 
-        scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();
+        scan_context->total_dmfile_rough_set_index_check_time_ns += watch.elapsed();
     }
 
 private:

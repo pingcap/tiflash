@@ -54,6 +54,7 @@ private:
     };
     Spiller * spiller;
     std::vector<std::unique_ptr<SpilledFile>> spilled_files;
+    UInt64 all_constant_block_rows = 0;
     size_t partition_id;
     Int64 current_spilled_file_index;
     String current_spill_file_name;

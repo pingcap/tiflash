@@ -243,6 +243,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         SSTViewVec{nullptr, 0},
         MockTiKV::instance().getRaftIndex(region_id),
         RAFT_INIT_LOG_TERM,
+        std::nullopt,
         tmt);
 
     output(fmt::format("put region #{}, range[{}, {}) to table #{} with raft commands", region_id, RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key), RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key), table_id));
@@ -524,7 +525,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
         {
             gc_safe_point
-                = PDClientHelper::getGCSafePointWithRetry(pd_client, false, context.getSettingsRef().safe_point_update_interval_seconds);
+                = PDClientHelper::getGCSafePointWithRetry(pd_client, keyspace_id, false, context.getSettingsRef().safe_point_update_interval_seconds);
         }
         /**
          * In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
@@ -733,6 +734,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
+        std::nullopt,
         tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
@@ -830,6 +832,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
+        std::nullopt,
         tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 

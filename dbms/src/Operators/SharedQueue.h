@@ -49,10 +49,10 @@ class SharedQueueSinkOp : public SinkOp
 {
 public:
     explicit SharedQueueSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const SharedQueuePtr & shared_queue_)
-        : SinkOp(exec_status_, req_id)
+        : SinkOp(exec_context_, req_id)
         , shared_queue(shared_queue_)
     {
     }
@@ -82,11 +82,11 @@ class SharedQueueSourceOp : public SourceOp
 {
 public:
     SharedQueueSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Block & header_,
         const SharedQueuePtr & shared_queue_)
-        : SourceOp(exec_status_, req_id)
+        : SourceOp(exec_context_, req_id)
         , shared_queue(shared_queue_)
     {
         setHeader(header_);

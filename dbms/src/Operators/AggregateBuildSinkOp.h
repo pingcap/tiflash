@@ -25,11 +25,11 @@ class AggregateBuildSinkOp : public SinkOp
 {
 public:
     AggregateBuildSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         size_t index_,
         AggregateContextPtr agg_context_,
         const String & req_id)
-        : SinkOp(exec_status_, req_id)
+        : SinkOp(exec_context_, req_id)
         , index(index_)
         , agg_context(agg_context_)
     {

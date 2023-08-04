@@ -36,17 +36,17 @@ try
         LooseBoundedMPMCQueue<size_t> queue(max_size);
         for (size_t i = 0; i < max_size; ++i)
         {
-            ASSERT_TRUE(!queue.isFull());
+            ASSERT_TRUE(queue.isWritable());
             ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
         }
-        ASSERT_TRUE(queue.isFull());
+        ASSERT_TRUE(!queue.isWritable());
         ASSERT_EQ(queue.forcePush(0 + max_size), MPMCQueueResult::OK);
-        ASSERT_TRUE(queue.isFull());
+        ASSERT_TRUE(!queue.isWritable());
         ASSERT_EQ((max_size + 1), queue.size());
 
         for (size_t i = 0; i < max_size; ++i)
             ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
-        ASSERT_TRUE(!queue.isFull());
+        ASSERT_TRUE(queue.isWritable());
         size_t i;
         ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
         ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::EMPTY);
@@ -58,15 +58,16 @@ try
         LooseBoundedMPMCQueue<size_t> queue(max_size);
         for (size_t i = 0; i < max_size; ++i)
         {
-            ASSERT_TRUE(!queue.isFull());
+            ASSERT_TRUE(queue.isWritable());
             ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
         }
-        ASSERT_TRUE(queue.isFull());
+        ASSERT_TRUE(!queue.isWritable());
         ASSERT_EQ(queue.forcePush(0 + max_size), MPMCQueueResult::OK);
-        ASSERT_TRUE(queue.isFull());
+        ASSERT_TRUE(!queue.isWritable());
         ASSERT_EQ((max_size + 1), queue.size());
 
         queue.finish();
+        ASSERT_TRUE(queue.isWritable());
         ASSERT_EQ(queue.push(0 + max_size), MPMCQueueResult::FINISHED);
         for (size_t i = 0; i < max_size; ++i)
             ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
@@ -82,15 +83,16 @@ try
         LooseBoundedMPMCQueue<size_t> queue(max_size);
         for (size_t i = 0; i < max_size; ++i)
         {
-            ASSERT_TRUE(!queue.isFull());
+            ASSERT_TRUE(queue.isWritable());
             ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
         }
-        ASSERT_TRUE(queue.isFull());
+        ASSERT_TRUE(!queue.isWritable());
         ASSERT_EQ(queue.forcePush(0 + max_size), MPMCQueueResult::OK);
-        ASSERT_TRUE(queue.isFull());
+        ASSERT_TRUE(!queue.isWritable());
         ASSERT_EQ((max_size + 1), queue.size());
 
         queue.cancel();
+        ASSERT_TRUE(queue.isWritable());
         ASSERT_EQ(queue.push(0 + max_size), MPMCQueueResult::CANCELLED);
         size_t i;
         ASSERT_EQ(queue.pop(i), MPMCQueueResult::CANCELLED);
@@ -119,7 +121,7 @@ try
                     thread_manager->schedule(false, "producer", [&]() {
                         for (size_t i = 0; i < produce_count_per_producer; ++i)
                         {
-                            while (queue.isFull())
+                            while (!queue.isWritable())
                             {
                             }
                             Int64 tmp = 0;
@@ -170,7 +172,7 @@ try
                     thread_manager->schedule(false, "producer", [&]() {
                         for (size_t i = 0; i < produce_count_per_producer; ++i)
                         {
-                            while (queue.isFull())
+                            while (!queue.isWritable())
                             {
                             }
                             Int64 tmp = 0;

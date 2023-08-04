@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class NotIn : public RSOperator
 {
     Attr attr;
@@ -47,18 +46,16 @@ public:
         return s + "]}";
     };
 
-
-    RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
+    RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        // TODO optimize for IN
-        RSResult res = !rsindex.minmax->checkEqual(pack_id, values[0], rsindex.type);
-        for (size_t i = 1; i < values.size(); ++i)
-            res = res && !rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
+        RSResults res(pack_count, RSResult::Some);
+        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res);
+        res = rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
+        // Note: Actually NotIn is not always equal to !In, like check(not in (NULL)) == check(in (NULL)) == None
+        // But it is not a problem, because we will check NULL in the filter operator.
+        std::transform(res.begin(), res.end(), res.begin(), [](RSResult result) { return !result; });
         return res;
     }
 };
 
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

@@ -99,6 +99,7 @@ struct PageStorageConfig
     SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
     SettingUInt64 blob_spacemap_type = 2;
     SettingDouble blob_heavy_gc_valid_rate = 0.5;
+    SettingDouble blob_heavy_gc_valid_rate_raft_data = 0.05;
     SettingUInt64 blob_block_alignment_bytes = 0;
 
     SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
@@ -122,6 +123,7 @@ struct PageStorageConfig
         blob_file_limit_size = rhs.blob_file_limit_size;
         blob_spacemap_type = rhs.blob_spacemap_type;
         blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
+        blob_heavy_gc_valid_rate_raft_data = rhs.blob_heavy_gc_valid_rate_raft_data;
         blob_block_alignment_bytes = rhs.blob_block_alignment_bytes;
 
         wal_roll_size = rhs.wal_roll_size;
@@ -150,11 +152,12 @@ struct PageStorageConfig
         return fmt::format(
             "PageStorageConfig {{"
             "blob_file_limit_size: {}, blob_spacemap_type: {}, "
-            "blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
-            "wal_roll_size: {}, wal_max_persisted_log_files: {}}}",
+            "blob_heavy_gc_valid_rate: {:.3f}, blob_heavy_gc_valid_rate_raft_data: {:.3f}, "
+            "blob_block_alignment_bytes: {}, wal_roll_size: {}, wal_max_persisted_log_files: {}}}",
             blob_file_limit_size.get(),
             blob_spacemap_type.get(),
             blob_heavy_gc_valid_rate.get(),
+            blob_heavy_gc_valid_rate_raft_data.get(),
             blob_block_alignment_bytes.get(),
             wal_roll_size.get(),
             wal_max_persisted_log_files.get());

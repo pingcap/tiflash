@@ -41,7 +41,7 @@ using Events = std::vector<EventPtr>;
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 struct PipelineEvents
 {
@@ -65,14 +65,14 @@ public:
 
     void addChild(const PipelinePtr & child);
 
-    void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
+    const String & toTreeString() const;
 
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
 
-    PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
+    PipelineExecGroup buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
 
-    Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
+    Events toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request, const Settings & settings);
 
@@ -88,13 +88,16 @@ public:
     ///     task2──┼──►─┼──►task2
     ///     ...    │    │   ...
     ///     taskn──┘    └──►taskm
-    EventPtr complete(PipelineExecutorStatus & exec_status);
+    EventPtr complete(PipelineExecutorContext & exec_context);
+
+    String getFinalPlanExecId() const;
 
 private:
+    void toTreeStringImpl(FmtBuffer & buffer, size_t level) const;
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    PipelineEvents toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
-    PipelineEvents doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
+    PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
+    PipelineEvents doToEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, Events & all_events);
 
 private:
     const UInt32 id;
@@ -106,5 +109,7 @@ private:
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
     std::vector<PipelinePtr> children;
+
+    mutable String tree_string;
 };
 } // namespace DB

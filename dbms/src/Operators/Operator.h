@@ -38,7 +38,8 @@ enum class OperatorStatus
     /// waiting status
     WAITING,
     /// io status
-    IO,
+    IO_IN,
+    IO_OUT,
     /// running status
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
     NEED_INPUT,
@@ -46,13 +47,13 @@ enum class OperatorStatus
     HAS_OUTPUT,
 };
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 class Operator
 {
 public:
-    Operator(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : exec_status(exec_status_)
+    Operator(PipelineExecutorContext & exec_context_, const String & req_id)
+        : exec_context(exec_context_)
         , log(Logger::get(req_id))
     {}
 
@@ -97,7 +98,7 @@ protected:
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
 protected:
-    PipelineExecutorStatus & exec_status;
+    PipelineExecutorContext & exec_context;
     const LoggerPtr log;
     Block header;
 
@@ -110,8 +111,8 @@ protected:
 class SourceOp : public Operator
 {
 public:
-    SourceOp(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : Operator(exec_status_, req_id)
+    SourceOp(PipelineExecutorContext & exec_context_, const String & req_id)
+        : Operator(exec_context_, req_id)
     {}
     // read will inplace the block when return status is HAS_OUTPUT;
     // Even after source has finished, source op still needs to return an empty block and HAS_OUTPUT,
@@ -125,8 +126,8 @@ using SourceOps = std::vector<SourceOpPtr>;
 class TransformOp : public Operator
 {
 public:
-    TransformOp(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : Operator(exec_status_, req_id)
+    TransformOp(PipelineExecutorContext & exec_context_, const String & req_id)
+        : Operator(exec_context_, req_id)
     {}
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
@@ -154,8 +155,8 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
-    SinkOp(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : Operator(exec_status_, req_id)
+    SinkOp(PipelineExecutorContext & exec_context_, const String & req_id)
+        : Operator(exec_context_, req_id)
     {}
     OperatorStatus prepare();
     virtual OperatorStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }

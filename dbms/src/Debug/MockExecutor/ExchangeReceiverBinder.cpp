@@ -51,10 +51,7 @@ bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int3
     for (size_t i = 0; i < size; ++i)
     {
         mpp::TaskMeta meta;
-        meta.set_start_ts(mpp_info.start_ts);
-        meta.set_query_ts(mpp_info.query_ts);
-        meta.set_server_id(mpp_info.server_id);
-        meta.set_local_query_id(mpp_info.local_query_id);
+        fillTaskMetaWithMPPInfo(meta, mpp_info);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
         auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[i].addr : Debug::LOCAL_HOST;

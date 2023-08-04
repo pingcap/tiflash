@@ -57,11 +57,11 @@ public:
         const pingcap::kv::Cluster * cluster;
     };
 
-    explicit RNWorkers(const Options & options);
+    explicit RNWorkers(const Context & context, const Options & options, size_t num_streams);
 
-    static RNWorkersPtr create(const Options & options)
+    static RNWorkersPtr create(const Context & context, const Options & options, size_t num_streams)
     {
-        return std::make_shared<RNWorkers>(options);
+        return std::make_shared<RNWorkers>(context, options, num_streams);
     }
 
 private:

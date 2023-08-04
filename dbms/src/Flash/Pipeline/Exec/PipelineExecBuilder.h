@@ -56,11 +56,15 @@ public:
 
     void addGroup() { groups.emplace_back(); }
 
+    size_t groupCnt() const { return groups.size(); }
+
     size_t concurrency() const { return getCurGroup().size(); }
 
     bool empty() const { return getCurGroup().empty(); }
 
     void addConcurrency(SourceOpPtr && source);
+
+    void addConcurrency(PipelineExecBuilder && exec_builder);
 
     void reset();
 

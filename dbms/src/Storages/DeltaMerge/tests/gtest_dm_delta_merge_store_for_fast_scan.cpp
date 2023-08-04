@@ -204,6 +204,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -211,6 +212,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -224,6 +226,7 @@ try
             break;
         }
         case TestMode::V2_Mix: // disk + memory
+        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -258,6 +261,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
@@ -266,6 +270,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -285,6 +290,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             // persist first, then memory, finally stable
             auto pk_coldata = []() {
@@ -325,6 +331,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -332,6 +339,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -345,6 +353,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -382,6 +391,8 @@ try
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
         case TestMode::V2_FileOnly:
+        case TestMode::V3_BlockOnly:
+        case TestMode::V3_FileOnly:
         {
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
@@ -390,6 +401,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -432,6 +444,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -439,6 +452,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -452,6 +466,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -490,6 +505,8 @@ try
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
         case TestMode::V2_FileOnly:
+        case TestMode::V3_BlockOnly:
+        case TestMode::V3_FileOnly:
         {
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
@@ -498,6 +515,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -540,6 +558,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -547,6 +566,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -560,6 +580,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -622,6 +643,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -629,6 +651,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -640,6 +663,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -678,6 +702,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -699,6 +724,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -718,6 +744,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1014,6 +1041,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -1021,6 +1049,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -1032,6 +1061,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -1078,6 +1108,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1099,6 +1130,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1118,6 +1150,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto pk_coldata = []() {
                 std::vector<Int64> res;
@@ -1176,6 +1209,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:

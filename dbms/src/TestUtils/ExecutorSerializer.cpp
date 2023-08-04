@@ -86,6 +86,10 @@ void serializeExpression(const tipb::Expr & expr, FmtBuffer & buf)
             ", ");
         buf.append(")");
     }
+    else if (isLiteralExpr(expr))
+    {
+        buf.fmtAppend("<{}, {}>", decodeLiteral(expr).toString(), getFieldTypeName(expr.field_type().tp()));
+    }
     else
     {
         buf.fmtAppend("<{}, {}>", decodeDAGInt64(expr.val()), getFieldTypeName(expr.field_type().tp()));
@@ -158,6 +162,27 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, FmtBuff
         },
         ", ");
     buf.fmtAppend("}}, limit: {}\n", top_n.limit());
+}
+
+void serializeExpand2Source(const String & executor_id, const tipb::Expand2 & expand2, FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | expand projection: ", executor_id);
+    buf.append("[");
+    buf.joinStr(
+        expand2.proj_exprs().begin(),
+        expand2.proj_exprs().end(),
+        [](const auto & item, FmtBuffer & buf1) {
+            // for every level-projection, make it as string too.
+            buf1.append("[");
+            buf1.joinStr(
+                item.exprs().begin(),
+                item.exprs().end(),
+                [](const auto & item2, FmtBuffer & buf2) { serializeExpression(item2, buf2); },
+                ", ");
+            buf1.append("]");
+        },
+        ", ");
+    buf.append("]\n");
 }
 
 void serializeExpandSource(const String & executor_id, const tipb::Expand & expand, FmtBuffer & buf)
@@ -310,6 +335,9 @@ void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_reques
         case tipb::ExecType::TypeExpand:
             serializeExpandSource("Expand", executor.expand(), buf);
             break;
+        case tipb::ExecType::TypeExpand2:
+            serializeExpand2Source(executor.executor_id(), executor.expand2(), buf);
+            break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }
@@ -369,6 +397,9 @@ void ExecutorSerializer::serializeTreeStruct(const tipb::Executor & root_executo
             break;
         case tipb::ExecType::TypeExpand:
             serializeExpandSource(executor.executor_id(), executor.expand(), buf);
+            break;
+        case tipb::ExecType::TypeExpand2:
+            serializeExpand2Source(executor.executor_id(), executor.expand2(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);

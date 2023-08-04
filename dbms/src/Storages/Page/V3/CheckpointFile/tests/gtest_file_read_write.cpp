@@ -385,7 +385,11 @@ try
 {
     const auto delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(std::vector{dir});
     const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
-    auto blob_store = BlobStore<universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, BlobConfig{});
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = 0.5}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = 0.01}},
+    };
+    auto blob_store = BlobStore<universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, BlobConfig{}, page_type_and_config);
 
     auto edits = universal::PageEntriesEdit{};
     {
@@ -393,7 +397,7 @@ try
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         wb.delPage("id_bar");
         wb.putPage("page_abc", 0, "Dreamed of the day that she was born");
-        auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
+        auto blob_store_edits = blob_store.write(std::move(wb));
 
         ASSERT_EQ(blob_store_edits.size(), 3);
 

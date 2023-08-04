@@ -93,4 +93,27 @@ createWriteBufferFromFileBaseByFileProvider(
     throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }
 
+
+std::unique_ptr<WriteBufferFromFileBase>
+createWriteBufferFromFileBaseByWriterBuffer(
+    std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size)
+{
+    auto file_ptr = writer_buffer->file;
+    switch (checksum_algorithm)
+    {
+    case ChecksumAlgo::None:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::None>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::CRC32:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::CRC32>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::CRC64:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::CRC64>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::City128:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::City128>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::XXH3:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::XXH3>>(file_ptr, checksum_frame_size);
+    }
+    throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
+}
 } // namespace DB

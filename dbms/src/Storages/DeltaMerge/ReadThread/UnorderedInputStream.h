@@ -14,17 +14,11 @@
 
 #pragma once
 
-#include <Common/FailPoint.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-
-namespace DB::FailPoints
-{
-extern const char pause_when_reading_from_dt_stream[];
-}
 
 namespace DB::DM
 {
@@ -89,7 +83,6 @@ protected:
         addReadTaskPoolToScheduler();
         while (true)
         {
-            FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
             Block res;
             task_pool->popBlock(res);
             if (res)

@@ -28,7 +28,6 @@ namespace DB
 {
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
-    M(exception_between_alter_data_and_meta)                      \
     M(exception_drop_table_during_remove_meta)                    \
     M(exception_between_rename_table_data_and_metadata)           \
     M(exception_between_create_database_meta_and_directory)       \
@@ -39,12 +38,14 @@ namespace DB
     M(exception_before_dmfile_remove_from_disk)                   \
     M(force_triggle_background_merge_delta)                       \
     M(force_triggle_foreground_flush)                             \
+    M(exception_before_mpp_make_non_root_mpp_task_active)         \
     M(exception_before_mpp_register_non_root_mpp_task)            \
     M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_before_mpp_non_root_task_run)                     \
     M(exception_during_mpp_non_root_task_run)                     \
     M(exception_during_query_run)                                 \
+    M(exception_before_mpp_make_root_mpp_task_active)             \
     M(exception_before_mpp_register_root_mpp_task)                \
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \
@@ -67,7 +68,8 @@ namespace DB
     M(force_owner_mgr_state)                                      \
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
-    M(force_remote_read_for_batch_cop_once)
+    M(force_remote_read_for_batch_cop_once)                       \
+    M(exception_new_dynamic_thread)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -109,7 +111,8 @@ namespace DB
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
     M(pause_after_copr_streams_acquired_once)  \
-    M(pause_before_register_non_root_mpp_task)
+    M(pause_before_register_non_root_mpp_task) \
+    M(pause_before_make_non_root_mpp_task_active)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \

@@ -92,6 +92,32 @@ void RNLocalPageCache::write(const PageOID & oid, std::string_view data, const P
     write(oid, read_buf, data.size(), field_sizes);
 }
 
+void RNLocalPageCache::write(UniversalWriteBatch && wb)
+{
+    if (max_size > 0)
+    {
+        const auto & writes = wb.getWrites();
+        std::unique_lock lock(mu);
+        for (const auto & w : writes)
+        {
+            const auto & itr = occupied_keys.find(w.page_id);
+            RUNTIME_CHECK_MSG(
+                itr != occupied_keys.end(),
+                "Page {} was not occupied before writing",
+                w.page_id);
+            RUNTIME_CHECK_MSG(
+                itr->second.size == w.size,
+                "Page {} write size is different to occupy size, write_size={} occupy_size={}",
+                w.page_id,
+                w.size,
+                itr->second.size);
+        }
+    }
+    GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment(wb.getWrites().size());
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(wb.getTotalDataSize());
+    storage->write(std::move(wb));
+}
+
 Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & indices)
 {
     auto key = buildCacheId(oid);
@@ -248,7 +274,7 @@ void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64
     cv.notify_all();
 }
 
-RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes)
+RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes, ScanContextPtr scan_context)
 {
     RUNTIME_CHECK(pages.size() == page_sizes.size(), pages.size(), page_sizes.size());
     const size_t n = pages.size();
@@ -350,8 +376,12 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
         // Pages may be occupied but not written yet, so we always return missing pages according
         // to the storage.
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
+        {
+            scan_context->total_disagg_read_cache_hit_size += page_sizes[i];
             continue;
+        }
         missing_ids.push_back(pages[i]);
+        scan_context->total_disagg_read_cache_miss_size += page_sizes[i];
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());

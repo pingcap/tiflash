@@ -77,7 +77,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
                         /// They must be performed synchronously,
                         /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                         // GC safe point must be obtained ahead of syncing schema.
-                        auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+                        auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
                         stage = "Sync schemas";
                         done_anything = syncSchemas(keyspace);
                         if (done_anything)
@@ -130,6 +130,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         keyspace_handle_iter = keyspace_handle_map.erase(keyspace_handle_iter);
 
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
+        PDClientHelper::remove_ks_gc_sp(keyspace);
     }
 }
 

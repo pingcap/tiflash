@@ -207,10 +207,14 @@ void TiFlashTestEnv::shutdown()
     }
 }
 
-void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
+void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os, bool enable_colors)
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
-    Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<true>());
+    Poco::AutoPtr<Poco::Formatter> formatter;
+    if (enable_colors)
+        formatter = new UnifiedLogFormatter<true>();
+    else
+        formatter = new UnifiedLogFormatter<false>();
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
@@ -292,4 +296,14 @@ void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
     }
 }
 
+
+void TiFlashTestEnv::disableS3Config()
+{
+    DB::S3::ClientFactory::instance().disable();
+}
+
+void TiFlashTestEnv::enableS3Config()
+{
+    DB::S3::ClientFactory::instance().enable();
+}
 } // namespace DB::tests

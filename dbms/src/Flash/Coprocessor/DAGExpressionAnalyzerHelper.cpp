@@ -415,7 +415,12 @@ String DAGExpressionAnalyzerHelper::buildGroupingFunction(
         argument_names.push_back(name);
     }
 
+    // Get the result by function name and parameters is **NOT** enough, grouping functions like: grouping(a) and grouping(b) will be rewritten as the same signature:
+    //  grouping(gid), grouping(gid) with different metadata.
+    // In TiDB, we don't reuse the action by the signature name, while TiFlash does, we should distinguish different grouping function out from their metadata.
     String result_name = genFuncString(func_name, argument_names, {getCollatorFromExpr(expr)});
+    // grouping function's metadata has naturally been encoded as proto-message as string, just appending them to the result name as new grouping functions' result_name.
+    result_name += expr.val();
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
