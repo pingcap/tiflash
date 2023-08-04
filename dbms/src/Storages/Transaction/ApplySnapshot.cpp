@@ -399,7 +399,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             stream->writeSuffix();
             if (stream->isAbort())
             {
-                LOG_INFO(log, "Cancel stream because of upper layer abort [region_id={}]", region_id);
+                LOG_INFO(log, "Apply snapshot is aborted, cancelling. region_id={} term={} index={}", region_id, term, index);
                 stream->cancel();
             }
             generated_ingest_ids = stream->outputFiles();
