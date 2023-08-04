@@ -76,5 +76,8 @@ try
     }
 }
 CATCH
+
+// TODO(proactive flush)
+
 } // namespace tests
 } // namespace DB
