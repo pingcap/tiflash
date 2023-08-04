@@ -1563,6 +1563,7 @@ typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(
         auto * w = *iter;
         first->edit->merge(std::move(*(w->edit)));
         last_writer = w;
+        w->edit->clear();
     }
     return last_writer;
 }
@@ -1607,6 +1608,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         return {};
     }
     auto * last_writer = buildWriteGroup(&w, apply_lock);
+    LOG_DEBUG(log, "WriteGroup: leader built, batch={}", w.edit->size());
     apply_lock.unlock();
     SYNC_FOR("before_PageDirectory::leader_apply");
 
@@ -1651,7 +1653,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         r.version = PageVersion(max_sequence, 0);
     }
 
-    wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
+    auto ser_edit = Trait::Serializer::serializeTo(edit);
+    LOG_DEBUG(log, "WriteGroup: leader edit bytes={}", ser_edit.size());
+    wal->apply(std::move(ser_edit), write_limiter);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
     watch.restart();
     SCOPE_EXIT(

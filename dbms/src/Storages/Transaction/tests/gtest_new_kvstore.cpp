@@ -259,7 +259,7 @@ try
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
 
             kvr1->markCompactLog(applied_index + 1);
-            kvs.setRegionCompactLogConfig(0, 0, 0);
+            kvs.setRegionCompactLogConfig(0, 0, 0, 256);
             auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
             auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));
             // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
@@ -387,7 +387,7 @@ try
             EngineStoreApplyRes::None);
 
         {
-            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+            kvs.setRegionCompactLogConfig(0, 0, 0, 256);
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
             ASSERT_EQ(
                 kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 26, 6, ctx.getTMTContext()),

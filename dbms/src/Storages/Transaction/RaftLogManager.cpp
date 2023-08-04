@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -157,14 +158,20 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
             num_raft_log_removed,
             watch.elapsedSecondsFromLastTime());
     }
+
+    const double cost_seconds = watch.elapsedSeconds();
+    const size_t num_process_regions = hints.size() - num_skip;
+    GET_METRIC(tiflash_raft_eager_gc_duration_seconds, type_run).Observe(cost_seconds);
+    GET_METRIC(tiflash_raft_eager_gc_count, type_num_raft_logs).Increment(total_num_raft_log_removed);
+    GET_METRIC(tiflash_raft_eager_gc_count, type_num_regions).Increment(num_process_regions);
     LOG_INFO(
         logger,
         "Eager raft log gc round done, "
         "n_hints={} n_regions={} n_removed_logs={} cost={:.3f}s",
         hints.size(),
-        hints.size() - num_skip,
+        num_process_regions,
         total_num_raft_log_removed,
-        watch.elapsedSeconds());
+        cost_seconds);
     return eager_truncated_indexes;
 }
 

@@ -36,7 +36,7 @@ try
         // test CompactLog
         auto region = kvs.getRegion(1);
         region->markCompactLog(region->appliedIndex());
-        kvs.setRegionCompactLogConfig(100000, 1000, 1000, 0);
+        kvs.setRegionCompactLogConfig(100000, 1000, 1000, 256);
 
         raft_cmdpb::AdminRequest request;
         request.mutable_compact_log();
