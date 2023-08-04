@@ -72,9 +72,7 @@ struct RowKeyValue
         : is_common_handle(is_common_handle_)
         , value(value_)
         , int_value(int_value_)
-    {
-        RUNTIME_CHECK_MSG(is_common_handle || value->size() == sizeof(Int64), "Invalid int handle value {}", Redact::keyToHexString(value->data(), value->size()));
-    }
+    {}
 
     RowKeyValue(bool is_common_handle_, HandleValuePtr value_)
         : is_common_handle(is_common_handle_)
