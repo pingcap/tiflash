@@ -495,7 +495,6 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(const Region
 void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
 {
     UNUSED(tmt);
-    auto lock = prehandling_trace.genLockGuard();
     auto task = prehandling_trace.deregisterTask(region_id);
     if (task)
     {
