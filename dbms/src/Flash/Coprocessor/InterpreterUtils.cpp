@@ -387,7 +387,7 @@ void executePushedDownFilter(
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
         stream->setExtraInfo("projection after push down filter");
-    };
+    }
 }
 
 void executePushedDownFilter(
