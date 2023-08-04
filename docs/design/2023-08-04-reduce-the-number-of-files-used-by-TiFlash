@@ -1,0 +1,21 @@
+# Reduce the number of files used by TiFlash
+
+- Author: [Yunyan Hong](https://github.com/hongyunyan)
+
+## Introduction
+
+This RFC introduces a new DMFile format V3, which merging the small files among DMFiles to cut down the number of inodes.
+
+## Background
+
+Currently, for each section in DMFile we generate a separate file. Specifically, for each column, it will contain `x.dat`, `x.mrk`, `x.null.dat`, `x.null.mrk` (if the data type for this column is nullable) and `x.idx` (if the column has min-max index). So when the table has many columns, each dmfile contains quite a number of files, which will lead to exhaustion of the number of inodes before filling the disk.
+
+Therefore, we consider merging the small files in DMFiles to cut down the number of inode and enhance TiFlash availability.
+
+## Detailed Desgin
+
+For these files in DMFiles, `x.idx`, `x.null.mrk`, `x.mrk` are always very small, stablely less than 4KB. Besides, when the table contains tiny data,  the file sizes of `x.dat` and `x.null.dat` are also very small. Therefore, for each DMFile, we can always merge `x.idx`, `x.null.mrk` and `x.mrk` together. For `x.dat` and `x.null.dat`, we can decide whether they should be merged based on their actual file size with our min file size threshold. 
+
+Furthermore, we do not merge the files of each column individually, but merge all the small files of each column collectively. In order to avoid the merged file being too large, we will set a max file size threshold. When the merged file reaches the threshold, we will close this merged file and write it into the next merged file.
+
+When upgrade the TiFlash version, we directly support the upgraded TiFlash to read the old version DMFiles and write into new version DMFiles when do compaction later. To downgrade the TiFlash version, we support a `DTTool` to support rewriting the new version DMFiles to old versions offline.
