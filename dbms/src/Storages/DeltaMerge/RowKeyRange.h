@@ -72,7 +72,9 @@ struct RowKeyValue
         : is_common_handle(is_common_handle_)
         , value(value_)
         , int_value(int_value_)
-    {}
+    {
+        RUNTIME_CHECK_MSG(is_common_handle || value->size() == sizeof(Int64), "Invalid int handle value {}", Redact::keyToHexString(value->data(), value->size()));
+    }
 
     RowKeyValue(bool is_common_handle_, HandleValuePtr value_)
         : is_common_handle(is_common_handle_)
@@ -84,6 +86,21 @@ struct RowKeyValue
         {
             size_t cursor = 0;
             int_value = DB::DecodeInt64(cursor, *value);
+            if (unlikely(value->size() != sizeof(Int64)))
+            {
+                // For int type handle, the standard key enconding format should be t{table_id}_r{handle_value}.
+                // But TiKV may generate region range keys which are not strictly following the standard format.
+                // More concretely, the key may be t{table_id}_r{handle_value} + some other bytes.
+                // We need to adapt the key to the standard format.
+                // For example, the key may be t100_r1000 + 0x00, we need to adapt it to t100_r1001.
+                // This is ok, because
+                //  1) if the key is the start range, then [t100_r1000 + 0x00, xxx) has the same semantics with [t100_r1001, xxx)
+                //  1) if the key is the end range, then [xxx, t100_r1000 + 0x00) also has the same semantics with [xxx, t100_r1001)
+                int_value = int_value + 1;
+                WriteBufferFromOwnString ss;
+                DB::EncodeInt64(int_value, ss);
+                value = std::make_shared<String>(ss.releaseStr());
+            }
         }
     }
 
