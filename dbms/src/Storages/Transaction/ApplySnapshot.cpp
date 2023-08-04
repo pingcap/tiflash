@@ -478,15 +478,15 @@ template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWit
 template <>
 void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles & s, TMTContext & tmt)
 {
-    auto & storage = tmt.getStorages();
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = s.base->getKeyspaceID();
     auto table_id = s.base->getMappedTableID();
-    auto ks_id = s.base->getKeyspaceID();
-    auto istore = storage.get(ks_id, table_id);
-    if (istore->engineType() != TiDB::StorageEngine::DT)
+    auto storage = storages.get(keyspace_id, table_id);
+    if (storage->engineType() != TiDB::StorageEngine::DT)
     {
         return;
     }
-    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(istore);
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
     LOG_INFO(log, "Release prehandled snapshot, clean {} dmfiles, region_id={} keyspace={} table_id={}", s.external_files.size(), s.base->id(), keyspace_id, table_id);
     auto & context = tmt.getContext();
     dm_storage->cleanPreIngestFiles(s.external_files, context.getSettingsRef());
