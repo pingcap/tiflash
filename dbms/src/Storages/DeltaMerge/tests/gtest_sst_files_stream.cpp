@@ -345,7 +345,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
-    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto abort_flag = std::make_shared<std::atomic_bool>(false);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
