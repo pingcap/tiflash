@@ -46,10 +46,7 @@ extern const int TABLE_IS_DROPPED;
 namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
-extern const char pause_proactive_flush_before_persist_region[];
 extern const char pause_passive_flush_before_persist_region[];
-extern const char proactive_flush_between_persist_cache_and_region[];
-extern const char proactive_flush_between_persist_regions[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)

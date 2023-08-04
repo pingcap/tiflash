@@ -100,8 +100,6 @@ namespace DB
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
-    M(proactive_flush_between_persist_cache_and_region)      \
-    M(proactive_flush_between_persist_regions)               \
     M(exception_when_fetch_disagg_pages)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -123,7 +121,6 @@ namespace DB
     M(pause_when_altering_dt_store)                \
     M(pause_after_copr_streams_acquired)           \
     M(pause_query_init)                            \
-    M(pause_proactive_flush_before_persist_region) \
     M(pause_passive_flush_before_persist_region)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \

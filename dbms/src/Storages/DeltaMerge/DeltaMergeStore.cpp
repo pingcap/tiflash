@@ -100,7 +100,6 @@ extern const char random_exception_after_dt_write_done[];
 extern const char force_slow_page_storage_snapshot_release[];
 extern const char exception_before_drop_segment[];
 extern const char exception_after_drop_segment[];
-extern const char pause_proactive_flush_before_persist_region[];
 extern const char proactive_flush_force_set_type[];
 } // namespace FailPoints
 

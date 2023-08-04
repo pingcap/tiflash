@@ -54,10 +54,8 @@ namespace FailPoints
 {
 extern const char skip_check_segment_update[];
 extern const char force_fail_in_flush_region_data[];
-extern const char pause_proactive_flush_before_persist_region[];
 extern const char proactive_flush_force_set_type[];
 extern const char pause_passive_flush_before_persist_region[];
-extern const char proactive_flush_between_persist_cache_and_region[];
 } // namespace FailPoints
 
 namespace RegionBench
