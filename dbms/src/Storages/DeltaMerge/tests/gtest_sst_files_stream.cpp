@@ -519,6 +519,7 @@ try
     });
     sp.waitAndPause();
     abort_flag->store(true, std::memory_order_seq_cst);
+    sp.next();
     sp.disable();
     t.join();
     stream->writeSuffix();
