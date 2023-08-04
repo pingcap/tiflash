@@ -136,7 +136,7 @@ try
             statistics_collector.fillExecuteSummaries(*cop_response);
         }
     }
-    else if (Kind == CoprocessorKind::CopStream)
+    else if constexpr (Kind == CoprocessorKind::CopStream)
     {
         auto streaming_writer = std::make_shared<CopStreamWriter>(cop_writer);
         TiDB::TiDBCollators collators;
@@ -166,7 +166,7 @@ try
         if (need_send)
             streaming_writer->write(last_response);
     }
-    else if (Kind == CoprocessorKind::BatchCop)
+    else if constexpr (Kind == CoprocessorKind::BatchCop)
     {
         if (!dag_context.retry_regions.empty())
         {
