@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -47,6 +49,8 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     FileConvertJobType job_type_,
     UInt64 split_after_rows_,
     UInt64 split_after_size_,
+    UInt64 region_id_,
+    std::shared_ptr<std::atomic_bool> abort_flag_,
     Context & context_)
     : child(std::move(child_))
     , storage(std::move(storage_))
@@ -54,6 +58,8 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , job_type(job_type_)
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
+    , region_id(region_id_)
+    , abort_flag(abort_flag_)
     , context(context_)
     , log(Logger::get(log_prefix_))
 {
@@ -222,6 +228,11 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
     size_t cur_deleted_rows = 0;
     while (true)
     {
+        if (abort_flag->load(std::memory_order_seq_cst))
+        {
+            break;
+        }
+        SYNC_FOR("before_SSTFilesToDTFilesOutputStream::handle_one");
         Block block = child->read();
         if (!block)
             break;
@@ -334,6 +345,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
             tryLogCurrentException(log, fmt::format("ignore exception while canceling SST files to DeltaTree files stream [file={}]", file->path()));
         }
     }
+    ingest_files.clear();
 }
 
 template <typename ChildStream>
