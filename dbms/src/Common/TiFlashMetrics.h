@@ -146,9 +146,7 @@ namespace DB
         F(type_compact_log_segment_bg, {"type", "compact_log_segment_bg"}),                                                                         \
         F(type_compact_log_segment_fg, {"type", "compact_log_segment_fg"}),                                                                         \
         F(type_compact_log_region_bg, {"type", "compact_log_region_bg"}),                                                                           \
-        F(type_compact_log_region_fg, {"type", "compact_log_region_fg"}),                                                                           \
-        F(type_compact_log_segment_bg_breakdown_kvs, {"type", "compact_log_segment_bg_breakdown_kvs"}),                                             \
-        F(type_compact_log_segment_fg_breakdown_kvs, {"type", "compact_log_segment_fg_breakdown_kvs"}))                                             \
+        F(type_compact_log_region_fg, {"type", "compact_log_region_fg"}))                                                                           \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                                     \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
         F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                       \
@@ -163,10 +161,8 @@ namespace DB
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_compact_log_bg, {{"type", "compact_log_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
         F(type_compact_log_fg, {{"type", "compact_log_fg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-        F(type_compact_log_fg_breakdown_kvs, {{"type", "compact_log_fg_breakdown_kvs"}}, ExpBuckets{0.001, 2, 20}),                                 \
-        F(type_compact_log_fg_breakdown_dm, {{"type", "compact_log_fg_breakdown_dm"}}, ExpBuckets{0.001, 2, 20}),                                   \
-        F(type_compact_log_bg_breakdown_kvs, {{"type", "compact_log_bg_breakdown_kvs"}}, ExpBuckets{0.001, 2, 20}),                                 \
-        F(type_compact_log_bg_breakdown_dm, {{"type", "compact_log_bg_breakdown_dm"}}, ExpBuckets{0.001, 2, 20}))                                   \
+        F(type_compact_log_fg_dm, {{"type", "compact_log_fg_dm"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+        F(type_compact_log_bg_dm, {{"type", "compact_log_bg_dm"}}, ExpBuckets{0.001, 2, 20}))                                                       \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                              \
         F(type_write, {"type", "write"}),                                                                         /**/                              \
         F(type_ingest, {"type", "ingest"}),                                                                       /**/                              \
@@ -272,7 +268,8 @@ namespace DB
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}),                                                                            \
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                              \
     M(tiflash_raft_raft_log_lag_count, "Bucketed histogram raft index lag", Histogram,                                                              \
-        F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}))                                                           \
+        F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}),                                                           \
+        F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 200, 5}))                                                           \
     M(tiflash_raft_raft_events_count, "Raft event counter", Counter,                                                                                \
         F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}),                                                                                   \
         F(type_flush_apply_snapshot, {{"type", "flush_apply_snapshot"}}),                                                                           \
@@ -285,6 +282,9 @@ namespace DB
         F(type_flush_size, {{"type", "flush_size"}}),                                                                                               \
         F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                                       \
         F(type_exec_compact, {{"type", "exec_compact"}}))                                                                                           \
+    M(tiflash_raft_region_flush_size, "Bucketed histogram of region flushed size", Histogram,                                                       \
+        F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 16}),                                                                              \
+        F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 16}))                                                                          \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                              \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                                        \

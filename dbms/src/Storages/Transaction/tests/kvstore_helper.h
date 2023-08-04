@@ -16,6 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Interpreters/Context.h>

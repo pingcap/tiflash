@@ -14,6 +14,7 @@
 
 #include "kvstore_helper.h"
 
+
 namespace DB
 {
 namespace tests
@@ -90,6 +91,7 @@ std::tuple<uint64_t, uint64_t, uint64_t> RegionKVStoreTest::prepareForProactiveF
     UInt64 region_id2 = 7;
     TableID table_id;
     KVStore & kvs = getKVS();
+    ctx.getTMTContext().debugSetKVStore(kvstore);
     MockRaftStoreProxy::FailCond cond;
     {
         initStorages();
@@ -272,14 +274,14 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ProactiveFlushRecover)
+TEST_F(RegionKVStoreTest, ProactiveFlushRecover1)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();
+    // Safe to abort between flushCache and persistRegion.
     DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_force_set_type, ai);
     {
-        // Safe to abort between flushing regions.
         auto tp = prepareForProactiveFlushTest();
         auto table_id = std::get<0>(tp);
         auto region_id = std::get<1>(tp);
@@ -334,9 +336,7 @@ try
             ASSERT_EQ(kvr2->appliedIndex(), r2->getLatestAppliedIndex());
         }
     }
-    {
-        // Safe to abort between flushCache and persistRegion.
-    }
+
     DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_force_set_type);
 }
 CATCH
