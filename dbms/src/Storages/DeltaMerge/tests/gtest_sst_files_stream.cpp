@@ -422,7 +422,7 @@ try
     auto blocks2 = prepareBlocks(0, 30, /*block_size=*/20);
     blocks1.insert(blocks1.end(), blocks2.begin(), blocks2.end());
     auto mock_stream = makeMockChild(blocks1);
-    std::shared_ptr<std::atomic_bool> abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto abort_flag = std::make_shared<std::atomic_bool>(false);
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
