@@ -46,7 +46,7 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
 
     auto & tmt_context = context->getTMTContext();
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_DEBUG(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    LOG_INFO(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
 
     // set schema ver and start ts
     auto schema_ver = request->schema_ver();

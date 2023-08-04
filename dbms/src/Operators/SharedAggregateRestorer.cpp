@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/SharedAggregateRestorer.h>
@@ -20,11 +20,11 @@
 namespace DB
 {
 SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const BlockInputStreams & bucket_streams,
     const String & req_id,
     size_t max_queue_size_)
-    : exec_status(exec_status_)
+    : exec_context(exec_context_)
     , log(Logger::get(req_id))
     , max_queue_size(std::max(1, max_queue_size_))
 {
@@ -32,15 +32,15 @@ SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
         bucket_inputs.emplace_back(bucket_stream);
     RUNTIME_CHECK(!bucket_inputs.empty());
 
-    exec_status.onEventSchedule();
+    exec_context.incActiveRefCount();
 }
 
 SharedSpilledBucketDataLoader::~SharedSpilledBucketDataLoader()
 {
     bucket_data_queue = {};
     bucket_inputs.clear();
-    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
-    exec_status.onEventFinish();
+    // In order to ensure that `PipelineExecutorContext` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
+    exec_context.decActiveRefCount();
 }
 
 bool SharedSpilledBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)
@@ -66,7 +66,7 @@ void SharedSpilledBucketDataLoader::storeBucketData()
     RUNTIME_CHECK(status == SharedLoaderStatus::loading);
 
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
-    if unlikely (exec_status.isCancelled())
+    if unlikely (exec_context.isCancelled())
         return;
 
     // get min bucket num.
@@ -96,19 +96,18 @@ void SharedSpilledBucketDataLoader::loadBucket()
 {
     RUNTIME_CHECK(status == SharedLoaderStatus::loading);
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
-    if unlikely (exec_status.isCancelled())
+    if unlikely (exec_context.isCancelled())
         return;
 
     RUNTIME_CHECK(!bucket_inputs.empty());
-    auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-    auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
+    auto event = std::make_shared<LoadBucketEvent>(exec_context, log->identifier(), shared_from_this());
     RUNTIME_CHECK(event->prepare());
     event->schedule();
 }
 
 bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
-    if unlikely (exec_status.isCancelled())
+    if unlikely (exec_context.isCancelled())
         return true;
 
     bool result = true;

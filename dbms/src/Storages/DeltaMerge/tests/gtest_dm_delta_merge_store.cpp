@@ -77,6 +77,12 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
         return "V2_FileOnly";
     case TestMode::V2_Mix:
         return "V2_Mix";
+    case TestMode::V3_BlockOnly:
+        return "V3_BlockOnly";
+    case TestMode::V3_FileOnly:
+        return "V3_FileOnly";
+    case TestMode::V3_Mix:
+        return "V3_Mix";
     default:
         return "Unknown";
     }
@@ -431,6 +437,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -517,6 +524,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -773,6 +781,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
             store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
@@ -854,6 +863,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -861,6 +871,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -874,6 +885,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -928,6 +940,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
         {
             store->write(*db_context, db_context->getSettingsRef(), block1);
             store->write(*db_context, db_context->getSettingsRef(), block2);
@@ -935,6 +948,7 @@ try
             break;
         }
         case TestMode::V2_FileOnly:
+        case TestMode::V3_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -946,6 +960,7 @@ try
             break;
         }
         case TestMode::V2_Mix:
+        case TestMode::V3_Mix:
         {
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
@@ -1529,12 +1544,15 @@ try
             {
             case TestMode::V1_BlockOnly:
             case TestMode::V2_BlockOnly:
+            case TestMode::V3_BlockOnly:
                 store->write(*db_context, settings, block);
                 break;
             case TestMode::V2_FileOnly:
+            case TestMode::V3_FileOnly:
                 write_as_file();
                 break;
             case TestMode::V2_Mix:
+            case TestMode::V3_Mix:
             {
                 if ((random() % 2) == 0)
                 {
@@ -3001,7 +3019,7 @@ CATCH
 INSTANTIATE_TEST_CASE_P(
     TestMode,
     DeltaMergeStoreRWTest,
-    testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
+    testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix, TestMode::V3_BlockOnly, TestMode::V3_FileOnly, TestMode::V3_Mix),
     testModeToString);
 
 

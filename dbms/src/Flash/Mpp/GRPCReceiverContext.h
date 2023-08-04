@@ -14,12 +14,10 @@
 
 #pragma once
 
-#include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
@@ -33,7 +31,7 @@ namespace DB
 using MPPDataPacket = mpp::MPPDataPacket;
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
-using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+using RequestAndRegionIDs = std::tuple<mpp::DispatchTaskRequest, std::vector<pingcap::kv::RegionVerID>, uint64_t>;
 
 
 class ExchangePacketReader
@@ -50,9 +48,9 @@ class AsyncExchangePacketReader
 {
 public:
     virtual ~AsyncExchangePacketReader() = default;
-    virtual void init(UnaryCallback<bool> * callback) = 0;
-    virtual void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
-    virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
+    virtual void init(GRPCKickTag * tag) = 0;
+    virtual void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) = 0;
+    virtual void finish(::grpc::Status & status, GRPCKickTag * tag) = 0;
     virtual grpc::ClientContext * getClientContext() = 0;
 };
 using AsyncExchangePacketReaderPtr = std::unique_ptr<AsyncExchangePacketReader>;
@@ -62,7 +60,7 @@ struct ExchangeRecvRequest
     Int64 source_index = -1;
     Int64 send_task_id = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = -2;
-    std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
+    mpp::EstablishMPPConnectionRequest req;
     bool is_local = false;
 
     String debugString() const;
@@ -95,7 +93,7 @@ public:
     AsyncExchangePacketReaderPtr makeAsyncReader(
         const ExchangeRecvRequest & request,
         grpc::CompletionQueue * cq,
-        UnaryCallback<bool> * callback) const;
+        GRPCKickTag * tag) const;
 
     static Status getStatusOK()
     {

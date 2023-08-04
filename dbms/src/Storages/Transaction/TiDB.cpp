@@ -15,6 +15,7 @@
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
@@ -1073,9 +1074,17 @@ ColumnID TableInfo::getColumnID(const String & name) const
     else if (name == DB::MutableSupport::delmark_column_name)
         return DB::DelMarkColumnID;
 
+    DB::Strings available_columns;
+    for (const auto & c : columns)
+    {
+        available_columns.emplace_back(c.name);
+    }
+
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name,
-        DB::ErrorCodes::LOGICAL_ERROR);
+        DB::ErrorCodes::LOGICAL_ERROR,
+        "Fail to get column id from TableInfo, name={} available_columns={}",
+        name,
+        available_columns);
 }
 
 KeyspaceID TableInfo::getKeyspaceID() const

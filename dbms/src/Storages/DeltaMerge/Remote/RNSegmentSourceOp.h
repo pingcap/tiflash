@@ -30,14 +30,14 @@ public:
     struct Options
     {
         std::string_view debug_tag;
-        PipelineExecutorStatus & exec_status;
+        PipelineExecutorContext & exec_context;
         const RNWorkersPtr & workers;
         const ColumnDefines & columns_to_read;
         int extra_table_id_index;
     };
 
     explicit RNSegmentSourceOp(const Options & options)
-        : SourceOp(options.exec_status, String(options.debug_tag))
+        : SourceOp(options.exec_context, String(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
     {

@@ -36,6 +36,138 @@ public:
     }
 };
 
+TEST_F(ExpandExecutorTestRunner, Expand2Logical)
+try
+{
+    std::vector<tipb::FieldType> fields(3);
+    fields[0].set_tp(TiDB::TypeString);
+    fields[1].set_tp(TiDB::TypeString);
+    fields[2].set_tp(TiDB::TypeLongLong);
+    fields[2].set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", {}, {}, {}, "banana", {}}),
+             toNullableVec<String>({{}, "apple", {}, {}, {}, "banana"}),
+             toVec<UInt64>({1, 2, 1, 2, 1, 2})});
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", {}}),
+             toNullableVec<String>({{}, "banana"}),
+             toVec<UInt64>({1, 2})});
+    }
+
+    {
+        auto const_false = lit(Field(static_cast<UInt64>(0)));
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(const_false) // refuse all rows.
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {});
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {
+                toVec<UInt64>({1, 0, 1}),
+                toNullableVec<String>({"apple", {}, "banana"}),
+            });
+    }
+
+    fields[0].set_tp(TiDB::TypeLongLong);
+    fields[0].set_flag(TiDB::ColumnFlagUnsigned); // data after count become uint64
+    fields[1].set_tp(TiDB::TypeString);
+    fields[2].set_tp(TiDB::TypeLongLong);
+    fields[2].set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<UInt64>({1, {}, 0, {}, 1, {}}),
+             toNullableVec<String>({{}, "apple", {}, {}, {}, "banana"}),
+             toVec<UInt64>({1, 2, 1, 2, 1, 2})});
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .project({"count(s1)"})
+                           .topN({{"count(s1)", true}}, 2)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<UInt64>({1, 1})});
+    }
+
+    {
+        auto request = context
+                           .receive("exchange1")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .project({"count(s1)", "grouping_id"})
+                           .topN({{"grouping_id", true}}, 2)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {
+                toNullableVec<UInt64>({{}, {}}),
+                toVec<UInt64>({2, 2}),
+            });
+    }
+}
+CATCH
+
 TEST_F(ExpandExecutorTestRunner, ExpandLogical)
 try
 {

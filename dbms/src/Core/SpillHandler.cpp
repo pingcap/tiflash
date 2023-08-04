@@ -79,49 +79,64 @@ void SpillHandler::spillBlocks(Blocks && blocks)
     ///  todo check the disk usage
     if (unlikely(blocks.empty()))
         return;
+
     RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
+    RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
+
     try
     {
-        Stopwatch watch;
-        RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
-        auto block_size = blocks.size();
-        LOG_DEBUG(spiller->logger, "Spilling {} blocks data", block_size);
-
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_spill);
 
-        size_t total_rows = 0;
-        size_t rows_in_file = 0;
-        size_t bytes_in_file = 0;
-        for (auto & block : blocks)
+        if unlikely (spiller->isAllConstant())
         {
-            if (unlikely(!block || block.rows() == 0))
-                continue;
-            /// erase constant column
-            spiller->removeConstantColumns(block);
-            RUNTIME_CHECK_MSG(block.columns() > 0, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
-            if (unlikely(writer == nullptr))
+            LOG_WARNING(spiller->logger, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+            for (auto & block : blocks)
             {
-                std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
-            }
-            auto rows = block.rows();
-            total_rows += rows;
-            rows_in_file += rows;
-            bytes_in_file += block.estimateBytesForSpill();
-            writer->write(block);
-            block.clear();
-            if (spiller->enable_append_write && isSpilledFileFull(rows_in_file, bytes_in_file))
-            {
-                spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
-                spilled_files[current_spilled_file_index]->markFull();
-                writer = nullptr;
+                if (unlikely(!block || block.rows() == 0))
+                    continue;
+                all_constant_block_rows += block.rows();
             }
         }
-        double cost = watch.elapsedSeconds();
-        time_cost += cost;
-        LOG_DEBUG(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
-        RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
+        else
+        {
+            Stopwatch watch;
+            auto block_size = blocks.size();
+            LOG_DEBUG(spiller->logger, "Spilling {} blocks data", block_size);
+
+            size_t total_rows = 0;
+            size_t rows_in_file = 0;
+            size_t bytes_in_file = 0;
+            for (auto & block : blocks)
+            {
+                if (unlikely(!block || block.rows() == 0))
+                    continue;
+                /// erase constant column
+                spiller->removeConstantColumns(block);
+                RUNTIME_CHECK(block.columns() > 0);
+                if (unlikely(writer == nullptr))
+                {
+                    std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
+                }
+                auto rows = block.rows();
+                total_rows += rows;
+                rows_in_file += rows;
+                bytes_in_file += block.estimateBytesForSpill();
+                writer->write(block);
+                block.clear();
+                if (spiller->enable_append_write && isSpilledFileFull(rows_in_file, bytes_in_file))
+                {
+                    spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+                    spilled_files[current_spilled_file_index]->markFull();
+                    writer = nullptr;
+                }
+            }
+            double cost = watch.elapsedSeconds();
+            time_cost += cost;
+            LOG_DEBUG(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
+            RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
+        }
+
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
-        return;
     }
     catch (...)
     {
@@ -173,6 +188,15 @@ void SpillHandler::finish()
         spiller->has_spilled_data = true;
         current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
+    }
+    else if unlikely (spiller->isAllConstant())
+    {
+        if (all_constant_block_rows > 0)
+        {
+            spiller->recordAllConstantBlockRows(partition_id, all_constant_block_rows);
+            spiller->has_spilled_data = true;
+            all_constant_block_rows = 0;
+        }
     }
 }
 } // namespace DB

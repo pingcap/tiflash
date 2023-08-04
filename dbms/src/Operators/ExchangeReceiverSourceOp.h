@@ -25,11 +25,11 @@ class ExchangeReceiverSourceOp : public SourceOp
 {
 public:
     ExchangeReceiverSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
         size_t stream_id_)
-        : SourceOp(exec_status_, req_id)
+        : SourceOp(exec_context_, req_id)
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, exchange_receiver->getSourceNum()))

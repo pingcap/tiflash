@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -29,14 +30,18 @@ class UnorderedSourceOp : public SourceOp
 {
 public:
     UnorderedSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         const DM::ColumnDefines & columns_to_read_,
         int extra_table_id_index_,
-        const String & req_id)
-        : SourceOp(exec_status_, req_id)
+        const String & req_id,
+        const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
+        int max_wait_time_ms_ = 0)
+        : SourceOp(exec_context_, req_id)
         , task_pool(task_pool_)
         , ref_no(0)
+        , waiting_rf_list(runtime_filter_list_)
+        , max_wait_time_ms(max_wait_time_ms_)
     {
         setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
@@ -56,11 +61,18 @@ public:
 
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
-protected:
-    void operatePrefixImpl() override
+    // only for unit test
+    // The logic order of unit test is error, it will build source_op firstly and register rf secondly.
+    // It causes source_op could not get RF list in constructor.
+    // So, for unit test, it should call this function separated.
+    void setRuntimeFilterInfo(const RuntimeFilteList & runtime_filter_list_, int max_wait_time_ms_)
     {
-        std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
+        waiting_rf_list = runtime_filter_list_;
+        max_wait_time_ms = max_wait_time_ms_;
     }
+
+protected:
+    void operatePrefixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus awaitImpl() override;
@@ -68,6 +80,10 @@ protected:
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
     int64_t ref_no;
+
+    // runtime filter
+    RuntimeFilteList waiting_rf_list;
+    int max_wait_time_ms;
 
     bool done = false;
     Block t_block;

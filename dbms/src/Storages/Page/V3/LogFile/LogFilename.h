@@ -16,6 +16,7 @@
 
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 
+#include <boost/container_hash/hash_fwd.hpp>
 #include <set>
 
 namespace DB::PS::V3
@@ -56,6 +57,11 @@ struct LogFilename
         assert(!parent_path.empty());
         return fmt::format("{}/{}", parent_path, filename(file_stage));
     }
+
+    bool operator==(const LogFilename & other) const
+    {
+        return log_num == other.log_num && level_num == other.level_num;
+    }
 };
 
 struct LogFilenameCmp
@@ -70,3 +76,18 @@ struct LogFilenameCmp
 using LogFilenameSet = std::set<LogFilename, LogFilenameCmp>;
 
 } // namespace DB::PS::V3
+
+namespace std
+{
+template <>
+struct hash<DB::PS::V3::LogFilename>
+{
+    size_t operator()(const DB::PS::V3::LogFilename & name) const
+    {
+        size_t seed = 0;
+        boost::hash_combine(seed, boost::hash_value(name.log_num));
+        boost::hash_combine(seed, boost::hash_value(name.level_num));
+        return seed;
+    }
+};
+} // namespace std

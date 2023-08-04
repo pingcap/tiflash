@@ -50,7 +50,7 @@
 
 // Timeout for building one disagg task in the TiFlash write node.
 // Including read index / wait index / generate segments snapshots.
-static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 10;
+static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 15;
 // Timeout for how long one disagg task is valid in the TiFlash write node.
 // It is now a short period to avoid long stale snapshots causing system
 // instable.
@@ -63,6 +63,8 @@ static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 5 * 60;
   * Smaller values give better cache locality, less consumption of RAM, but more overhead to process the query.
   */
 #define DEFAULT_BLOCK_SIZE 65536
+
+constexpr size_t DEFAULT_BLOCK_BYTES = DEFAULT_BLOCK_SIZE * 256; // 256B per row, total 16MB.
 
 /** Which blocks should be formed for insertion into the table, if we control the formation of blocks.
   * (Sometimes the blocks are inserted exactly such blocks that have been read / transmitted from the outside, and this parameter does not affect their size.)

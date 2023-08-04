@@ -83,6 +83,14 @@ public:
         ChecksumAlgo checksum_algorithm,
         size_t checksum_frame_size);
 
+
+    CompressedReadBufferFromFileProvider(
+        String && data,
+        const String & file_name,
+        size_t estimated_size,
+        ChecksumAlgo checksum_algorithm,
+        size_t checksum_frame_size);
+
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) override;
 
     size_t readBig(char * to, size_t n) override;

@@ -29,12 +29,32 @@ mysql> insert into test.t select a + 5, b + 5 from test.t
 
 func> wait_table test t
 
-
-mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select count(*) from t where a > (select avg(b) from t t1 where t.a > t1.a);
+mysql> use test; set @@tidb_enable_parallel_apply=0; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select count(*) from t where a > (select avg(b) from t t1 where t.a > t1.a);
 +----------+
 | count(*) |
 +----------+
 |     4094 |
++----------+
+
+mysql> use test; set @@tidb_enable_parallel_apply=0; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select count(*) from t where a > (select a from t t1 where t.a > t1.a limit 1);
++----------+
+| count(*) |
++----------+
+|     4095 |
++----------+
+
+mysql> use test; set @@tidb_enable_parallel_apply=1; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select count(*) from t where a > (select avg(b) from t t1 where t.a > t1.a);
++----------+
+| count(*) |
++----------+
+|     4094 |
++----------+
+
+mysql> use test; set @@tidb_enable_parallel_apply=1; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select count(*) from t where a > (select a from t t1 where t.a > t1.a limit 1);
++----------+
+| count(*) |
++----------+
+|     4095 |
 +----------+
 
 # Clean up.

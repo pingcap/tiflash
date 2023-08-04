@@ -185,7 +185,7 @@ private:
                         // Case B: There is something wrong with the downstream
                         // In case B, we need to populate the error to upstream, so that the whole
                         // pipeline is cancelled.
-                        auto cancel_reason = source_queue->getCancelReason();
+                        auto cancel_reason = result_queue->getCancelReason();
                         LOG_WARNING(log, "{}#{} meeting error from downstream: {}", getName(), thread_idx, cancel_reason);
                         source_queue->cancelWith(cancel_reason);
                         break;

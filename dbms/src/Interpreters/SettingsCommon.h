@@ -16,6 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/FieldVisitors.h>
+#include <Common/config.h>
 #include <Common/getNumberOfCPUCores.h>
 #include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>
@@ -773,15 +774,26 @@ public:
             return CompressionMethod::LZ4HC;
         if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
-
+#if USE_QPL
+        if (lower_str == "qpl")
+            return CompressionMethod::QPL;
+        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#else
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#endif
     }
 
     String toString() const
     {
+#if USE_QPL
+        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl"};
+        auto compression_method_last = CompressionMethod::QPL;
+#else
         const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd"};
+        auto compression_method_last = CompressionMethod::ZSTD;
+#endif
 
-        if (value < CompressionMethod::LZ4 || value > CompressionMethod::ZSTD)
+        if (value < CompressionMethod::LZ4 || value > compression_method_last)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 
         return strings[static_cast<size_t>(value)];
@@ -829,7 +841,7 @@ struct SettingTaskQueueType
 public:
     bool changed = false;
 
-    SettingTaskQueueType(TaskQueueType x = TaskQueueType::FIFO)
+    SettingTaskQueueType(TaskQueueType x = TaskQueueType::DEFAULT)
         : value(x)
     {}
 

@@ -212,6 +212,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
 
     global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->mockConfigLoaded();
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)

@@ -98,7 +98,7 @@ size_t MPPGatherIdHash::operator()(MPPGatherId const & mpp_gather_id) const noex
 
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP<query_id:N/A,task_id:N/A>" : fmt::format("MPP<query:{},task_id:{}>", query_id.toString(), task_id);
+    return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>" : fmt::format("MPP<gather_id:{},task_id:{}>", gather_id.toString(), task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
@@ -108,6 +108,6 @@ const MPPQueryId MPPTaskId::Max_Query_Id = MPPQueryId(MAX_UINT64, MAX_UINT64, MA
 
 bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
 {
-    return lid.query_id == rid.query_id && lid.task_id == rid.task_id;
+    return lid.gather_id == rid.gather_id && lid.task_id == rid.task_id;
 }
 } // namespace DB

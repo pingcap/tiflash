@@ -53,11 +53,7 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    void execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
-
-    /// Members will be transferred to DAGQueryBlockInterpreter after execute
-
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+    void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
 private:
     struct StorageWithStructureLock
@@ -84,7 +80,7 @@ private:
 
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
     buildLocalExecForPhysicalTable(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
@@ -93,7 +89,7 @@ private:
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
     void buildLocalExec(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         size_t max_block_size);
 
@@ -115,24 +111,24 @@ private:
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void buildRemoteExec(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const std::vector<RemoteRequest> & remote_requests);
 
     void executeCastAfterTableScan(
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
+        DAGPipeline & pipeline,
+        DAGExpressionAnalyzer & analyzer);
 
     void executeCastAfterTableScan(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
-        size_t remote_read_start_index);
+        DAGExpressionAnalyzer & analyzer);
 
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
 
-    void executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
+    void executeImpl(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
 private:
     /// Normally, time and timestamp(when timezone is not UTC) type columns need to be casted after table scan.

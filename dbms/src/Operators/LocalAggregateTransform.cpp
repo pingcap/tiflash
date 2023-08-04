@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/LocalAggregateTransform.h>
 
 #include <magic_enum.hpp>
@@ -29,14 +29,14 @@ constexpr size_t task_index = 0;
 } // namespace
 
 LocalAggregateTransform::LocalAggregateTransform(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
     const Aggregator::Params & params_)
-    : TransformOp(exec_status_, req_id)
+    : TransformOp(exec_context_, req_id)
     , params(params_)
     , agg_context(req_id)
 {
-    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
+    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -46,6 +46,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     case LocalAggStatus::build:
         if unlikely (!block)
         {
+            agg_context.getAggSpillContext()->finishSpillableStage();
             return agg_context.hasSpilledData()
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);

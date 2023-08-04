@@ -26,7 +26,7 @@ class AggregateRestoreSourceOp : public SourceOp
 {
 public:
     AggregateRestoreSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const AggregateContextPtr & agg_context_,
         SharedAggregateRestorerPtr && restorer_,
         const String & req_id);

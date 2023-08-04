@@ -146,7 +146,7 @@ public:
         return MPMCQueueResult::OK;
     }
 
-    MPMCQueueResult dequeue()
+    MPMCQueueResult tryDequeue()
     {
         std::lock_guard lock(mu);
 

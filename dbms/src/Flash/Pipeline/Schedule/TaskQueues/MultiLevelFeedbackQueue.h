@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <array>
@@ -87,8 +88,7 @@ public:
     const UnitQueueInfo info;
     std::atomic_uint64_t accu_consume_time_microsecond{0};
 
-private:
-    std::deque<TaskPtr> task_queue;
+    std::list<TaskPtr> task_queue;
 };
 using UnitQueuePtr = std::unique_ptr<UnitQueue>;
 
@@ -114,6 +114,8 @@ public:
 
     const UnitQueueInfo & getUnitQueueInfo(size_t level);
 
+    void cancel(const String & query_id) override;
+
 public:
     static constexpr size_t QUEUE_SIZE = 8;
 
@@ -125,6 +127,8 @@ public:
 private:
     void computeQueueLevel(const TaskPtr & task);
 
+    void submitTaskWithoutLock(TaskPtr && task);
+
 private:
     mutable std::mutex mu;
     std::condition_variable cv;
@@ -135,6 +139,9 @@ private:
     // the longer the total execution time of all tasks in the queue,
     // and the shorter the execution time of each individual task.
     std::array<UnitQueuePtr, QUEUE_SIZE> level_queues;
+
+    FIFOQueryIdCache cancel_query_id_cache;
+    std::deque<TaskPtr> cancel_task_queue;
 };
 
 struct CPUTimeGetter

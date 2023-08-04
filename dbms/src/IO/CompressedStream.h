@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/config.h>
+
 #include <cstdint>
 
 /** Common Defines */
@@ -31,7 +33,12 @@ enum class CompressionMethod
     LZ4 = 1,
     LZ4HC = 2, /// The format is the same as for LZ4. The difference is only in compression.
     ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
+#if USE_QPL
+    QPL = 4, /// The Intel Query Processing Library (QPL) is an open-source library to provide high-performance query processing operations
+    NONE = 5, /// No compression
+#else
     NONE = 4, /// No compression
+#endif
 };
 
 /** The compressed block format is as follows:
@@ -60,6 +67,9 @@ enum class CompressionMethodByte : uint8_t
     NONE = 0x02,
     LZ4 = 0x82,
     ZSTD = 0x90,
+#if USE_QPL
+    QPL = 0x88,
+#endif
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
     COL_END = 0x66,
 };

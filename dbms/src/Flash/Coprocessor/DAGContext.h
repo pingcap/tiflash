@@ -52,12 +52,12 @@ using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
+struct JoinProfileInfo;
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
-    JoinPtr join_ptr;
+    JoinProfileInfoPtr join_profile_info;
     BlockInputStreams join_build_streams;
     OperatorProfileInfos join_build_profile_infos;
 };
@@ -156,7 +156,7 @@ public:
 
     std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
 
-    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
+    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos, bool is_append = false);
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -166,7 +166,7 @@ public:
 
     std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
 
-    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos);
+    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos, bool is_append = false);
 
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);

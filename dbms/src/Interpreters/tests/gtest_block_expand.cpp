@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Expand.h>
 #include <Interpreters/sortBlock.h>
 #include <TestUtils/FunctionTestUtils.h>

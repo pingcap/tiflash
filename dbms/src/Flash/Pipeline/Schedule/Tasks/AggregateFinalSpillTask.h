@@ -25,15 +25,14 @@ class AggregateFinalSpillTask : public OutputIOEventTask
 {
 public:
     AggregateFinalSpillTask(
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
-        PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         AggregateContextPtr agg_context_,
         size_t index_);
 
 protected:
-    ExecTaskStatus doExecuteIOImpl() override;
+    ExecTaskStatus executeIOImpl() override;
 
     void doFinalizeImpl() override;
 

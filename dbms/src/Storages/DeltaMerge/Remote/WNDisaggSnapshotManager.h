@@ -52,7 +52,7 @@ public:
     bool registerSnapshot(const DisaggTaskId & task_id, const DisaggReadSnapshotPtr & snap, const Timepoint & expired_at)
     {
         std::unique_lock lock(mtx);
-        LOG_DEBUG(log, "Register Disaggregated Snapshot, task_id={}", task_id);
+        LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
         // Since EstablishDisagg may be retried, there may be existing snapshot.
         // We replace these existing snapshot using a new one.
@@ -80,7 +80,7 @@ private:
         std::unique_lock lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
         {
-            LOG_DEBUG(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
+            LOG_INFO(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
             snapshots.erase(iter);
             return true;
         }

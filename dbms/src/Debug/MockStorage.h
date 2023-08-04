@@ -106,12 +106,15 @@ public:
         int rf_max_wait_time_ms = 0);
 
     void buildExecFromDeltaMerge(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         Int64 table_id,
         size_t concurrency = 1,
-        bool keep_order = false);
+        bool keep_order = false,
+        const FilterConditions * filter_conditions = nullptr,
+        std::vector<int> runtime_filter_ids = std::vector<int>(),
+        int rf_max_wait_time_ms = 0);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 

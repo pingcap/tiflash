@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 enum class RuntimeFilterStatus
 {
     NOT_READY,
@@ -33,7 +32,7 @@ enum class RuntimeFilterStatus
 class RuntimeFilter
 {
 public:
-    RuntimeFilter(tipb::RuntimeFilter & rf_pb)
+    explicit RuntimeFilter(tipb::RuntimeFilter & rf_pb)
         : id(rf_pb.id())
         , rf_type(rf_pb.rf_type())
     {

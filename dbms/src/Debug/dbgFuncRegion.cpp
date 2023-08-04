@@ -93,14 +93,6 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     }
 }
 
-void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
-{
-    TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().tryFlushRegions();
-
-    output("region_table try flush regions");
-}
-
 void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 1)
@@ -111,9 +103,11 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region_id);
-
-    output(fmt::format("region_table try flush region {}", region_id));
+    if (auto region = tmt.getKVStore()->getRegion(region_id); region)
+    {
+        tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
+        output(fmt::format("region_table try flush region {}", region_id));
+    }
 }
 
 void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)

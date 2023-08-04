@@ -141,7 +141,7 @@ private:
         std::shared_ptr<ProcessListEntry> process_list_entry;
         ~ProcessListEntryHolder()
         {
-            /// Because MemoryTracker is now saved in `MPPQueryTaskSet` and shared by all the mpp tasks belongs to the same mpp query,
+            /// Because MemoryTracker is now saved in `MPPQuery` and shared by all the mpp tasks belongs to the same mpp query,
             /// it may not be destructed when MPPTask is destructed, so need to manually reset current_memory_tracker to nullptr at the
             /// end of the destructor of MPPTask, otherwise, current_memory_tracker may point to a invalid memory tracker
             current_memory_tracker = nullptr;

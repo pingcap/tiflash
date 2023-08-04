@@ -73,7 +73,7 @@ public:
         unsigned num_streams) override;
 
     void read(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         const Names & column_names,
         const SelectQueryInfo & query_info,
@@ -189,7 +189,7 @@ public:
 
     std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool /* need_block */) override;
 
-    void releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block) override;
+    void releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block) override;
 
     bool initStoreIfDataDirExist(ThreadPool * thread_pool) override;
 
@@ -260,7 +260,7 @@ private:
                                         const String & req_id,
                                         const LoggerPtr & tracing_logger);
 
-    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context);
+    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -301,8 +301,8 @@ private:
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
     // The following two members must be used under the protection of table structure lock
     bool decoding_schema_changed = false;
-    // internal version for `decoding_schema_snapshot`
-    Int64 decoding_schema_version = 1;
+    // internal epoch for `decoding_schema_snapshot`
+    Int64 decoding_schema_epoch = 1;
 
     // avoid creating block every time when decoding row
     std::vector<BlockUPtr> cache_blocks;

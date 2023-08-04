@@ -55,7 +55,7 @@ void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & 
 }
 
 void PhysicalLimit::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
@@ -63,7 +63,7 @@ void PhysicalLimit::buildPipelineExecGroupImpl(
     auto input_header = group_builder.getCurrentHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_status, log->identifier(), global_limit));
+        builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, log->identifier(), global_limit));
     });
 }
 

@@ -96,7 +96,8 @@ public:
     };
     CPDataDumpStats writeEditsAndApplyCheckpointInfo(
         universal::PageEntriesEdit & edit,
-        const CompactOptions & options = CompactOptions(false));
+        const CompactOptions & options = CompactOptions(false),
+        bool manifest_only = false);
 
     /**
      * This function must be called, and must be called last, after other `writeXxx`.

@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class Like : public ColCmpVal
 {
 public:
@@ -29,10 +28,10 @@ public:
 
     String name() override { return "like"; }
 
-    RSResult roughCheck(size_t /*pack_id*/, const RSCheckParam & /*param*/) override { return Some; }
+    RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
+    {
+        return RSResults(pack_count, Some);
+    }
 };
 
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

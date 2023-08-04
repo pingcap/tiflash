@@ -274,7 +274,7 @@ void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr pt
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI consume write batch {}", wb->toString()));
-        uni_ps->write(std::move(*wb));
+        uni_ps->write(std::move(*wb), DB::PS::V3::PageType::RaftData, nullptr);
         wb->clear();
     }
     catch (...)

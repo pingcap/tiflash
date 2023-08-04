@@ -26,7 +26,7 @@ namespace DB
 {
 class Context;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
 
 void restoreConcurrency(
@@ -44,14 +44,14 @@ void executeUnion(
     const String & extra_info = "");
 
 void restoreConcurrency(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     size_t concurrency,
     Int64 max_buffered_bytes,
     const LoggerPtr & log);
 
 void executeUnion(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Int64 max_buffered_bytes,
     const LoggerPtr & log);
@@ -67,7 +67,7 @@ void executeExpression(
     const String & extra_info = "");
 
 void executeExpression(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log);
@@ -82,7 +82,7 @@ void orderStreams(
     const LoggerPtr & log);
 
 void executeLocalSort(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
@@ -90,7 +90,7 @@ void executeLocalSort(
     const LoggerPtr & log);
 
 void executeFinalSort(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
@@ -108,34 +108,26 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
-    size_t remote_read_streams_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline);
 
 void executePushedDownFilter(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log);
 
 void executeGeneratedColumnPlaceholder(
-    size_t remote_read_streams_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline);
 
-NamesWithAliases buildTableScanProjectionCols(
-    const NamesAndTypes & schema,
-    const NamesAndTypes & storage_schema);
-
 void executeGeneratedColumnPlaceholder(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log);
 } // namespace DB

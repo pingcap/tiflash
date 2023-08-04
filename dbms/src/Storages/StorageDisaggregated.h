@@ -45,7 +45,7 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM
 
-using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+using RequestAndRegionIDs = std::tuple<mpp::DispatchTaskRequest, std::vector<pingcap::kv::RegionVerID>, uint64_t>;
 
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
@@ -78,7 +78,7 @@ public:
         unsigned num_streams) override;
 
     void read(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Names & /*column_names*/,
         const SelectQueryInfo & /*query_info*/,
@@ -90,8 +90,6 @@ public:
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
     static const String ExecIDPrefixForTiFlashStorageSender;
-    // Members will be transferred to DAGQueryBlockInterpreter after execute
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
@@ -99,7 +97,7 @@ private:
         const Context & db_context,
         unsigned num_streams);
     void readThroughS3(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         unsigned num_streams);
@@ -137,14 +135,15 @@ private:
     DM::Remote::RNWorkersPtr buildRNWorkers(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
-        const DM::ColumnDefinesPtr & column_defines);
+        const DM::ColumnDefinesPtr & column_defines,
+        size_t num_streams);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
         size_t num_streams,
         DAGPipeline & pipeline);
     void buildRemoteSegmentSourceOps(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
@@ -159,16 +158,16 @@ private:
 
     /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
     BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
+    void readThroughExchange(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
     std::vector<RequestAndRegionIDs> buildDispatchRequests();
     void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void buildReceiverSources(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
+    void buildReceiverSources(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void filterConditions(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void filterConditions(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void extraCast(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;
@@ -178,5 +177,7 @@ private:
     const FilterConditions & filter_conditions;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
+
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 };
 } // namespace DB

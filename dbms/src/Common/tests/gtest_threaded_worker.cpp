@@ -142,6 +142,35 @@ TEST(ThreadedWorker, SingleThread)
     ASSERT_EQ(pop_result, MPMCQueueResult::FINISHED);
 }
 
+TEST(ThreadedWorker, CancelResultQueue)
+{
+    auto w = WorkerMultiply(
+        /* src */ std::make_shared<MPMCQueue<Int64>>(5),
+        /* result */ std::make_shared<MPMCQueue<Int64>>(5),
+        1);
+
+    Int64 result = 0;
+    auto pop_result = w.result_queue->popTimeout(result, 100ms);
+    ASSERT_EQ(pop_result, MPMCQueueResult::TIMEOUT);
+
+    // When worker is not started, push should not trigger any results to be produced.
+    w.source_queue->push(1);
+    w.source_queue->push(3);
+    w.source_queue->push(5);
+
+    pop_result = w.result_queue->popTimeout(result, 300ms);
+    ASSERT_EQ(pop_result, MPMCQueueResult::TIMEOUT);
+
+    w.result_queue->cancelWith("testing"); // cancel the result queue
+
+    w.startInBackground();
+
+    pop_result = w.result_queue->pop(result);
+    ASSERT_EQ(pop_result, MPMCQueueResult::CANCELLED);
+
+    w.wait(); // finish normally
+}
+
 TEST(ThreadedWorker, MultiThread)
 {
     auto w = WorkerMultiply(

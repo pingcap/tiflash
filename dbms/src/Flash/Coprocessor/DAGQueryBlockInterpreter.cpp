@@ -18,6 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
+#include <DataStreams/ExpandBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
@@ -45,6 +46,7 @@
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Expand2.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -205,15 +207,13 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
-        analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
-
-        analyzer = std::move(storage_interpreter.analyzer);
     }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(pipeline.firstStream()->getHeader(), context);
 }
 
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)
@@ -270,8 +270,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     tiflash_join.fillJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names, join_non_equal_conditions);
 
     const Settings & settings = context.getSettingsRef();
-    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
-    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
+    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
     size_t max_block_size = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
@@ -355,8 +355,8 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     const auto * build_side_root_executor = query_block.children[build_side_index]->root;
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_root_executor->executor_id();
-    join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    join_execute_info.join_profile_info = join_ptr->profile_info;
+    assert(join_execute_info.join_profile_info);
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
@@ -413,7 +413,9 @@ void DAGQueryBlockInterpreter::executeAggregation(
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
-        context.getFileProvider());
+        context.getFileProvider(),
+        settings.max_threads,
+        settings.max_block_size);
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -531,6 +533,124 @@ void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(schema), context);
 }
 
+void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb::Expand2 & expand2)
+{
+    NamesAndTypes input_columns;
+    pipeline.streams = input_streams_vec[0];
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
+    ExpressionActionsChain chain;
+    NamesAndTypes gen_columns;
+    NamesAndTypes output_columns;
+    NamesWithAliasesVec project_cols_vec;
+    UniqueNameGenerator unique_name_generator;
+    ExpressionActionsPtrVec expression_actions_ptr_vec;
+    auto input_col_size = dag_analyzer.getCurrentInputColumns().size();
+    /// since every expr in one project level is quite different from the other in the same position of different level.
+    /// eg: [#col1, null, 1]
+    ///     [null, col#2, 2]
+    /// we couldn't derive a unified action for merged column 1,2,3, so we use seperated action for every single projection level.
+    /// but for output columns we should make a coordination for the output name, make them be always the same for a single column.
+    ///
+    /// Adding the example project expression to get the column type and column name in the expression system of tiflash, and use
+    /// that as the expand OP's output column and type.
+    ///
+    /// projection example: [#col1, #col2, uint64_literal(grouping id)]
+    /// projection      L1: [#col1, null, 1]
+    ///                 L2: [null, col#2, 2]
+    // pre-detect the nullability change action in the first projection level and generate the pre-actions.
+    chain.clear();
+    // strong ref here to avoid internal actions to be cleaned.
+    auto header_step = dag_analyzer.initAndGetLastStep(chain);
+    assert(!expand2.proj_exprs().empty());
+    auto first_proj_level = expand2.proj_exprs().Get(0);
+    auto horizontal_size = first_proj_level.exprs().size();
+    auto vertical_size = expand2.proj_exprs().size();
+    for (auto i = 0; i < horizontal_size; ++i)
+    {
+        // horizontally search nullability change column.
+        auto expr = first_proj_level.exprs().Get(i);
+        /// record the ref-col nullable attributes for header.
+        /// case1: origin col is a normal col, if it's not-null, make it nullable if expr specified.
+        /// case2: origin col is a const col, <non-null value>, it's must be not-null, make it nullable and break const attribute if expr specified.
+        /// case3: origin col is a const col, <null value>, it's must be nullable, nothing to do.
+        if (static_cast<size_t>(i) < input_col_size
+            && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0)
+            && !dag_analyzer.getCurrentInputColumns()[i].type->isNullable())
+        {
+            // vertically search column-ref rather than literal null.
+            for (auto j = 0; j < vertical_size; ++j)
+            {
+                // relocate expr.
+                expr = expand2.proj_exprs().Get(j).exprs().Get(i);
+                if (isColumnExpr(expr))
+                {
+                    auto col = getColumnNameAndTypeForColumnExpr(expr, dag_analyzer.getCurrentInputColumns());
+                    header_step.actions->add(ExpressionAction::convertToNullable(col.name));
+                    break;
+                }
+            }
+        }
+    }
+    NamesAndTypes new_source_cols;
+    for (const auto & origin_col : header_step.actions->getSampleBlock().getNamesAndTypesList())
+        new_source_cols.emplace_back(origin_col.name, origin_col.type);
+    dag_analyzer.reset(new_source_cols);
+
+    // generate N level projections separately.
+    for (auto i = 0; i < expand2.proj_exprs().size(); i++)
+    {
+        chain.clear();
+        NamesWithAliases project_cols;
+        auto & last_step = dag_analyzer.initAndGetLastStep(chain);
+        const auto & project_expr = expand2.proj_exprs().Get(i);
+        // output name is composed of source column name from child and generated column name.
+        for (auto j = 0; j < project_expr.exprs().size(); j++)
+        {
+            // the original col-ref may be changed as nullable column-ref in planner side.
+            auto expr = project_expr.exprs().Get(j);
+
+            auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
+            last_step.required_output.emplace_back(expr_name);
+
+            const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
+            // link the current projected block column name with source output column name.
+            auto output_name = static_cast<size_t>(j) < input_col_size ? dag_analyzer.getCurrentInputColumns()[j].name : expand2.generated_output_names()[j - input_col_size];
+            project_cols.emplace_back(col.name, output_name);
+            if (i == 0)
+            {
+                // just collect the output schema in the first projection level is enough.
+                // output name is composed of two parts: origin base col names + specified generated col names.
+                // the first part is absolutely unique while the second part is guaranteed by planner, the func below is just in case.
+                String alias = unique_name_generator.toUniqueName(output_name);
+                // record the generated appended schema.
+                if (static_cast<size_t>(j) >= input_col_size)
+                    gen_columns.emplace_back(alias, col.type);
+                output_columns.emplace_back(alias, col.type);
+            }
+        }
+        // cache this N level projection actions for expand output control.
+        expression_actions_ptr_vec.emplace_back(last_step.actions);
+        project_cols_vec.emplace_back(project_cols);
+    }
+    // add column that used to for header, append it to the pre-actions as well (convenient for header generation).
+    for (const auto & gen_col : gen_columns)
+    {
+        ColumnWithTypeAndName column;
+        column.column = gen_col.type->createColumn();
+        column.name = gen_col.name;
+        column.type = gen_col.type;
+        header_step.actions->add(ExpressionAction::addColumn(column));
+    }
+    header_step.actions->finalize(toNames(output_columns));
+
+    // unified these N level actions as one expand action.
+    auto ep2 = std::make_shared<Expand2>(expression_actions_ptr_vec, header_step.actions, project_cols_vec);
+    executeExpand2(pipeline, ep2);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
+}
+
 void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
     NamesAndTypes input_columns;
@@ -621,6 +741,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
         handleProjection(pipeline, query_block.source->projection());
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeExpand2)
+    {
+        handleExpand2(pipeline, query_block.source->expand2());
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.isTableScanSource())
@@ -769,6 +894,19 @@ void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const Expre
     String expand_extra_info = fmt::format("expand: grouping set {}", expr->getActions().back().expand->getGroupingSetsDes());
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log->identifier());
+        stream->setExtraInfo(expand_extra_info);
+    });
+}
+
+void DAGQueryBlockInterpreter::executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand)
+{
+    String expand_extra_info = fmt::format("expand: leveled projection: {}", expand->getLevelProjectionDes());
+    pipeline.transform([&](auto & stream) {
+        // make expand2 header ahead for every stream.
+        auto header = stream->getHeader();
+        expand->getBeforeExpandActions()->execute(header);
+        // construct ExpandBlockInputStream.
+        stream = std::make_shared<ExpandBlockInputStream>(stream, expand, header, log->identifier());
         stream->setExtraInfo(expand_extra_info);
     });
 }

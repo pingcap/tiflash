@@ -19,6 +19,27 @@
 
 namespace DB
 {
+namespace
+{
+void moveCancelledTasks(UnitQueue & unit_queue, std::deque<TaskPtr> & cancel_queue, const String & query_id)
+{
+    assert(!query_id.empty());
+    auto & normal_queue = unit_queue.task_queue;
+    for (auto it = normal_queue.begin(); it != normal_queue.end();)
+    {
+        if (query_id == (*it)->getQueryId())
+        {
+            cancel_queue.push_back(std::move(*it));
+            it = normal_queue.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+} // namespace
+
 void UnitQueue::take(TaskPtr & task)
 {
     assert(!task);
@@ -95,6 +116,15 @@ void MultiLevelFeedbackQueue<TimeGetter>::computeQueueLevel(const TaskPtr & task
 }
 
 template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::submitTaskWithoutLock(TaskPtr && task)
+{
+    if unlikely (cancel_query_id_cache.contains(task->getQueryId()))
+        cancel_task_queue.push_back(std::move(task));
+    else
+        level_queues[task->mlfq_level]->submit(std::move(task));
+}
+
+template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
 {
     if unlikely (is_finished)
@@ -106,7 +136,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
     computeQueueLevel(task);
     {
         std::lock_guard lock(mu);
-        level_queues[task->mlfq_level]->submit(std::move(task));
+        submitTaskWithoutLock(std::move(task));
     }
     assert(!task);
     cv.notify_one();
@@ -115,14 +145,14 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
 template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
 {
+    if (tasks.empty())
+        return;
+
     if unlikely (is_finished)
     {
         FINALIZE_TASKS(tasks);
         return;
     }
-
-    if (tasks.empty())
-        return;
 
     for (auto & task : tasks)
         computeQueueLevel(task);
@@ -130,7 +160,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
     std::lock_guard lock(mu);
     for (auto & task : tasks)
     {
-        level_queues[task->mlfq_level]->submit(std::move(task));
+        submitTaskWithoutLock(std::move(task));
         cv.notify_one();
     }
 }
@@ -146,6 +176,13 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
         std::unique_lock lock(mu);
         while (true)
         {
+            if (!cancel_task_queue.empty())
+            {
+                task = std::move(cancel_task_queue.front());
+                cancel_task_queue.pop_front();
+                return true;
+            }
+
             // Find the queue with the smallest execution time.
             for (size_t i = 0; i < QUEUE_SIZE; ++i)
             {
@@ -191,7 +228,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::empty() const
         if (!queue->empty())
             return false;
     }
-    return true;
+    return cancel_task_queue.empty();
 }
 
 template <typename TimeGetter>
@@ -209,6 +246,21 @@ const UnitQueueInfo & MultiLevelFeedbackQueue<TimeGetter>::getUnitQueueInfo(size
 {
     assert(level < QUEUE_SIZE);
     return level_queues[level]->info;
+}
+
+template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
+{
+    if unlikely (query_id.empty())
+        return;
+
+    std::lock_guard lock(mu);
+    if (cancel_query_id_cache.add(query_id))
+    {
+        for (const auto & queue : level_queues)
+            moveCancelledTasks(*queue, cancel_task_queue, query_id);
+        cv.notify_all();
+    }
 }
 
 template class MultiLevelFeedbackQueue<CPUTimeGetter>;

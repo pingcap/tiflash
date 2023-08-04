@@ -24,16 +24,6 @@ class Context;
 
 // TiDB table data writing test tools
 
-// Change flush threshold rows
-// Usage:
-//   ./storages-client.sh "DBGInvoke set_flush_rows(threshold_rows)"
-void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
-// Change flush deadline seconds
-// Usage:
-//   ./storages-client.sh "DBGInvoke set_deadline_seconds(seconds)"
-void dbgFuncSetDeadlineSeconds(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
 // Write one row of mocked TiDB data with raft command.
 // Usage:
 //   ./storages-client.sh "DBGInvoke raft_insert_row(database_name, table_name, region_id, handle_id, val1, val2, ...)"

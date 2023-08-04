@@ -350,7 +350,7 @@ try
 
     // Make sure in-disk data is encrypted.
 
-    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, 1),
+    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, PageTypeUtils::nextFileID(PageType::Normal, 1)),
                                                                             -1,
                                                                             nullptr);
     file_read->pread(c_buff_read, buf_sz, 0);
@@ -1093,8 +1093,8 @@ TEST_F(PageStorageWith2PagesTest, RemoveReadOnlyFile)
     cfg.blob_heavy_gc_valid_rate = 1.0;
     page_storage = reopenWithConfig(cfg);
 
-    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
-    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_10");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_20");
     ASSERT_EQ(blob_file1.exists(), true);
     ASSERT_EQ(blob_file2.exists(), false);
 
@@ -1125,8 +1125,8 @@ TEST_F(PageStorageWith2PagesTest, ReuseEmptyFileAfterRestart)
     cfg.blob_heavy_gc_valid_rate = 1.0;
     page_storage = reopenWithConfig(cfg);
 
-    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
-    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_10");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_20");
     ASSERT_EQ(blob_file1.exists(), true);
     ASSERT_EQ(blob_file2.exists(), false);
 
@@ -1592,7 +1592,7 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto blob_file = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file = Poco::File(getTemporaryPath() + "/blobfile_10");
 
     page_storage = reopenWithConfig(config);
     EXPECT_GT(blob_file.getSize(), 0);

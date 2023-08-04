@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/PageType.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 
 #include <mutex>
@@ -56,7 +57,12 @@ public:
     using PageMap = typename Trait::PageMap;
 
 public:
-    BlobStore(const String & storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config);
+    BlobStore(
+        const String & storage_name,
+        const FileProviderPtr & file_provider_,
+        PSDiskDelegatorPtr delegator_,
+        const BlobConfig & config,
+        const PageTypeAndConfig & page_type_and_config_);
 
     void registerPaths();
 
@@ -64,14 +70,23 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
-    std::vector<BlobFileId> getGCStats();
+    using PageTypeAndBlobIds = std::map<PageType, std::vector<BlobFileId>>;
+    PageTypeAndBlobIds getGCStats();
 
-    PageEntriesEdit gc(GcEntriesMap & entries_need_gc,
-                       const PageSize & total_page_size,
+    void gc(
+        PageType page_type,
+        const GcEntriesMap & entries_need_gc,
+        const PageSize & total_page_size,
+        PageEntriesEdit & edit,
+        const WriteLimiterPtr & write_limiter = nullptr,
+        const ReadLimiterPtr & read_limiter = nullptr);
+
+    using PageTypeAndGcInfo = std::vector<std::tuple<PageType, GcEntriesMap, PageSize>>;
+    PageEntriesEdit gc(const PageTypeAndGcInfo & page_type_and_gc_info,
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(typename Trait::WriteBatch && wb, PageType page_type = PageType::Normal, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntries & del_entries);
 
@@ -98,7 +113,7 @@ public:
 private:
 #endif
 
-    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch && wb, PageType page_type, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(const PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
@@ -107,7 +122,7 @@ private:
      *  We will lock BlobStats until we get a BlobStat that can hold the size.
      *  Then lock the BlobStat to get the span.
      */
-    std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size);
+    std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size, PageType page_type);
 
     /**
      *  Request a specific BlobStat to delete a certain span.
@@ -132,6 +147,7 @@ private:
 
     FileProviderPtr file_provider;
     BlobConfig config;
+    PageTypeAndConfig page_type_and_config;
 
     LoggerPtr log;
 

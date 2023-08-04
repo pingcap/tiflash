@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/GCDefines.h>
 #include <fmt/format.h>
 
+#include <numeric>
 #include <type_traits>
 
 namespace DB
@@ -281,13 +282,18 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     }
 
     // Execute full gc
-    GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(blob_ids_need_gc.size());
+    GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(std::accumulate(blob_ids_need_gc.begin(), blob_ids_need_gc.end(), 0, [&](Int64 acc, const auto & page_type_and_blob_ids) {
+        return acc + page_type_and_blob_ids.second.size();
+    }));
     // 4. Filter out entries in MVCC by BlobId.
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
-    auto [blob_gc_info, total_page_size] = page_directory.getEntriesByBlobIds(blob_ids_need_gc);
+    auto page_type_gc_infos = page_directory.getEntriesByBlobIdsForDifferentPageTypes(blob_ids_need_gc);
     statistics.full_gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    if (blob_gc_info.empty())
+    auto entries_size_to_move = std::accumulate(page_type_gc_infos.begin(), page_type_gc_infos.end(), 0, [&](UInt64 acc, const auto & page_type_and_gc_info) {
+        return acc + std::get<2>(page_type_and_gc_info);
+    });
+    if (entries_size_to_move == 0)
     {
         cleanExternalPage(page_directory, gc_watch, statistics);
         statistics.stage = GCStageType::FullGCNothingMoved;
@@ -300,7 +306,7 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
-    PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
+    PageEntriesEdit gc_edit = blob_store.gc(page_type_gc_infos, write_limiter, read_limiter);
     statistics.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_rewrite).Observe( //
         (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms) / 1000.0);

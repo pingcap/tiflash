@@ -62,7 +62,7 @@ BlockInputStreams StorageDisaggregated::read(
 }
 
 void StorageDisaggregated::read(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
@@ -72,10 +72,10 @@ void StorageDisaggregated::read(
 {
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readThroughS3(exec_status, group_builder, db_context, num_streams);
+        return readThroughS3(exec_context, group_builder, db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
-    readThroughExchange(exec_status, group_builder, num_streams);
+    readThroughExchange(exec_context, group_builder, num_streams);
 }
 
 std::vector<RequestAndRegionIDs> StorageDisaggregated::buildDispatchRequests()
@@ -111,20 +111,20 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
 }
 
 void StorageDisaggregated::readThroughExchange(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     unsigned num_streams)
 {
     std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
 
-    buildReceiverSources(exec_status, group_builder, dispatch_reqs, num_streams);
+    buildReceiverSources(exec_context, group_builder, dispatch_reqs, num_streams);
 
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // TODO: push down filter conditions to write node
-    filterConditions(exec_status, group_builder, *analyzer);
+    filterConditions(exec_context, group_builder, *analyzer);
 }
 
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
@@ -185,15 +185,16 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
 RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
-    auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
-    ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
+    mpp::DispatchTaskRequest dispatch_req;
+    mpp::TaskMeta * dispatch_req_meta = dispatch_req.mutable_meta();
     auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     dispatch_req_meta->set_keyspace_id(keyspace_id);
     dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
-    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
-    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
+    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+    dispatch_req_meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
     dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
 
@@ -201,11 +202,11 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     // dispatch_req_meta->set_mpp_version(?);
 
     const auto & settings = context.getSettings();
-    dispatch_req->set_timeout(60);
-    dispatch_req->set_schema_ver(settings.schema_version);
+    dispatch_req.set_timeout(60);
+    dispatch_req.set_schema_ver(settings.schema_version);
 
     // For error handling, need to record region_ids and store_id to invalidate cache.
-    std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, dispatch_req);
+    std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, &dispatch_req);
 
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request();
@@ -246,7 +247,7 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     }
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
-    dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
+    dispatch_req.set_encoded_plan(sender_dag_req.SerializeAsString());
     return RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
@@ -282,7 +283,7 @@ void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndReg
     tipb::ExchangeReceiver receiver;
     for (const auto & dispatch_req : dispatch_reqs)
     {
-        const ::mpp::TaskMeta & sender_task_meta = std::get<0>(dispatch_req)->meta();
+        const ::mpp::TaskMeta & sender_task_meta = std::get<0>(dispatch_req).meta();
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
     }
 
@@ -345,7 +346,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 }
 
 void StorageDisaggregated::buildReceiverSources(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const std::vector<RequestAndRegionIDs> & dispatch_reqs,
     unsigned num_streams)
@@ -356,7 +357,7 @@ void StorageDisaggregated::buildReceiverSources(
     {
         group_builder.addConcurrency(
             std::make_unique<ExchangeReceiverSourceOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 exchange_receiver,
                 /*stream_id=*/0));
@@ -371,7 +372,7 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
     if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(filter_conditions, analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
@@ -379,13 +380,13 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
 }
 
 void StorageDisaggregated::filterConditions(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     DAGExpressionAnalyzer & analyzer)
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
         context.getDAGContext()->addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
@@ -421,20 +422,19 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
-        for (auto & stream : pipeline.streams)
-        {
+        pipeline.transform([&](auto & stream) {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
-        }
+        });
     }
 }
 
-void StorageDisaggregated::extraCast(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+void StorageDisaggregated::extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
         });
     }
 }

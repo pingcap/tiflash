@@ -18,10 +18,12 @@
 #include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -113,8 +115,14 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status);
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, UInt64 small_file_size_threshold, UInt64 merged_file_max_size, DMFileFormat::Version version)
 {
+    // if small_file_size_threshold == 0 we should use DMFileFormat::V2
+    if (version == DMFileFormat::V3 and small_file_size_threshold == 0)
+    {
+        version = DMFileFormat::V2;
+    }
+
     fiu_do_on(FailPoints::force_use_dmfile_format_v3, {
         // some unit test we need mock upload DMFile to S3, which only support DMFileFormat::V3
         version = DMFileFormat::V3;
@@ -125,6 +133,8 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigura
                                     file_id,
                                     parent_path,
                                     Status::WRITABLE,
+                                    small_file_size_threshold,
+                                    merged_file_max_size,
                                     std::move(configuration),
                                     version));
 
@@ -1050,55 +1060,19 @@ void DMFile::finalizeDirName()
     old_file.renameTo(new_path);
 }
 
-std::vector<std::pair<String, UInt64>> DMFile::listFilesForUpload()
+std::vector<String> DMFile::listFilesForUpload()
 {
     RUNTIME_CHECK(useMetaV2());
-    std::vector<std::pair<String, UInt64>> fnames;
-    fnames.emplace_back(metav2FileName(), /*file_size*/ 0); // We don't need the meta file's size currently.
-    for (const auto & merged_file : merged_files)
+    std::vector<String> fnames;
+    Poco::DirectoryIterator end;
+    for (Poco::DirectoryIterator itr(path()); itr != end; ++itr)
     {
-        fnames.emplace_back(mergedFilename(merged_file.number), merged_file.size);
-    }
-    auto col_fnames = listColumnFilesWithSize();
-    for (const auto & [fname, fsize] : col_fnames)
-    {
-        auto itr = merged_sub_file_infos.find(fname);
-        if (itr == merged_sub_file_infos.end())
+        if (itr.name() != "NGC")
         {
-            fnames.emplace_back(fname, fsize);
+            fnames.emplace_back(itr.name());
         }
     }
     return fnames;
-}
-
-std::vector<std::pair<String, UInt64>> DMFile::listColumnFilesWithSize()
-{
-    RUNTIME_CHECK(useMetaV2());
-    std::vector<std::pair<String, UInt64>> fnames;
-    for (const auto & [col_id, stat] : column_stats)
-    {
-        listFilesOfColumn(col_id, stat, [&fnames](String && fname, UInt64 fsize) {
-            fnames.emplace_back(std::move(fname), fsize);
-        });
-    }
-    return fnames;
-}
-
-void DMFile::listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle)
-{
-    auto name_base = getFileNameBase(col_id, {});
-    handle(colDataFileName(name_base), stat.data_bytes);
-    handle(colMarkFileName(name_base), stat.mark_bytes);
-    if (stat.index_bytes > 0)
-    {
-        handle(colIndexFileName(name_base), stat.index_bytes);
-    }
-    if (stat.type->isNullable())
-    {
-        auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
-        handle(colDataFileName(null_name_base), stat.nullmap_data_bytes);
-        handle(colMarkFileName(null_name_base), stat.nullmap_mark_bytes);
-    }
 }
 
 void DMFile::switchToRemote(const S3::DMFileOID & oid)
@@ -1114,79 +1088,76 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
     std::filesystem::remove_all(local_path);
 }
 
-void DMFile::finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
-{
-    std::unique_ptr<WriteBufferFromFileBase> cur_write_file;
-    MergedFile cur_merged_file;
 
-    auto create_write_file = [&](UInt64 number) {
-        return std::make_unique<WriteBufferFromFileProvider>(
+void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+{
+    if (writer.file_info.size >= merged_file_max_size)
+    {
+        // finialize cur merged file
+        writer.buffer->sync();
+        merged_files.push_back(writer.file_info);
+        auto cur_number = writer.file_info.number;
+
+        // create a new merge file
+        writer.file_info.number = cur_number + 1;
+        writer.file_info.size = 0;
+        writer.buffer.reset();
+
+        writer.buffer = std::make_unique<WriteBufferFromFileProvider>(
             file_provider,
-            mergedPath(number),
-            encryptionMergedPath(number),
+            mergedPath(writer.file_info.number),
+            encryptionMergedPath(writer.file_info.number),
             /*create_new_encryption_info*/ false,
             write_limiter);
-    };
+    }
+}
 
-    auto init_cur = [&]() {
-        cur_merged_file.number = merged_files.size();
-        cur_write_file = create_write_file(cur_merged_file.number);
-    };
-
-    auto finalize_cur = [&]() {
-        cur_write_file->sync();
-        merged_files.push_back(cur_merged_file);
-        cur_write_file.reset();
-        cur_merged_file.size = 0;
-    };
-
+void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+{
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
+        checkMergedFile(writer, file_provider, write_limiter);
+
         auto read_file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
         std::vector<char> read_buf(fsize);
         auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
-        cur_write_file->write(read_buf.data(), read_buf.size());
-        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, cur_merged_file.number, /*offset*/ cur_merged_file.size, /*size*/ read_buf.size()));
-        cur_merged_file.size += read_buf.size();
+
+        writer.buffer->write(read_buf.data(), read_buf.size());
+        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, writer.file_info.number, /*offset*/ writer.file_info.size, /*size*/ read_buf.size()));
+        writer.file_info.size += read_buf.size();
     };
 
-    auto copy_files_to_cur = [&](const std::vector<std::pair<String, UInt64>> & fnames) {
-        for (const auto & [fname, fsize] : fnames)
-        {
-            copy_file_to_cur(fname, fsize);
-        }
-    };
-
+    std::vector<String> delete_file_name;
     for (const auto & [col_id, stat] : column_stats)
     {
-        std::vector<std::pair<String, UInt64>> fnames;
-        listFilesOfColumn(col_id, stat, [&fnames](String && fname, UInt64 fsize) {
-            if (fsize <= small_file_size_threshold.load(std::memory_order_relaxed))
+        // check .data
+        if (stat.data_bytes <= small_file_size_threshold)
+        {
+            auto fname = colDataFileName(getFileNameBase(col_id, {}));
+            auto fsize = stat.data_bytes;
+            copy_file_to_cur(fname, fsize);
+            delete_file_name.push_back(fname);
+        }
+
+        // check .null.data
+        if (stat.type->isNullable())
+        {
+            if (stat.nullmap_data_bytes <= small_file_size_threshold)
             {
-                fnames.emplace_back(std::move(fname), fsize);
+                auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
+                auto fsize = stat.nullmap_data_bytes;
+                copy_file_to_cur(fname, fsize);
+                delete_file_name.push_back(fname);
             }
-        });
-        if (fnames.empty())
-        {
-            continue;
         }
-
-        if (cur_merged_file.size >= merged_file_max_size.load(std::memory_order_relaxed))
-        {
-            finalize_cur();
-        }
-
-        if (cur_write_file == nullptr)
-        {
-            init_cur();
-        }
-
-        copy_files_to_cur(fnames);
     }
 
-    if (cur_write_file != nullptr)
+    writer.buffer->sync();
+    merged_files.push_back(writer.file_info);
+
+    for (auto & fname : delete_file_name)
     {
-        finalize_cur();
+        std::filesystem::remove(subFilePath(fname));
     }
 }
 
@@ -1220,27 +1191,21 @@ UInt64 DMFile::getFileSize(ColId col_id, const String & filename) const
     }
 }
 
-S3::S3RandomAccessFile::ReadFileInfo DMFile::getReadFileInfo(ColId col_id, const String & filename) const
+UInt64 DMFile::getReadFileSize(ColId col_id, const String & filename) const
 {
     auto itr = merged_sub_file_infos.find(filename);
     if (itr != merged_sub_file_infos.end())
     {
-        return getMergedFileInfoOfColumn(itr->second);
+        return getMergedFileSizeOfColumn(itr->second);
     }
     else
     {
-        return S3::S3RandomAccessFile::ReadFileInfo{.size = getFileSize(col_id, filename)};
+        return getFileSize(col_id, filename);
     }
 }
 
-S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const
+UInt64 DMFile::getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const
 {
-    S3::S3RandomAccessFile::ReadFileInfo read_file_info;
-
-    read_file_info.merged_filename = mergedPath(file_info.number);
-    read_file_info.read_merged_offset = file_info.offset;
-    read_file_info.read_merged_size = file_info.size;
-
     // Get filesize of merged file.
     auto itr = std::find_if(
         merged_files.begin(),
@@ -1249,24 +1214,7 @@ S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const Mer
             return merged_file.number == file_info.number;
         });
     RUNTIME_CHECK(itr != merged_files.end());
-    read_file_info.size = itr->size;
-    return read_file_info;
+    return itr->size;
 }
-
-void DMFile::updateMergeFileConfig(const Settings & settings)
-{
-    if (settings.dt_small_file_size_threshold != small_file_size_threshold.load(std::memory_order_relaxed))
-    {
-        LOG_INFO(Logger::get(), "small_file_size_threshold {} => {}", small_file_size_threshold.load(std::memory_order_relaxed), settings.dt_small_file_size_threshold.get());
-        small_file_size_threshold.store(settings.dt_small_file_size_threshold, std::memory_order_relaxed);
-    }
-
-    if (settings.dt_merged_file_max_size != merged_file_max_size.load(std::memory_order_relaxed))
-    {
-        LOG_INFO(Logger::get(), "merged_file_max_size {} => {}", small_file_size_threshold.load(std::memory_order_relaxed), settings.dt_merged_file_max_size.get());
-        merged_file_max_size.store(settings.dt_merged_file_max_size, std::memory_order_relaxed);
-    }
-}
-
 } // namespace DM
 } // namespace DB

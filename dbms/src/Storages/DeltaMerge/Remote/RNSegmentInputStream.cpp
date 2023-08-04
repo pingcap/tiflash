@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
@@ -20,9 +21,13 @@
 
 #include <magic_enum.hpp>
 
+namespace DB::FailPoints
+{
+extern const char pause_when_reading_from_dt_stream[];
+} // namespace DB::FailPoints
+
 namespace DB::DM::Remote
 {
-
 RNSegmentInputStream::~RNSegmentInputStream()
 {
     LOG_INFO(
@@ -78,6 +83,7 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
         }
 
         Stopwatch w{CLOCK_MONOTONIC_COARSE};
+        FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
         Block res = current_seg_task->getInputStream()->read(res_filter, return_filter);
         duration_read_sec += w.elapsedSeconds();
 

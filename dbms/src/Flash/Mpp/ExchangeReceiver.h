@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 #include <future>
@@ -217,10 +216,9 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
     ReceivedMessageQueue received_message_queue;
 
-    std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;
+    std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext>>> async_handler_ptrs;
 
     std::mutex mu;
     std::condition_variable cv;

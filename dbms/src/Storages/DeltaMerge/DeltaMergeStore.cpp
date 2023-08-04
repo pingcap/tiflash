@@ -948,6 +948,116 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     return res;
 }
 
+// Read data without mvcc filtering.
+// just for debug
+// readRaw is called under 'selraw  xxxx'
+void DeltaMergeStore::readRaw(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const Context & db_context,
+    const DB::Settings & db_settings,
+    const ColumnDefines & columns_to_read,
+    size_t num_streams,
+    bool keep_order,
+    const SegmentIdSet & read_segments,
+    size_t extra_table_id_index)
+{
+    SegmentReadTasks tasks;
+
+    auto dm_context = newDMContext(db_context, db_settings, fmt::format("read_raw_{}", db_context.getCurrentQueryId()));
+    // If keep order is required, disable read thread.
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
+    {
+        std::shared_lock lock(read_write_mutex);
+
+        for (const auto & [handle, segment] : segments)
+        {
+            (void)handle;
+            if (read_segments.empty() || read_segments.count(segment->segmentId()))
+            {
+                auto segment_snap = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
+                if (unlikely(!segment_snap))
+                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+
+                tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
+            }
+        }
+    }
+
+    fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
+        std::thread thread_hold_snapshots([this, tasks]() {
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
+            std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
+            (void)tasks;
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
+        });
+        thread_hold_snapshots.detach();
+    });
+
+    auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
+    };
+    size_t final_num_stream = enable_read_thread
+        ? std::max(1, num_streams)
+        : std::max(1, std::min(num_streams, tasks.size()));
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        physical_table_id,
+        extra_table_id_index,
+        dm_context,
+        columns_to_read,
+        EMPTY_FILTER,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        /* read_mode */ ReadMode::Raw,
+        std::move(tasks),
+        after_segment_read,
+        req_info,
+        enable_read_thread,
+        final_num_stream);
+
+    if (enable_read_thread)
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<UnorderedSourceOp>(
+                    exec_context,
+                    read_task_pool,
+                    columns_to_read,
+                    extra_table_id_index,
+                    req_info));
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_context,
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                EMPTY_FILTER,
+                std::numeric_limits<UInt64>::max(),
+                DEFAULT_BLOCK_SIZE,
+                /* read_mode */ ReadMode::Raw,
+                req_info));
+        }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_context,
+                req_info,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
+    }
+}
+
 static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, bool keep_order)
 {
     if (is_fast_scan)
@@ -1069,7 +1179,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 void DeltaMergeStore::read(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,
@@ -1078,6 +1188,8 @@ void DeltaMergeStore::read(
     size_t num_streams,
     UInt64 max_version,
     const PushDownFilterPtr & filter,
+    const RuntimeFilteList & runtime_filter_list,
+    const int rf_max_wait_time_ms,
     const String & tracing_id,
     bool keep_order,
     bool is_fast_scan,
@@ -1134,11 +1246,13 @@ void DeltaMergeStore::read(
         {
             group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
-                    exec_status,
+                    exec_context,
                     read_task_pool,
-                    columns_to_read,
+                    filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                     extra_table_id_index,
-                    log_tracing_id));
+                    log_tracing_id,
+                    runtime_filter_list,
+                    rf_max_wait_time_ms));
         }
     }
     else
@@ -1146,7 +1260,7 @@ void DeltaMergeStore::read(
         for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
-                exec_status,
+                exec_context,
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -1159,7 +1273,7 @@ void DeltaMergeStore::read(
         }
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
-                exec_status,
+                exec_context,
                 log_tracing_id,
                 columns_to_read,
                 extra_table_id_index,
@@ -1846,7 +1960,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
-    LOG_DEBUG(
+    LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
         watch.elapsedMilliseconds(),

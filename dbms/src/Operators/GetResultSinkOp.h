@@ -24,10 +24,10 @@ class GetResultSinkOp : public SinkOp
 {
 public:
     GetResultSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const ResultQueuePtr & result_queue_)
-        : SinkOp(exec_status_, req_id)
+        : SinkOp(exec_context_, req_id)
         , result_queue(result_queue_)
     {
         assert(result_queue);

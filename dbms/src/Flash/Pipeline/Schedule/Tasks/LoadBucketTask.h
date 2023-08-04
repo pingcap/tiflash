@@ -24,18 +24,17 @@ class LoadBucketTask : public InputIOEventTask
 {
 public:
     LoadBucketTask(
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
-        PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         SpilledBucketInput & input_)
-        : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        : IOEventTask(exec_context_, req_id, event_)
         , input(input_)
     {
     }
 
 private:
-    ExecTaskStatus doExecuteIOImpl() override;
+    ExecTaskStatus executeIOImpl() override;
 
 private:
     SpilledBucketInput & input;

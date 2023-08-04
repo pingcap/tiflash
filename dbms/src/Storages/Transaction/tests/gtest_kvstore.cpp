@@ -28,7 +28,7 @@ try
         proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
     }
     {
-        kvs.tryPersistRegion(1);
+        tryPersistRegion(kvs, 1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -635,7 +635,7 @@ TEST_F(RegionKVStoreTest, Writes)
     }
     {
         // Test gc region persister
-        kvs.tryPersistRegion(1);
+        tryPersistRegion(kvs, 1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -1025,7 +1025,7 @@ try
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), fmt::format("[region {}] already has newer apply-index 8 than 6, should not happen", region_id));
+                ASSERT_EQ(e.message(), fmt::format("try to apply with older index, region_id={} applied_index={} new_index={}", region_id, 8, 6));
             }
         }
 
@@ -1057,7 +1057,7 @@ try
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), "range of region 20 is overlapped with 22, state: region { id: 22 }");
+                ASSERT_EQ(e.message(), "range of region_id=20 is overlapped with region_id=22, state: region { id: 22 }");
             }
         }
         {
@@ -1157,9 +1157,9 @@ TEST_F(RegionKVStoreTest, Restore)
             ASSERT_EQ(kvs.getRegion(0), nullptr);
             proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 2, 3}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}, {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
         }
-        kvs.tryPersistRegion(1);
-        kvs.tryPersistRegion(2);
-        kvs.tryPersistRegion(3);
+        tryPersistRegion(kvs, 1);
+        tryPersistRegion(kvs, 2);
+        tryPersistRegion(kvs, 3);
     }
     {
         KVStore & kvs = reloadKVSFromDisk();
@@ -1251,7 +1251,7 @@ TEST_F(RegionKVStoreTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region 1");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region_id=1");
         }
 
         region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 3), RecordKVFormat::genKey(1, 5)));
@@ -1285,7 +1285,7 @@ TEST_F(RegionKVStoreTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): range of region 2 is empty");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): range of region_id=2 is empty");
         }
 
         try
@@ -1296,7 +1296,7 @@ TEST_F(RegionKVStoreTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region 2");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region_id=2");
         }
 
         region_index.clear();

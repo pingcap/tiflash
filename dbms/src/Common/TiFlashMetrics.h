@@ -417,7 +417,6 @@ namespace DB
         F(type_cpu, {{"type", "cpu"}}, ExpBuckets{0.005, 2, 20}),                                                                                   \
         F(type_io, {{"type", "io"}}, ExpBuckets{0.005, 2, 20}))                                                                                     \
     M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
-        F(type_to_init, {"type", "to_init"}),                                                                                                       \
         F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
         F(type_to_running, {"type", "to_running"}),                                                                                                 \
         F(type_to_io, {"type", "to_io"}),                                                                                                           \

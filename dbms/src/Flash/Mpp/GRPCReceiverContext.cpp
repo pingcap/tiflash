@@ -24,36 +24,6 @@
 #include <cassert>
 #include <tuple>
 
-namespace pingcap
-{
-namespace kv
-{
-template <>
-struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
-{
-    using RequestType = mpp::EstablishMPPConnectionRequest;
-    using ResultType = mpp::MPPDataPacket;
-    static std::unique_ptr<grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req)
-    {
-        return client->stub->EstablishMPPConnection(context, req);
-    }
-    static std::unique_ptr<grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        grpc::CompletionQueue & cq,
-        void * call)
-    {
-        return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
-    }
-};
-
-} // namespace kv
-} // namespace pingcap
-
 namespace DB
 {
 namespace FailPoints
@@ -63,16 +33,16 @@ extern const char random_exception_when_connect_local_tunnel[];
 
 namespace
 {
+
+using RpcCallEstablishMPPConnection = pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(EstablishMPPConnection)>;
+using RpcCallAsyncEstablishMPPConnection = pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(AsyncEstablishMPPConnection)>;
+
 struct GrpcExchangePacketReader : public ExchangePacketReader
 {
-    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
     grpc::ClientContext client_context;
     std::unique_ptr<grpc::ClientReader<mpp::MPPDataPacket>> reader;
 
-    explicit GrpcExchangePacketReader(const ExchangeRecvRequest & req)
-    {
-        call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
-    }
+    GrpcExchangePacketReader() = default;
 
     bool read(TrackedMppDataPacketPtr & packet) override
     {
@@ -91,7 +61,6 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 {
     pingcap::kv::Cluster * cluster;
     const ExchangeRecvRequest & request;
-    pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
     grpc::ClientContext client_context;
     grpc::CompletionQueue * cq; // won't be null
     std::unique_ptr<grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
@@ -102,30 +71,25 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
         const ExchangeRecvRequest & req_)
         : cluster(cluster_)
         , request(req_)
-        , call(req_.req)
         , cq(cq_)
     {
         assert(cq != nullptr);
     }
 
-    void init(UnaryCallback<bool> * callback) override
+    void init(GRPCKickTag * tag) override
     {
-        reader = cluster->rpc_client->sendStreamRequestAsync(
-            request.req->sender_meta().address(),
-            &client_context,
-            call,
-            *cq,
-            callback);
+        RpcCallAsyncEstablishMPPConnection rpc(cluster->rpc_client, request.req.sender_meta().address());
+        reader = rpc.call(&client_context, request.req, cq, tag);
     }
 
-    void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) override
     {
-        packet->read(reader, callback);
+        packet->read(reader, tag);
     }
 
-    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
+    void finish(::grpc::Status & status, GRPCKickTag * tag) override
     {
-        reader->Finish(&status, callback);
+        reader->Finish(&status, tag);
     }
 
     grpc::ClientContext * getClientContext() override
@@ -170,9 +134,8 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.is_local = enable_local_tunnel && sender_task->address() == task_meta.address();
     req.send_task_id = sender_task->task_id();
     req.recv_task_id = task_meta.task_id();
-    req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta)); // NOLINT
-    req.req->set_allocated_sender_meta(sender_task.release()); // NOLINT
+    req.req.set_allocated_receiver_meta(new mpp::TaskMeta(task_meta)); // NOLINT
+    req.req.set_allocated_sender_meta(sender_task.release()); // NOLINT
     return req;
 }
 
@@ -186,7 +149,7 @@ void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
     for (const RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
     {
-        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
+        LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req).DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [&dispatch_req, this] {
             // When send req succeed or backoff timeout, need_retry is false.
             bool need_retry = true;
@@ -195,16 +158,20 @@ void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
             {
                 try
                 {
-                    pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(std::get<0>(dispatch_req));
-                    this->cluster->rpc_client->sendRequest(std::get<0>(dispatch_req)->meta().address(), rpc_call, /*timeout=*/60);
+                    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(DispatchMPPTask)> rpc(cluster->rpc_client, std::get<0>(dispatch_req).meta().address());
+                    grpc::ClientContext client_context;
+                    rpc.setClientContext(client_context, 60);
+                    mpp::DispatchTaskResponse resp;
+                    auto status = rpc.call(&client_context, std::get<0>(dispatch_req), &resp);
+                    if (!status.ok())
+                        throw Exception(rpc.errMsg(status));
                     need_retry = false;
-                    const auto & resp = rpc_call.getResp();
-                    if (resp->has_error())
+                    if (resp.has_error())
                     {
-                        this->setDispatchMPPTaskErrMsg(resp->error().msg());
+                        this->setDispatchMPPTaskErrMsg(resp.error().msg());
                         return;
                     }
-                    for (const auto & retry_region : resp->retry_regions())
+                    for (const auto & retry_region : resp.retry_regions())
                     {
                         auto region_id = pingcap::kv::RegionVerID(
                             retry_region.id(),
@@ -260,18 +227,21 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
             LOG_WARNING(log, "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, will ignore this error");
             return;
         }
-        auto cancel_req = std::make_shared<mpp::CancelTaskRequest>();
-        cancel_req->set_allocated_meta(sender_task.release());
-        auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::CancelTaskRequest>>(cancel_req);
+        mpp::CancelTaskRequest cancel_req;
+        cancel_req.set_allocated_meta(sender_task.release());
         thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [cancel_req, log, this] {
             try
             {
-                auto rpc_call = pingcap::kv::RpcCall<mpp::CancelTaskRequest>(cancel_req);
+                pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(CancelMPPTask)> rpc(cluster->rpc_client, cancel_req.meta().address());
+                grpc::ClientContext client_context;
+                rpc.setClientContext(client_context, /*timeout=*/30);
+                mpp::CancelTaskResponse resp;
                 // No need to retry.
-                this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
-                const auto & resp = rpc_call.getResp();
-                if (resp->has_error())
-                    throw Exception(resp->error().msg());
+                auto status = rpc.call(&client_context, cancel_req, &resp);
+                if (!status.ok())
+                    throw Exception(rpc.errMsg(status));
+                if (resp.has_error())
+                    throw Exception(resp.error().msg());
             }
             catch (...)
             {
@@ -296,7 +266,7 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
 {
     RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
 
-    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(&request.req, std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
     local_request_handler.recordWaitingTaskTime();
     tunnel->connectLocalV2(source_index, local_request_handler, has_remote_conn);
@@ -330,8 +300,6 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         : local_tunnel_sender(local_tunnel_sender_)
     {}
 
-    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
-    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
     ~LocalExchangePacketReader() override
     {
         if (local_tunnel_sender)
@@ -376,7 +344,7 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 {
     if (request.is_local)
     {
-        auto [tunnel, status] = establishMPPConnectionLocalV1(request.req.get(), task_manager);
+        auto [tunnel, status] = establishMPPConnectionLocalV1(&request.req, task_manager);
         if (!status.ok())
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
@@ -385,32 +353,28 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
     }
     else
     {
-        auto reader = std::make_unique<GrpcExchangePacketReader>(request);
-        reader->reader = cluster->rpc_client->sendStreamRequest(
-            request.req->sender_meta().address(),
-            &reader->client_context,
-            *reader->call);
+        RpcCallEstablishMPPConnection rpc(cluster->rpc_client, request.req.sender_meta().address());
+        auto reader = std::make_unique<GrpcExchangePacketReader>();
+        reader->reader = rpc.call(&reader->client_context, request.req);
         return reader;
     }
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const
 {
-    auto reader = std::make_unique<GrpcExchangePacketReader>(request);
-    reader->reader = cluster->rpc_client->sendStreamRequest(
-        request.req->sender_meta().address(),
-        &reader->client_context,
-        *reader->call);
+    RpcCallEstablishMPPConnection rpc(cluster->rpc_client, request.req.sender_meta().address());
+    auto reader = std::make_unique<GrpcExchangePacketReader>();
+    reader->reader = rpc.call(&reader->client_context, request.req);
     return reader;
 }
 
 AsyncExchangePacketReaderPtr GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
     grpc::CompletionQueue * cq,
-    UnaryCallback<bool> * callback) const
+    GRPCKickTag * tag) const
 {
     auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(cluster, cq, request);
-    reader->init(callback);
+    reader->init(tag);
     return reader;
 }
 
@@ -427,6 +391,6 @@ void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
 
 String ExchangeRecvRequest::debugString() const
 {
-    return req->DebugString();
+    return req.DebugString();
 }
 } // namespace DB

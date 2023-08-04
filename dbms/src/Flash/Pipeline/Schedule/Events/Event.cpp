@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
@@ -35,8 +35,14 @@ extern const char random_pipeline_model_event_finish_failpoint[];
     catch (...)                                                  \
     {                                                            \
         LOG_WARNING(log, "error occurred and cancel the query"); \
-        exec_status.onErrorOccurred(std::current_exception());   \
+        exec_context.onErrorOccurred(std::current_exception());  \
     }
+
+Event::Event(PipelineExecutorContext & exec_context_, const String & req_id)
+    : exec_context(exec_context_)
+    , mem_tracker(exec_context_.getMemoryTracker())
+    , log(Logger::get(req_id))
+{}
 
 void Event::addInput(const EventPtr & input)
 {
@@ -85,13 +91,13 @@ bool Event::prepare()
     assertStatus(EventStatus::INIT);
     if (is_source)
     {
-        // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
+        // For source event, `exec_context.incActiveRefCount()` needs to be called before schedule.
         // Suppose there are two source events, A and B, a possible sequence of calls is:
         // `A.prepareForSource --> B.prepareForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
-        // if `exec_status.onEventSchedule()` be called in schedule just like non-source event,
-        // `exec_status.wait` and `result_queue.pop` may return early.
+        // if `exec_context.incActiveRefCount()` be called in schedule just like non-source event,
+        // `exec_context.wait` and `result_queue.pop` may return early.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.onEventSchedule();
+        exec_context.incActiveRefCount();
         return true;
     }
     else
@@ -120,9 +126,9 @@ void Event::schedule()
     }
     else
     {
-        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepare`.
+        // for is_source == true, `exec_context.incActiveRefCount()` has been called in `prepare`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.onEventSchedule();
+        exec_context.incActiveRefCount();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
@@ -159,7 +165,7 @@ void Event::scheduleTasks()
 void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 {
     assertStatus(EventStatus::SCHEDULED);
-    exec_status.update(task_profile_info);
+    exec_context.update(task_profile_info);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
     RUNTIME_ASSERT(
         remaining_tasks >= 0,
@@ -177,32 +183,34 @@ void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
     finish_duration = stopwatch.elapsed();
-    MemoryTrackerSetter setter{true, mem_tracker.get()};
-    try
     {
-        finishImpl();
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_finish_failpoint);
-    }
-    CATCH
-    // If query has already been cancelled, it will not trigger outputs.
-    if (likely(!exec_status.isCancelled()))
-    {
-        // finished processing the event, now we can schedule output events.
-        for (auto & output : outputs)
+        MemoryTrackerSetter setter{true, mem_tracker.get()};
+        try
         {
-            RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
-            output->onInputFinish();
-            output.reset();
+            finishImpl();
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_finish_failpoint);
         }
+        CATCH
+        // If query has already been cancelled, it will not trigger outputs.
+        if (likely(!exec_context.isCancelled()))
+        {
+            // finished processing the event, now we can schedule output events.
+            for (auto & output : outputs)
+            {
+                RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
+                output->onInputFinish();
+                output.reset();
+            }
+        }
+        // Release all output, so that the event that did not call `finishImpl`
+        // because of `exec_context.isCancelled()` will be destructured before the end of `exec_context.wait`.
+        outputs.clear();
     }
-    // Release all output, so that the event that did not call `finishImpl`
-    // because of `exec_status.isCancelled()` will be destructured before the end of `exec_status.wait`.
-    outputs.clear();
-    // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
-    // we have to call `exec_status.onEventFinish()` here,
-    // since `exec_status.onEventSchedule()` will have been called by outputs.
-    // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
-    exec_status.onEventFinish();
+    // In order to ensure that `exec_context.wait()` doesn't finish when there is an active event,
+    // we have to call `exec_context.decActiveRefCount()` here,
+    // since `exec_context.incActiveRefCount()` will have been called by outputs.
+    // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_context.await finished`.
+    exec_context.decActiveRefCount();
 }
 
 UInt64 Event::getScheduleDuration() const

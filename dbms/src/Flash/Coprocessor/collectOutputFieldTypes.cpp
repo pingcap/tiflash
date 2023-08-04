@@ -100,6 +100,14 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
+bool collectForExpand2(std::vector<tipb::FieldType> & output_field_types, const tipb::Expand2 & expand2)
+{
+    // just collect from the level one.
+    for (const auto & expr : expand2.proj_exprs().Get(0).exprs())
+        output_field_types.push_back(expr.field_type());
+    return false;
+}
+
 bool collectForExpand(std::vector<tipb::FieldType> & out_field_types, const tipb::Executor & executor)
 {
     auto & out_child_fields = out_field_types;
@@ -231,6 +239,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         return collectForJoin(output_field_types, executor);
     case tipb::ExecType::TypeExpand:
         return collectForExpand(output_field_types, executor);
+    case tipb::ExecType::TypeExpand2:
+        return collectForExpand2(output_field_types, executor.expand2());
     default:
         return true;
     }

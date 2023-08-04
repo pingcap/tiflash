@@ -25,11 +25,11 @@ class PartialSortTransformOp : public TransformOp
 {
 public:
     PartialSortTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id_,
         const SortDescription & order_desc_,
         size_t limit_)
-        : TransformOp(exec_status_, req_id_)
+        : TransformOp(exec_context_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)
     {}

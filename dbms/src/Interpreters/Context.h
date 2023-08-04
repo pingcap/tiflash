@@ -505,6 +505,8 @@ public:
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
+    void mockConfigLoaded() { is_config_loaded = true; }
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.

@@ -177,7 +177,7 @@ public:
 
         if (cur_stream)
         {
-            if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*cur_stream))
+            if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*cur_stream))
             {
                 child->cancel(kill);
             }

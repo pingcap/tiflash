@@ -529,9 +529,10 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     // (the checkpoint info) each page's data was dumped.
     // In this case, there is a living snapshot protecting the data.
 
-    // Pre-check: All ENTRY edit record must contain checkpoint info for copying.
     RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
-    RUNTIME_CHECK(edit.entry.checkpoint_info.has_value());
+    // The checkpoint_info from `edit` could be empty when we upload the manifest without any page data
+    if (!edit.entry.checkpoint_info.has_value())
+        return;
 
     auto page_lock = acquireLock();
 
@@ -1558,6 +1559,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
+    SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
@@ -1813,24 +1815,39 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 }
 
 template <typename Trait>
+typename PageDirectory<Trait>::PageTypeAndGcInfo
+PageDirectory<Trait>::getEntriesByBlobIdsForDifferentPageTypes(const typename PageDirectory<Trait>::PageTypeAndBlobIds & page_type_and_blob_ids) const
+{
+    PageDirectory<Trait>::PageTypeAndGcInfo page_type_and_gc_info;
+    // Because raft related data should do full gc less frequently, so we get the gc info for different page types separately.
+    // TODO: get entries in a single traverse of PageDirectory
+    for (const auto & [page_type, blob_ids] : page_type_and_blob_ids)
+    {
+        auto [blob_versioned_entries, total_page_size] = getEntriesByBlobIds(blob_ids);
+        page_type_and_gc_info.emplace_back(page_type, std::move(blob_versioned_entries), total_page_size);
+    }
+
+    return page_type_and_gc_info;
+}
+
+template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
+    auto identifier = fmt::format("{}.dump", wal->name());
+    auto snap = createSnapshot(identifier);
+
     // Only apply compact logs when files snapshot is valid
-    auto files_snap = wal->tryGetFilesSnapshot(max_persisted_log_files, force);
+    auto files_snap = wal->tryGetFilesSnapshot(
+        max_persisted_log_files,
+        snap->sequence,
+        details::getMaxSequenceForRecord<Trait>,
+        force);
     if (!files_snap.isValid())
         return false;
 
-    // To prevent writes from affecting dumping snapshot (and vice versa), old log files
-    // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
-    // The main reason write affect dumping snapshot is that we can not get a read-only
-    // `being_ref_count` by the function `createSnapshot()`.
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
-    auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
-    auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
 
     Stopwatch watch;
-    // The records persisted in `files_snap` is older than or equal to all records in `edit`
-    auto snap = createSnapshot(identifier);
     auto edit = dumpSnapshotToEdit(snap);
     files_snap.num_records = edit.size();
     files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();
@@ -1853,14 +1870,6 @@ size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & 
     const auto & records = edit.getRecords();
     if (records.empty())
         return num_copied;
-
-    // Pre-check: All ENTRY edit record must contain checkpoint info.
-    // We do the pre-check before copying any remote info to avoid partial completion.
-    for (const auto & rec : records)
-    {
-        if (rec.type == EditRecordType::VAR_ENTRY)
-            RUNTIME_CHECK_MSG(rec.entry.checkpoint_info.has_value(), "try to copy checkpoint from an edit with invalid record: {}", rec);
-    }
 
     for (const auto & rec : records)
     {

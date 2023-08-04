@@ -51,22 +51,19 @@ public:
     void buildPipeline(
         PipelineBuilder & builder,
         Context & context,
-        PipelineExecutorStatus & exec_status) override;
+        PipelineExecutorContext & exec_context) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     void buildPipelineExecGroupImpl(
-        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecutorContext & /*exec_status*/,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,
         size_t /*concurrency*/) override;
 
-    void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
-    void buildProjection(
-        PipelineExecutorStatus & exec_status,
-        PipelineExecGroupBuilder & group_builder,
-        const NamesAndTypes & storage_schema);
+    void buildProjection(DAGPipeline & pipeline);
+    void buildProjection(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
 private:
     FilterConditions filter_conditions;

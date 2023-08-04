@@ -122,8 +122,6 @@ public:
 
     void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
 
-    void tryPersistRegion(RegionID region_id);
-
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
@@ -281,7 +279,7 @@ private:
         UInt64 curr_region_id,
         UInt64 index,
         UInt64 term,
-        TMTContext & tmt);
+        TMTContext & tmt) const;
 
     /// Notice that if flush_if_possible is set to false, we only check if a flush is allowed by rowsize/size/interval.
     /// It will not check if a flush will eventually succeed.

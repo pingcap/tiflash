@@ -23,7 +23,6 @@ mysql> insert into test.t2 values (1, 'abc', 'abc '),(2, 'Abc', 'abc'),(3,'def',
 func> wait_table test t1
 func> wait_table test t2
 
->> DBGInvoke __try_flush()
 mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value;
 +------+-------+--------+------+-------+--------+
 | id   | value | value1 | id   | value | value1 |

@@ -146,12 +146,12 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
 }
 
 void PhysicalProjection::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    executeExpression(exec_status, group_builder, project_actions, log);
+    executeExpression(exec_context, group_builder, project_actions, log);
 }
 
 void PhysicalProjection::finalize(const Names & parent_require)

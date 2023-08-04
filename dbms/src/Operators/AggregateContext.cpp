@@ -31,7 +31,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
         many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
     }
 
-    aggregator = std::make_unique<Aggregator>(params, log->identifier());
+    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads);
     aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     status = AggStatus::build;
@@ -42,7 +42,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
 void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
 {
     assert(status.load() == AggStatus::build);
-    aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index]->key_columns, threads_data[task_index]->aggregate_columns);
+    aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index]->key_columns, threads_data[task_index]->aggregate_columns, task_index);
     threads_data[task_index]->src_bytes += block.bytes();
     threads_data[task_index]->src_rows += block.rows();
 }
@@ -79,14 +79,14 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
-std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorStatus & exec_status)
+std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorContext & exec_context)
 {
     assert(status.load() == AggStatus::build);
     aggregator->finishSpill();
     LOG_INFO(log, "Begin restore data from disk for shared aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
-    auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
+    auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_context, input_streams, log->identifier(), max_threads);
     std::vector<SharedAggregateRestorerPtr> ret;
     for (size_t i = 0; i < max_threads; ++i)
         ret.push_back(std::make_unique<SharedAggregateRestorer>(*aggregator, loader));
@@ -131,7 +131,8 @@ void AggregateContext::initConvergentPrefix()
             this->getHeader(),
             *many_data[0],
             threads_data[0]->key_columns,
-            threads_data[0]->aggregate_columns);
+            threads_data[0]->aggregate_columns,
+            0);
         /// Since this won't consume a lot of memory,
         /// even if it triggers marking need spill due to a low threshold setting,
         /// it's still reasonable not to spill disk.

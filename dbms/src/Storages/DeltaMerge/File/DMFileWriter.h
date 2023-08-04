@@ -43,7 +43,6 @@ class DMFileWriter
 {
 public:
     using WriteBufferFromFileBasePtr = std::unique_ptr<WriteBufferFromFileBase>;
-
     struct Stream
     {
         Stream(const DMFilePtr & dmfile,
@@ -70,39 +69,34 @@ public:
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(*plain_file, compression_settings))
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
-            , mark_file(WriteBufferByFileProviderBuilder(
-                            dmfile->configuration.has_value(),
-                            file_provider,
-                            dmfile->colMarkPath(file_base_name),
-                            dmfile->encryptionMarkPath(file_base_name),
-                            false,
-                            write_limiter_)
-                            .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                            .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
-                            .build())
         {
+            if (!dmfile->useMetaV2())
+            {
+                mark_file = WriteBufferByFileProviderBuilder( // will not used in DMFileFormat::V3, could be removed when v3 is default
+                                dmfile->configuration.has_value(),
+                                file_provider,
+                                dmfile->colMarkPath(file_base_name),
+                                dmfile->encryptionMarkPath(file_base_name),
+                                false,
+                                write_limiter_)
+                                .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
+                                .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                                .build();
+            }
+            else
+            {
+                marks = std::make_shared<MarksInCompressedFile>();
+            }
         }
-
-        void flush()
-        {
-            // Note that this method won't flush minmaxes.
-            compressed_buf->next();
-            plain_file->next();
-
-            plain_file->sync();
-            mark_file->sync();
-        }
-
-        // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
-        // Note that this class don't take responsible for serializing `minmaxes`,
-        // bytes of `minmaxes` won't be counted in this method.
-        size_t getWrittenBytes() const { return plain_file->getMaterializedBytes() + mark_file->getMaterializedBytes(); }
 
         // compressed_buf -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         WriteBufferPtr compressed_buf;
 
         MinMaxIndexPtr minmaxes;
+
+        MarksInCompressedFilePtr marks;
+
         WriteBufferFromFileBasePtr mark_file;
     };
     using StreamPtr = std::unique_ptr<Stream>;
@@ -178,6 +172,8 @@ private:
     // If dmfile->useMetaV2() is true, `meta_file` is for metav2,
     // else `meta_file` is for pack stats.
     WriteBufferFromFileBasePtr meta_file;
+
+    DMFile::MergedFileWriter merged_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;

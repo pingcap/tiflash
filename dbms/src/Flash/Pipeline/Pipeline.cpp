@@ -14,7 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
@@ -150,14 +150,25 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
         " -> ");
 }
 
-void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
+const String & Pipeline::toTreeString() const
+{
+    if (!tree_string.empty())
+        return tree_string;
+
+    FmtBuffer buffer;
+    toTreeStringImpl(buffer, 0);
+    tree_string = buffer.toString();
+    return tree_string;
+}
+
+void Pipeline::toTreeStringImpl(FmtBuffer & buffer, size_t level) const
 {
     toSelfString(buffer, level);
     if (!children.empty())
         buffer.append("\n");
     ++level;
     for (const auto & child : children)
-        child->toTreeString(buffer, level);
+        child->toTreeStringImpl(buffer, level);
 }
 
 void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
@@ -167,13 +178,25 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
     addPlanNode(get_result_sink);
 }
 
-PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
+String Pipeline::getFinalPlanExecId() const
+{
+    // NOLINTNEXTLINE(modernize-loop-convert)
+    for (auto it = plan_nodes.crbegin(); it != plan_nodes.crend(); ++it)
+    {
+        const auto & plan_node = *it;
+        if (plan_node->isTiDBOperator())
+            return plan_node->execId();
+    }
+    return "";
+}
+
+PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
     {
-        plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
+        plan_node->buildPipelineExecGroup(exec_context, builder, context, concurrency);
     }
     return builder.build();
 }
@@ -198,48 +221,47 @@ bool Pipeline::isFineGrainedMode() const
     return is_fine_grained_mode;
 }
 
-EventPtr Pipeline::complete(PipelineExecutorStatus & exec_status)
+EventPtr Pipeline::complete(PipelineExecutorContext & exec_context)
 {
     assert(!isFineGrainedMode());
-    if unlikely (exec_status.isCancelled())
+    if unlikely (exec_context.isCancelled())
         return nullptr;
     assert(!plan_nodes.empty());
-    return plan_nodes.back()->sinkComplete(exec_status);
+    return plan_nodes.back()->sinkComplete(exec_context);
 }
 
-Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
+Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     Events all_events;
-    doToEvents(status, context, concurrency, all_events);
+    doToEvents(exec_context, context, concurrency, all_events);
     RUNTIME_CHECK(!all_events.empty());
     return all_events;
 }
 
-PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
+PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
-    auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
     RUNTIME_CHECK(!plan_nodes.empty());
     if (isFineGrainedMode())
     {
-        auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
+        auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
-        self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
+        self_events.push_back(std::make_shared<PlainPipelineEvent>(exec_context, log->identifier(), context, shared_from_this(), concurrency));
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
 }
 
-PipelineEvents Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+PipelineEvents Pipeline::doToEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, Events & all_events)
 {
-    auto self_events = toSelfEvents(status, context, concurrency);
+    auto self_events = toSelfEvents(exec_context, context, concurrency);
     for (const auto & child : children)
-        self_events.mapInputs(child->doToEvents(status, context, concurrency, all_events));
+        self_events.mapInputs(child->doToEvents(exec_context, context, concurrency, all_events));
     all_events.insert(all_events.end(), self_events.events.cbegin(), self_events.events.cend());
     return self_events;
 }
@@ -261,6 +283,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
+            case tipb::ExecType::TypeExpand2:
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeWindow:
