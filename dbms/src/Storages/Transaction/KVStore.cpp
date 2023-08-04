@@ -312,7 +312,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(const WriteCmdsView & cmds,
     /// This call is from Proxy's applying thread of this region, so:
     /// 1. No other thread can write from raft to this region even if we unlocked here.
     /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
-    // TODO We will enable this once TiKV supports.
+    // TODO(proactive flush)
     // if (write_result)
     // {
     //     auto & inner = write_result.value();
@@ -380,7 +380,7 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, U
         gap);
 }
 
-void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg)
+void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg) const
 {
     RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     if (region_task_lock.has_value())
@@ -485,7 +485,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
         can_flush = true;
     }
     auto gap_threshold = region_compact_log_gap.load();
-    
+
     auto last_compact_log_applied = curr_region.lastCompactLogApplied();
     auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
 
@@ -1008,7 +1008,7 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 
 void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
 {
-    // TODO We will enable this once TiKV supports.
+    // TODO(proactive flush)
     UNUSED(tmt);
     UNUSED(rowkey_range);
     UNUSED(keyspace_id);

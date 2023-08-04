@@ -285,9 +285,9 @@ private:
     /// It will not check if a flush will eventually succeed.
     /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
     bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term, UInt64 truncated_index, UInt64 truncated_term);
-    bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
+    bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term) const;
 
-    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg);
+    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg) const;
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 

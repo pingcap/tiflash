@@ -995,7 +995,7 @@ void DeltaMergeStore::readRaw(
     });
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
-        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
+        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read, InputType::NotRaft);
     };
     size_t final_num_stream = enable_read_thread
         ? std::max(1, num_streams)
@@ -1421,8 +1421,8 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
-
-    bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes);
+    // TODO(proactive flush)
+    // bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes);
     bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
@@ -1533,7 +1533,7 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment});
             }
         }
-        // TODO Will enable once TiKV supports.
+        // TODO(proactive flush)
         // if (should_background_compact_log)
         // {
         //     try_add_background_task(BackgroundTask{TaskType::FlushDTAndKVStore, dm_context, segment});

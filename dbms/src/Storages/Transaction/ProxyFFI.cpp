@@ -150,7 +150,7 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        // TODO truncated_index is always 0, since not support in Proxy.
+        // TODO(proactive flush) truncated_index is 0 for now.
         return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term, truncated_index, truncated_term);
     }
     catch (...)
