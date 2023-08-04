@@ -77,6 +77,8 @@ public:
         FileConvertJobType job_type_,
         UInt64 split_after_rows_,
         UInt64 split_after_size_,
+        UInt64 region_id_,
+        std::shared_ptr<std::atomic_bool> abort_flag_,
         Context & context);
     ~SSTFilesToDTFilesOutputStream();
 
@@ -91,6 +93,11 @@ public:
 
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
+
+    bool isAbort() const
+    {
+        return abort_flag->load(std::memory_order_seq_cst);
+    }
 
 private:
     /**
@@ -114,6 +121,8 @@ private:
     const FileConvertJobType job_type;
     const UInt64 split_after_rows;
     const UInt64 split_after_size;
+    const UInt64 region_id;
+    std::shared_ptr<std::atomic_bool> abort_flag;
     Context & context;
     LoggerPtr log;
 
