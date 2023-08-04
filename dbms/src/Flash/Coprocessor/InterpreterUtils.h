@@ -108,7 +108,6 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
-    size_t remote_read_streams_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
@@ -117,13 +116,11 @@ void executePushedDownFilter(
 void executePushedDownFilter(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log);
 
 void executeGeneratedColumnPlaceholder(
-    size_t remote_read_streams_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline);
@@ -131,7 +128,6 @@ void executeGeneratedColumnPlaceholder(
 void executeGeneratedColumnPlaceholder(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log);
 } // namespace DB

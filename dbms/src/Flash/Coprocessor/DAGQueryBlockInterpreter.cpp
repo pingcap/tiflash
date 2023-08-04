@@ -207,15 +207,13 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
-        analyzer = std::move(disaggregated_tiflash_interpreter.analyzer);
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
-
-        analyzer = std::move(storage_interpreter.analyzer);
     }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(pipeline.firstStream()->getHeader(), context);
 }
 
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)
