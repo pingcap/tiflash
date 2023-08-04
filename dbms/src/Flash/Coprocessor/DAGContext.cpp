@@ -59,6 +59,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tab
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(keyspace_id_)
+    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     initOutputInfo();
 }
@@ -79,6 +80,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(meta_))
+    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
@@ -105,6 +107,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::Dis
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(task_meta_))
+    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     initOutputInfo();
 }
@@ -121,6 +124,7 @@ DAGContext::DAGContext(UInt64 max_error_count_)
     , max_recorded_error_count(max_error_count_)
     , warnings(max_recorded_error_count)
     , warning_count(0)
+    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {}
 
 // for tests need to run query tasks.
@@ -138,8 +142,14 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)
+    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     initOutputInfo();
+}
+
+DAGContext::~DAGContext()
+{
+    operator_spill_contexts->finish();
 }
 
 void DAGContext::initOutputInfo()

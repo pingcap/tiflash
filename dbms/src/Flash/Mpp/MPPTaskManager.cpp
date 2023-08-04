@@ -78,7 +78,7 @@ MPPTaskManager::~MPPTaskManager()
 
 MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id)
 {
-    auto ptr = std::make_shared<MPPQuery>(has_meaningful_gather_id);
+    auto ptr = std::make_shared<MPPQuery>(query_id, has_meaningful_gather_id);
     mpp_query_map.insert({query_id, ptr});
     GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     return ptr;
@@ -334,6 +334,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     }
     gather_task_set->registerTask(task->id);
     task->initProcessListEntry(query->process_list_entry);
+    task->initMPPQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
     return {true, ""};
 }
 

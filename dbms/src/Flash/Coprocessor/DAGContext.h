@@ -24,7 +24,6 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
-#include <Core/MPPTaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
@@ -32,7 +31,9 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Executor/toRU.h>
+#include <Flash/Mpp/MPPQueryOperatorSpillContexts.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskOperatorSpillContexts.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
@@ -152,6 +153,8 @@ public:
 
     // for tests need to run query tasks.
     DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
+
+    ~DAGContext();
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
@@ -288,8 +291,9 @@ public:
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
-    void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
+    void setProcessListEntry(const std::shared_ptr<ProcessListEntry> & entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
+    void setMPPQueryOperatorSpillContexts(const std::shared_ptr<MPPQueryOperatorSpillContexts> & query_operator_spill_contexts_) { query_operator_spill_contexts = query_operator_spill_contexts_; }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
@@ -311,12 +315,17 @@ public:
 
     void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
     {
-        operator_spill_contexts.registerOperatorSpillContext(operator_spill_context);
+        operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
     }
 
     Int64 triggerAutoSpill(Int64 expected_released_memories)
     {
-        return operator_spill_contexts.triggerAutoSpill(expected_released_memories);
+        return query_operator_spill_contexts->triggerAutoSpill(expected_released_memories);
+    }
+
+    void registerTaskOperatorSpillContexts()
+    {
+        query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
     }
 
 public:
@@ -424,7 +433,8 @@ private:
     // - Pipeline: execute with pipeline model
     ExecutionMode execution_mode = ExecutionMode::None;
 
-    MPPTaskOperatorSpillContexts operator_spill_contexts;
+    std::shared_ptr<MPPTaskOperatorSpillContexts> operator_spill_contexts;
+    std::shared_ptr<MPPQueryOperatorSpillContexts> query_operator_spill_contexts;
 };
 
 } // namespace DB

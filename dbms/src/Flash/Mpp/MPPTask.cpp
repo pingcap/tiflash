@@ -350,6 +350,12 @@ void MPPTask::unregisterTask()
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
+void MPPTask::initMPPQueryOperatorSpillContexts(const std::shared_ptr<MPPQueryOperatorSpillContexts> & mpp_query_operator_spill_contexts)
+{
+    assert(mpp_query_operator_spill_contexts != nullptr);
+    dag_context->setMPPQueryOperatorSpillContexts(mpp_query_operator_spill_contexts);
+}
+
 void MPPTask::initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry)
 {
     /// all the mpp tasks of the same mpp query shares the same process list entry
@@ -524,6 +530,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
+        dag_context->registerTaskOperatorSpillContexts();
 
 #ifndef NDEBUG
         if (isRootMPPTask())
