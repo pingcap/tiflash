@@ -537,6 +537,9 @@ private:
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
+    /// Should be called after every write into DeltaMergeStore.
+    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of releated regions,
+    /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
     DM::WriteResult checkSegmentsUpdateForKVStore(const DMContextPtr & context, Iter begin, Iter end, ThreadType thread_type, InputType input_type)
@@ -733,9 +736,10 @@ private:
      * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
      * A `thread_type` should be specified indicating the type of the thread calling this function.
      * Depend on the thread type, the "update" to do may be varied.
+     * 
+     * It returns a bool which indicates whether a flush of KVStore is recommended.
      */
     bool checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type, InputType input_type);
-    void triggerCompactLog(const DMContextPtr & dm_context, const RowKeyRange & range, bool is_background) const;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
