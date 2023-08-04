@@ -257,27 +257,29 @@ private:
 
     struct PreHandlingTrace : MutexLockWrap
     {
-        std::map<uint64_t, std::shared_ptr<std::atomic_bool>> tasks;
+        std::unordered_map<uint64_t, std::shared_ptr<std::atomic_bool>> tasks;
 
         std::shared_ptr<std::atomic_bool> registerTask(uint64_t region_id)
         {
             // Automaticlly override the old one.
+            genLockGuard();
             auto b = std::make_shared<std::atomic_bool>(false);
             tasks[region_id] = b;
             return b;
         }
-        std::optional<std::shared_ptr<std::atomic_bool>> deregisterTask(uint64_t region_id)
+        std::shared_ptr<std::atomic_bool> deregisterTask(uint64_t region_id)
         {
+            genLockGuard();
             auto it = tasks.find(region_id);
             if (it != tasks.end())
             {
-                std::shared_ptr<std::atomic_bool> b = it->second;
+                auto b = it->second;
                 tasks.erase(it);
                 return b;
             }
             else
             {
-                return std::nullopt;
+                return nullptr;
             }
         }
     };
