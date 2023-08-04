@@ -327,7 +327,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
             executeCastAfterTableScan(exec_context, group_builder, analyzer);
             dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos(), /*is_append=*/true);
 
-            /// handle filter conditions for local and remote table scan.
+            /// handle filter conditions for local table scan.
             /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
             /// TODO add runtime filter in Filter input stream.
             if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
