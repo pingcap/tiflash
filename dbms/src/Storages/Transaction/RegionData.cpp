@@ -163,7 +163,9 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
                     {
                         // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
                         // So we print out a log here, and neglect the error.
-                        LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
+                        // TODO We currently comment this line, since it will cause too many log outputs.
+                        // We will also tried to recover the state from cached apply snapshot after restart.
+                        // LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
                         return std::nullopt;
                     }
 
