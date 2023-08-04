@@ -214,7 +214,7 @@ public:
         Compact,
         Flush,
         PlaceIndex,
-        NotifyCompactLog,
+        FlushDTAndKVStore,
     };
 
     struct BackgroundTask

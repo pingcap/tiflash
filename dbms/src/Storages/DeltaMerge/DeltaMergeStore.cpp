@@ -130,7 +130,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
     case TaskType::Compact:
     case TaskType::Flush:
     case TaskType::PlaceIndex:
-    case TaskType::NotifyCompactLog:
+    case TaskType::FlushDTAndKVStore:
         is_heavy = false;
         // reserve some task space for heavy tasks
         if (max_task_num > 1 && light_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
@@ -1420,10 +1420,11 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment});
             }
         }
-        if (should_background_compact_log)
-        {
-            try_add_background_task(BackgroundTask{TaskType::NotifyCompactLog, dm_context, segment});
-        }
+        // TODO Will enable once TiKV supports.
+        // if (should_background_compact_log)
+        // {
+        //     try_add_background_task(BackgroundTask{TaskType::FlushDTAndKVStore, dm_context, segment});
+        // }
     }
 
     // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,

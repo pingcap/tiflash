@@ -399,7 +399,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
-        case TaskType::NotifyCompactLog:
+        case TaskType::FlushDTAndKVStore:
             triggerCompactLog(task.dm_context, task.segment->getRowKeyRange(), true);
         case TaskType::PlaceIndex:
             task.segment->placeDeltaIndex(*task.dm_context);

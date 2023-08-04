@@ -141,11 +141,11 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
 
 void fn_notify_compact_log(RaftStoreProxyPtr ptr, uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index)
 {
+    UNUSED(applied_index);
     // Update flushed applied_index and truncated state.
     auto & x = as_ref(ptr);
     auto region = x.getRegion(region_id);
     ASSERT(region);
-    LOG_INFO(&Poco::Logger::get("!!!!!"), "!!!! fn_notify_compact_log {} commit index {} applied_index {} compact_index {} compact_term {}", region_id, region->getLatestCommitIndex(), applied_index, compact_index, compact_term);
     // `applied_index` in proxy's disk can still be less than the `applied_index` here when fg flush.
     if (region && region->getApply().truncated_state().index() < compact_index)
     {
