@@ -18,7 +18,6 @@
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 
-=> DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDate, col_2 MyDateTime')

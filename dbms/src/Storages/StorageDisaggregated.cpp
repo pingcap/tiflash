@@ -185,8 +185,8 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
 RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
-    auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
-    ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
+    mpp::DispatchTaskRequest dispatch_req;
+    mpp::TaskMeta * dispatch_req_meta = dispatch_req.mutable_meta();
     auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     dispatch_req_meta->set_keyspace_id(keyspace_id);
     dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
@@ -202,11 +202,11 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     // dispatch_req_meta->set_mpp_version(?);
 
     const auto & settings = context.getSettings();
-    dispatch_req->set_timeout(60);
-    dispatch_req->set_schema_ver(settings.schema_version);
+    dispatch_req.set_timeout(60);
+    dispatch_req.set_schema_ver(settings.schema_version);
 
     // For error handling, need to record region_ids and store_id to invalidate cache.
-    std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, dispatch_req);
+    std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, &dispatch_req);
 
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request();
@@ -247,7 +247,7 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     }
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
-    dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
+    dispatch_req.set_encoded_plan(sender_dag_req.SerializeAsString());
     return RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
@@ -283,7 +283,7 @@ void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndReg
     tipb::ExchangeReceiver receiver;
     for (const auto & dispatch_req : dispatch_reqs)
     {
-        const ::mpp::TaskMeta & sender_task_meta = std::get<0>(dispatch_req)->meta();
+        const ::mpp::TaskMeta & sender_task_meta = std::get<0>(dispatch_req).meta();
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
     }
 

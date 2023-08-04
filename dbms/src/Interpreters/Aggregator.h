@@ -28,8 +28,8 @@
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
-#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Storages/Transaction/Collator.h>
@@ -724,6 +724,13 @@ struct AggregatedDataVariants : private boost::noncopyable
         }
     }
 
+    size_t revocableBytes() const
+    {
+        if (empty())
+            return 0;
+        return bytesCount();
+    }
+
     size_t bytesCount() const
     {
         size_t bytes_count = 0;
@@ -1019,10 +1026,10 @@ public:
     };
 
 
-    Aggregator(const Params & params_, const String & req_id);
+    Aggregator(const Params & params_, const String & req_id, size_t concurrency);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
-    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result);
+    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
@@ -1034,8 +1041,8 @@ public:
         const Block & block,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
-    );
+        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+        size_t thread_num);
 
     /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
       * Return nullptr if there are no non empty data_variant.
@@ -1060,9 +1067,10 @@ public:
     void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
     BlockInputStreams restoreSpilledData();
-    bool hasSpilledData() const { return spill_triggered; }
+    bool hasSpilledData() const { return agg_spill_context->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
+    AggSpillContextPtr & getAggSpillContext() { return agg_spill_context; }
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1121,11 +1129,9 @@ protected:
           */
     size_t group_by_two_level_threshold = 0;
     size_t group_by_two_level_threshold_bytes = 0;
-    /// Settings to flush temporary data to the filesystem (external aggregation).
-    size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.
-    std::unique_ptr<Spiller> spiller;
+    AggSpillContextPtr agg_spill_context;
     std::atomic<bool> spill_triggered{false};
 
     /** Select the aggregation method based on the number and types of keys. */

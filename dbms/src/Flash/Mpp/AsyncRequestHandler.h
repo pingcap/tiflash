@@ -166,7 +166,8 @@ private:
         switch (res)
         {
         case MPMCQueueResult::OK:
-            break;
+            startAsyncRead();
+            return;
         case MPMCQueueResult::FULL:
             // Do nothing and return immediately
             return;
@@ -174,8 +175,6 @@ private:
             closeConnection("Exchange receiver meet error : push packet fail");
             return;
         }
-
-        startAsyncRead();
     }
 
     void processWaitPushToQueue(bool ok)

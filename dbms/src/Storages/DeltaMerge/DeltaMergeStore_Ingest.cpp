@@ -555,10 +555,12 @@ UInt64 DeltaMergeStore::ingestFiles(
             {
                 RUNTIME_CHECK_MSG(
                     compare(range.getStart(), ext_file.range.getStart()) <= 0 && compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
-                    "Detected illegal region boundary: range={} file_range={} . "
+                    "Detected illegal region boundary: range={} file_range={} keyspace={} table_id={}. "
                     "TiFlash will exit to prevent data inconsistency. "
                     "If you accept data inconsistency and want to continue the service, "
                     "set profiles.default.dt_enable_ingest_check=false .",
+                    keyspace_id,
+                    physical_table_id,
                     range.toDebugString(),
                     ext_file.range.toDebugString());
             }
@@ -1023,18 +1025,18 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
-        const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", log->identifier());
+        const auto msg = fmt::format("Try to ingest files into a shutdown table, store_id={}", log->identifier());
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
 
     if (unlikely(range.none()))
     {
-        LOG_INFO(log, "Meet empty ingest range from store {} for region {}. Ignore it.", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+        LOG_INFO(log, "Ingest checkpoint from remote meet empty range, ignore, store_id={} region_id={}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
         return;
     }
 
-    LOG_INFO(log, "Ingest checkpoint from store {} for region {}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+    LOG_INFO(log, "Ingest checkpoint from remote, store_id={} region_id={}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
     auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
@@ -1055,7 +1057,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     wbs.writeLogAndData();
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    LOG_INFO(log, "Ingest checkpoint from store {} for region {} done", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+    LOG_INFO(log, "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={}", checkpoint_info->remote_store_id, checkpoint_info->region_id, restored_segments.size());
 
     for (auto & segment : restored_segments)
     {

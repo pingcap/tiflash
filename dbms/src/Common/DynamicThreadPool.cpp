@@ -13,10 +13,18 @@
 // limitations under the License.
 
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+
+#include <exception>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_new_dynamic_thread[];
+} // namespace FailPoints
+
 DynamicThreadPool::~DynamicThreadPool()
 {
     for (auto & queue : fixed_queues)
@@ -90,9 +98,23 @@ bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 
 void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 {
-    alive_dynamic_threads.fetch_add(1);
-    std::thread t = ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
+    std::thread t = newDynamcThread(task);
     t.detach();
+}
+
+std::thread DynamicThreadPool::newDynamcThread(TaskPtr & task)
+{
+    alive_dynamic_threads.fetch_add(1);
+    try
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_new_dynamic_thread);
+        return ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
+    }
+    catch (...)
+    {
+        alive_dynamic_threads.fetch_sub(1);
+        std::rethrow_exception(std::current_exception());
+    }
 }
 
 void DynamicThreadPool::executeTask(TaskPtr & task)

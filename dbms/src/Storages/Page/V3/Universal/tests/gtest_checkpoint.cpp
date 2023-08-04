@@ -953,6 +953,7 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        DB::tests::TiFlashTestEnv::enableS3Config();
         auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
         auto & settings = global_context.getSettingsRef();
         old_remote_checkpoint_only_upload_manifest = settings.remote_checkpoint_only_upload_manifest;
@@ -968,6 +969,7 @@ public:
         auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
         auto & settings = global_context.getSettingsRef();
         settings.remote_checkpoint_only_upload_manifest = old_remote_checkpoint_only_upload_manifest;
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
     static UniversalPageStorageServicePtr newService()

@@ -42,7 +42,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             const KVStore & kvs = reloadKVSFromDisk();
@@ -71,7 +71,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
@@ -103,7 +103,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
@@ -134,7 +134,7 @@ try
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             MockRaftStoreProxy::FailCond cond;
@@ -179,10 +179,10 @@ try
                 // This key has empty PK which is actually truncated.
                 std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
                 std::string v = "4486809092ACFEC38906";
-                auto strKey = Redact::hexStringToKey(k.data(), k.size());
-                auto strVal = Redact::hexStringToKey(v.data(), v.size());
+                auto str_key = Redact::hexStringToKey(k.data(), k.size());
+                auto str_val = Redact::hexStringToKey(v.data(), v.size());
 
-                auto [index, term] = proxy_instance->rawWrite(region_id, {strKey}, {strVal}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+                auto [index, term] = proxy_instance->rawWrite(region_id, {str_key}, {str_val}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
                 EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
                 UNUSED(term);
                 EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
@@ -312,9 +312,9 @@ static void validate(KVStore & kvs, std::unique_ptr<MockRaftStoreProxy> & proxy_
     auto ssts = cf_data.ssts();
     ASSERT_EQ(ssts.size(), sst_size);
     auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) -> std::unique_ptr<MonoSSTReader> {
-        auto parsedKind = MockRaftStoreProxy::parseSSTViewKind(buffToStrView(snap.path));
+        auto parsed_kind = MockRaftStoreProxy::parseSSTViewKind(buffToStrView(snap.path));
         auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
-        assert(reader->sst_format_kind() == parsedKind);
+        assert(reader->sst_format_kind() == parsed_kind);
         return reader;
     };
     MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), cf, make_inner_func, ssts, Logger::get(), kvr1->getRange()};

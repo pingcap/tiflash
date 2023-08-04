@@ -35,34 +35,6 @@
 
 using namespace std::chrono_literals;
 
-namespace pingcap::kv
-{
-
-template <>
-struct RpcTypeTraits<disaggregated::FetchDisaggPagesRequest>
-{
-    using RequestType = disaggregated::FetchDisaggPagesRequest;
-    using ResultType = disaggregated::PagesPacket;
-    static std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req)
-    {
-        return client->stub->FetchDisaggPages(context, req);
-    }
-    static std::unique_ptr<grpc::ClientAsyncReader<disaggregated::PagesPacket>> doAsyncRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        grpc::CompletionQueue & cq,
-        void * call)
-    {
-        return client->stub->AsyncFetchDisaggPages(context, req, &cq, call);
-    }
-};
-
-} // namespace pingcap::kv
-
 namespace DB::DM::Remote
 {
 
@@ -89,32 +61,33 @@ RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask(const RNReadSegme
     // FetchPagesRequest into multiples in future, then we need to change
     // the moment of calling `occupySpace`.
     auto page_cache = seg_task->meta.dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+    auto scan_context = seg_task->meta.dm_context->scan_context;
 
     Stopwatch w_occupy;
-    auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->meta.delta_tinycf_page_sizes);
+    auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->meta.delta_tinycf_page_sizes, scan_context);
     // This metric is per-segment.
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_cache_occupy).Observe(w_occupy.elapsedSeconds());
 
     return occupy_result;
 }
 
-std::shared_ptr<disaggregated::FetchDisaggPagesRequest> buildFetchPagesRequest(
+disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
     const RNReadSegmentTaskPtr & seg_task,
     const std::vector<PageOID> & pages_not_in_cache)
 {
-    auto req = std::make_shared<disaggregated::FetchDisaggPagesRequest>();
+    disaggregated::FetchDisaggPagesRequest req;
     auto meta = seg_task->meta.snapshot_id.toMeta();
     // The keyspace_id here is not vital, as we locate the table and segment by given
     // snapshot_id. But it could be helpful for debugging.
     auto keyspace_id = seg_task->meta.keyspace_id;
     meta.set_keyspace_id(keyspace_id);
     meta.set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
-    *req->mutable_snapshot_id() = meta;
-    req->set_table_id(seg_task->meta.physical_table_id);
-    req->set_segment_id(seg_task->meta.segment_id);
+    *req.mutable_snapshot_id() = meta;
+    req.set_table_id(seg_task->meta.physical_table_id);
+    req.set_segment_id(seg_task->meta.segment_id);
 
     for (auto page_id : pages_not_in_cache)
-        req->add_page_ids(page_id.page_id);
+        req.add_page_ids(page_id.page_id);
 
     return req;
 }
@@ -194,10 +167,10 @@ using WritePageTaskPtr = std::unique_ptr<WritePageTask>;
 
 void RNWorkerFetchPages::doFetchPages(
     const RNReadSegmentTaskPtr & seg_task,
-    std::shared_ptr<disaggregated::FetchDisaggPagesRequest> request)
+    const disaggregated::FetchDisaggPagesRequest & request)
 {
     // No page need to be fetched.
-    if (request->page_ids_size() == 0)
+    if (request.page_ids_size() == 0)
         return;
 
     Stopwatch sw_total;
@@ -205,12 +178,10 @@ void RNWorkerFetchPages::doFetchPages(
     bool rpc_is_observed = false;
     double total_write_page_cache_sec = 0.0;
 
+    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(cluster->rpc_client, seg_task->meta.store_address);
+
     grpc::ClientContext client_context;
-    auto rpc_call = std::make_shared<pingcap::kv::RpcCall<disaggregated::FetchDisaggPagesRequest>>(request);
-    auto stream_resp = cluster->rpc_client->sendStreamRequest(
-        seg_task->meta.store_address,
-        &client_context,
-        *rpc_call);
+    auto stream_resp = rpc.call(&client_context, request);
 
     SCOPE_EXIT({
         // TODO: Not sure whether we really need this. Maybe RAII is already there?
@@ -219,7 +190,7 @@ void RNWorkerFetchPages::doFetchPages(
 
     // Used to verify all pages are fetched.
     std::set<UInt64> remaining_pages_to_fetch;
-    for (auto p : request->page_ids())
+    for (auto p : request.page_ids())
         remaining_pages_to_fetch.insert(p);
 
     UInt64 read_stream_ns = 0;
@@ -227,7 +198,7 @@ void RNWorkerFetchPages::doFetchPages(
     UInt64 schedule_write_page_ns = 0;
     UInt64 packet_count = 0;
     UInt64 task_count = 0;
-    UInt64 page_count = request->page_ids_size();
+    UInt64 page_count = request.page_ids_size();
 
     auto schedule_task = [&task_count, &schedule_write_page_ns](WritePageTaskPtr && write_page_task) {
         task_count += 1;

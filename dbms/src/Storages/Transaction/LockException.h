@@ -37,7 +37,7 @@ public:
         for (const auto & lock : locks)
             locked_regions.insert(lock.first);
 
-        this->message(fmt::format("Key is locked ({} locks in region {})", locks.size(), locked_regions));
+        this->message(fmt::format("Key is locked ({} locks in regions {})", locks.size(), locked_regions));
     }
 
     std::vector<std::pair<RegionID, LockInfoPtr>> locks;

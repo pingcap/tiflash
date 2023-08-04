@@ -196,11 +196,12 @@ MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(size_t source_index,
     if (!received_message->containUsefulMessage())
         return MPMCQueueResult::OK;
 
+    fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, return MPMCQueueResult::CANCELLED);
+
     auto res = grpc_recv_queue.pushWithTag(std::move(received_message), new_tag);
     if likely (res == MPMCQueueResult::OK || res == MPMCQueueResult::FULL)
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
 
-    fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = MPMCQueueResult::CANCELLED);
     return res;
 }
 

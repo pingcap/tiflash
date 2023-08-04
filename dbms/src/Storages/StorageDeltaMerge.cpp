@@ -976,8 +976,21 @@ void StorageDeltaMerge::read(
     setColumnsToRead(store, columns_to_read, extra_table_id_index, column_names);
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-
-    RUNTIME_CHECK(!select_query.raw_for_mutable, select_query.raw_for_mutable);
+    if (select_query.raw_for_mutable) // for selraw
+    {
+        // Read without MVCC filtering and del_mark = 1 filtering
+        store->readRaw(
+            exec_context_,
+            group_builder,
+            context,
+            context.getSettingsRef(),
+            columns_to_read,
+            num_streams,
+            query_info.keep_order,
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
+        return;
+    }
 
     auto tracing_logger = log->getChild(query_info.req_id);
 
@@ -1225,7 +1238,7 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     if (!decoding_schema_snapshot || decoding_schema_changed)
     {
         auto & store = getAndMaybeInitStore();
-        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_version++);
+        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_epoch++);
         cache_blocks.clear();
         decoding_schema_changed = false;
     }
@@ -1271,10 +1284,10 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     }
 }
 
-void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block_ptr)
+void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block_ptr)
 {
     std::lock_guard lock{decode_schema_mutex};
-    if (!decoding_schema_snapshot || block_decoding_schema_version < decoding_schema_snapshot->decoding_schema_version)
+    if (!decoding_schema_snapshot || block_decoding_schema_epoch < decoding_schema_snapshot->decoding_schema_epoch)
         return;
     if (cache_blocks.size() >= max_cached_blocks_num)
         return;

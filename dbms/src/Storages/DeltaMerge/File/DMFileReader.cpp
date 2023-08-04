@@ -20,6 +20,7 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <IO/CompressedReadBuffer.h>
 #include <Poco/File.h>
 #include <Poco/Thread_STD.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -29,10 +30,9 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
-
-
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -66,18 +66,58 @@ DMFileReader::Stream::Stream(
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
+        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo({reader.dmfile->getReadFileSize(col_id, reader.dmfile->colMarkFileName(file_name_base)), reader.scan_context});
         if (reader.dmfile->configuration)
         {
-            auto buffer = createReadBufferFromFileBaseByFileProvider(
-                reader.file_provider,
-                reader.dmfile->colMarkPath(file_name_base),
-                reader.dmfile->encryptionMarkPath(file_name_base),
-                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-                read_limiter,
-                reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
-                reader.dmfile->getConfiguration()->getChecksumFrameLength());
-            buffer->readBig(reinterpret_cast<char *>(res->data()), size);
+            if (reader.dmfile->useMetaV2()) // metav2
+            { // v3
+                auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colMarkFileName(file_name_base));
+                if (info == reader.dmfile->merged_sub_file_infos.end())
+                {
+                    throw Exception(fmt::format("Unknown mark file {}", reader.dmfile->colMarkFileName(file_name_base)), ErrorCodes::LOGICAL_ERROR);
+                }
+
+                auto file_path = reader.dmfile->mergedPath(info->second.number);
+                auto encryp_path = reader.dmfile->encryptionMergedPath(info->second.number);
+                auto offset = info->second.offset;
+                auto data_size = info->second.size;
+
+                if (data_size == 0)
+                    return res;
+
+                // first read from merged file to get the raw data(contains the header)
+                auto buffer = ReadBufferFromFileProvider(
+                    reader.file_provider,
+                    file_path,
+                    encryp_path,
+                    reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                    read_limiter);
+                buffer.seek(offset);
+
+                String raw_data;
+                raw_data.resize(data_size);
+
+                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+                // read from the buffer based on the raw data
+                auto buf = createReadBufferFromData(std::move(raw_data),
+                                                    reader.dmfile->colDataPath(file_name_base),
+                                                    reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                                                    reader.dmfile->configuration->getChecksumAlgorithm(),
+                                                    reader.dmfile->configuration->getChecksumFrameLength());
+                buf->readBig(reinterpret_cast<char *>(res->data()), size);
+            }
+            else
+            { // v2
+                auto buffer = createReadBufferFromFileBaseByFileProvider(
+                    reader.file_provider,
+                    reader.dmfile->colMarkPath(file_name_base),
+                    reader.dmfile->encryptionMarkPath(file_name_base),
+                    reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                    read_limiter,
+                    reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    reader.dmfile->getConfiguration()->getChecksumFrameLength());
+                buffer->readBig(reinterpret_cast<char *>(res->data()), size);
+            }
         }
         else
         {
@@ -96,6 +136,9 @@ DMFileReader::Stream::Stream(
     auto is_null_map = endsWith(file_name_base, ".null");
     size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
     size_t packs = reader.dmfile->getPacks();
+    if (packs == 0)
+        return;
+
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
@@ -149,7 +192,7 @@ DMFileReader::Stream::Stream(
               buffer_size,
               aio_threshold,
               max_read_buffer_size);
-    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colDataFileName(file_name_base)));
+    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo({reader.dmfile->getReadFileSize(col_id, reader.dmfile->colDataFileName(file_name_base)), reader.scan_context});
     if (!reader.dmfile->configuration)
     {
         buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,
@@ -160,13 +203,56 @@ DMFileReader::Stream::Stream(
                                                                            read_limiter,
                                                                            buffer_size);
     }
-    else
+    else if (reader.dmfile->useMetaV2()) // v3
     {
+        auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
+        if (info == reader.dmfile->merged_sub_file_infos.end())
+        {
+            buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+                reader.file_provider,
+                reader.dmfile->colDataPath(file_name_base),
+                reader.dmfile->encryptionDataPath(file_name_base),
+                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                read_limiter,
+                reader.dmfile->configuration->getChecksumAlgorithm(),
+                reader.dmfile->configuration->getChecksumFrameLength());
+        }
+        else
+        {
+            auto file_path = reader.dmfile->mergedPath(info->second.number);
+            auto encryp_path = reader.dmfile->encryptionMergedPath(info->second.number);
+            auto offset = info->second.offset;
+            auto size = info->second.size;
+
+            // first read from merged file to get the raw data(contains the header)
+            auto buffer = ReadBufferFromFileProvider(
+                reader.file_provider,
+                file_path,
+                encryp_path,
+                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                read_limiter);
+            buffer.seek(offset);
+
+            String raw_data;
+            raw_data.resize(size);
+
+            buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
+            // read from the buffer based on the raw data
+            buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+                std::move(raw_data),
+                file_path,
+                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                reader.dmfile->configuration->getChecksumAlgorithm(),
+                reader.dmfile->configuration->getChecksumFrameLength());
+        }
+    }
+    else
+    { // v2
         buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
-            estimated_size,
+            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
             read_limiter,
             reader.dmfile->configuration->getChecksumAlgorithm(),
             reader.dmfile->configuration->getChecksumFrameLength());
@@ -431,8 +517,8 @@ Block DMFileReader::read()
     size_t skip_rows;
 
     getSkippedRows(skip_rows);
-
     const auto & use_packs = pack_filter.getUsePacksConst();
+
     if (next_pack_id >= use_packs.size())
         return {};
     // Find max continuing rows we can read.
@@ -667,7 +753,6 @@ void DMFileReader::readFromDisk(
     {
         auto & top_stream = iter->second;
         bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
-
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         data_type->deserializeBinaryBulkWithMultipleStreams( //
             *column,

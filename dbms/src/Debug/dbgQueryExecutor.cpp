@@ -119,22 +119,22 @@ BlockInputStreamPtr prepareRootExchangeReceiverWithMultipleContext(Context & con
     return constructRootExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, root_addr);
 }
 
-void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
+void prepareDispatchTaskRequest(QueryTask & task, mpp::DispatchTaskRequest & req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
 {
     if (task.is_root_task)
     {
         root_task_ids.push_back(task.task_id);
         root_task_schema = task.result_schema;
     }
-    auto * tm = req->mutable_meta();
+    auto * tm = req.mutable_meta();
     fillTaskMetaWithDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
-    auto * encoded_plan = req->mutable_encoded_plan();
+    auto * encoded_plan = req.mutable_encoded_plan();
     task.dag_request->AppendToString(encoded_plan);
-    req->set_timeout(properties.mpp_timeout);
-    req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+    req.set_timeout(properties.mpp_timeout);
+    req.set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
 }
 
 void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, std::vector<Int64> & root_task_partition_ids, DAGSchema & root_task_schema, String & addr)
@@ -164,7 +164,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     std::vector<Int64> root_task_ids;
     for (auto & task : query_tasks)
     {
-        auto req = std::make_shared<mpp::DispatchTaskRequest>();
+        mpp::DispatchTaskRequest req;
         prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, Debug::LOCAL_HOST);
         auto table_id = task.table_id;
         if (table_id != -1)
@@ -187,7 +187,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                             current_table_regions = nullptr;
                         if (current_table_regions == nullptr)
                         {
-                            current_table_regions = req->add_table_regions();
+                            current_table_regions = req.add_table_regions();
                             current_table_regions->set_physical_table_id(partition_id);
                         }
                         setTipbRegionInfo(current_table_regions->add_regions(), regions[i], partition_id);
@@ -206,15 +206,20 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                 {
                     if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
                         continue;
-                    setTipbRegionInfo(req->add_regions(), regions[i], table_id);
+                    setTipbRegionInfo(req.add_regions(), regions[i], table_id);
                 }
             }
         }
 
-        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-        context.getTMTContext().getKVCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
-        if (call.getResp()->has_error())
-            throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+        pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(DispatchMPPTask)> rpc(context.getTMTContext().getKVCluster()->rpc_client, Debug::LOCAL_HOST);
+        grpc::ClientContext client_context;
+        rpc.setClientContext(client_context, 5);
+        mpp::DispatchTaskResponse resp;
+        auto status = rpc.call(&client_context, req, &resp);
+        if (!status.ok())
+            throw Exception("Meet grpc error while dispatch mpp task: " + rpc.errMsg(status));
+        if (resp.has_error())
+            throw Exception("Meet error while dispatch mpp task: " + resp.error().msg());
     }
     return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema);
 }

@@ -943,9 +943,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (storage_config.format_version != 0)
     {
-        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
+        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier)
         {
-            LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
+            LOG_WARNING(log, "'storage.format_version' must be set to 100 when S3 is enabled!");
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.format_version' must be set to 5 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
@@ -957,8 +957,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
-            setStorageFormat(5);
-            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V5.identifier);
+            setStorageFormat(STORAGE_FORMAT_V100.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V100.identifier);
         }
         else
         {
@@ -1331,11 +1331,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 FileCache::instance()->updateConfig(global_context->getSettingsRef());
             }
-            if (S3::ClientFactory::instance().isEnabled())
-            {
-                DM::DMFile::updateMergeFileConfig(global_context->getSettingsRef());
-            }
-
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
                 bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.

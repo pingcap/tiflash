@@ -37,7 +37,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
-        size_t scan_hash_map_after_probe_stream_index,
+        size_t stream_index,
         const String & req_id,
         UInt64 max_block_size_);
 

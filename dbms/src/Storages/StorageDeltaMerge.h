@@ -188,7 +188,7 @@ public:
 
     std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool /* need_block */) override;
 
-    void releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block) override;
+    void releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block) override;
 
     bool initStoreIfDataDirExist(ThreadPool * thread_pool) override;
 
@@ -300,8 +300,8 @@ private:
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
     // The following two members must be used under the protection of table structure lock
     bool decoding_schema_changed = false;
-    // internal version for `decoding_schema_snapshot`
-    Int64 decoding_schema_version = 1;
+    // internal epoch for `decoding_schema_snapshot`
+    Int64 decoding_schema_epoch = 1;
 
     // avoid creating block every time when decoding row
     std::vector<BlockUPtr> cache_blocks;

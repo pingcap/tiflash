@@ -37,6 +37,7 @@ bool needFrameMigration(const DB::DM::DMFile & file, const std::string & target)
     return endsWith(target, ".mrk")
         || endsWith(target, ".dat")
         || endsWith(target, ".idx")
+        || endsWith(target, ".merged")
         || file.packStatFileName() == target;
 }
 bool isRecognizable(const DB::DM::DMFile & file, const std::string & target)
@@ -193,7 +194,16 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             args.file_id,
             args.no_keep};
         auto src_file = DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-        LOG_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
+        auto source_version = 0;
+        if (src_file->useMetaV2())
+        {
+            source_version = 3;
+        }
+        else
+        {
+            source_version = src_file->getConfiguration() ? 2 : 1;
+        }
+        LOG_INFO(logger, "source version: {}", source_version);
         LOG_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
         LOG_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
         LOG_INFO(logger, "target version: {}", args.version);

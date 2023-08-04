@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -225,7 +226,7 @@ void RegionRaftCommandDelegate::execPrepareMerge(
     const auto & target = prepare_merge_request.target();
 
     LOG_INFO(log,
-             "{} execute prepare merge, min_index {}, target [region {}]",
+             "{} execute prepare merge, min_index {}, target region_id={}",
              toString(false),
              prepare_merge_request.min_index(),
              target.id());
@@ -261,7 +262,7 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
     const auto & source_meta = commit_merge_request.source();
     auto source_region = kvstore.getRegion(source_meta.id());
     LOG_INFO(log,
-             "{} execute commit merge, source [region {}], commit index {}",
+             "{} execute commit merge, source region_id={}, commit index={}",
              toString(false),
              source_meta.id(),
              commit_merge_request.commit());
@@ -410,7 +411,7 @@ std::string Region::getDebugString() const
 {
     const auto & meta_snap = meta.dumpRegionMetaSnapshot();
     return fmt::format(
-        "[region {}, index {}, table {}, ver {}, conf_ver {}, state {}, peer {}]",
+        "[region_id={} index={} table_id={} ver={} conf_ver={} state={} peer={}]",
         id(),
         meta.appliedIndex(),
         mapped_table_id,
@@ -466,17 +467,19 @@ std::string Region::dataInfo() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
-    std::stringstream ss;
-    auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
-    ss << "[";
+    FmtBuffer buff;
+    buff.append("[");
+    auto write_size = data.writeCF().getSize();
+    auto lock_size = data.lockCF().getSize();
+    auto default_size = data.defaultCF().getSize();
     if (write_size)
-        ss << "write " << write_size << " ";
+        buff.fmtAppend("write {} ", write_size);
     if (lock_size)
-        ss << "lock " << lock_size << " ";
+        buff.fmtAppend("lock {} ", lock_size);
     if (default_size)
-        ss << "default " << default_size << " ";
-    ss << "]";
-    return ss.str();
+        buff.fmtAppend("default {} ", default_size);
+    buff.append("]");
+    return buff.toString();
 }
 
 void Region::markCompactLog() const
@@ -664,7 +667,7 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     if (del_write)
     {
         LOG_INFO(log,
-                 "delete {} records in write cf for region {}",
+                 "delete {} records in write cf for region_id={}",
                  del_write,
                  meta.regionId());
     }
@@ -680,6 +683,8 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
+    auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
+
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -691,7 +696,15 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             auto tikv_value = TiKVValue(cmds.vals[i].data, cmds.vals[i].len);
             try
             {
-                doInsert(cf, std::move(tikv_key), std::move(tikv_value));
+                if (is_v2)
+                {
+                    // There may be orphan default key in a snapshot.
+                    doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
+                }
+                else
+                {
+                    doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
+                }
             }
             catch (Exception & e)
             {

@@ -679,13 +679,15 @@ public:
                                                      size_t expected_block_size);
 
     // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
-    size_t clipBlockRows(const Context & context,
-                         size_t expected_block_rows,
-                         const ColumnDefines & read_columns);
-    size_t clipBlockRows(size_t max_block_bytes,
-                         size_t pack_rows,
-                         size_t expected_block_rows,
-                         const ColumnDefines & read_columns);
+    static size_t clipBlockRows(const Context & context,
+                                size_t expected_block_rows,
+                                const ColumnDefines & read_columns,
+                                const StableValueSpacePtr & stable);
+    static size_t clipBlockRows(size_t max_block_bytes,
+                                size_t pack_rows,
+                                size_t expected_block_rows,
+                                const ColumnDefines & read_columns,
+                                const StableValueSpacePtr & stable);
 
 
 #ifndef DBMS_PUBLIC_GTEST

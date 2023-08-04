@@ -124,7 +124,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                              UInt64 file_id,
                              const String & parent_path)
 {
-    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig());
+    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig(), dm_context.db_context.getSettingsRef().dt_small_file_size_threshold, dm_context.db_context.getSettingsRef().dt_merged_file_max_size);
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap);
     const auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -714,7 +714,7 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
                                             UInt64 max_version,
                                             size_t expected_block_size)
 {
-    auto clipped_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read);
+    auto clipped_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read, segment_snap->stable->stable);
     switch (read_mode)
     {
     case ReadMode::Normal:
@@ -2902,16 +2902,18 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         read_data_block_rows);
 }
 
-size_t Segment::clipBlockRows(const Context & context, size_t expected_block_rows, const ColumnDefines & read_columns)
+// clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
+size_t Segment::clipBlockRows(const Context & context, size_t expected_block_rows, const ColumnDefines & read_columns, const StableValueSpacePtr & stable)
 {
     size_t max_block_bytes = context.getSettingsRef().max_block_bytes;
     size_t pack_rows = context.getSettingsRef().dt_segment_stable_pack_rows; // At least one pack.
-    return clipBlockRows(max_block_bytes, pack_rows, expected_block_rows, read_columns);
+    return clipBlockRows(max_block_bytes, pack_rows, expected_block_rows, read_columns, stable);
 }
 
-size_t Segment::clipBlockRows(size_t max_block_bytes, size_t pack_rows, size_t expected_block_rows, const ColumnDefines & read_columns)
+size_t Segment::clipBlockRows(size_t max_block_bytes, size_t pack_rows, size_t expected_block_rows, const ColumnDefines & read_columns, const StableValueSpacePtr & stable)
 {
-    if (unlikely(max_block_bytes <= 0)) // Disable block bytes limit.
+    // Disable block bytes limit.
+    if (stable == nullptr || unlikely(max_block_bytes <= 0))
     {
         return expected_block_rows;
     }

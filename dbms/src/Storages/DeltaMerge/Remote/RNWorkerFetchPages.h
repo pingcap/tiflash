@@ -39,7 +39,7 @@ protected:
 private:
     void doFetchPages(
         const RNReadSegmentTaskPtr & seg_task,
-        std::shared_ptr<disaggregated::FetchDisaggPagesRequest> request);
+        const disaggregated::FetchDisaggPagesRequest & request);
 
 private:
     const pingcap::kv::Cluster * cluster;

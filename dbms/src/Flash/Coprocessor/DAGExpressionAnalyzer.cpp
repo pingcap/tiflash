@@ -1511,17 +1511,6 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
-void DAGExpressionAnalyzer::addNullableActionForColumnRef(const tipb::Expr & expr, const ExpressionActionsPtr & actions) const
-{
-    if (isColumnExpr(expr))
-    {
-        auto col = getColumnNameAndTypeForColumnExpr(expr, getCurrentInputColumns());
-        if (!col.type->isNullable() && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0))
-            // when the original col is not null and current columnRef is nullable, add convert nullable action here.
-            actions->add(ExpressionAction::convertToNullable(col.name));
-    }
-}
-
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, const ExpressionActionsPtr & actions, bool output_as_uint8_type)
 {
     String ret;
