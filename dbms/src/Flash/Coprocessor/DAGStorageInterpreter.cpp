@@ -425,7 +425,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
             executeCastAfterTableScan(pipeline, analyzer);
             recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
-            /// handle filter conditions for local and remote table scan.
+            /// handle filter conditions for local table scan.
             /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
             /// TODO add runtime filter in Filter input stream.
             if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
