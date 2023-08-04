@@ -23,35 +23,43 @@
 namespace DB
 {
 
+class ResourceGroup;
+
 // This is only for ResourceControlQueue gtest.
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
-    MockLocalAdmissionController() = default;
+    MockLocalAdmissionController()
+        : consume_resource_func(nullptr)
+        , get_priority_func(nullptr)
+        , is_resource_group_throttled_func(nullptr)
+    {}
+
     ~MockLocalAdmissionController() = default;
 
-    void consumeResource(const std::string & name, const KeyspaceID &, double, uint64_t cpu_time_ns)
-    {
-        auto iter = resource_groups.find(name);
-        if (iter == resource_groups.end())
-            __builtin_unreachable();
+    using ConsumeResourceFuncType = void(*)(const std::string &, const KeyspaceID &, double, uint64_t);
+    using GetPriorityFuncType = double(*)(const std::string &, const KeyspaceID &);
+    using IsResourceGroupThrottledFuncType = bool(*)(const std::string &);
 
-        iter->second.first += toCPUTimeMillisecond(cpu_time_ns);
-        iter->second.second -= toRU(cpu_time_ns);
+    void consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time_ns)
+    {
+        consume_resource_func(name, keyspace_id, ru, cpu_time_ns);
     }
 
-    double getPriority(const std::string &, const KeyspaceID &)
+    double getPriority(const std::string & name, const KeyspaceID & keyspace_id)
     {
-        return 1000;
+        return get_priority_func(name, keyspace_id);
     }
 
-    bool isResourceGroupThrottled(const std::string &)
+    bool isResourceGroupThrottled(const std::string & name)
     {
-        return false;
+        return is_resource_group_throttled_func(name);
     }
 
-    // <resource_group_name, <cpu_usage_in_ms, remaining_ru>
-    std::unordered_map<std::string, std::pair<int64_t, int64_t>> resource_groups;
+    std::unordered_map<std::string, std::shared_ptr<ResourceGroup>> resource_groups;
+    ConsumeResourceFuncType consume_resource_func;
+    GetPriorityFuncType get_priority_func;
+    IsResourceGroupThrottledFuncType is_resource_group_throttled_func;
 };
 
 } // namespace DB

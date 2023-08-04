@@ -48,6 +48,16 @@ public:
         bucket = std::make_unique<TokenBucket>(setting.fill_rate(), setting.fill_rate(), setting.burst_limit());
     }
 
+#ifdef DBMS_PUBLIC_GTEST
+    ResourceGroup(const std::string & group_name_, uint32_t user_priority_, uint64_t user_ru_per_sec_, bool burstable_)
+        : name(group_name_)
+        , user_priority(user_priority_)
+        , user_ru_per_sec(user_ru_per_sec_)
+        , burstable(burstable_)
+        , keyspace_id(NullspaceID)
+    {}
+#endif
+
     ~ResourceGroup() = default;
 
     enum TokenBucketMode
@@ -225,6 +235,7 @@ private:
     uint32_t user_priority;
     uint64_t user_ru_per_sec;
 
+    // gjt todo burstable?
     bool burstable = false;
 
     // Definition of the RG, e.g. RG settings, priority etc.
