@@ -517,7 +517,7 @@ try
                 write_cf.freeze();
 
                 kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
-                auto r = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt, true);
+                auto r = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt, /*cancel_after_prehandle=*/true);
             }
         }
     }
