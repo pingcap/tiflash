@@ -18,7 +18,7 @@
 
 namespace DB
 {
-class OperatorSpillContexts
+class MPPTaskOperatorSpillContexts
 {
 public:
     Int64 triggerAutoSpill(Int64 expected_released_memories)
@@ -47,6 +47,14 @@ public:
     size_t operatorSpillContextCount()
     {
         return operator_spill_contexts.size();
+    }
+
+    Int64 totalRevocableMemories() const
+    {
+        Int64 ret = 0;
+        for (const auto & operator_spill_context : operator_spill_contexts)
+            ret += operator_spill_context->getTotalRevocableMemory();
+        return ret;
     }
 
 private:

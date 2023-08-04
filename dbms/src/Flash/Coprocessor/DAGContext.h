@@ -24,7 +24,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
-#include <Core/OperatorSpillContexts.h>
+#include <Core/MPPTaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
@@ -424,7 +424,7 @@ private:
     // - Pipeline: execute with pipeline model
     ExecutionMode execution_mode = ExecutionMode::None;
 
-    OperatorSpillContexts operator_spill_contexts;
+    MPPTaskOperatorSpillContexts operator_spill_contexts;
 };
 
 } // namespace DB
