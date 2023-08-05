@@ -94,10 +94,14 @@ struct RowKeyValue
                 // This is ok, because
                 //  1) if the key is the start range, then [t100_r1000 + 0x00, xxx) has the same semantics with [t100_r1001, xxx)
                 //  1) if the key is the end range, then [xxx, t100_r1000 + 0x00) also has the same semantics with [xxx, t100_r1001)
-                int_value = int_value + 1;
-                WriteBufferFromOwnString ss;
-                DB::EncodeInt64(int_value, ss);
-                value = std::make_shared<String>(ss.releaseStr());
+                // FIXME: check the case when int_value == Int64::max_value
+                if (int_value < std::numeric_limits<Int64>::max())
+                {
+                    int_value = int_value + 1;
+                    WriteBufferFromOwnString ss;
+                    DB::EncodeInt64(int_value, ss);
+                    value = std::make_shared<String>(ss.releaseStr());
+                }
             }
         }
     }
