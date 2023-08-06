@@ -71,6 +71,7 @@ public:
 
     static std::unique_ptr<TaskScheduler> instance;
 
+    void stopAndWaitOnce();
 private:
     TaskThreadPool<CPUImpl> cpu_task_thread_pool;
 
@@ -79,5 +80,7 @@ private:
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
+
+    std::once_flag stop_call_once_flag;
 };
 } // namespace DB

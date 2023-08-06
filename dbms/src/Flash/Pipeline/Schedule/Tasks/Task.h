@@ -85,6 +85,7 @@ public:
     const String & getResourceGroupName() const;
     const KeyspaceID & getKeyspaceID() const;
 
+    const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 public:
     LoggerPtr log;
 
@@ -119,5 +120,4 @@ private:
     bool is_finalized = false;
 };
 using TaskPtr = std::unique_ptr<Task>;
-
 } // namespace DB

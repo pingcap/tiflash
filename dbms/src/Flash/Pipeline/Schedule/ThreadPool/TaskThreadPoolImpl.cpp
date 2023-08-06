@@ -29,7 +29,7 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
     // the default queue is mlfq queue.
     case TaskQueueType::DEFAULT:
     case TaskQueueType::RCQ_MLFQ:
-        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
+         return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
     case TaskQueueType::MLFQ:
         return std::make_unique<CPUMultiLevelFeedbackQueue>();
     default:
@@ -44,7 +44,7 @@ TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
     // the default queue is io priority queue.
     case TaskQueueType::DEFAULT:
     case TaskQueueType::RCQ_IO_PRIORITY:
-        return std::make_unique<ResourceControlQueue<IOPriorityQueue>>();
+         return std::make_unique<ResourceControlQueue<IOPriorityQueue>>();
     case TaskQueueType::IO_PRIORITY:
         return std::make_unique<IOPriorityQueue>();
     case TaskQueueType::MLFQ:

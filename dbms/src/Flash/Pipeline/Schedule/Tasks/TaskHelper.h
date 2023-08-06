@@ -29,6 +29,7 @@ namespace DB
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
 
+// gjt todo why not endTraceMemory?
 #define FINALIZE_TASK(task) \
     (task)->finalize();     \
     (task).reset();

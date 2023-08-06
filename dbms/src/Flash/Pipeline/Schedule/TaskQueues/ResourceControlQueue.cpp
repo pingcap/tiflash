@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/toRU.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
@@ -42,7 +43,10 @@ template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
 {
     if unlikely (is_finished)
+    {
+        FINALIZE_TASK(task);
         return;
+    }
 
     // name can be empty, it means resource control is disabled.
     const std::string & name = task->getResourceGroupName();
@@ -66,30 +70,62 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
 template <typename NestedQueueType>
 bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 {
+    assert(task == nullptr);
     std::unique_lock lock(mu);
     while (true)
     {
+        // gjt todo: resource_group_infos.empty() but task_queue not empty; noway!
         while (!resource_group_infos.empty())
         {
+            // gjt todo: this changes the semantics of TaskQueue::take(),
+            // but IMO this way is better, because we can avoid do extra last one task execution when task_queue is alredy finised.
+            if unlikely (is_finished)
+            {
+                while (!resource_group_infos.empty())
+                {
+                    auto & group_info = resource_group_infos.top();
+                    const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
+                    std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
+                    // Drain task_queue.
+                    while (!task_queue->empty() && task_queue->take(task))
+                    {
+                        FINALIZE_TASK(task);
+                    }
+                    LOG_DEBUG(logger, "finish drain all nested task_queue. current resource group {}, task_queue.empty(): {}", name, task_queue->empty());
+                    assert(task_queue->empty());
+                    task_queue->finish();
+                    resource_group_infos.pop();
+                }
+                return false;
+            }
+
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
             const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
             auto priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
             std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
+            LOG_DEBUG(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}", name, priority, is_finished, task_queue->empty());
+
+            // 1. When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
+            //    Should not take any task from nested task queue.
+            // 2. But if TaskScheduler has signal task_queue to finish, should drain nested task queue as soon as possible.
+            //    So will ignore checking priority.
             if (priority <= 0.0)
-            {
                 break;
-            }
 
             if (task_queue->empty() || !task_queue->take(task))
             {
+                LOG_DEBUG(logger, "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}", name, task_queue->empty());
                 // Got here only when task_queue is empty or finished, we try next resource group.
                 // If new task of this resource gorup is submited, the resource_group info will be added again.
                 resource_group_infos.pop();
                 size_t erase_num = pipeline_tasks.erase(name);
+                // gjt todo finish empty task_queue
                 RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
             } else {
+                LOG_DEBUG(logger, "schedule task of resource group {} succeed, cur cpu time of resource group: {}", name,
+                        task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
                 assert(task != nullptr);
                 break;
             }
@@ -98,13 +134,15 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         if (task != nullptr)
             return true;
 
+        // For situation when resource_group_infos never insert any resource group.
         if unlikely (is_finished)
             return false;
 
-        // When got here means:
-        // 1. Highest priority is less than zero.
-        // 2. All task_queues of all resource groups are empty.
-        cv.wait(lock);
+        // Other TaskQueue like MultiLevelFeedbackQueue and IOPriorityQueue will wake up when new task submit or is_finished become true.
+        // But for ResourceControlQueue, when all resource groups's RU are exhausted, will go to sleep, and should wakeup when RU is updated.
+        // But LAC has no way to notify ResourceControlQueue for now, so ResourceControlQueue should wakeup to check if RU is updated or not.
+        cv.wait_for(lock, DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU);
+        updateResourceGroupInfosWithoutLock();
     }
 }
 
@@ -141,7 +179,9 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
 {
-    LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, toRU(consumed_cpu_time), consumed_cpu_time);
+    auto ru = toRU(consumed_cpu_time);
+    LOG_DEBUG(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
+    LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, ru, consumed_cpu_time);
     updateResourceGroupInfosWithoutLock();
 
     // Notify priority info is updated.

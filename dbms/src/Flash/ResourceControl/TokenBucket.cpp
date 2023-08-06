@@ -15,6 +15,8 @@
 #include <Common/Exception.h>
 #include <Flash/ResourceControl/TokenBucket.h>
 
+#include <iostream>
+
 namespace DB
 {
 void TokenBucket::put(double n)

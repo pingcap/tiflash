@@ -59,6 +59,7 @@ private:
     static constexpr auto InfoIndexPipelineTaskQueue = 1;
     static constexpr auto InfoIndexResourceGroupName = 2;
     static constexpr auto InfoIndexResourceKeyspaceId = 3;
+    static constexpr auto DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU = std::chrono::seconds(1);
 
     // ResourceGroupInfoQueue compator.
     static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)

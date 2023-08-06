@@ -56,10 +56,23 @@ public:
         return is_resource_group_throttled_func(name);
     }
 
+    void resetAll()
+    {
+        resource_groups.clear();
+        consume_resource_func = nullptr;
+        get_priority_func = nullptr;
+        is_resource_group_throttled_func = nullptr;
+        max_ru_per_sec = 0;
+    }
+
+    std::mutex mu;
     std::unordered_map<std::string, std::shared_ptr<ResourceGroup>> resource_groups;
+
     ConsumeResourceFuncType consume_resource_func;
     GetPriorityFuncType get_priority_func;
     IsResourceGroupThrottledFuncType is_resource_group_throttled_func;
+
+    uint64_t max_ru_per_sec = 0;
 };
 
 } // namespace DB

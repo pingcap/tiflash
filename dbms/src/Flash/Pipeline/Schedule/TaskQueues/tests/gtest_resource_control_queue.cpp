@@ -35,7 +35,10 @@ class PlainTask : public Task
 {
 public:
     explicit PlainTask(PipelineExecutorContext & exec_context_)
-        : Task(exec_context_) {}
+        : Task(exec_context_)
+        , task_exec_context(exec_context_) {}
+
+    ~PlainTask() override = default;
 
     ExecTaskStatus executeImpl() noexcept override
     {
@@ -43,37 +46,115 @@ public:
         {
             ++exec_time_counter;
             std::this_thread::sleep_for(each_exec_time);
+            return ExecTaskStatus::RUNNING;
         }
         return ExecTaskStatus::FINISHED;
     }
 
+    void finalizeImpl() override
+    {
+        task_exec_context.update(profile_info);
+    }
+
     std::chrono::nanoseconds each_exec_time = std::chrono::milliseconds(100);
-    uint64_t total_exec_times = 100;
+    uint64_t total_exec_times = 10;
     uint64_t exec_time_counter = 0;
+    PipelineExecutorContext & task_exec_context;
 };
 }  // namespace
 
 class TestResourceControlQueue : public ::testing::Test
 {
+public:
+    void SetUp() override
+    {
+        mem_tracker = MemoryTracker::create(1000000000);
+    }
+
+    void TearDown() override
+    {
+        mem_tracker->reset();
+    }
+
+    std::vector<std::shared_ptr<PipelineExecutorContext>> setupExecContextForEachResourceGroup(const std::vector<ResourceGroupPtr> & resource_groups)
+    {
+        std::vector<std::shared_ptr<PipelineExecutorContext>> all_contexts;
+        all_contexts.resize(resource_groups.size());
+        for (size_t i = 0; i < resource_groups.size(); ++i)
+        {
+            auto resource_group_name = resource_groups[i]->name;
+            all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock_query_id-" + resource_group_name, "mock_req_id-" + resource_group_name,
+                    mem_tracker, resource_group_name, NullspaceID);
+        }
+        return all_contexts;
+    }
+
+    MemoryTrackerPtr mem_tracker;
 };
 
 void nopConsumeResource(const std::string &, const KeyspaceID &, double, uint64_t) {}
 double nopGetPriority(const std::string &, const KeyspaceID &) { return 10; }
 bool nopIsResourceGroupThrottled(const std::string &) { return false; }
 
-TEST_F(TestResourceControlQueue, BasicTest)
+void staticConsumeResource(const std::string & name, const KeyspaceID &, double ru, uint64_t cpu_time_ns)
 {
-    TaskQueuePtr queue = std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
+    std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+    auto & resource_groups = LocalAdmissionController::global_instance->resource_groups;
+    auto iter = resource_groups.find(name);
+    RUNTIME_ASSERT(iter != resource_groups.end());
+    iter->second->consumeResource(ru, cpu_time_ns);
+}
 
+double staticGetPriority(const std::string & name, const KeyspaceID &)
+{
+    std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+    auto & resource_groups = LocalAdmissionController::global_instance->resource_groups;
+    auto iter = resource_groups.find(name);
+    RUNTIME_ASSERT(iter != resource_groups.end());
+    auto priority = iter->second->getPriority(LocalAdmissionController::global_instance->max_ru_per_sec);
+    return priority;
+}
+
+bool staticIsResourceGroupThrottled(const std::string &)
+{
+    return false;
+}
+
+void setupNopLocalAdmissionController()
+{
+    LocalAdmissionController::global_instance->resetAll();
     LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
     LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
     LocalAdmissionController::global_instance->is_resource_group_throttled_func = nopIsResourceGroupThrottled;
+}
+
+void setupStaticLocalAdmissionController(const std::vector<ResourceGroupPtr> & resource_groups)
+{
+    LocalAdmissionController::global_instance->resetAll();
+    LocalAdmissionController::global_instance->consume_resource_func = staticConsumeResource;
+    LocalAdmissionController::global_instance->get_priority_func = staticGetPriority;
+    LocalAdmissionController::global_instance->is_resource_group_throttled_func = staticIsResourceGroupThrottled;
+
+    uint64_t max_ru_per_sec = 0;
+    for (const auto & resource_group : resource_groups)
+    {
+        auto cur_ru_per_sec = resource_group->user_ru_per_sec;
+        if (max_ru_per_sec < cur_ru_per_sec)
+            max_ru_per_sec = cur_ru_per_sec;
+
+        LocalAdmissionController::global_instance->resource_groups.insert({resource_group->name, resource_group});
+    }
+    LocalAdmissionController::global_instance->max_ru_per_sec = max_ru_per_sec;
+}
+
+// Basic test, task runs normally and finish normally.
+TEST_F(TestResourceControlQueue, BasicTest)
+{
+    setupNopLocalAdmissionController();
 
     const int thread_num = 10;
     const int resource_group_num = 10;
-    const int task_num_per_resource_group = 100;
-
-    auto mem_tracker = MemoryTracker::create(1000000000);
+    const int task_num_per_resource_group = 10;
 
     TaskSchedulerConfig config{thread_num, thread_num};
     TaskScheduler task_scheduler(config);
@@ -83,12 +164,13 @@ TEST_F(TestResourceControlQueue, BasicTest)
     all_contexts.resize(resource_group_num);
     for (int i = 0; i < resource_group_num; ++i)
     {
-        String group_name = "rg-" + std::to_string(i);
+        String group_name = "rg" + std::to_string(i);
         all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, group_name, NullspaceID);
 
         for (int j = 0; j < task_num_per_resource_group; ++j)
         {
-            tasks.push_back(std::make_unique<PlainTask>(*(all_contexts[i])));
+            auto task = std::make_unique<PlainTask>(*(all_contexts[i]));
+            tasks.push_back(std::move(task));
         }
     }
 
@@ -98,43 +180,179 @@ TEST_F(TestResourceControlQueue, BasicTest)
         context->waitFor(std::chrono::seconds(20));
 }
 
-// // When RU is exhausted, we expect that task cannot be executed.
-// TEST_F(TestResourceControlQueue, RunOutOFRU)
-// {
-//     const int thread_num = 10;
-// 
-//     TaskSchedulerConfig config{thread_num, thread_num};
-//     TaskScheduler task_scheduler(config);
-// 
-//     const String group_name = "rg1";
-//     LocalAdmissionController::global_instance->resource_groups.insert({group_name, {0, 0}});
-// 
-//     auto mem_tracker = MemoryTracker::create(1000000000);
-//     PipelineExecutorContext exec_context("mock-query-id", "mock-req-id", mem_tracker, group_name, NullspaceID);
-// 
-//     auto task = std::make_unique<PlainTask>(exec_context);
-//     task_scheduler.submit(std::move(task));
-// 
-//     try
-//     {
-//         exec_context.waitFor(std::chrono::seconds(10));
-//     }
-//     catch (...)
-//     {
-//         String err_msg = getCurrentExceptionMessage(false, false);
-//         EXPECT_EQ(PipelineExecutorContext::timeout_err_msg, err_msg);
-//     }
-// }
-
-// 1. When RU is exhausted, task is stopped.
-// 2. When RU is refilled, the task can be executed again.
-TEST_F(TestResourceControlQueue, RefillRU)
+// Timeout test, Task need to run 1sec, but we only wait 500ms.
+TEST_F(TestResourceControlQueue, BasicTimeoutTest)
 {
+    setupNopLocalAdmissionController();
+
+    const int thread_num = 1;
+    const int task_num_per_resource_group = 1;
+
+    TaskSchedulerConfig config{thread_num, thread_num};
+    TaskScheduler task_scheduler(config);
+
+    String group_name = "rg1";
+    auto exec_context = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, group_name, NullspaceID);
+    std::vector<TaskPtr> tasks;
+
+    for (int i = 0; i < task_num_per_resource_group; ++i)
+    {
+        auto task = std::make_unique<PlainTask>(*exec_context);
+        tasks.push_back(std::move(task));
+    }
+
+    task_scheduler.submit(tasks);
+    EXPECT_THROW(exec_context->waitFor(std::chrono::milliseconds(500)), DB::Exception);
+    // task_scheduler should wait all TaskPtr to be really resetted before exec_context is destructed,
+    // because ~Task() use exec_context to deref task count.
+    task_scheduler.stopAndWaitOnce();
+}
+
+// Test resource group runs out of RU, and tasks of this resource group will be stuck.
+// When RU is refilled, task can run again.
+TEST_F(TestResourceControlQueue, RunOutOfRU)
+{
+    const std::string rg_name = "rg1";
+    // 1. When RU is exhausted, we expect that task cannot be executed.
+    const uint64_t ru_per_sec = 0;
+    auto resource_group = std::make_shared<ResourceGroup>(rg_name, ResourceGroup::MediumPriorityValue, ru_per_sec, false);
+    setupStaticLocalAdmissionController({resource_group});
+
+    const int thread_num = 10;
+
+    TaskSchedulerConfig config{thread_num, thread_num};
+    TaskScheduler task_scheduler(config);
+
+    PipelineExecutorContext exec_context("mock-query-id", "mock-req-id", mem_tracker, rg_name, NullspaceID);
+
+    auto task = std::make_unique<PlainTask>(exec_context);
+    // This task should use 2*100ms cpu_time.
+    task->total_exec_times = 2;
+    task_scheduler.submit(std::move(task));
+
+    // This task is stuck because run out of ru, so will throw timeout exception.
+    ASSERT_THROW(exec_context.waitFor(std::chrono::seconds(3)), DB::Exception);
+
+    // Refill RU.
+    {
+        std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+        EXPECT_EQ(LocalAdmissionController::global_instance->resource_groups.erase(rg_name), 1);
+        EXPECT_TRUE(LocalAdmissionController::global_instance->resource_groups.empty());
+        const uint64_t new_ru_per_sec = 1000000;
+        LocalAdmissionController::global_instance->max_ru_per_sec = new_ru_per_sec;
+        resource_group = std::make_shared<ResourceGroup>(rg_name, ResourceGroup::MediumPriorityValue, new_ru_per_sec, false);
+        LocalAdmissionController::global_instance->resource_groups.insert({rg_name, resource_group});
+    }
+    // 2. When RU is refilled, the task can be executed again.
+    ASSERT_NO_THROW(exec_context.waitFor(std::chrono::milliseconds(500)));
+}
+
+// When all resource groups have the same RU config, the cpu_time usage of all resource groups should be same.
+TEST_F(TestResourceControlQueue, EqualCPUUsage)
+{
+    const uint64_t ru_per_sec = 10000;
+    auto resource_groups = std::vector<ResourceGroupPtr>{
+        std::make_shared<ResourceGroup>("rg1", ResourceGroup::MediumPriorityValue, ru_per_sec, false),
+        std::make_shared<ResourceGroup>("rg2", ResourceGroup::MediumPriorityValue, ru_per_sec, false),
+        std::make_shared<ResourceGroup>("rg3", ResourceGroup::MediumPriorityValue, ru_per_sec, false),
+        std::make_shared<ResourceGroup>("rg4", ResourceGroup::MediumPriorityValue, ru_per_sec, false),
+        std::make_shared<ResourceGroup>("rg5", ResourceGroup::MediumPriorityValue, ru_per_sec, false),
+    };
+
+    setupStaticLocalAdmissionController(resource_groups);
+
+    const uint64_t task_num_per_resource_group = 10;
+
+    std::vector<std::shared_ptr<PipelineExecutorContext>> all_contexts;
+    all_contexts.resize(resource_groups.size());
+    std::vector<TaskPtr> tasks;
+    for (size_t i = 0; i < resource_groups.size(); ++i)
+    {
+        all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, resource_groups[i]->name, NullspaceID);
+        for (size_t j = 0; j < task_num_per_resource_group; ++j)
+        {
+            auto task = std::make_unique<PlainTask>(*(all_contexts[i]));
+            tasks.push_back(std::move(task));
+        }
+    }
+
+    const int thread_num = 10;
+    TaskSchedulerConfig config{thread_num, thread_num};
+    TaskScheduler task_scheduler(config);
+
+    task_scheduler.submit(tasks);
+
+    for (auto & context : all_contexts)
+    {
+        context->waitFor(std::chrono::seconds(20));
+        uint64_t cpu_exec_time_sec = context->getQueryProfileInfo().getCPUExecuteTimeNs() / 1e9;
+        // We expect tasks in one exec_context use 10s cpu_time:
+        // Each task use: 100ms * 10 = 1s.
+        // And there are 10 tasks in one resource group/exec_context.
+        EXPECT_EQ(cpu_exec_time_sec, 10);
+    }
+}
+
+TEST_F(TestResourceControlQueue, SmallRUTask)
+{
+    auto resource_group = std::make_shared<ResourceGroup>("rg1", ResourceGroup::MediumPriorityValue, 150, false);
+    setupStaticLocalAdmissionController({resource_group});
+    auto all_contexts = setupExecContextForEachResourceGroup({resource_group});
+
+    const int thread_num = 1;
+    TaskSchedulerConfig config{thread_num, thread_num};
+    TaskScheduler task_scheduler(config);
+
+    auto task = std::make_unique<PlainTask>(*(all_contexts[0]));
+    task->total_exec_times = 15;
+
+    task_scheduler.submit(std::move(task));
+
+    all_contexts[0]->waitFor(std::chrono::seconds(5));
+
+    std::cout << "gjt debug " << all_contexts[0]->getQueryProfileInfo().getCPUExecuteTimeNs() << std::endl;
 }
 
 // The proportion of CPU time used by each resource group should be same with the proportion of RU.
 TEST_F(TestResourceControlQueue, CPUUsageProportion)
 {
+    // RU proportion is 1:5:10.
+    auto resource_groups = std::vector<ResourceGroupPtr>{
+        std::make_shared<ResourceGroup>("rg-ru20", ResourceGroup::MediumPriorityValue, 20, false),
+        std::make_shared<ResourceGroup>("rg-ru100", ResourceGroup::MediumPriorityValue, 100, false),
+        std::make_shared<ResourceGroup>("rg-ru200", ResourceGroup::MediumPriorityValue, 200, false),
+    };
+
+    setupStaticLocalAdmissionController(resource_groups);
+    auto all_contexts = setupExecContextForEachResourceGroup(resource_groups);
+
+    const int thread_num = 10;
+    const int tasks_per_resource_group = 1000;
+
+    TaskSchedulerConfig config{thread_num, thread_num};
+    TaskScheduler task_scheduler(config);
+
+    std::vector<TaskPtr> tasks;
+    for (size_t i = 0; i < resource_groups.size(); ++i)
+    {
+        for (size_t j = 0; j < tasks_per_resource_group; ++j)
+        {
+            auto task = std::make_unique<PlainTask>(*(all_contexts[i]));
+            task->each_exec_time = std::chrono::milliseconds(5);
+            task->total_exec_times = 100;
+            tasks.push_back(std::move(task));
+        }
+    }
+
+    task_scheduler.submit(tasks);
+    std::this_thread::sleep_for(std::chrono::seconds(50));
+    task_scheduler.stopAndWaitOnce();
+    for (auto & exec_context : all_contexts)
+        exec_context->waitFor(std::chrono::seconds(10));
+
+    for (auto & exec_context : all_contexts)
+        std::cout << exec_context->getResourceGroupName() << ": " << exec_context->getQueryProfileInfo().getCPUExecuteTimeNs() << std::endl;
 }
+// gjt todo iopool
 
 } // namespace DB::test

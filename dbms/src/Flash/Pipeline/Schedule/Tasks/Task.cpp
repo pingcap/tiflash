@@ -171,7 +171,7 @@ void Task::finalize()
 
     profile_info.reportMetrics();
 #ifndef NDEBUG
-    LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
+    LOG_TRACE(log, "task(resource group: {}) finalize with profile info: {}", getQueryExecContext().getResourceGroupName(), profile_info.toJson());
 #endif // !NDEBUG
 }
 

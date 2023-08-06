@@ -55,7 +55,9 @@ public:
         , user_ru_per_sec(user_ru_per_sec_)
         , burstable(burstable_)
         , keyspace_id(NullspaceID)
-    {}
+    {
+        bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
+    }
 #endif
 
     ~ResourceGroup() = default;
@@ -67,7 +69,15 @@ public:
         trickle_mode,
     };
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+    // Priority of resource group set by user.
+    // This is specified by tidb: parser/model/model.go
+    static constexpr int32_t LowPriorityValue = 1;
+    static constexpr int32_t MediumPriorityValue = 8;
+    static constexpr int32_t HighPriorityValue = 16;
+
     static constexpr uint64_t MAX_WEIGHT = (std::numeric_limits<uint64_t>::max() >> 4);
 
     static uint32_t getUserPriorityWeight(uint32_t user_priority)
@@ -139,6 +149,8 @@ private:
     {
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue, "unexpected user_priority {}", user_priority);
+        // gjt todo: add wanring log when RU less than zero.
+        std::cout << "gjt debug remaining ru: " << bucket->peek() << std::endl;
         if (!burstable && bucket->peek() <= 0.0)
             return -1.0;
 
@@ -225,12 +237,6 @@ private:
     }
 
     const std::string name;
-
-    // Priority of resource group set by user.
-    // This is specified by tidb: parser/model/model.go
-    static constexpr int32_t LowPriorityValue = 1;
-    static constexpr int32_t MediumPriorityValue = 8;
-    static constexpr int32_t HighPriorityValue = 16;
 
     uint32_t user_priority;
     uint64_t user_ru_per_sec;
@@ -326,6 +332,17 @@ public:
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
 #endif
 
+    // Interval of fetch from GAC periodically.
+    static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
+    // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
+    static constexpr uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
+    // Interval of cleanup resource group.
+    static constexpr auto CLEANUP_RESOURCE_GROUP_INTERVAL = std::chrono::minutes(10);
+    // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
+    static constexpr auto DEGRADE_MODE_DURATION = 120;
+    static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
+    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
+
 private:
     // Get ResourceGroup by name, if not exist, fetch from PD.
     // If you are sure this resource group exists in GAC, you can skip the check.
@@ -367,17 +384,6 @@ private:
     void handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
 
     void handleBackgroundError(const std::string & err_msg);
-
-    // Interval of fetch from GAC periodically.
-    static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
-    // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
-    static constexpr uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
-    // Interval of cleanup resource group.
-    static constexpr auto CLEANUP_RESOURCE_GROUP_INTERVAL = std::chrono::minutes(10);
-    // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
-    static constexpr auto DEGRADE_MODE_DURATION = 120;
-    static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
-    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
 
     // Background jobs:
     // 1. Fetch tokens from GAC periodically.
