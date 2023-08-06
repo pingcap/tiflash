@@ -178,7 +178,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
         {
             if (unlikely(is_finished))
             {
-                drainTaskQueue();
+                drainTaskQueueWithoutLock();
                 return false;
             }
             if (!cancel_task_queue.empty())
