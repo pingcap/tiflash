@@ -65,6 +65,12 @@ bool IOPriorityQueue::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        if (unlikely(is_finished))
+        {
+            drainTaskQueueWithoutLock();
+            return false;
+        }
+
         if (popTask(cancel_task_queue, task))
             return true;
 
@@ -75,9 +81,24 @@ bool IOPriorityQueue::take(TaskPtr & task)
             return true;
         if (popTask(next_queue, task))
             return true;
-        if (unlikely(is_finished))
-            return false;
         cv.wait(lock);
+    }
+}
+
+void IOPriorityQueue::drainTaskQueueWithoutLock()
+{
+    TaskPtr task;
+    while (popTask(io_out_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
+    while (popTask(io_in_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
+    while (popTask(cancel_task_queue, task))
+    {
+        FINALIZE_TASK(task);
     }
 }
 
