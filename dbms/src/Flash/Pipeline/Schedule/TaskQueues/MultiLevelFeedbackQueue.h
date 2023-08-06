@@ -129,6 +129,7 @@ private:
 
     void submitTaskWithoutLock(TaskPtr && task);
 
+    void drainTaskQueueWithoutLock();
 private:
     mutable std::mutex mu;
     std::condition_variable cv;
