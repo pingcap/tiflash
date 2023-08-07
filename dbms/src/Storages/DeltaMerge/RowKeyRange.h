@@ -100,6 +100,10 @@ struct RowKeyValue
                 // So we can just ignore it.
                 if (int_value < std::numeric_limits<Int64>::max())
                 {
+                    LOG_WARNING(
+                        Logger::get(),
+                        "Meet rowkey {} which is not strictly following the standard encoding format",
+                        Redact::keyToDebugString(value->data(), value->size()));
                     int_value = int_value + 1;
                     WriteBufferFromOwnString ss;
                     DB::EncodeInt64(int_value, ss);
