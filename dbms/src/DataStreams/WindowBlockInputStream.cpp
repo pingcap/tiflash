@@ -783,7 +783,7 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
     while (cursor < partition_end)
     {
         const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
-        if (is_order_by_col_nullable)
+        if constexpr (is_order_by_col_nullable)
         {
             if (cursor_column->isNullAt(cursor.row))
             {
