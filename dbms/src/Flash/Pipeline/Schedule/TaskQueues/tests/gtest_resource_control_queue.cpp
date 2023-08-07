@@ -31,14 +31,14 @@ namespace DB::tests
 
 namespace
 {
-class PlainTask : public Task
+class SimpleTask : public Task
 {
 public:
-    explicit PlainTask(PipelineExecutorContext & exec_context_)
+    explicit SimpleTask(PipelineExecutorContext & exec_context_)
         : Task(exec_context_)
         , task_exec_context(exec_context_) {}
 
-    ~PlainTask() override = default;
+    ~SimpleTask() override = default;
 
     ExecTaskStatus executeImpl() noexcept override
     {
@@ -148,6 +148,7 @@ void setupStaticLocalAdmissionController(const std::vector<ResourceGroupPtr> & r
 }
 
 // Basic test, task runs normally and finish normally.
+// Expect runs ok and no error/exception.
 TEST_F(TestResourceControlQueue, BasicTest)
 {
     setupNopLocalAdmissionController();
@@ -169,18 +170,22 @@ TEST_F(TestResourceControlQueue, BasicTest)
 
         for (int j = 0; j < task_num_per_resource_group; ++j)
         {
-            auto task = std::make_unique<PlainTask>(*(all_contexts[i]));
+            auto task = std::make_unique<SimpleTask>(*(all_contexts[i]));
+            task->each_exec_time = std::chrono::milliseconds(10);
+            task->total_exec_times = 10;
             tasks.push_back(std::move(task));
         }
     }
 
     task_scheduler.submit(tasks);
     
+    // Expect total cpu_time usage: 10(rg_num) * 10(task_num_per_rg) * 10ms*10 / 10(thead_num)= 1s
     for (const auto & context : all_contexts)
-        context->waitFor(std::chrono::seconds(20));
+        context->wait();
 }
 
 // Timeout test, Task need to run 1sec, but we only wait 500ms.
+// Expect runs ok and no error/exception.
 TEST_F(TestResourceControlQueue, BasicTimeoutTest)
 {
     setupNopLocalAdmissionController();
@@ -197,18 +202,17 @@ TEST_F(TestResourceControlQueue, BasicTimeoutTest)
 
     for (int i = 0; i < task_num_per_resource_group; ++i)
     {
-        auto task = std::make_unique<PlainTask>(*exec_context);
+        auto task = std::make_unique<SimpleTask>(*exec_context);
+        task->each_exec_time = std::chrono::milliseconds(100);
+        task->total_exec_times = 10;
         tasks.push_back(std::move(task));
     }
 
     task_scheduler.submit(tasks);
     EXPECT_THROW(exec_context->waitFor(std::chrono::milliseconds(500)), DB::Exception);
-    // task_scheduler should wait all TaskPtr to be really resetted before exec_context is destructed,
-    // because ~Task() use exec_context to deref task count.
-    task_scheduler.stopAndWaitOnce();
 }
 
-// Test resource group runs out of RU, and tasks of this resource group will be stuck.
+// 1. resource group runs out of RU, and tasks of this resource group will be stuck.
 // When RU is refilled, task can run again.
 TEST_F(TestResourceControlQueue, RunOutOfRU)
 {
@@ -225,7 +229,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
 
     PipelineExecutorContext exec_context("mock-query-id", "mock-req-id", mem_tracker, rg_name, NullspaceID);
 
-    auto task = std::make_unique<PlainTask>(exec_context);
+    auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 2*100ms cpu_time.
     task->total_exec_times = 2;
     task_scheduler.submit(std::move(task));
@@ -271,7 +275,7 @@ TEST_F(TestResourceControlQueue, EqualCPUUsage)
         all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, resource_groups[i]->name, NullspaceID);
         for (size_t j = 0; j < task_num_per_resource_group; ++j)
         {
-            auto task = std::make_unique<PlainTask>(*(all_contexts[i]));
+            auto task = std::make_unique<SimpleTask>(*(all_contexts[i]));
             tasks.push_back(std::move(task));
         }
     }
@@ -303,7 +307,7 @@ TEST_F(TestResourceControlQueue, SmallRUTask)
     TaskSchedulerConfig config{thread_num, thread_num};
     TaskScheduler task_scheduler(config);
 
-    auto task = std::make_unique<PlainTask>(*(all_contexts[0]));
+    auto task = std::make_unique<SimpleTask>(*(all_contexts[0]));
     task->total_exec_times = 15;
 
     task_scheduler.submit(std::move(task));
@@ -337,7 +341,7 @@ TEST_F(TestResourceControlQueue, CPUUsageProportion)
     {
         for (size_t j = 0; j < tasks_per_resource_group; ++j)
         {
-            auto task = std::make_unique<PlainTask>(*(all_contexts[i]));
+            auto task = std::make_unique<SimpleTask>(*(all_contexts[i]));
             task->each_exec_time = std::chrono::milliseconds(5);
             task->total_exec_times = 100;
             tasks.push_back(std::move(task));

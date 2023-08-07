@@ -21,6 +21,7 @@
 #include <etcd/v3election.grpc.pb.h>
 #include <etcd/v3election.pb.h>
 #include <fmt/chrono.h>
+#include <Common/Exception.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -36,9 +37,12 @@
 
 #include <chrono>
 #include <mutex>
+#include <random>
 
 namespace DB::Etcd
 {
+const String Client::SERVER_ID_ETCD_PATH = "/tidb/server_id";
+
 ClientPtr Client::create(const pingcap::pd::ClientPtr & pd_client, const pingcap::ClusterConfig & config, Int64 timeout_s)
 {
     auto etcd_client = std::make_shared<Client>();
@@ -228,6 +232,96 @@ grpc::Status Client::resign(const v3electionpb::LeaderKey & leader_key)
     v3electionpb::ResignResponse resp;
     auto status = leaderClient()->election_stub->Resign(&context, req, &resp);
     return status;
+}
+
+UInt64 Client::acquireServerIDFromPD()
+{
+    const int retry_times = 3;
+    UInt64 random_server_id = 0;
+    bool acquire_succ = false;
+
+    std::random_device dev;
+    std::mt19937_64 gen(dev());
+    std::uniform_int_distribution dist;
+
+    for (int i = 0; i < retry_times; ++i)
+    {
+        auto exists_server_ids = getExistsServerID();
+
+        int max_count = 65535;
+        bool gen_random_server_id_succ = false;
+        for (int count = 0; count < max_count; ++count)
+        {
+            random_server_id = dist(gen);
+            if (exists_server_ids.find(random_server_id) == exists_server_ids.end())
+            {
+                gen_random_server_id_succ = true;
+                break;
+            }
+        }
+
+        if (!gen_random_server_id_succ)
+            continue;
+
+        etcdserverpb::TxnRequest txn_req;
+        etcdserverpb::Compare * cmp = txn_req.add_compare();
+
+        cmp->set_result(etcdserverpb::Compare_CompareResult::Compare_CompareResult_EQUAL);
+        cmp->set_target(etcdserverpb::Compare_CompareTarget::Compare_CompareTarget_CREATE);
+        String key = fmt::format("{}/{}", SERVER_ID_ETCD_PATH, random_server_id);
+        cmp->set_key(key);
+        cmp->set_create_revision(0);
+
+        etcdserverpb::RequestOp * succ_req_op = txn_req.add_success();
+        etcdserverpb::PutRequest * put_req = succ_req_op->mutable_request_put();
+        put_req->set_key(key);
+        put_req->set_value("0");
+
+        etcdserverpb::TxnResponse txn_resp;
+        grpc::ClientContext context;
+        context.set_deadline(std::chrono::system_clock::now() + timeout);
+        auto status = leaderClient()->kv_stub->Txn(&context, txn_req, &txn_resp);
+        if (!status.ok())
+            throw Exception("acquireServerIDFromPD failed, grpc error: {}", status.error_message());
+
+        if (txn_resp.succeeded())
+        {
+            acquire_succ = true;
+            break;
+        }
+    }
+
+    if (!acquire_succ)
+        throw Exception("too many times({}) retry when acquireServerIDFromPD", retry_times);
+
+    return random_server_id;
+}
+
+std::unordered_set<UInt64> Client::getExistsServerID()
+{
+    etcdserverpb::RangeRequest range_req;
+    range_req.set_key(SERVER_ID_ETCD_PATH);
+    char next_ch = '/' + 1;
+    range_req.set_range_end(SERVER_ID_ETCD_PATH + std::string{next_ch});
+    range_req.set_keys_only(true);
+
+    grpc::ClientContext context;
+    context.set_deadline(std::chrono::system_clock::now() + timeout);
+    etcdserverpb::RangeResponse range_resp;
+    auto status = leaderClient()->kv_stub->Range(&context, range_req, &range_resp);
+    if (!status.ok())
+        throw Exception("getExistsServerID failed, grpc error: {}", status.error_message());
+
+    std::unordered_set<UInt64> exists_server_ids;
+    for (const auto & kv : range_resp.kvs())
+    {
+        String key = kv.key();
+        String prefix(key.begin(), key.begin() + SERVER_ID_ETCD_PATH.size());
+        RUNTIME_CHECK(prefix == SERVER_ID_ETCD_PATH);
+        String server_id_str(key.begin() + SERVER_ID_ETCD_PATH.size() + 1, key.end());
+        exists_server_ids.insert(std::stoi(server_id_str));
+    }
+    return exists_server_ids;
 }
 
 bool Session::isValid() const
