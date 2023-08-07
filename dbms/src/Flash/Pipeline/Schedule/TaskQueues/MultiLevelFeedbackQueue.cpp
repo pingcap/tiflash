@@ -230,7 +230,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
         auto & cur_queue = level_queues[i];
         TaskPtr task;
         while (!cur_queue->empty())
-        { 
+        {
             cur_queue->take(task);
             FINALIZE_TASK(task);
         }
