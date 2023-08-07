@@ -14,5 +14,7 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_subdirectory (PageCtl EXCLUDE_FROM_ALL)
-add_subdirectory (Checkpoint EXCLUDE_FROM_ALL)
+add_library (checkpoint-tool-lib CheckpointTool.cpp)
+target_include_directories (checkpoint-tool-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries (checkpoint-tool-lib dbms page tiflash-dttool-entry-object)
+target_compile_options(checkpoint-tool-lib PRIVATE -Wno-format)
