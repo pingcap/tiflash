@@ -17,8 +17,8 @@
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
-#include <utility>
 #include <magic_enum.hpp>
+#include <utility>
 
 namespace DB
 {
@@ -68,55 +68,55 @@ public:
 protected:
     ExecTaskStatus runExecute()
     {
-        assert(pipeline_exec);                                                                                                                             \
-        auto op_status = (pipeline_exec)->execute();                                                                                                       \
-        switch (op_status)                                                                                                                                 \
-        {                                                                                                                                                  \
-            MAP_NOT_RUNNING_TASK_STATUS                                                                                                                    \
-        /* After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */ \
-        /* And other states are unexpected. */                                                                                                             \
-        case OperatorStatus::NEED_INPUT:                                                                                                                   \
-            return ExecTaskStatus::RUNNING;                                                                                                                \
-        default:                                                                                                                                           \
-            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::execute");                                                                                      \
+        assert(pipeline_exec);
+        auto op_status = (pipeline_exec)->execute();
+        switch (op_status)
+        {
+            MAP_NOT_RUNNING_TASK_STATUS
+        /* After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */
+        /* And other states are unexpected. */
+        case OperatorStatus::NEED_INPUT:
+            return ExecTaskStatus::RUNNING;
+        default:
+            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::execute");
         }
     }
 
     ExecTaskStatus runExecuteIO()
     {
-        assert(pipeline_exec);                                                                                               \
-        auto op_status = (pipeline_exec)->executeIO();                                                                       \
-        switch (op_status)                                                                                                   \
-        {                                                                                                                    \
-            MAP_NOT_RUNNING_TASK_STATUS                                                                                      \
-        /* After `pipeline_exec->executeIO`, */                                                                              \
-        /* - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */ \
-        /* - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute` */  \
-        /* And other states are unexpected. */                                                                               \
-        case OperatorStatus::NEED_INPUT:                                                                                     \
-        case OperatorStatus::HAS_OUTPUT:                                                                                     \
-            return ExecTaskStatus::RUNNING;                                                                                  \
-        default:                                                                                                             \
-            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::execute");                                                        \
+        assert(pipeline_exec);
+        auto op_status = (pipeline_exec)->executeIO();
+        switch (op_status)
+        {
+            MAP_NOT_RUNNING_TASK_STATUS
+        /* After `pipeline_exec->executeIO`, */
+        /* - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */
+        /* - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute` */
+        /* And other states are unexpected. */
+        case OperatorStatus::NEED_INPUT:
+        case OperatorStatus::HAS_OUTPUT:
+            return ExecTaskStatus::RUNNING;
+        default:
+            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::execute");
         }
     }
 
     ExecTaskStatus runAwait()
     {
-        assert(pipeline_exec);                                                                                               \
-        auto op_status = (pipeline_exec)->await();                                                                           \
-        switch (op_status)                                                                                                   \
-        {                                                                                                                    \
-            MAP_NOT_RUNNING_TASK_STATUS                                                                                      \
-        /* After `pipeline_exec->await`, */                                                                                  \
-        /* - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */ \
-        /* - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute` */  \
-        /* And other states are unexpected. */                                                                               \
-        case OperatorStatus::NEED_INPUT:                                                                                     \
-        case OperatorStatus::HAS_OUTPUT:                                                                                     \
-            return ExecTaskStatus::RUNNING;                                                                                  \
-        default:                                                                                                             \
-            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::await");                                                          \
+        assert(pipeline_exec);
+        auto op_status = (pipeline_exec)->await();
+        switch (op_status)
+        {
+            MAP_NOT_RUNNING_TASK_STATUS
+        /* After `pipeline_exec->await`, */
+        /* - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */
+        /* - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute` */
+        /* And other states are unexpected. */
+        case OperatorStatus::NEED_INPUT:
+        case OperatorStatus::HAS_OUTPUT:
+            return ExecTaskStatus::RUNNING;
+        default:
+            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::await");
         }
     }
 

@@ -20,7 +20,8 @@
 
 namespace DB
 {
-class PipelineTask : public EventTask, public PipelineTaskBase
+class PipelineTask : public EventTask
+    , public PipelineTaskBase
 {
 public:
     PipelineTask(

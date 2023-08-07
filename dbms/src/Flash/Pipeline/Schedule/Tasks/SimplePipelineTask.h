@@ -15,12 +15,13 @@
 #pragma once
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTaskBase.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
-class SimplePipelineTask : public Task, public PipelineTaskBase
+class SimplePipelineTask : public Task
+    , public PipelineTaskBase
 {
 public:
     SimplePipelineTask(
