@@ -355,7 +355,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     const auto & orig_table_info = storage->getTableInfo();
     if (!orig_table_info.isLogicalPartitionTable())
     {
-        LOG_ERROR(log, "old table in TiFlash not partition table {} with database_id={}, table_id={}", name_mapper.debugCanonicalName(*db_info, orig_table_info), db_info->id, orig_table_info->id);
+        LOG_ERROR(log, "old table in TiFlash not partition table {} with database_id={}, table_id={}", name_mapper.debugCanonicalName(*db_info, orig_table_info), db_info->id, orig_table_info.id);
         return;
     }
 
@@ -479,7 +479,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_table).Increment();
     LOG_INFO(
         log,
-        "Renaming table {}.{} (display name: {}) to {} {} with database_id={}, table_id={}.",
+        "Renaming table {}.{} (display name: {}) to {} with database_id={}, table_id={}.",
         old_mapped_db_name,
         old_mapped_tbl_name,
         old_display_table_name,
@@ -549,7 +549,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(const TiDB::DB
             return;
         }
 
-        LOG_DEBUG(log, "Recovering table {} with database_id={}, table_id={}", name_mapper.debugCanonicalName(*db_info, *table_info) db_info->id, table_info->id);
+        LOG_DEBUG(log, "Recovering table {} with database_id={}, table_id={}", name_mapper.debugCanonicalName(*db_info, *table_info), db_info->id, table_info->id);
         AlterCommands commands;
         {
             AlterCommand command;
