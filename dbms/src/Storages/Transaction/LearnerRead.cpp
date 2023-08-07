@@ -295,9 +295,13 @@ LearnerReadSnapshot doLearnerRead(
             if (resp.has_region_error())
             {
                 const auto & region_error = resp.region_error();
-                auto region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                auto region_status = RegionException::RegionReadStatus::OTHER;
                 if (region_error.has_epoch_not_match())
                     region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+                else if (region_error.has_not_leader())
+                    region_status = RegionException::RegionReadStatus::NOT_LEADER;
+                else if (region_error.has_region_not_found())
+                    region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
                 unavailable_regions.add(region_id, region_status);
             }
             else if (resp.has_locked())
@@ -412,6 +416,7 @@ LearnerReadSnapshot doLearnerRead(
     const auto start_time = Clock::now();
     batch_wait_index(0);
 
+    // Will be handled in `CoprocessorHandler::execute`.
     unavailable_regions.tryThrowRegionException(
         for_batch_cop,
         context.getDAGContext() ? context.getDAGContext()->is_disaggregated_task : false);

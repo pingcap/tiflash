@@ -48,6 +48,7 @@ public:
 
     // source_columns_ is intended to be passed by value to adapt both to left and right references.
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_);
+    DAGExpressionAnalyzer(const Block & sample_block, const Context & context_);
 
     const Context & getContext() const { return context; }
 
