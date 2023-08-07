@@ -111,6 +111,10 @@ const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 const String Join::flag_mapped_entry_helper_prefix = "__flag-mapped-entry-match-helper";
 const DataTypePtr Join::flag_mapped_entry_helper_type = std::make_shared<PointerHelper::DataType>();
+#ifdef DBMS_PUBLIC_GTEST
+const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
+#endif
+
 
 Join::Join(
     const Names & key_names_left_,
@@ -181,9 +185,14 @@ Join::Join(
         throw Exception("Validate join conditions error: {}" + err);
 
     hash_join_spill_context = std::make_shared<HashJoinSpillContext>(build_spill_config, probe_spill_config, max_bytes_before_external_join, log);
-    if (hash_join_spill_context->isSpillEnabled() && restore_round >= 4)
+    size_t max_restore_round = 4;
+#ifdef DBMS_PUBLIC_GTEST
+    max_restore_round = MAX_RESTORE_ROUND_IN_GTEST;
+#endif
+
+    if (hash_join_spill_context->isSpillEnabled() && restore_round >= max_restore_round)
     {
-        LOG_WARNING(log, fmt::format("restore round reach to 4, spilling will be disabled."));
+        LOG_WARNING(log, fmt::format("restore round reach to {}, spilling will be disabled.", max_restore_round));
         hash_join_spill_context->disableSpill();
     }
 
@@ -525,7 +534,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
-        if (restore_round == 2)
+        if (restore_round == MAX_RESTORE_ROUND_IN_GTEST)
             return;
 #endif
         spillMostMemoryUsedPartitionIfNeed(stream_index);
@@ -1910,7 +1919,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
         std::unique_lock lk(build_probe_mutex);
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
-        if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
+        if (restore_round == std::max(2, MAX_RESTORE_ROUND_IN_GTEST) - 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
             return;
 #endif
         for (const auto & partition_to_be_spilled : hash_join_spill_context->getPartitionsToSpill())
