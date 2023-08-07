@@ -18,6 +18,7 @@
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
@@ -79,6 +80,7 @@ public:
     struct ReadFileInfo
     {
         UInt64 size = 0; // File size of `remote_fname` or `merged_filename`, mainly used for FileCache.
+        DB::DM::ScanContextPtr scan_context;
     };
 
     [[nodiscard]] static auto setReadFileInfo(ReadFileInfo && read_file_info_)
