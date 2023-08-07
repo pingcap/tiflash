@@ -51,6 +51,7 @@ public:
 
 private:
     void submitTaskWithoutLock(TaskPtr && task);
+
     void drainTaskQueueWithoutLock();
 
 private:
