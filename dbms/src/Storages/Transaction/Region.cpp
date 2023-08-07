@@ -497,13 +497,6 @@ std::string Region::dataInfo() const
 void Region::markCompactLog() const
 {
     last_compact_log_time = Clock::now();
-    uint64_t current_applied_index = 0;
-    if (last_compact_log_applied != 0)
-    {
-        uint64_t gap = current_applied_index > last_compact_log_applied ? current_applied_index - last_compact_log_applied : 0;
-        GET_METRIC(tiflash_raft_raft_log_lag_count, type_applied_index).Observe(gap);
-    }
-    last_compact_log_applied = current_applied_index;
 }
 
 Timepoint Region::lastCompactLogTime() const

@@ -397,6 +397,7 @@ void KVStore::persistRegion(const Region & region, std::optional<const RegionTas
         region_persister->persist(region);
         LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
     }
+
     switch (reason)
     {
     case PersistRegionReason::UselessAdminCommand:
