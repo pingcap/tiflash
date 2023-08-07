@@ -71,7 +71,7 @@ public:
     void startRestoreProbe();
     bool prepareProbeRestoredBlock();
 
-    bool shouldRestore() const { return join->isEnableSpill() && (join->isSpilled() || join->isRestoreJoin()); }
+    bool shouldRestore() const { return join->isSpilled() || join->isRestoreJoin(); }
 
     HashProbeTransformExecPtr tryGetRestoreExec();
 
