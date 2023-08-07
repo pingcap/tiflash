@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
 #include <benchmark/benchmark.h>
+
 #include <random>
 
 namespace DB
@@ -99,13 +99,13 @@ TASKQUEUE_BENCHMARK(MLFQBench, SimpleCPUTask)
 TASKQUEUE_BENCHMARK(IOPriorityBench, SimpleIOTask)
 
 BENCHMARK_REGISTER_F(MLFQBench, Basic)
-    ->Args({10, 1, 1, 10000, 2})     // 10000 * 1 * 2 / 10 = 2s
-    ->Args({10, 15, 15, 1000, 2})    // 1000 * 15 * 2 / 10 = 3s
+    ->Args({10, 1, 1, 10000, 2}) // 10000 * 1 * 2 / 10 = 2s
+    ->Args({10, 15, 15, 1000, 2}) // 1000 * 15 * 2 / 10 = 3s
     ->Args({10, 200, 200, 1000, 2}); // 1000 * 200 * 2 / 10 = 40s
 
 BENCHMARK_REGISTER_F(IOPriorityBench, Basic)
-    ->Args({10, 1, 1, 10000, 2})     // 10000 * 1 * 2 / 10 = 2s
-    ->Args({10, 15, 15, 1000, 2})    // 1000 * 15 * 2 / 10 = 3s
+    ->Args({10, 1, 1, 10000, 2}) // 10000 * 1 * 2 / 10 = 2s
+    ->Args({10, 15, 15, 1000, 2}) // 1000 * 15 * 2 / 10 = 3s
     ->Args({10, 200, 200, 1000, 2}); // 1000 * 200 * 2 / 10 = 40s
 
 } // namespace tests
