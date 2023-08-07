@@ -16,29 +16,41 @@
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipelineTaskBase.h>
 
 namespace DB
 {
-class SimplePipelineTask : public Task
+class SimplePipelineTask : public Task, public PipelineTaskBase
 {
 public:
     SimplePipelineTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        PipelineExecPtr && pipeline_exec_);
+        PipelineExecPtr && pipeline_exec_)
+        : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
+        , PipelineTaskBase(std::move(pipeline_exec_))
+    {
+    }
 
 protected:
-    ExecTaskStatus executeImpl() override;
+    ExecTaskStatus executeImpl() override
+    {
+        return runExecute();
+    }
 
-    ExecTaskStatus executeIOImpl() override;
+    ExecTaskStatus executeIOImpl() override
+    {
+        return runExecuteIO();
+    }
 
-    ExecTaskStatus awaitImpl() override;
+    ExecTaskStatus awaitImpl() override
+    {
+        return runAwait();
+    }
 
-    void finalizeImpl() override;
-
-private:
-    PipelineExecPtr pipeline_exec_holder;
-    // To reduce the overheads of `pipeline_exec_holder.get()`
-    PipelineExec * pipeline_exec;
+    void finalizeImpl() override
+    {
+        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs());
+    }
 };
 } // namespace DB
