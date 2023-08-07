@@ -45,11 +45,6 @@ TEST_F(TestIOPriorityTaskQueue, base)
 try
 {
     PipelineExecutorContext context;
-    // To avoid the active ref count being returned to 0 in advance.
-    context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
 
     IOPriorityQueue queue;
 
@@ -57,16 +52,15 @@ try
     size_t task_num_per_status = 1000;
 
     // take valid task
+    size_t taken_take_num = 0;
     thread_manager->schedule(false, "take", [&]() {
         TaskPtr task;
-        size_t taken_take_num = 0;
         while (queue.take(task))
         {
             ASSERT_TRUE(task);
             ++taken_take_num;
             FINALIZE_TASK(task);
         }
-        ASSERT_EQ(taken_take_num, 2 * task_num_per_status);
     });
     // submit valid task
     thread_manager->schedule(false, "submit", [&]() {
@@ -80,10 +74,19 @@ try
         }
         queue.finish();
     });
+
+    // 10 seconds is totally enough for 1000 SimpleTask to run.
+    // When waitFor() returns, it means all tasks runs finish and finilize() is called.
+    context.waitFor(std::chrono::seconds(10));
+
+    // Some tasks will not be taken successfully, because queue is already finished.
+    ASSERT_LE(taken_take_num, 2 * task_num_per_status);
+
     // wait
     thread_manager->wait();
 
     // No tasks can be submitted after the queue is finished.
+    context.incActiveRefCount();
     queue.submit(std::make_unique<MockIOTask>(context, false));
     TaskPtr task;
     ASSERT_FALSE(queue.take(task));

@@ -88,15 +88,15 @@ bool IOPriorityQueue::take(TaskPtr & task)
 void IOPriorityQueue::drainTaskQueueWithoutLock()
 {
     TaskPtr task;
+    while (popTask(cancel_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
     while (popTask(io_out_task_queue, task))
     {
         FINALIZE_TASK(task);
     }
     while (popTask(io_in_task_queue, task))
-    {
-        FINALIZE_TASK(task);
-    }
-    while (popTask(cancel_task_queue, task))
     {
         FINALIZE_TASK(task);
     }

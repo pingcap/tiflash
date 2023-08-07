@@ -75,11 +75,6 @@ TEST_F(TestMLFQTaskQueue, random)
 try
 {
     PipelineExecutorContext context;
-    // To avoid the active ref count being returned to 0 in advance.
-    context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
 
     TaskQueuePtr queue = std::make_unique<CPUMultiLevelFeedbackQueue>();
 
@@ -101,9 +96,10 @@ try
         }
         queue->finish();
     });
+
     // take valid task
+    size_t take_task_num = 0;
     thread_manager->schedule(false, "take", [&]() {
-        size_t take_task_num = 0;
         TaskPtr task;
         while (queue->take(task))
         {
@@ -111,8 +107,15 @@ try
             ++take_task_num;
             FINALIZE_TASK(task);
         }
-        ASSERT_EQ(take_task_num, valid_task_num);
     });
+
+    // 10 seconds is totally enough for 1000 SimpleTask to run.
+    // When waitFor() returns, it means all tasks runs finish and finilize() is called.
+    context.waitFor(std::chrono::seconds(10));
+
+    // Some tasks will not be taken successfully, because queue is already finished.
+    ASSERT_LE(take_task_num, valid_task_num);
+
     thread_manager->wait();
 }
 CATCH

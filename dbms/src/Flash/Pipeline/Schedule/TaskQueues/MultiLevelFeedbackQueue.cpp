@@ -181,6 +181,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
                 drainTaskQueueWithoutLock();
                 return false;
             }
+
             if (!cancel_task_queue.empty())
             {
                 task = std::move(cancel_task_queue.front());
