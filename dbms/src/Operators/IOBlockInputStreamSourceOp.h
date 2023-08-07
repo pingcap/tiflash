@@ -37,7 +37,7 @@ public:
 
     String getName() const override
     {
-        return "BlockInputStreamSourceOp";
+        return "IOBlockInputStreamSourceOp";
     }
 
 protected:
