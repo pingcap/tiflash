@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
@@ -28,7 +29,6 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
-#include <Common/TiFlashMetrics.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
