@@ -1148,7 +1148,6 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
 
                 // TODO We can save the applied_index of every region, before the last time we flushCache.
                 // And we will persistRegion according to this applied_index, following the upper note.
-                storage->flushCache(tmt.getContext(), region_rowkey_range);
                 LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}] [last_flushed_applied={}]", region_compact_info.first, region_compact_info.second.applied_index, region_compact_info.second.applied_term, last_flushed_applied);
             }
             else
