@@ -52,7 +52,7 @@ struct RaftWriteResult
         return *this;
     }
 };
-typedef std::optional<RaftWriteResult> WriteResult;
+using WriteResult = std::optional<RaftWriteResult>;
 static_assert(std::is_move_constructible_v<WriteResult>);
 } // namespace DM
 } // namespace DB
