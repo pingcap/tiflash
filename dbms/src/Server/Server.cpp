@@ -1711,8 +1711,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         tmt_context.setStatusRunning();
-
+#ifndef DBMS_PUBLIC_GTEST
         LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
+#else
+        static_assert(0, "ENABLE_TESTS compilation flag is only for gtests, remove it when you compile tiflash server");
+#endif
 
         try
         {
