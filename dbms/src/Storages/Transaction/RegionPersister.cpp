@@ -121,7 +121,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
         uint64_t gap = current_applied_index > last_compact_log_applied ? current_applied_index - last_compact_log_applied : 0;
         GET_METRIC(tiflash_raft_raft_log_lag_count, type_applied_index).Observe(gap);
     }
-    last_compact_log_applied = current_applied_index;
+    region.setLastCompactLogApplied(current_applied_index);
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
