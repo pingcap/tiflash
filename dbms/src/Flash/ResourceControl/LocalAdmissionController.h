@@ -35,12 +35,14 @@ class LocalAdmissionController;
 class ResourceGroup final : private boost::noncopyable
 {
 public:
+    static const std::string DEFAULT_RESOURCE_GROUP_NAME;
+
     explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_, KeyspaceID keyspace_id_)
         : name(group_pb_.name())
         , user_priority(group_pb_.priority())
         , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
-        , cpu_time(0)
+        , cpu_time_in_ns(0)
         , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
         , keyspace_id(keyspace_id_)
     {
@@ -78,17 +80,18 @@ private:
     static constexpr int32_t MediumPriorityValue = 8;
     static constexpr int32_t HighPriorityValue = 16;
 
-    static constexpr uint64_t MAX_WEIGHT = (std::numeric_limits<uint64_t>::max() >> 4);
+    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4);
 
-    static uint32_t getUserPriorityWeight(uint32_t user_priority)
-    {
-        if (user_priority == LowPriorityValue)
-            return 100;
-        else if (user_priority == MediumPriorityValue)
-            return 20;
-        else
-            return 0;
-    }
+    // gjt todo del
+    // static uint32_t getUserPriorityWeight(uint32_t user_priority)
+    // {
+    //     if (user_priority == LowPriorityValue)
+    //         return 100;
+    //     else if (user_priority == MediumPriorityValue)
+    //         return 20;
+    //     else
+    //         return 0;
+    // }
 
     friend class LocalAdmissionController;
     std::string getName() const { return name; }
@@ -99,10 +102,10 @@ private:
         return bucket_mode == TokenBucketMode::normal_mode && bucket->lowToken();
     }
 
-    void consumeResource(double ru, uint64_t cpu_time_)
+    void consumeResource(double ru, uint64_t cpu_time_in_ns_)
     {
         std::lock_guard lock(mu);
-        cpu_time += cpu_time_;
+        cpu_time_in_ns += cpu_time_in_ns_;
         bucket->consume(ru);
         ru_consumption_delta += ru;
     }
@@ -149,17 +152,20 @@ private:
     {
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue, "unexpected user_priority {}", user_priority);
-        // gjt todo: add wanring log when RU less than zero.
-        std::cout << "gjt debug remaining ru: " << bucket->peek() << std::endl;
+
         if (!burstable && bucket->peek() <= 0.0)
             return -1.0;
 
-        uint64_t cpu_time_in_ms = toCPUTimeMillisecond(cpu_time);
-        uint64_t ru_weight = getUserPriorityWeight(user_priority) * 1000 * max_ru_per_sec / user_ru_per_sec;
-        uint64_t total_weight = cpu_time_in_ms + ru_weight;
-        if unlikely (total_weight > MAX_WEIGHT)
-            total_weight = MAX_WEIGHT;
-        return ((user_priority - 1) << 60) | total_weight;
+        double weight = 0.0;
+        if (name == DEFAULT_RESOURCE_GROUP_NAME)
+            weight = 1.0;
+        else
+           weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
+
+        uint64_t virtual_time = cpu_time_in_ns * weight;
+        if unlikely (virtual_time > MAX_VIRTUAL_TIME)
+            virtual_time = MAX_VIRTUAL_TIME;
+        return ((user_priority - 1) << 60) | virtual_time;
     }
 
     // New tokens fetched from GAC, update remaining tokens.
@@ -252,8 +258,8 @@ private:
     // Local token bucket.
     TokenBucketPtr bucket;
 
-    // Total used cpu_time of this ResourceGroup.
-    uint64_t cpu_time = 0;
+    // Total used cpu_time_in_ns of this ResourceGroup.
+    uint64_t cpu_time_in_ns = 0;
 
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
 
@@ -302,10 +308,10 @@ public:
         thread_manager->wait();
     }
 
-    void consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time)
+    void consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time_in_ns)
     {
         ResourceGroupPtr group = getOrCreateResourceGroup(name, keyspace_id);
-        group->consumeResource(ru, cpu_time);
+        group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken())
             cv.notify_one();
     }

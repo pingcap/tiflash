@@ -220,6 +220,8 @@ void LocalAdmissionController::handleBackgroundError(const std::string & err_msg
 #ifndef DBMS_PUBLIC_GTEST
 std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
 #else
-std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_instance;
+auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #endif
+
+const std::string ResourceGroup::DEFAULT_RESOURCE_GROUP_NAME = "default";
 } // namespace DB
