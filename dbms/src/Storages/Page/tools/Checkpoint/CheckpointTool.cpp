@@ -102,7 +102,6 @@ struct Options
         }
         catch (...)
         {
-            //auto error = getCurrentExceptionMessage(false);
         }
     }
 
