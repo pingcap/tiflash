@@ -47,9 +47,8 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
     if unlikely (exec_context.isCancelled())
         return {};
 
-    assert(join->isEnableSpill());
     // first check if current join has a partition to restore
-    if (join->hasPartitionSpilledWithLock())
+    if (join->isSpilled() && join->hasPartitionSpilledWithLock())
     {
         // get a restore join
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
