@@ -499,7 +499,8 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (!last_compact_log_applied)
     {
-        curr_region.setLastCompactLogApplied(last_compact_log_applied);
+        // If we just experienced a restart, we will set `last_compact_log_applied`.
+        curr_region.setLastCompactLogApplied(index);
     }
 
     GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
