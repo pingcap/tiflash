@@ -1733,13 +1733,16 @@ bool Join::isAllProbeFinished() const
 
 void Join::finishOneNonJoin(size_t partition_index)
 {
-    if likely (build_finished && probe_finished)
+    if (isEnableSpill())
     {
-        /// only clear hash table if not active build/probe threads
-        while (partition_index < build_concurrency)
+        if likely (build_finished && probe_finished)
         {
-            partitions[partition_index]->releasePartition();
-            partition_index += build_concurrency;
+            /// only clear hash table if not active build/probe threads
+            while (partition_index < build_concurrency)
+            {
+                partitions[partition_index]->releasePartition();
+                partition_index += build_concurrency;
+            }
         }
     }
 }
