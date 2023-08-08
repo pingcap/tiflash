@@ -17,6 +17,7 @@
 #include <Core/Types.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/Transaction/DatumCodec.h>
@@ -25,6 +26,7 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
 
 namespace DB::DM
 {
@@ -99,8 +101,8 @@ struct RowKeyValue
                 // So we can just ignore it.
                 if (value->size() != sizeof(UInt64) + 1 || value->back() != 0x00)
                 {
-                    LOG_WARNING(
-                        Logger::get(),
+                    LOG_FMT_WARNING(
+                        &Poco::Logger::get("RowKeyValue"),
                         "Meet rowkey {} with unexpected encoding format",
                         Redact::keyToDebugString(value->data(), value->size()));
                 }
@@ -108,8 +110,8 @@ struct RowKeyValue
                 {
                     if (int_value < std::numeric_limits<Int64>::max())
                     {
-                        LOG_WARNING(
-                            Logger::get(),
+                        LOG_FMT_WARNING(
+                            &Poco::Logger::get("RowKeyValue"),
                             "Meet rowkey {} which has an extra zero suffix",
                             Redact::keyToDebugString(value->data(), value->size()));
                         int_value = int_value + 1;
