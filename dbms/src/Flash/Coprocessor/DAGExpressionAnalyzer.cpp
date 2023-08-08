@@ -255,8 +255,10 @@ void setAuxiliaryColumnInfo(
         return;
 
     const Block & tmp_block = actions->getSampleBlock();
-    setAuxiliaryColumnInfoImpl(begin_aux_col_name, tmp_block, window_desc.frame.begin_range_auxiliary_column_index, window_desc.begin_aux_col_type, window_desc.is_begin_aux_col_nullable);
-    setAuxiliaryColumnInfoImpl(end_aux_col_name, tmp_block, window_desc.frame.end_range_auxiliary_column_index, window_desc.end_aux_col_type, window_desc.is_end_aux_col_nullable);
+    if (!begin_aux_col_name.empty())
+        setAuxiliaryColumnInfoImpl(begin_aux_col_name, tmp_block, window_desc.frame.begin_range_auxiliary_column_index, window_desc.begin_aux_col_type, window_desc.is_begin_aux_col_nullable);
+    if (!end_aux_col_name.empty())
+        setAuxiliaryColumnInfoImpl(end_aux_col_name, tmp_block, window_desc.frame.end_range_auxiliary_column_index, window_desc.end_aux_col_type, window_desc.is_end_aux_col_nullable);
 }
 
 void setOrderByColumnTypeAndDirectionForRangeFrame(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
@@ -296,12 +298,19 @@ std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return std::make_pair("", "");
 
-    RUNTIME_CHECK_MSG(window.frame().start().has_frame_range(), "start's tipb::WindowFrameBound must be set when the frame type is range");
-    RUNTIME_CHECK_MSG(window.frame().end().has_frame_range(), "end's tipb::WindowFrameBound must be set when the frame type is range");
+    RUNTIME_CHECK_MSG(
+        window.frame().start().has_frame_range() || window.frame().end().has_frame_range(),
+        "tipb::WindowFrameBound of start or end must be set when the frame type is range");
 
-    return std::make_pair(
-        DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions),
-        DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions));
+    String begin_aux_col_name;
+    String end_aux_col_name;
+    if (window.frame().start().has_frame_range())
+        begin_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions);
+
+    if (window.frame().end().has_frame_range())
+        end_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions);
+
+    return std::make_pair(begin_aux_col_name, end_aux_col_name);
 }
 
 WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer, const tipb::Window & window)

@@ -17,6 +17,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
 #include <Common/Decimal.h>
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
 #include <DataStreams/WindowBlockInputStream.h>
@@ -65,26 +66,26 @@ typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t i
     return (*col_ptr)[idx].get<typename ActualCmpDataType<T>::Type>();
 }
 
-template <typename T, typename U, bool is_start, bool is_desc>
+template <typename T, typename U, bool is_preceding, bool is_desc>
 bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
 {
-    if constexpr ((is_start && is_desc) || (!is_start && !is_desc))
+    if constexpr ((is_preceding && is_desc) || (!is_preceding && !is_desc))
         return cursor_value <= current_row_aux_value;
     else
         return cursor_value >= current_row_aux_value;
 }
 
-template <typename T, typename U, bool is_start, bool is_desc>
+template <typename T, typename U, bool is_preceding, bool is_desc>
 bool isInRangeIntImpl(T current_row_aux_value, U cursor_value)
 {
-    return isInRangeCommonImpl<T, U, is_start, is_desc>(current_row_aux_value, cursor_value);
+    return isInRangeCommonImpl<T, U, is_preceding, is_desc>(current_row_aux_value, cursor_value);
 }
 
-template <typename AuxColType, typename OrderByColType, bool is_start, bool is_desc>
+template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc>
 bool isInRangeDecimalImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
     if constexpr (checkIfDecimalFieldType<AuxColType>() && checkIfDecimalFieldType<OrderByColType>())
-        return isInRangeCommonImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
+        return isInRangeCommonImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
 
     // When comparing Decimal and Int, we convert them to the Float first.
     Float64 current_row_aux_value_float64;
@@ -100,10 +101,10 @@ bool isInRangeDecimalImpl(AuxColType current_row_aux_value, OrderByColType curso
     else
         cursor_value_float64 = static_cast<Float64>(cursor_value);
 
-    return isInRangeCommonImpl<Float64, Float64, is_start, is_desc>(current_row_aux_value_float64, cursor_value_float64);
+    return isInRangeCommonImpl<Float64, Float64, is_preceding, is_desc>(current_row_aux_value_float64, cursor_value_float64);
 }
 
-template <typename AuxColType, typename OrderByColType, bool is_start, bool is_desc>
+template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc>
 bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
     Float64 current_row_aux_value_float64;
@@ -119,10 +120,10 @@ bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_
     else
         cursor_value_float64 = static_cast<Float64>(cursor_value);
 
-    return isInRangeCommonImpl<Float64, Float64, is_start, is_desc>(current_row_aux_value_float64, cursor_value_float64);
+    return isInRangeCommonImpl<Float64, Float64, is_preceding, is_desc>(current_row_aux_value_float64, cursor_value_float64);
 }
 
-template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_start, bool is_desc>
+template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_preceding, bool is_desc>
 bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
     if constexpr (CmpDataType == tipb::RangeCmpDataType::Int)
@@ -131,21 +132,23 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
         if constexpr (std::is_integral_v<OrderByColType> && std::is_integral_v<AuxColType>)
         {
             if constexpr (std::is_unsigned_v<OrderByColType> && std::is_unsigned_v<AuxColType>)
-                return isInRangeIntImpl<UInt64, UInt64, is_start, is_desc>(current_row_aux_value, cursor_value);
-            return isInRangeIntImpl<Int64, Int64, is_start, is_desc>(current_row_aux_value, cursor_value);
+                return isInRangeIntImpl<UInt64, UInt64, is_preceding, is_desc>(current_row_aux_value, cursor_value);
+            return isInRangeIntImpl<Int64, Int64, is_preceding, is_desc>(current_row_aux_value, cursor_value);
         }
         throw Exception("Unexpected Data Type!");
     }
-    else if (CmpDataType == tipb::RangeCmpDataType::Float)
+    else if constexpr (CmpDataType == tipb::RangeCmpDataType::Float)
     {
-        return isInRangeFloatImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
+        if constexpr (std::is_floating_point_v<OrderByColType> && std::is_floating_point_v<AuxColType>)
+            return isInRangeFloatImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
+        throw Exception("Both data type should be float");
     }
     else
     {
         if constexpr (std::is_floating_point_v<OrderByColType> || std::is_floating_point_v<AuxColType>)
             throw Exception("Occurrence of float type at here is unexpected!");
 
-        return isInRangeDecimalImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
+        return isInRangeDecimalImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
     }
 }
 } // namespace
@@ -660,8 +663,12 @@ RowNumber WindowTransformAction::stepForRangeImpl()
     ColumnPtr cur_row_aux_column = inputAt(current_row)[cur_row_aux_col_idx];
     typename ActualCmpDataType<T>::Type current_row_aux_value = getValue<T>(cur_row_aux_column, current_row.row);
 
-    if (is_col_nullable && cur_row_aux_column->isNullAt(current_row.row))
-        return moveCursorAndFindRangeFrameIfNull<is_begin>(cursor);
+    if (is_col_nullable)
+    {
+        ColumnPtr order_by_column = inputAt(current_row)[order_column_indices[0]];
+        if (order_by_column->isNullAt(current_row.row))
+            return moveCursorAndFindRangeFrameIfNull<is_begin>(cursor);
+    }
     return moveCursorAndFindRangeFrame<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(cursor, current_row_aux_value);
 }
 
@@ -690,7 +697,6 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrameIfNull(RowNumber cur
             advanceRowNumber(cursor);
         }
     }
-
 
     return cursor;
 }
@@ -803,13 +809,29 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
 
         if constexpr (is_begin)
         {
-            if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, is_begin, is_desc>(current_row_aux_value, cursor_value))
-                return cursor;
+            if (window_description.frame.begin_preceding)
+            {
+                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(current_row_aux_value, cursor_value))
+                    return cursor;
+            }
+            else
+            {
+                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(current_row_aux_value, cursor_value))
+                    return cursor;
+            }
         }
         else
         {
-            if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, is_begin, is_desc>(current_row_aux_value, cursor_value))
-                return cursor;
+            if (window_description.frame.end_preceding)
+            {
+                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(current_row_aux_value, cursor_value))
+                    return cursor;
+            }
+            else
+            {
+                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(current_row_aux_value, cursor_value))
+                    return cursor;
+            }
         }
 
         advanceRowNumber(cursor);
@@ -1119,7 +1141,7 @@ void WindowTransformAction::tryCalculate()
             // not after end.
             assert(frame_started);
             assert(frame_ended);
-            assert(frame_start <= frame_end);
+            RUNTIME_CHECK_MSG((frame_start <= frame_end), "With BETWEEN syntax, frame_start must not occur later than frame_end.");
 
             // Write out the results.
             // TODO execute the window function by block instead of row.
