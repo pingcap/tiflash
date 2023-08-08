@@ -1462,7 +1462,9 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::force_triggle_background_merge_delta, { should_background_merge_delta = true; });
 
     fiu_do_on(FailPoints::proactive_flush_force_set_type, {
-        // | set bg bit | bg value bit | set fg bit | fg value bit|
+        // If bg/fg modify bit is set, we will perform background/foreground flush.
+        // Otherwise, it depends by the original logic.
+        // | bg modify bit | bg value bit | fg modify bit | fg value bit|
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::proactive_flush_force_set_type); v)
         {
             auto set_kind = std::any_cast<std::shared_ptr<std::atomic<size_t>>>(v.value());
