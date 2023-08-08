@@ -210,8 +210,8 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
         auto canonical_name = [&]() {
             // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
             auto db_info = tmt_context.getSchemaSyncerManager()->getDBInfoByMappedName(keyspace_id, database_name);
-            return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
-                           : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
+            return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info) + "with database_id = " + std::to_string(db_info->id) + " and table_id =" + std::to_string(table_info.id)
+                           : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info) + "with database_id =" + std::to_string(db_info->id) + " and table_id =" + std::to_string(table_info.id);
         }();
         LOG_INFO(keyspace_log, "Physically dropping table {}", canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();

@@ -585,7 +585,7 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 {
     auto mapped_db_name = name_mapper.mapDatabaseName(db_info);
     if (isReservedDatabase(context, mapped_db_name))
-        throw TiFlashException(fmt::format("Database {} is reserved", name_mapper.debugDatabaseName(db_info)), Errors::DDL::Internal);
+        throw TiFlashException(fmt::format("Database {} with database_id = {} is reserved", name_mapper.debugDatabaseName(db_info), db_info.id), Errors::DDL::Internal);
 
     // R"raw(
     // CREATE DATABASE IF NOT EXISTS `db_xx`
@@ -620,7 +620,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
-    LOG_INFO(log, "Creating database {}", name_mapper.debugDatabaseName(*db_info));
+    LOG_INFO(log, "Creating database {} with database_id = {}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 
     auto statement = createDatabaseStmt(context, *db_info, name_mapper);
 
@@ -636,7 +636,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
         databases.emplace(db_info->id, db_info);
     }
 
-    LOG_INFO(log, "Created database {}", name_mapper.debugDatabaseName(*db_info));
+    LOG_INFO(log, "Created database {} with database_id = {}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -849,7 +849,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         return;
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
-    LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstoning table {}.{} with table_id = {}", db_name, name_mapper.debugTableName(storage->getTableInfo()), table_id);
 
     // TODO:try to optimize alterCommands
     AlterCommands commands;
@@ -866,7 +866,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->updateTombstone(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstoned table {}.{} with table_id = {}", db_name, name_mapper.debugTableName(storage->getTableInfo()), table_id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -925,7 +925,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                         created_db_set.emplace(name_mapper.mapDatabaseName(*db));
                     }
 
-                    LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
+                    LOG_DEBUG(log, "Database {} with database_id = {} created during sync all schemas", name_mapper.debugDatabaseName(*db), db->id);
                 }
             }
 
@@ -971,7 +971,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (!table_id_map.tableIDInTwoMaps(table_info.id))
         {
             applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id);
-            LOG_DEBUG(log, "Table {}.{} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(table_info));
+            LOG_DEBUG(log, "Table {}.{} with table_id = {} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(table_info), table_info.id);
         }
     }
 
@@ -1070,7 +1070,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
             continue;
         }
         applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id);
-        LOG_DEBUG(log, "Table {}.{} dropped during drop all schemas", storage.second->getDatabaseName(), name_mapper.debugTableName(table_info));
+        LOG_DEBUG(log, "Table {}.{} with table_id = {} dropped during drop all schemas", storage.second->getDatabaseName(), name_mapper.debugTableName(table_info), table_info.id);
     }
 
     /// Drop all dbs.
