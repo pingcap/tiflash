@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Core/AutoSpillTrigger.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
@@ -29,7 +30,6 @@ namespace DB
 {
 class OperatorSpillContext;
 using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<OperatorSpillContext> & ptr)>;
-using AutoSpillTrigger = std::function<void()>;
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -45,7 +45,7 @@ public:
         const String & query_id_,
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
-        const AutoSpillTrigger & auto_spill_trigger_ = nullptr,
+        AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr)
         : query_id(query_id_)
         , log(Logger::get(req_id))
@@ -168,7 +168,7 @@ public:
     void triggerAutoSpill() const
     {
         if (auto_spill_trigger != nullptr)
-            auto_spill_trigger();
+            auto_spill_trigger->triggerAutoSpill();
     }
 
     void registerOperatorSpillContext(const std::shared_ptr<OperatorSpillContext> & operator_spill_context)
@@ -206,7 +206,7 @@ private:
 
     QueryProfileInfo query_profile_info;
 
-    AutoSpillTrigger auto_spill_trigger;
+    AutoSpillTrigger * auto_spill_trigger;
 
     RegisterOperatorSpillContext register_operator_spill_context;
 };

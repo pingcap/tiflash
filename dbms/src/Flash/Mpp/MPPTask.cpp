@@ -350,10 +350,10 @@ void MPPTask::unregisterTask()
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
-void MPPTask::initMPPQueryOperatorSpillContexts(const std::shared_ptr<MPPQueryOperatorSpillContexts> & mpp_query_operator_spill_contexts)
+void MPPTask::initQueryOperatorSpillContexts(const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts)
 {
     assert(mpp_query_operator_spill_contexts != nullptr);
-    dag_context->setMPPQueryOperatorSpillContexts(mpp_query_operator_spill_contexts);
+    dag_context->setQueryOperatorSpillContexts(mpp_query_operator_spill_contexts);
 }
 
 void MPPTask::initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry)

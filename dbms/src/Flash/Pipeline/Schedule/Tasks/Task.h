@@ -44,7 +44,6 @@ enum class ExecTaskStatus
 };
 
 class PipelineExecutorContext;
-using AutoSpillTrigger = std::function<void()>;
 
 class Task
 {

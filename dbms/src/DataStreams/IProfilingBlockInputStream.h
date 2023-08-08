@@ -36,9 +36,9 @@ extern const int QUERY_WAS_CANCELLED;
 class QuotaForIntervals;
 class ProcessListElement;
 class IProfilingBlockInputStream;
+class AutoSpillTrigger;
 
 using ProfilingBlockInputStreamPtr = std::shared_ptr<IProfilingBlockInputStream>;
-using AutoSpillTrigger = std::function<void()>;
 
 
 /** Watches out at how the source of the blocks works.
@@ -91,7 +91,7 @@ public:
      * query memory threshold or global memory threshold
      * @param callback
      */
-    void setAutoSpillTrigger(const AutoSpillTrigger & callback);
+    void setAutoSpillTrigger(AutoSpillTrigger * auto_spill_trigger_);
 
 
     /** In this method:
@@ -192,7 +192,7 @@ protected:
     std::atomic<bool> is_killed{false};
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
-    AutoSpillTrigger auto_spill_trigger;
+    AutoSpillTrigger * auto_spill_trigger = nullptr;
 
     /// Additional information that can be generated during the work process.
 
@@ -256,7 +256,6 @@ private:
                     return;
     }
     void setProgressCallbackImpl(const ProgressCallback & callback, std::unordered_set<void *> & visited_nodes);
-    void setAutoSpillTriggerImpl(const AutoSpillTrigger & callback, std::unordered_set<void *> & visited_nodes);
 };
 
 } // namespace DB

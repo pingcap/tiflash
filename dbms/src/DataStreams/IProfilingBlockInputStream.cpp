@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Core/AutoSpillTrigger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
@@ -117,7 +118,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 #endif
 
     if (auto_spill_trigger != nullptr)
-        auto_spill_trigger();
+        auto_spill_trigger->triggerAutoSpill();
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     return res;
 }
@@ -410,21 +411,14 @@ void IProfilingBlockInputStream::setProgressCallbackImpl(const ProgressCallback 
     });
 }
 
-void IProfilingBlockInputStream::setAutoSpillTrigger(const AutoSpillTrigger & callback)
+void IProfilingBlockInputStream::setAutoSpillTrigger(AutoSpillTrigger * auto_spill_trigger_)
 {
-    std::unordered_set<void *> visited_nodes;
-    setAutoSpillTriggerImpl(callback, visited_nodes);
-}
-
-void IProfilingBlockInputStream::setAutoSpillTriggerImpl(const AutoSpillTrigger & callback, std::unordered_set<void *> & visited_nodes)
-{
-    if (visited_nodes.find(this) != visited_nodes.end())
+    if (auto_spill_trigger == auto_spill_trigger_)
         return;
-    visited_nodes.insert(this);
-    auto_spill_trigger = callback;
+    auto_spill_trigger = auto_spill_trigger_;
 
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-        child.setAutoSpillTriggerImpl(callback, visited_nodes);
+        child.setAutoSpillTrigger(auto_spill_trigger_);
         return false;
     });
 }

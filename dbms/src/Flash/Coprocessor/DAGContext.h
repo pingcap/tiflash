@@ -24,6 +24,8 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
+#include <Core/QueryOperatorSpillContexts.h>
+#include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
@@ -31,9 +33,7 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Executor/toRU.h>
-#include <Flash/Mpp/MPPQueryOperatorSpillContexts.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Mpp/MPPTaskOperatorSpillContexts.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
@@ -53,6 +53,8 @@ class MPPReceiverSet;
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
+
+class AutoSpillTrigger;
 
 struct JoinProfileInfo;
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
@@ -293,7 +295,9 @@ public:
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
     void setProcessListEntry(const std::shared_ptr<ProcessListEntry> & entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
-    void setMPPQueryOperatorSpillContexts(const std::shared_ptr<MPPQueryOperatorSpillContexts> & query_operator_spill_contexts_) { query_operator_spill_contexts = query_operator_spill_contexts_; }
+    void setQueryOperatorSpillContexts(const std::shared_ptr<QueryOperatorSpillContexts> & query_operator_spill_contexts_) { query_operator_spill_contexts = query_operator_spill_contexts_; }
+    std::shared_ptr<QueryOperatorSpillContexts> & getQueryOperatorSpillContexts() { return query_operator_spill_contexts; }
+    void setAutoSpillTrigger(const std::shared_ptr<AutoSpillTrigger> & auto_spill_trigger_) { auto_spill_trigger = auto_spill_trigger_; }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
@@ -316,11 +320,6 @@ public:
     void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
     {
         operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
-    }
-
-    Int64 triggerAutoSpill(Int64 expected_released_memories)
-    {
-        return query_operator_spill_contexts->triggerAutoSpill(expected_released_memories);
     }
 
     void registerTaskOperatorSpillContexts()
@@ -380,6 +379,9 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    std::shared_ptr<TaskOperatorSpillContexts> operator_spill_contexts;
+    std::shared_ptr<QueryOperatorSpillContexts> query_operator_spill_contexts;
+    std::shared_ptr<AutoSpillTrigger> auto_spill_trigger;
     /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;
@@ -432,9 +434,6 @@ private:
     // - Stream: execute with block input stream
     // - Pipeline: execute with pipeline model
     ExecutionMode execution_mode = ExecutionMode::None;
-
-    std::shared_ptr<MPPTaskOperatorSpillContexts> operator_spill_contexts;
-    std::shared_ptr<MPPQueryOperatorSpillContexts> query_operator_spill_contexts;
 };
 
 } // namespace DB

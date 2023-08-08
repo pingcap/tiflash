@@ -334,7 +334,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     }
     gather_task_set->registerTask(task->id);
     task->initProcessListEntry(query->process_list_entry);
-    task->initMPPQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
+    task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
     return {true, ""};
 }
 

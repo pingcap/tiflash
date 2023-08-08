@@ -18,11 +18,13 @@
 
 namespace DB
 {
-class MPPTaskOperatorSpillContexts
+class TaskOperatorSpillContexts
 {
 public:
     Int64 triggerAutoSpill(Int64 expected_released_memories)
     {
+        if (isFinished())
+            return expected_released_memories;
         appendAdditionalOperatorSpillContexts();
         bool has_finished_operator_spill_contexts = false;
         for (auto & operator_spill_context : operator_spill_contexts)

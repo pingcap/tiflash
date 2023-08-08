@@ -53,13 +53,13 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tab
     , is_batch_cop(is_batch_cop_)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(keyspace_id_)
-    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     initOutputInfo();
 }
@@ -72,6 +72,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
     , is_mpp_task(true)
     , is_root_mpp_task(is_root_mpp_task_)
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , mpp_task_meta(meta_)
@@ -80,7 +81,6 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(meta_))
-    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
@@ -100,6 +100,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::Dis
     , is_disaggregated_task(true)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_meta_))
@@ -107,7 +108,6 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::Dis
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(task_meta_))
-    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     initOutputInfo();
 }
@@ -119,12 +119,12 @@ DAGContext::DAGContext(UInt64 max_error_count_)
     , collect_execution_summaries(false)
     , is_mpp_task(false)
     , is_root_mpp_task(false)
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(0)
     , sql_mode(0)
     , max_recorded_error_count(max_error_count_)
     , warnings(max_recorded_error_count)
     , warning_count(0)
-    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {}
 
 // for tests need to run query tasks.
@@ -137,12 +137,12 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , is_mpp_task(false)
     , is_root_mpp_task(false)
     , log(Logger::get(log_identifier))
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)
-    , operator_spill_contexts(std::make_shared<MPPTaskOperatorSpillContexts>())
 {
     initOutputInfo();
 }

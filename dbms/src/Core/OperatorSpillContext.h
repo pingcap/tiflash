@@ -78,5 +78,4 @@ public:
 
 using OperatorSpillContextPtr = std::shared_ptr<OperatorSpillContext>;
 using RegisterOperatorSpillContext = std::function<void(const OperatorSpillContextPtr & ptr)>;
-using AutoSpillTrigger = std::function<void()>;
 } // namespace DB

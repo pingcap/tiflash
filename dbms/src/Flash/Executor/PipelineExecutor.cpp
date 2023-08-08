@@ -23,7 +23,7 @@ namespace DB
 {
 PipelineExecutor::PipelineExecutor(
     const MemoryTrackerPtr & memory_tracker_,
-    const AutoSpillTrigger & auto_spill_trigger,
+    AutoSpillTrigger * auto_spill_trigger,
     const RegisterOperatorSpillContext & register_operator_spill_context,
     Context & context_,
     const String & req_id)

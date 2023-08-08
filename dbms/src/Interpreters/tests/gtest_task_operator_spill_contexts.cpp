@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
-#include <Core/OperatorSpillContexts.h>
+#include <Core/TaskOperatorSpillContexts.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Interpreters/AggSpillContext.h>
@@ -28,7 +28,7 @@ namespace DB
 {
 namespace tests
 {
-class TestOperatorSpillContexts : public ::testing::Test
+class TestTaskOperatorSpillContexts : public ::testing::Test
 {
 protected:
     void SetUp() override
@@ -51,9 +51,9 @@ protected:
     LoggerPtr logger;
 };
 
-String TestOperatorSpillContexts::spill_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("operator_spill_context_test");
+String TestTaskOperatorSpillContexts::spill_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("operator_spill_context_test");
 
-TEST_F(TestOperatorSpillContexts, TestRegisterOperatorSpillContext)
+TEST_F(TestTaskOperatorSpillContexts, TestRegisterOperatorSpillContext)
 try
 {
     /// currently only sort_spill_context support auto spill
@@ -61,32 +61,32 @@ try
     auto sort_spill_context = std::make_shared<SortSpillContext>(*spill_config_ptr, 1000, logger);
     auto join_spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
     join_spill_context->init(10);
-    OperatorSpillContexts operator_spill_contexts;
-    ASSERT_TRUE(operator_spill_contexts.operatorSpillContextCount() == 0);
-    operator_spill_contexts.registerOperatorSpillContext(agg_spill_context);
-    ASSERT_TRUE(operator_spill_contexts.operatorSpillContextCount() == 0);
-    operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
-    ASSERT_TRUE(operator_spill_contexts.operatorSpillContextCount() == 1);
-    operator_spill_contexts.registerOperatorSpillContext(join_spill_context);
-    ASSERT_TRUE(operator_spill_contexts.operatorSpillContextCount() == 1);
-    operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
-    ASSERT_TRUE(operator_spill_contexts.operatorSpillContextCount() == 2);
+    TaskOperatorSpillContexts task_operator_spill_contexts;
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 0);
+    task_operator_spill_contexts.registerOperatorSpillContext(agg_spill_context);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 0);
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 1);
+    task_operator_spill_contexts.registerOperatorSpillContext(join_spill_context);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 1);
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 2);
 }
 CATCH
 
-TEST_F(TestOperatorSpillContexts, TestSpillAutoTrigger)
+TEST_F(TestTaskOperatorSpillContexts, TestSpillAutoTrigger)
 try
 {
     auto sort_spill_context_1 = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
     auto sort_spill_context_2 = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
-    OperatorSpillContexts operator_spill_contexts;
-    operator_spill_contexts.registerOperatorSpillContext(sort_spill_context_1);
-    operator_spill_contexts.registerOperatorSpillContext(sort_spill_context_2);
+    TaskOperatorSpillContexts task_operator_spill_contexts;
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context_1);
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context_2);
 
     /// memory usage under OperatorSpillContext::MIN_SPILL_THRESHOLD will not trigger spill
     sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD - 1);
     sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD - 1);
-    ASSERT_TRUE(operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD / 2) == OperatorSpillContext::MIN_SPILL_THRESHOLD / 2);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD / 2) == OperatorSpillContext::MIN_SPILL_THRESHOLD / 2);
     auto spill_1 = sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     auto spill_2 = sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     ASSERT_TRUE(!spill_1 && !spill_2);
@@ -94,7 +94,7 @@ try
     /// only one spill_context will trigger spill
     sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
-    ASSERT_TRUE(operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD / 2) <= 0);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD / 2) <= 0);
     spill_1 = sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     spill_2 = sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     ASSERT_TRUE(spill_1 ^ spill_2);
@@ -106,7 +106,7 @@ try
     /// two spill_context will be triggered spill
     sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
-    ASSERT_TRUE(operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 1.5) <= 0);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 1.5) <= 0);
     spill_1 = sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     spill_2 = sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     ASSERT_TRUE(spill_1 && spill_2);
@@ -116,7 +116,7 @@ try
     /// revocable memories less than expected released memory
     sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
-    ASSERT_TRUE(operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 0.5);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 0.5);
     spill_1 = sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     spill_2 = sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1);
     ASSERT_TRUE(spill_1 && spill_2);
@@ -127,7 +127,7 @@ try
     sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     sort_spill_context_1->finishSpillableStage();
-    ASSERT_TRUE(operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 1.5);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 1.5);
     ASSERT_FALSE(sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
     ASSERT_TRUE(sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
     sort_spill_context_1->finishOneSpill();
@@ -137,9 +137,18 @@ try
     sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     sort_spill_context_1->finishSpillableStage();
     sort_spill_context_2->finishSpillableStage();
-    ASSERT_TRUE(operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5);
     ASSERT_FALSE(sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
     ASSERT_FALSE(sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
+
+    /// add new spill_context at runtime
+    auto sort_spill_context_3 = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context_3);
+    sort_spill_context_3->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
+    ASSERT_TRUE(task_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2.5) == OperatorSpillContext::MIN_SPILL_THRESHOLD * 1.5);
+    ASSERT_FALSE(sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
+    ASSERT_FALSE(sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
+    ASSERT_TRUE(sort_spill_context_3->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
 }
 CATCH
 } // namespace tests

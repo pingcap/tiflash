@@ -14,15 +14,15 @@
 
 #pragma once
 
+#include <Core/TaskOperatorSpillContexts.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Mpp/MPPTaskOperatorSpillContexts.h>
 
 namespace DB
 {
-class MPPQueryOperatorSpillContexts
+class QueryOperatorSpillContexts
 {
 public:
-    MPPQueryOperatorSpillContexts(const MPPQueryId & query_id)
+    explicit QueryOperatorSpillContexts(const MPPQueryId & query_id)
         : log(Logger::get(query_id.toString()))
     {}
     Int64 triggerAutoSpill(Int64 expected_released_memories)
@@ -37,12 +37,12 @@ public:
                 LOG_INFO(log, "Query memory usage exceeded threshold, trigger auto spill check");
             }
             /// vector of <index, revocable_memories>
-            std::vector<std::pair<size_t, Int64>> revocable_memories(mpp_task_operator_spill_contexts.size());
+            std::vector<std::pair<size_t, Int64>> revocable_memories(task_operator_spill_contexts_vec.size());
             bool has_finished_mpp_task = false;
-            for (size_t i = 0; i < mpp_task_operator_spill_contexts.size(); ++i)
+            for (size_t i = 0; i < task_operator_spill_contexts_vec.size(); ++i)
             {
-                revocable_memories[i] = std::make_pair(i, mpp_task_operator_spill_contexts[i]->totalRevocableMemories());
-                if (mpp_task_operator_spill_contexts[i]->isFinished())
+                revocable_memories[i] = std::make_pair(i, task_operator_spill_contexts_vec[i]->totalRevocableMemories());
+                if (task_operator_spill_contexts_vec[i]->isFinished())
                     has_finished_mpp_task = true;
             }
             std::sort(revocable_memories.begin(), revocable_memories.end(), [](const std::pair<size_t, Int64> & a, std::pair<size_t, Int64> & b) {
@@ -50,27 +50,34 @@ public:
             });
             for (auto & pair : revocable_memories)
             {
-                expected_released_memories = mpp_task_operator_spill_contexts[pair.first]->triggerAutoSpill(expected_released_memories);
+                if (pair.second < OperatorSpillContext::MIN_SPILL_THRESHOLD)
+                    break;
+                expected_released_memories = task_operator_spill_contexts_vec[pair.first]->triggerAutoSpill(expected_released_memories);
                 if (expected_released_memories <= 0)
                     break;
             }
             if (has_finished_mpp_task)
             {
                 /// clean finished mpp task
-                mpp_task_operator_spill_contexts.erase(std::remove_if(mpp_task_operator_spill_contexts.begin(), mpp_task_operator_spill_contexts.end(), [](const auto & contexts) { return contexts->isFinished(); }), mpp_task_operator_spill_contexts.end());
+                task_operator_spill_contexts_vec.erase(std::remove_if(task_operator_spill_contexts_vec.begin(), task_operator_spill_contexts_vec.end(), [](const auto & contexts) { return contexts->isFinished(); }), task_operator_spill_contexts_vec.end());
             }
             return expected_released_memories;
         }
         return expected_released_memories;
     }
-    void registerTaskOperatorSpillContexts(const std::shared_ptr<MPPTaskOperatorSpillContexts> & task_operator_spill_contexts)
+    void registerTaskOperatorSpillContexts(const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)
     {
         std::unique_lock lock(mutex);
-        mpp_task_operator_spill_contexts.push_back(task_operator_spill_contexts);
+        task_operator_spill_contexts_vec.push_back(task_operator_spill_contexts);
+    }
+    /// used for test
+    size_t getTaskOperatorSpillContextsCount() const
+    {
+        return task_operator_spill_contexts_vec.size();
     }
 
 private:
-    std::vector<std::shared_ptr<MPPTaskOperatorSpillContexts>> mpp_task_operator_spill_contexts;
+    std::vector<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_vec;
     bool first_check = false;
     LoggerPtr log;
     std::mutex mutex;
