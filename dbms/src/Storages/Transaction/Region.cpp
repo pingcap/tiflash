@@ -509,6 +509,11 @@ UInt64 Region::lastCompactLogApplied() const
     return last_compact_log_applied;
 }
 
+void Region::setLastCompactLogApplied(UInt64 new_value)
+{
+    last_compact_log_applied = new_value;
+}
+
 Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need_value)
 {
     return Region::CommittedScanner(this->shared_from_this(), use_lock, need_value);

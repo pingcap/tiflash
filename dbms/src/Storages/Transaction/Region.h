@@ -152,6 +152,7 @@ public:
     void markCompactLog() const;
     Timepoint lastCompactLogTime() const;
     UInt64 lastCompactLogApplied() const;
+    void setLastCompactLogApplied(UInt64 new_value);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
