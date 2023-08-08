@@ -21,6 +21,7 @@ void MPPReceiverSet::addExchangeReceiver(const String & executor_id, const Excha
 {
     RUNTIME_ASSERT(exchange_receiver_map.find(executor_id) == exchange_receiver_map.end(), log, "Duplicate executor_id: {} in DAGRequest", executor_id);
     exchange_receiver_map[executor_id] = exchange_receiver;
+    external_thread_cnt += exchange_receiver->getExternalThreadCnt();
 }
 
 void MPPReceiverSet::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
@@ -52,13 +53,4 @@ void MPPReceiverSet::close()
         cop_reader->close();
 }
 
-int MPPReceiverSet::getExternalThreadCnt()
-{
-    int cnt = 0;
-    for (auto & it : exchange_receiver_map)
-        cnt += it.second->getExternalThreadCnt();
-    for (auto & cop_reader : coprocessor_readers)
-        cnt += cop_reader->getExternalThreadCnt();
-    return cnt;
-}
 } // namespace DB

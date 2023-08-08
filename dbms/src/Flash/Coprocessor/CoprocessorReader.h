@@ -172,23 +172,18 @@ public:
 private:
     DAGSchema schema;
     bool has_enforce_encode_type;
-    pingcap::coprocessor::ResponseIter resp_iter;
+    std::shared_ptr<pingcap::coprocessor::ResponseIter> resp_iter;
+    bool enable_cop_stream_for_remote_read;
 
 public:
     CoprocessorReader(
         const DAGSchema & schema_,
-        pingcap::kv::Cluster * cluster,
-        std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
-        int concurrency_,
-        const pingcap::kv::LabelFilter & tiflash_label_filter_,
-        Int64 remote_read_queue_size,
+        const std::shared_ptr<pingcap::coprocessor::ResponseIter> & resp_iter_,
         bool enable_cop_stream_for_remote_read_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::make_unique<CopIterQueue>(remote_read_queue_size), std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
-        , collected(false)
-        , concurrency(concurrency_)
+        , resp_iter(resp_iter_)
         , enable_cop_stream_for_remote_read(enable_cop_stream_for_remote_read_)
     {}
 
@@ -198,14 +193,13 @@ public:
     void open()
     {
         if (enable_cop_stream_for_remote_read)
-            resp_iter.open<true>();
+            resp_iter->open<true>();
         else
-            resp_iter.open<false>();
-        opened = true;
+            resp_iter->open<false>();
     }
 
     // `cancel` will call the resp_iter's `cancel` to abort the data receiving and prevent the next retry.
-    void cancel() { resp_iter.cancel(); }
+    void cancel() { resp_iter->cancel(); }
 
 
     static DecodeDetail decodeChunks(
@@ -253,8 +247,7 @@ public:
 
     std::pair<pingcap::coprocessor::ResponseIter::Result, bool> nonBlockingNext()
     {
-        RUNTIME_CHECK(opened == true);
-        return resp_iter.nonBlockingNext();
+        return resp_iter->nonBlockingNext();
     }
 
     CoprocessorReaderResult toResult(std::pair<pingcap::coprocessor::ResponseIter::Result, bool> & result_pair,
@@ -298,25 +291,16 @@ public:
         }
     }
 
-    // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
+    // stream_id, decoder_ptr are only meaningful for ExchangeReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
-        RUNTIME_CHECK(opened == true);
-
-        auto && result_pair = resp_iter.next();
+        auto && result_pair = resp_iter->next();
 
         return toResult(result_pair, block_queue, header);
     }
 
-    size_t getSourceNum() const { return 1; }
-
-    int getExternalThreadCnt() const { return concurrency; }
+    static size_t getSourceNum() { return 1; }
 
     void close() {}
-
-    bool collected = false;
-    int concurrency;
-    bool opened = false;
-    bool enable_cop_stream_for_remote_read;
 };
 } // namespace DB

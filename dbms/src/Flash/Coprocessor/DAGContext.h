@@ -303,6 +303,8 @@ public:
     {
         return disaggregated_compute_exchange_receiver;
     }
+    int getRemoteReadThreadCnt() const { return remote_read_thread_cnt; }
+    void addRemoteReadThreadCnt(int cnt) { remote_read_thread_cnt += cnt; }
 
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
@@ -418,6 +420,9 @@ private:
 
     MPPReceiverSetPtr mpp_receiver_set;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
+
+    int remote_read_thread_cnt = 0;
+
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;

@@ -32,10 +32,13 @@ public:
     {}
     void addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver);
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
+
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
     void close();
-    int getExternalThreadCnt();
+
+    void addRemoteReadThreadCnt(int cnt) { external_thread_cnt += cnt; }
+    int getExternalThreadCnt() const { return external_thread_cnt; }
 
 private:
     /// two kinds of receiver in MPP
@@ -44,6 +47,7 @@ private:
     ExchangeReceiverMap exchange_receiver_map;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
     const LoggerPtr log;
+    int external_thread_cnt = 0;
 };
 
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
