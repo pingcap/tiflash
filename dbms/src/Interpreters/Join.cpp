@@ -532,11 +532,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             }
             markBuildSideSpillData(i, std::move(blocks_to_spill), stream_index);
         }
-#ifdef DBMS_PUBLIC_GTEST
-        // for join spill to disk gtest
-        if (restore_round == MAX_RESTORE_ROUND_IN_GTEST)
-            return;
-#endif
         spillMostMemoryUsedPartitionIfNeed(stream_index);
     }
 }
