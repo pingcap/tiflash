@@ -183,7 +183,7 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-void IOPriorityQueue::cancel(const String & query_id)
+void IOPriorityQueue::cancel(const String & query_id, const String &)
 {
     if unlikely (query_id.empty())
         return;
@@ -195,5 +195,11 @@ void IOPriorityQueue::cancel(const String & query_id)
         moveCancelledTasks(io_out_task_queue, cancel_task_queue, query_id);
         cv.notify_all();
     }
+}
+
+bool IOPriorityQueue::isCancelQueueEmpty() const
+{
+    std::lock_guard lock(mu);
+    return cancel_task_queue.empty();
 }
 } // namespace DB

@@ -84,6 +84,9 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 return false;
             }
 
+            if (tryTakeCancelTaskWithoutLock(task))
+                break;
+
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
             const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
@@ -109,7 +112,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 // gjt todo finish empty task_queue
                 RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
             } else {
-                LOG_DEBUG(logger, "schedule task of resource group {} succeed, cur cpu time of resource group: {}", name,
+                LOG_DEBUG(logger, "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}", name,
                         task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
                 assert(task != nullptr);
                 break;
@@ -129,6 +132,27 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         cv.wait_for(lock, DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU);
         updateResourceGroupInfosWithoutLock();
     }
+}
+
+template <typename NestedQueueType>
+bool ResourceControlQueue<NestedQueueType>::tryTakeCancelTaskWithoutLock(TaskPtr & task)
+{
+    if (cancel_query_ids.empty())
+        return false;
+
+    for (auto iter = cancel_query_ids.begin(); iter != cancel_query_ids.end(); ++iter)
+    {
+        if (!iter->second->isCancelQueueEmpty())
+        {
+            std::shared_ptr<NestedQueueType> & task_queue = iter->second;
+            assert(!task_queue->empty());
+            task_queue->take(task);
+            break;
+        }
+        // todo: remove item from cancel_query_ids when this query is cancelled successfully,
+        // otherwise we may need to iterate all nested task queue to check if cancel task is empty or not.
+    }
+    return task != nullptr;
 }
 
 template <typename NestedQueueType>
@@ -210,19 +234,28 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::finish()
 {
-    {
-        std::lock_guard lock(mu);
-        is_finished = true;
-        for (auto & ele : pipeline_tasks)
-            ele.second->finish();
-    }
+    std::lock_guard lock(mu);
+    is_finished = true;
+    for (auto & ele : pipeline_tasks)
+        ele.second->finish();
+
     cv.notify_all();
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id)
+void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, const String & resource_group_name)
 {
+    std::lock_guard lock(mu);
+    auto iter = cancel_query_ids.find(query_id);
+    if (iter != cancel_query_ids.end())
+        return;
 
+    if (pipeline_tasks.find(resource_group_name) == pipeline_tasks.end())
+    {
+        std::shared_ptr<NestedQueueType> task_queue = iter->second;
+        task_queue->cancel(query_id, "");
+        cancel_query_ids[query_id] = task_queue;
+    }
 }
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 
 #include <mutex>
@@ -41,8 +42,11 @@ public:
 
     void finish() override;
 
-    void cancel(const String & query_id) override;
+    void cancel(const String & query_id, const String & resource_group_name) override;
+
 private:
+    bool tryTakeCancelTaskWithoutLock(TaskPtr & task);
+
     // <resource_group_name, pipeline_tasks>
     using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
@@ -50,9 +54,6 @@ private:
     using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
     using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
-
-    // <query_id, corresponding_task_queue>, just for cancel
-    // gjt todo
 
     // Index of ResourceGroupInfo.
     static constexpr auto InfoIndexPriority = 0;
@@ -100,5 +101,7 @@ private:
     // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.
     // This is to prevent the resource group from being updated too frequently.
     std::unordered_map<std::string, UInt64> resource_group_statistic;
+
+    std::unordered_map<std::string, std::shared_ptr<NestedQueueType>> cancel_query_ids;
 };
 } // namespace DB

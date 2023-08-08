@@ -59,7 +59,7 @@ public:
 
     void submit(std::vector<TaskPtr> & tasks);
 
-    void cancel(const String & query_id);
+    void cancel(const String & query_id, const String & resource_group_name);
 
 private:
     void loop(size_t thread_no);

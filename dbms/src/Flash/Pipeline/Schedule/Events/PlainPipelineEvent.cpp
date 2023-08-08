@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {

@@ -114,8 +114,9 @@ public:
 
     const UnitQueueInfo & getUnitQueueInfo(size_t level);
 
-    void cancel(const String & query_id) override;
+    void cancel(const String & query_id, const String & resource_group_name) override;
 
+    bool isCancelQueueEmpty() const;
 public:
     static constexpr size_t QUEUE_SIZE = 8;
 

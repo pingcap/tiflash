@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Operators/SpilledBucketInput.h>
-#include <Storages/Transaction/Types.h>
 
 #include <atomic>
 #include <memory>

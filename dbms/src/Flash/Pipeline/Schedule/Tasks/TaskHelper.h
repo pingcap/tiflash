@@ -54,7 +54,7 @@ namespace DB
 static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 
 // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-static bool pipelineTaskTimeExceedYieldThreshold(UInt64 total_time_spent)
+inline bool pipelineTaskTimeExceedYieldThreshold(UInt64 total_time_spent)
 {
     return total_time_spent >= YIELD_MAX_TIME_SPENT_NS;
 }

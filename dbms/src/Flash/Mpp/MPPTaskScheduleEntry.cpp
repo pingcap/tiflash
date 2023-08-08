@@ -19,10 +19,9 @@
 
 namespace DB
 {
-MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_, const String & resource_group_name_)
+MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_)
     : manager(manager_)
     , id(id_)
-    , resource_group_name(resource_group_name_)
     , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
     , log(Logger::get(id.toString()))
@@ -32,7 +31,7 @@ MPPTaskScheduleEntry::~MPPTaskScheduleEntry()
 {
     if (schedule_state == ScheduleState::SCHEDULED)
     {
-        manager->releaseThreadsFromScheduler(resource_group_name, needed_threads);
+        manager->releaseThreadsFromScheduler(needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
 }

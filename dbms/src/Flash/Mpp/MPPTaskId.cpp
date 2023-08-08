@@ -98,7 +98,7 @@ size_t MPPGatherIdHash::operator()(MPPGatherId const & mpp_gather_id) const noex
 
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>" : fmt::format("MPP<gather_id:{},task_id:{},resource_group:{}>", gather_id.toString(), task_id, resource_group_name);
+    return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>" : fmt::format("MPP<gather_id:{},task_id:{}>", gather_id.toString(), task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};

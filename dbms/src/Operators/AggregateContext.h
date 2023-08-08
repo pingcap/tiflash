@@ -19,7 +19,6 @@
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
 #include <Operators/SharedAggregateRestorer.h>
-#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -42,7 +41,8 @@ struct ThreadData
 class AggregateContext
 {
 public:
-    explicit AggregateContext(const String & req_id)
+    explicit AggregateContext(
+        const String & req_id)
         : log(Logger::get(req_id))
     {
     }

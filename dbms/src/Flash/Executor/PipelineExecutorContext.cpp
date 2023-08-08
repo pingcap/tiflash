@@ -158,7 +158,7 @@ void PipelineExecutorContext::cancel()
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
         if likely (TaskScheduler::instance && !query_id.empty())
-            TaskScheduler::instance->cancel(query_id);
+            TaskScheduler::instance->cancel(query_id, resource_group_name);
     }
 }
 

@@ -67,7 +67,7 @@ public:
     void submitToIOTaskThreadPool(TaskPtr && task);
     void submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks);
 
-    void cancel(const String & query_id);
+    void cancel(const String & query_id, const String & resource_group_name);
 
     static std::unique_ptr<TaskScheduler> instance;
 
@@ -79,7 +79,5 @@ private:
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
-
-    std::once_flag stop_call_once_flag;
 };
 } // namespace DB

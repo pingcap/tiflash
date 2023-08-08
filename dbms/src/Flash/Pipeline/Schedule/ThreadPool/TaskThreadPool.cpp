@@ -148,9 +148,9 @@ void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks)
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::cancel(const String & query_id)
+void TaskThreadPool<Impl>::cancel(const String & query_id, const String & resource_group_name)
 {
-    task_queue->cancel(query_id);
+    task_queue->cancel(query_id, resource_group_name);
 }
 
 template class TaskThreadPool<CPUImpl>;

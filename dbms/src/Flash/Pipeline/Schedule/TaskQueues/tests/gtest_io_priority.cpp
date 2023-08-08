@@ -198,7 +198,7 @@ try
         IOPriorityQueue queue;
         queue.submit(std::make_unique<MockIOTask>(context1, false));
         queue.submit(std::make_unique<MockIOTask>(context2, true));
-        queue.cancel("id2");
+        queue.cancel("id2", "");
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
         queue.take(task);
@@ -213,7 +213,7 @@ try
     // case2 cancel first.
     {
         IOPriorityQueue queue;
-        queue.cancel("id2");
+        queue.cancel("id2", "");
         queue.submit(std::make_unique<MockIOTask>(context1, false));
         queue.submit(std::make_unique<MockIOTask>(context2, true));
         TaskPtr task;

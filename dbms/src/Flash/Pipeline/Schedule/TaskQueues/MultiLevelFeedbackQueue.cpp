@@ -272,7 +272,7 @@ const UnitQueueInfo & MultiLevelFeedbackQueue<TimeGetter>::getUnitQueueInfo(size
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
+void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id, const String &)
 {
     if unlikely (query_id.empty())
         return;
@@ -284,6 +284,13 @@ void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
             moveCancelledTasks(*queue, cancel_task_queue, query_id);
         cv.notify_all();
     }
+}
+
+template <typename TimeGetter>
+bool MultiLevelFeedbackQueue<TimeGetter>::isCancelQueueEmpty() const
+{
+    std::lock_guard lock(mu);
+    return cancel_task_queue.empty();
 }
 
 template class MultiLevelFeedbackQueue<CPUTimeGetter>;

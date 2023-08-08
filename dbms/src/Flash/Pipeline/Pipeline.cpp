@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
@@ -24,7 +23,6 @@
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <tipb/select.pb.h>
 

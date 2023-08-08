@@ -120,10 +120,10 @@ void TaskScheduler::submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks)
     io_task_thread_pool.submit(tasks);
 }
 
-void TaskScheduler::cancel(const String & query_id)
+void TaskScheduler::cancel(const String & query_id, const String & resource_group_name)
 {
-    cpu_task_thread_pool.cancel(query_id);
-    io_task_thread_pool.cancel(query_id);
+    cpu_task_thread_pool.cancel(query_id, resource_group_name);
+    io_task_thread_pool.cancel(query_id, resource_group_name);
 }
 
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;

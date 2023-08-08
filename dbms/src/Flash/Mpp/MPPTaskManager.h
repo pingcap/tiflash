@@ -194,19 +194,6 @@ class MPPTaskManager : private boost::noncopyable
 {
     MPPTaskSchedulerPtr scheduler;
 
-    // key: resource_group_name, value: MPPTaskSchedulerPtr
-    // If resource control is enabled, will use scheduler in resource_group_schedulers.
-    // Otherwise use the global scheduler.
-    std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
-
-    // key: MPPQueryID, value: MPPTaskSchedulerPtr
-    // This is to find corresponding scheduler by query_id so we can release query info of MinTSO.
-    std::unordered_map<MPPQueryId, String, MPPQueryIdHash> resource_group_query_ids;
-
-    std::unordered_set<MPPTaskSchedulerPtr> resource_group_schedulers_ready_to_delete;
-
-    UInt64 resource_control_mpp_task_hard_limit;
-
     std::mutex mu;
 
     MPPQueryMap mpp_query_map;
@@ -220,7 +207,7 @@ class MPPTaskManager : private boost::noncopyable
     std::shared_ptr<MPPTaskMonitor> monitor;
 
 public:
-    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler, UInt64 resource_control_mpp_task_hard_limit);
+    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
 
     ~MPPTaskManager();
 
@@ -244,7 +231,7 @@ public:
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
-    void releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads);
+    void releaseThreadsFromScheduler(int needed_threads);
 
     std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
 
@@ -254,32 +241,9 @@ public:
 
     String toString();
 
-    // Tag a resource group scheduler can be delete. It's called in LocalAdmissionController periodically.
-    // And the scheduler will be really deleted when all mpptasks are done.
-    void tagResourceGroupSchedulerReadyToDelete(const String & name);
-
-    // Really delete resource group scheduler whose running mpp tasks is empty.
-    void cleanResourceGroupScheduler();
-
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
-
-    MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id)
-    {
-        auto query_id_iter = resource_group_query_ids.find(query_id);
-        if (query_id_iter == resource_group_query_ids.end())
-            return scheduler;
-        auto scheduler_iter = resource_group_schedulers.find(query_id_iter->second);
-        return scheduler_iter->second;
-    }
-    MPPTaskSchedulerPtr getScheduler(const String & resource_group_name)
-    {
-        auto iter = resource_group_schedulers.find(resource_group_name);
-        if (iter == resource_group_schedulers.end())
-            return scheduler;
-        return iter->second;
-    }
 
 private:
     MPPQueryPtr addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id);

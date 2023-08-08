@@ -47,8 +47,9 @@ public:
 
     void finish() override;
 
-    void cancel(const String & query_id) override;
+    void cancel(const String & query_id, const String & resource_group_name) override;
 
+    bool isCancelQueueEmpty() const;
 private:
     void submitTaskWithoutLock(TaskPtr && task);
 

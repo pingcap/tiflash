@@ -17,6 +17,8 @@
 
 namespace DB
 {
+
+// Convert cpu time nanoseconds to cpu time millisecond, and round up.
 UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
 {
     if (unlikely(cpu_time_ns == 0))
@@ -34,6 +36,8 @@ RU toRU(UInt64 cpu_time_ns)
         return 0;
 
     auto cpu_time_millisecond = toCPUTimeMillisecond(cpu_time_ns);
-    return static_cast<double>(cpu_time_millisecond) / 3;
+    auto ru = static_cast<double>(cpu_time_millisecond) / 3;
+    auto ceil_ru = ceil(ru);
+    return ceil_ru;
 }
 } // namespace DB

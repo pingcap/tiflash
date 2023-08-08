@@ -14,7 +14,6 @@
 
 #include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Pipeline/Schedule/Tasks/AggregateFinalSpillTask.h>
-#include <Operators/AggregateContext.h>
 
 namespace DB
 {
