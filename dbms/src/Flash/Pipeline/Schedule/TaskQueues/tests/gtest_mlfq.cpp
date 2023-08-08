@@ -99,6 +99,10 @@ try
             task->profile_info.addCPUExecuteTime(value);
             queue->submit(std::move(task));
         }
+        while (!queue->empty())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
         queue->finish();
     });
     // take valid task

@@ -188,20 +188,40 @@ std::unordered_map<String, OperatorProfileInfos> & DAGContext::getOperatorProfil
     return operator_profile_infos_map;
 }
 
-void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
+void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos, bool is_append)
 {
+    if (profile_infos.empty())
+        return;
     std::lock_guard lock(operator_profile_infos_map_mu);
-    /// The profiles of some operators has been recorded.
-    /// For example, `DAGStorageInterpreter` records the profiles of PhysicalTableScan.
-    if (operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
-        operator_profile_infos_map[executor_id] = std::move(profile_infos);
+    if (is_append)
+    {
+        auto & elem = operator_profile_infos_map[executor_id];
+        elem.insert(elem.end(), profile_infos.begin(), profile_infos.end());
+    }
+    else
+    {
+        /// The profiles of some operators has been recorded.
+        /// For example, `DAGStorageInterpreter` records the profiles of PhysicalTableScan.
+        if (operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
+            operator_profile_infos_map[executor_id] = std::move(profile_infos);
+    }
 }
 
-void DAGContext::addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos)
+void DAGContext::addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos, bool is_append)
 {
+    if (io_profile_infos.empty())
+        return;
     std::lock_guard lock(operator_profile_infos_map_mu);
-    if (inbound_io_profile_infos_map.find(executor_id) == inbound_io_profile_infos_map.end())
-        inbound_io_profile_infos_map[executor_id] = std::move(io_profile_infos);
+    if (is_append)
+    {
+        auto & elem = inbound_io_profile_infos_map[executor_id];
+        elem.insert(elem.end(), io_profile_infos.begin(), io_profile_infos.end());
+    }
+    else
+    {
+        if (inbound_io_profile_infos_map.find(executor_id) == inbound_io_profile_infos_map.end())
+            inbound_io_profile_infos_map[executor_id] = std::move(io_profile_infos);
+    }
 }
 
 std::unordered_map<String, IOProfileInfos> & DAGContext::getInboundIOProfileInfosMap()

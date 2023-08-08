@@ -976,8 +976,21 @@ void StorageDeltaMerge::read(
     setColumnsToRead(store, columns_to_read, extra_table_id_index, column_names);
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-
-    RUNTIME_CHECK(!select_query.raw_for_mutable, select_query.raw_for_mutable);
+    if (select_query.raw_for_mutable) // for selraw
+    {
+        // Read without MVCC filtering and del_mark = 1 filtering
+        store->readRaw(
+            exec_context_,
+            group_builder,
+            context,
+            context.getSettingsRef(),
+            columns_to_read,
+            num_streams,
+            query_info.keep_order,
+            parseSegmentSet(select_query.segment_expression_list),
+            extra_table_id_index);
+        return;
+    }
 
     auto tracing_logger = log->getChild(query_info.req_id);
 
@@ -1086,6 +1099,16 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 {
     GET_METRIC(tiflash_storage_command_count, type_delete_range).Increment();
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
+}
+
+void StorageDeltaMerge::cleanPreIngestFiles(
+    const std::vector<DM::ExternalDTFileInfo> & external_files,
+    const Settings & settings)
+{
+    getAndMaybeInitStore()->cleanPreIngestFiles(
+        global_context,
+        settings,
+        external_files);
 }
 
 UInt64 StorageDeltaMerge::ingestFiles(

@@ -68,8 +68,7 @@ double UnitQueue::normalizedTimeMicrosecond()
 template <typename TimeGetter>
 MultiLevelFeedbackQueue<TimeGetter>::~MultiLevelFeedbackQueue()
 {
-    for (const auto & unit_queue : level_queues)
-        RUNTIME_ASSERT(unit_queue->empty(), logger, "all task should be taken before it is destructed");
+    drainTaskQueueWithoutLock();
 }
 
 template <typename TimeGetter>
@@ -176,11 +175,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
         std::unique_lock lock(mu);
         while (true)
         {
+            // Remaining tasks will be drained in destructor.
             if (unlikely(is_finished))
-            {
-                drainTaskQueueWithoutLock();
                 return false;
-            }
+
             if (!cancel_task_queue.empty())
             {
                 task = std::move(cancel_task_queue.front());
@@ -230,7 +228,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
         auto & cur_queue = level_queues[i];
         TaskPtr task;
         while (!cur_queue->empty())
-        { 
+        {
             cur_queue->take(task);
             FINALIZE_TASK(task);
         }

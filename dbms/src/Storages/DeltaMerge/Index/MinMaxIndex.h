@@ -79,15 +79,18 @@ public:
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
-    RSResult checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkIsNull(size_t pack_index);
+    RSResults checkEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkIn(size_t start_pack, size_t pack_count, const std::vector<Field> & values, const DataTypePtr & type);
+    RSResults checkGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type, int nan_direction);
+    RSResults checkGreaterEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type, int nan_direction);
+    RSResults checkIsNull(size_t start_pack, size_t pack_count);
+
+    RSResults checkNullableEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableIn(size_t start_pack, size_t pack_count, const std::vector<Field> & values, const DataTypePtr & type);
+    RSResults checkNullableGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableGreaterEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
 
     static String toString();
-    RSResult checkNullableEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreater(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
 };
 
 

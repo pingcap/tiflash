@@ -291,6 +291,10 @@ public:
     void preIngestFile(const String & parent_path, PageIdU64 file_id, size_t file_size);
     void removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist);
 
+    void cleanPreIngestFiles(const Context & db_context,
+                             const DB::Settings & db_settings,
+                             const std::vector<DM::ExternalDTFileInfo> & external_files);
+
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     /// Return the 'ingested bytes'.
@@ -345,6 +349,17 @@ public:
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
+    /// Read all rows without MVCC filtering
+    void readRaw(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const ColumnDefines & columns_to_read,
+        size_t num_streams,
+        bool keep_order,
+        const SegmentIdSet & read_segments = {},
+        size_t extra_table_id_index = InvalidColumnID);
 
     /// Read rows in two modes:
     ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.

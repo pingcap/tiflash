@@ -55,9 +55,7 @@ void moveCancelledTasks(std::list<TaskPtr> & normal_queue, std::deque<TaskPtr> &
 
 IOPriorityQueue::~IOPriorityQueue()
 {
-    RUNTIME_ASSERT(cancel_task_queue.empty(), logger, "all task should be taken before it is destructed");
-    RUNTIME_ASSERT(io_in_task_queue.empty(), logger, "all task should be taken before it is destructed");
-    RUNTIME_ASSERT(io_out_task_queue.empty(), logger, "all task should be taken before it is destructed");
+    drainTaskQueueWithoutLock();
 }
 
 bool IOPriorityQueue::take(TaskPtr & task)
@@ -65,11 +63,9 @@ bool IOPriorityQueue::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        // Remaining tasks will be drained in destructor.
         if (unlikely(is_finished))
-        {
-            drainTaskQueueWithoutLock();
             return false;
-        }
 
         if (popTask(cancel_task_queue, task))
             return true;
@@ -88,15 +84,15 @@ bool IOPriorityQueue::take(TaskPtr & task)
 void IOPriorityQueue::drainTaskQueueWithoutLock()
 {
     TaskPtr task;
+    while (popTask(cancel_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
     while (popTask(io_out_task_queue, task))
     {
         FINALIZE_TASK(task);
     }
     while (popTask(io_in_task_queue, task))
-    {
-        FINALIZE_TASK(task);
-    }
-    while (popTask(cancel_task_queue, task))
     {
         FINALIZE_TASK(task);
     }
