@@ -1384,7 +1384,7 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::skip_check_segment_update, { return should_trigger_foreground_kvstore_flush; });
 
     if (segment->hasAbandoned())
-        return should_trigger_foreground_kvstore_flush;
+        return false;
     const auto & delta = segment->getDelta();
 
     size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);

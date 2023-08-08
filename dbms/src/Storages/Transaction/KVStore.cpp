@@ -497,13 +497,13 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
         can_flush = true;
     }
+    if (!last_compact_log_applied)
+    {
+        curr_region.setLastCompactLogApplied(last_compact_log_applied);
+    }
 
     GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
     // GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
-    if (last_compact_log_applied)
-    {
-        GET_METRIC(tiflash_raft_raft_log_lag_count, type_applied_index).Observe(current_applied_gap);
-    }
     LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}, gap {}/{}", curr_region.toString(false), rows, size_bytes, current_applied_gap, gap_threshold);
 
     if (can_flush && flush_if_possible)

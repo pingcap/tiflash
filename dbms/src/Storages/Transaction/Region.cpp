@@ -509,6 +509,11 @@ UInt64 Region::lastCompactLogApplied() const
     return last_compact_log_applied;
 }
 
+void Region::setLastCompactLogApplied(UInt64 new_value) const
+{
+    last_compact_log_applied = new_value;
+}
+
 void Region::updateLastCompactLogApplied() const
 {
     uint64_t current_applied_index = appliedIndex();
