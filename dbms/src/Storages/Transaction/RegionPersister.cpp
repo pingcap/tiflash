@@ -114,7 +114,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 
-    uint64_t current_applied_index = 0;
+    uint64_t current_applied_index = region.appliedIndex();
     uint64_t last_compact_log_applied = region.lastCompactLogApplied();
     if (last_compact_log_applied != 0)
     {
