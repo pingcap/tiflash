@@ -78,6 +78,10 @@ try
         {
             queue.submit(std::make_unique<MockIOTask>(context, false));
         }
+        while (!queue.empty())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
         queue.finish();
     });
     // wait

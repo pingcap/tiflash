@@ -62,11 +62,8 @@ private:
         Context & /*context*/,
         size_t /*concurrency*/) override;
 
-    void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
-    void buildProjection(
-        PipelineExecutorContext & exec_context,
-        PipelineExecGroupBuilder & group_builder,
-        const NamesAndTypes & storage_schema);
+    void buildProjection(DAGPipeline & pipeline);
+    void buildProjection(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
 private:
     FilterConditions filter_conditions;

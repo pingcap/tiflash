@@ -155,9 +155,8 @@ HashJoinProbeExecPtr HashJoinProbeExec::tryGetRestoreExec()
 
 HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
 {
-    assert(join->isEnableSpill());
     /// first check if current join has a partition to restore
-    if (join->hasPartitionSpilledWithLock())
+    if (join->isSpilled() && join->hasPartitionSpilledWithLock())
     {
         /// get a restore join
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
@@ -238,7 +237,12 @@ bool HashJoinProbeExec::onProbeFinish()
             join->flushProbeSideMarkedSpillData(stream_index);
         join->finalizeProbe();
     }
-    return !need_scan_hash_map_after_probe && !join->isEnableSpill();
+    /// once this function returns true, the join probe for current thread finishes completely.
+    /// it should return true if and only if
+    /// 1. no need to scan hash map after probe
+    /// 2. current join does spill
+    /// 3. current join is not a restore join
+    return !need_scan_hash_map_after_probe && !join->isSpilled() && !join->isRestoreJoin();
 }
 
 void HashJoinProbeExec::onScanHashMapAfterProbeStart()
@@ -257,6 +261,6 @@ bool HashJoinProbeExec::onScanHashMapAfterProbeFinish()
 {
     scan_hash_map_after_probe_stream->readSuffix();
     join->finishOneNonJoin(stream_index);
-    return !join->isEnableSpill();
+    return !join->isSpilled() && !join->isRestoreJoin();
 }
 } // namespace DB
