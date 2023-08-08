@@ -14,12 +14,11 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <common/logger_useful.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/ResourceControl/TokenBucket.h>
 #include <Flash/ResourceControl/MockLocalAdmissionController.h>
-
+#include <Flash/ResourceControl/TokenBucket.h>
+#include <common/logger_useful.h>
 #include <kvproto/resource_manager.pb.h>
 #include <pingcap/kv/Cluster.h>
 
@@ -108,7 +107,7 @@ private:
         if (name == DEFAULT_RESOURCE_GROUP_NAME)
             weight = 1.0;
         else
-           weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
+            weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
 
         uint64_t virtual_time = cpu_time_in_ns * weight;
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)

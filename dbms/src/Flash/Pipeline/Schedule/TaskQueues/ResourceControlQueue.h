@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 
 #include <mutex>
@@ -24,7 +24,8 @@
 namespace DB
 {
 template <typename NestedQueueType>
-class ResourceControlQueue : public TaskQueue, private boost::noncopyable
+class ResourceControlQueue : public TaskQueue
+    , private boost::noncopyable
 {
 public:
     ResourceControlQueue() = default;

@@ -30,7 +30,7 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
     case TaskQueueType::DEFAULT:
 #ifdef DBMS_PUBLIC_GTEST
     case TaskQueueType::RCQ_MLFQ:
-         return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
+        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
 #endif
     case TaskQueueType::MLFQ:
         return std::make_unique<CPUMultiLevelFeedbackQueue>();
@@ -47,7 +47,7 @@ TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
     case TaskQueueType::DEFAULT:
 #ifdef DBMS_PUBLIC_GTEST
     case TaskQueueType::RCQ_IO_PRIORITY:
-         return std::make_unique<ResourceControlQueue<IOPriorityQueue>>();
+        return std::make_unique<ResourceControlQueue<IOPriorityQueue>>();
 #endif
     case TaskQueueType::IO_PRIORITY:
         return std::make_unique<IOPriorityQueue>();

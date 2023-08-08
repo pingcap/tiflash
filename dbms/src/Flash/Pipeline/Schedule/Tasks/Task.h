@@ -86,6 +86,7 @@ public:
     const KeyspaceID & getKeyspaceID() const;
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
+
 public:
     LoggerPtr log;
 

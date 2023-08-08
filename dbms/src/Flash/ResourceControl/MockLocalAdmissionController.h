@@ -17,8 +17,8 @@
 #include <Flash/Executor/toRU.h>
 #include <Storages/Transaction/Types.h>
 
-#include <string>
 #include <cstdint>
+#include <string>
 
 namespace DB
 {
@@ -37,9 +37,9 @@ public:
 
     ~MockLocalAdmissionController() = default;
 
-    using ConsumeResourceFuncType = void(*)(const std::string &, const KeyspaceID &, double, uint64_t);
-    using GetPriorityFuncType = double(*)(const std::string &, const KeyspaceID &);
-    using IsResourceGroupThrottledFuncType = bool(*)(const std::string &);
+    using ConsumeResourceFuncType = void (*)(const std::string &, const KeyspaceID &, double, uint64_t);
+    using GetPriorityFuncType = double (*)(const std::string &, const KeyspaceID &);
+    using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
     void consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time_ns)
     {

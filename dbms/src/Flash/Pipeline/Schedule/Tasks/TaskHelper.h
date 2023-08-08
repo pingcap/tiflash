@@ -24,7 +24,8 @@
 namespace DB
 {
 #define FINISH_STATUS                                      \
-    ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR: case ExecTaskStatus::CANCELLED
+    ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR: \
+    case ExecTaskStatus::CANCELLED
 
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));

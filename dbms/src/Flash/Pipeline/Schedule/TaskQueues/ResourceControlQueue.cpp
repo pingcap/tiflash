@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/toRU.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
@@ -111,9 +110,10 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 size_t erase_num = pipeline_tasks.erase(name);
                 // gjt todo finish empty task_queue
                 RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
-            } else {
-                LOG_DEBUG(logger, "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}", name,
-                        task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
+            }
+            else
+            {
+                LOG_DEBUG(logger, "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}", name, task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
                 assert(task != nullptr);
                 break;
             }

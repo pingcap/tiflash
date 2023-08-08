@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/MockLocalAdmissionController.h>
-
 #include <gtest/gtest.h>
+
 #include <vector>
 
 namespace DB::tests
@@ -31,7 +31,8 @@ class SimpleTask : public Task
 public:
     explicit SimpleTask(PipelineExecutorContext & exec_context_)
         : Task(exec_context_)
-        , task_exec_context(exec_context_) {}
+        , task_exec_context(exec_context_)
+    {}
 
     ~SimpleTask() override = default;
 
@@ -56,7 +57,7 @@ public:
     uint64_t exec_time_counter = 0;
     PipelineExecutorContext & task_exec_context;
 };
-}  // namespace
+} // namespace
 
 class TestResourceControlQueue : public ::testing::Test
 {
@@ -78,8 +79,7 @@ public:
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
             auto resource_group_name = resource_groups[i]->name;
-            all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock_query_id-" + resource_group_name, "mock_req_id-" + resource_group_name,
-                    mem_tracker, resource_group_name, NullspaceID);
+            all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock_query_id-" + resource_group_name, "mock_req_id-" + resource_group_name, mem_tracker, resource_group_name, NullspaceID);
         }
         return all_contexts;
     }
@@ -88,8 +88,14 @@ public:
 };
 
 void nopConsumeResource(const std::string &, const KeyspaceID &, double, uint64_t) {}
-double nopGetPriority(const std::string &, const KeyspaceID &) { return 10; }
-bool nopIsResourceGroupThrottled(const std::string &) { return false; }
+double nopGetPriority(const std::string &, const KeyspaceID &)
+{
+    return 10;
+}
+bool nopIsResourceGroupThrottled(const std::string &)
+{
+    return false;
+}
 
 void staticConsumeResource(const std::string & name, const KeyspaceID &, double ru, uint64_t cpu_time_ns)
 {
@@ -173,7 +179,7 @@ TEST_F(TestResourceControlQueue, BasicTest)
     }
 
     task_scheduler.submit(tasks);
-    
+
     // Expect total cpu_time usage: 10(rg_num) * 10(task_num_per_rg) * 10ms*10 / 10(thead_num)= 1s
     // So it's ok to wait, no need to worry this case running too long.
     for (const auto & context : all_contexts)
@@ -361,4 +367,4 @@ TEST_F(TestResourceControlQueue, TestAddAndDelResourceGroup)
 {
 }
 
-} // namespace DB::test
+} // namespace DB::tests
