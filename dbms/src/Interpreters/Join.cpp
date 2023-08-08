@@ -1725,9 +1725,9 @@ bool Join::quickCheckBuildFinished() const
 
 void Join::finishOneNonJoin(size_t partition_index)
 {
-    // When spill is enabled, the hash table is stored in multiple hash partitions,
+    // When spill is enabled, the build data blocks is seperated for each partition,
     // so when non-joined-scan ends, the corresponding join partition can be released.
-    // When spill is not enabled, the hash table exists on a hash partition, so the join partition cannot be released.
+    // When spill is not enabled, the build data blocks is stored in the same partition, so the join partition cannot be released.
     if (isEnableSpill())
     {
         if likely (build_finished && probe_finished)
