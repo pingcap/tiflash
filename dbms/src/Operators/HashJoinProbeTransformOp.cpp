@@ -120,7 +120,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if (probe_transform->quickCheckBuildFinished())
             {
                 onRestoreBuildFinish();
-                break;
+                BREAK;
             }
             return OperatorStatus::WAITING;
         case ProbeStatus::FINISHED:
@@ -206,7 +206,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
             if (probe_transform->quickCheckBuildFinished())
             {
                 onRestoreBuildFinish();
-                break;
+                BREAK;
             }
             return OperatorStatus::WAITING;
         case ProbeStatus::RESTORE_PROBE:
