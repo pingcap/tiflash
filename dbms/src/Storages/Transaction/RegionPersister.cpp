@@ -114,14 +114,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 
-    uint64_t current_applied_index = region.appliedIndex();
-    uint64_t last_compact_log_applied = region.lastCompactLogApplied();
-    if (last_compact_log_applied != 0)
-    {
-        uint64_t gap = current_applied_index > last_compact_log_applied ? current_applied_index - last_compact_log_applied : 0;
-        GET_METRIC(tiflash_raft_raft_log_lag_count, type_applied_index).Observe(gap);
-    }
-    region.setLastCompactLogApplied(current_applied_index);
+    region.updateLastCompactLogApplied();
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
