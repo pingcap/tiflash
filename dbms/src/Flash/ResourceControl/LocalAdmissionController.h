@@ -45,6 +45,7 @@ public:
         , cpu_time_in_ns(0)
         , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
         , keyspace_id(keyspace_id_)
+        , log(Logger::get("resource_group-" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         bucket = std::make_unique<TokenBucket>(setting.fill_rate(), setting.fill_rate(), setting.burst_limit());
@@ -57,6 +58,7 @@ public:
         , user_ru_per_sec(user_ru_per_sec_)
         , burstable(burstable_)
         , keyspace_id(NullspaceID)
+        , log(Logger::get("resource_group-" + group_name_))
     {
         bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
     }
@@ -146,15 +148,15 @@ private:
         return num;
     }
 
-    // Positive: Less number means higher priority.
-    // Negative means has no RU left, should not schedule this resource group at all.
-    double getPriority(uint64_t max_ru_per_sec) const
+    // Priority greater than zero: Less number means higher priority.
+    // Zero priority means has no RU left, should not schedule this resource group at all.
+    uint64_t getPriority(uint64_t max_ru_per_sec) const
     {
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue, "unexpected user_priority {}", user_priority);
 
         if (!burstable && bucket->peek() <= 0.0)
-            return -1.0;
+            return 0;
 
         double weight = 0.0;
         if (name == DEFAULT_RESOURCE_GROUP_NAME)
@@ -165,7 +167,11 @@ private:
         uint64_t virtual_time = cpu_time_in_ns * weight;
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)
             virtual_time = MAX_VIRTUAL_TIME;
-        return ((user_priority - 1) << 60) | virtual_time;
+
+        uint64_t priority = (((user_priority - 1) << 60) | virtual_time);
+
+        LOG_TRACE(log, "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, priority: {}", name, weight, virtual_time, user_priority, priority);
+        return priority;
     }
 
     // New tokens fetched from GAC, update remaining tokens.
@@ -270,6 +276,8 @@ private:
     const KeyspaceID keyspace_id = NullspaceID;
 
     double ru_consumption_delta = 0.0;
+
+    LoggerPtr log;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -316,7 +324,7 @@ public:
             cv.notify_one();
     }
 
-    double getPriority(const std::string & name, const KeyspaceID & keyspace_id)
+    uint64_t getPriority(const std::string & name, const KeyspaceID & keyspace_id)
     {
         ResourceGroupPtr group = getOrCreateResourceGroup(name, keyspace_id);
         return group->getPriority(max_ru_per_sec.load());

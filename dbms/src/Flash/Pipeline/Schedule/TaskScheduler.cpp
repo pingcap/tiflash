@@ -31,20 +31,13 @@ TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
 
 TaskScheduler::~TaskScheduler()
 {
-    stopAndWaitOnce();
-}
+    cpu_task_thread_pool.finish();
+    io_task_thread_pool.finish();
+    wait_reactor.finish();
 
-void TaskScheduler::stopAndWaitOnce()
-{
-    std::call_once(stop_call_once_flag, [this]() {
-        cpu_task_thread_pool.finish();
-        io_task_thread_pool.finish();
-        wait_reactor.finish();
-
-        cpu_task_thread_pool.waitForStop();
-        io_task_thread_pool.waitForStop();
-        wait_reactor.waitForStop();
-   });
+    cpu_task_thread_pool.waitForStop();
+    io_task_thread_pool.waitForStop();
+    wait_reactor.waitForStop();
 }
 
 void TaskScheduler::submit(TaskPtr && task)

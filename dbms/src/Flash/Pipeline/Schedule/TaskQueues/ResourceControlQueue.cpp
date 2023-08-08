@@ -77,25 +77,10 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         // gjt todo: resource_group_infos.empty() but task_queue not empty; noway!
         while (!resource_group_infos.empty())
         {
-            // gjt todo: this changes the semantics of TaskQueue::take(),
-            // but IMO this way is better, because we can avoid do extra last one task execution when task_queue is alredy finised.
             if unlikely (is_finished)
             {
-                while (!resource_group_infos.empty())
-                {
-                    auto & group_info = resource_group_infos.top();
-                    const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-                    std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
-                    // Drain task_queue.
-                    while (!task_queue->empty() && task_queue->take(task))
-                    {
-                        FINALIZE_TASK(task);
-                    }
-                    LOG_DEBUG(logger, "finish drain all nested task_queue. current resource group {}, task_queue.empty(): {}", name, task_queue->empty());
-                    assert(task_queue->empty());
-                    task_queue->finish();
-                    resource_group_infos.pop();
-                }
+                // resource_group_infos and pipeline_tasks will be cleaned in destructor,
+                // and all Tasks in nested task queue will be drained in destructor of TaskQueue.
                 return false;
             }
 
@@ -111,7 +96,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             //    Should not take any task from nested task queue.
             // 2. But if TaskScheduler has signal task_queue to finish, should drain nested task queue as soon as possible.
             //    So will ignore checking priority.
-            if (priority <= 0.0)
+            if (priority <= 0)
                 break;
 
             if (task_queue->empty() || !task_queue->take(task))

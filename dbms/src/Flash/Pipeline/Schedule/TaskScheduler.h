@@ -71,7 +71,6 @@ public:
 
     static std::unique_ptr<TaskScheduler> instance;
 
-    void stopAndWaitOnce();
 private:
     TaskThreadPool<CPUImpl> cpu_task_thread_pool;
 

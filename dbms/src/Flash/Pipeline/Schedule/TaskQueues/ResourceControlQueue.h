@@ -47,7 +47,7 @@ private:
     using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
     // <priority, corresponding_task_queue, resource_group_name, keyspace_id>
-    using ResourceGroupInfo = std::tuple<double, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
+    using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
     using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
 
