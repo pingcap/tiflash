@@ -76,13 +76,11 @@ struct SchemaNameMapper
     // Only use for logging / debugging
     virtual String debugDatabaseName(const TiDB::DBInfo & db_info) const
     {
-        auto db_name = db_info.name + "(" + std::to_string(db_info.id) + ")";
-        return map2Keyspace(db_info.keyspace_id, db_name);
+        return map2Keyspace(db_info.keyspace_id, db_info.name);
     }
     virtual String debugTableName(const TiDB::TableInfo & table_info) const
     {
-        auto table_name = table_info.name + "(" + std::to_string(table_info.id) + ")";
-        return map2Keyspace(table_info.keyspace_id, table_name);
+        return map2Keyspace(table_info.keyspace_id, table_info.name);
     }
     virtual String debugCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
     {
