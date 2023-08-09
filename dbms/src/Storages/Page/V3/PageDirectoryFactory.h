@@ -70,7 +70,7 @@ public:
 
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
-    void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
+    void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit, bool force_apply, UInt64 filter_seq = 0);
     static void applyRecord(
         const PageDirectoryPtr & dir,
         const typename PageEntriesEdit::EditRecord & r);

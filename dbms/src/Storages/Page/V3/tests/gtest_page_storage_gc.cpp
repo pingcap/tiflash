@@ -226,7 +226,7 @@ try
     size_t num_entries_on_wal = 0;
     while (reader->remained())
     {
-        auto s = reader->next();
+        auto [_, s] = reader->next();
         if (s.has_value())
         {
             auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
@@ -305,7 +305,7 @@ try
     size_t num_entries_on_wal = 0;
     while (reader->remained())
     {
-        auto s = reader->next();
+        auto [_, s] = reader->next();
         if (s.has_value())
         {
             auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
@@ -446,7 +446,7 @@ try
     bool exist_id4_normal_entry = false;
     while (reader->remained())
     {
-        auto s = reader->next();
+        auto [_, s] = reader->next();
         if (s.has_value())
         {
             auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
