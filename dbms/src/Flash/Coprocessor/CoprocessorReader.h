@@ -173,18 +173,18 @@ private:
     DAGSchema schema;
     bool has_enforce_encode_type;
     std::shared_ptr<pingcap::coprocessor::ResponseIter> resp_iter;
-    bool enable_cop_stream_for_remote_read;
+    bool enable_cop_stream;
 
 public:
     CoprocessorReader(
         const DAGSchema & schema_,
         bool has_enforce_encode_type_,
         const std::shared_ptr<pingcap::coprocessor::ResponseIter> & resp_iter_,
-        bool enable_cop_stream_for_remote_read_)
+        bool enable_cop_stream_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(resp_iter_)
-        , enable_cop_stream_for_remote_read(enable_cop_stream_for_remote_read_)
+        , enable_cop_stream(enable_cop_stream_)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -192,7 +192,7 @@ public:
     // `open` will call the resp_iter's `open` to send coprocessor request.
     void open()
     {
-        if (enable_cop_stream_for_remote_read)
+        if (enable_cop_stream)
             resp_iter->open<true>();
         else
             resp_iter->open<false>();
