@@ -206,6 +206,7 @@ TEST(WALLognameTest, parsing)
         EXPECT_EQ(f.parent_path, parent_path);
         EXPECT_EQ(f.log_num, 1);
         EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.snap_seq, 0);
         EXPECT_EQ(f.stage, LogFileStage::Normal);
 
         EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2");
@@ -215,10 +216,25 @@ TEST(WALLognameTest, parsing)
     }
 
     {
+        LogFilename f = LogFilename::parseFrom(parent_path, "log_1_2_3", log);
+        EXPECT_EQ(f.parent_path, parent_path);
+        EXPECT_EQ(f.log_num, 1);
+        EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.snap_seq, 3);
+        EXPECT_EQ(f.stage, LogFileStage::Normal);
+
+        EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2_3");
+        EXPECT_EQ(f.fullname(LogFileStage::Temporary), "/data1/.temp.log_1_2_3");
+        EXPECT_EQ(f.filename(LogFileStage::Normal), "log_1_2_3");
+        EXPECT_EQ(f.fullname(LogFileStage::Normal), "/data1/log_1_2_3");
+    }
+
+    {
         LogFilename f = LogFilename::parseFrom(parent_path, ".temp.log_345_78", log);
         EXPECT_EQ(f.parent_path, parent_path);
         EXPECT_EQ(f.log_num, 345);
         EXPECT_EQ(f.level_num, 78);
+        EXPECT_EQ(f.snap_seq, 0);
         EXPECT_EQ(f.stage, LogFileStage::Temporary);
 
         EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_345_78");
@@ -229,8 +245,6 @@ TEST(WALLognameTest, parsing)
 
     for (const auto & n : Strings{
              "something_wrong",
-             "log_1_2_3",
-             ".temp.log_1_2_3",
              "log_1",
              ".temp.log_1",
              "log_abc_def",
