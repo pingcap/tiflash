@@ -98,6 +98,22 @@ TEST(RowKeyRange_test, RedactRangeFromCommonHandle)
     Redact::setRedactLog(false); // restore flags
 }
 
+TEST(RowKey, DecodeKeyWithExtraZeroSuffix)
+{
+    // Note: {20,00} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    auto key_end = RecordKVFormat::genRawKey(1, 20);
+    key_end.push_back(0);
+    auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
+    const auto range_keys = std::make_shared<RegionRangeKeys>(
+        RecordKVFormat::genKey(1, 0),
+        std::move(tikv_key_end));
+    const auto range = RowKeyRange::fromRegionRange(
+        range_keys,
+        /* table_id */ 1,
+        /* is_common_handle */ false,
+        /* row_key_column_size */ 1);
+    EXPECT_EQ(0, compare(RowKeyValue::fromHandle(21).toRowKeyValueRef(), range.getEnd()));
+}
 } // namespace tests
 } // namespace DM
 } // namespace DB
