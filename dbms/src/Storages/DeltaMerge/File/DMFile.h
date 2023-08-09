@@ -469,8 +469,8 @@ public:
     bool useMetaV2() const { return version == DMFileFormat::V3; }
 
     UInt64 getFileSize(ColId col_id, const String & filename) const;
-    S3::S3RandomAccessFile::ReadFileInfo getReadFileInfo(ColId col_id, const String & filename) const;
-    S3::S3RandomAccessFile::ReadFileInfo getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const;
+    UInt64 getReadFileSize(ColId col_id, const String & filename) const;
+    UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;
 
     // The id to construct the file path on disk.
     UInt64 file_id;

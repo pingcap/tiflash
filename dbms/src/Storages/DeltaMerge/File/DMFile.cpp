@@ -1191,23 +1191,21 @@ UInt64 DMFile::getFileSize(ColId col_id, const String & filename) const
     }
 }
 
-S3::S3RandomAccessFile::ReadFileInfo DMFile::getReadFileInfo(ColId col_id, const String & filename) const
+UInt64 DMFile::getReadFileSize(ColId col_id, const String & filename) const
 {
     auto itr = merged_sub_file_infos.find(filename);
     if (itr != merged_sub_file_infos.end())
     {
-        return getMergedFileInfoOfColumn(itr->second);
+        return getMergedFileSizeOfColumn(itr->second);
     }
     else
     {
-        return S3::S3RandomAccessFile::ReadFileInfo{.size = getFileSize(col_id, filename)};
+        return getFileSize(col_id, filename);
     }
 }
 
-S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const
+UInt64 DMFile::getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const
 {
-    S3::S3RandomAccessFile::ReadFileInfo read_file_info;
-
     // Get filesize of merged file.
     auto itr = std::find_if(
         merged_files.begin(),
@@ -1216,8 +1214,7 @@ S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const Mer
             return merged_file.number == file_info.number;
         });
     RUNTIME_CHECK(itr != merged_files.end());
-    read_file_info.size = itr->size;
-    return read_file_info;
+    return itr->size;
 }
 } // namespace DM
 } // namespace DB

@@ -130,7 +130,7 @@ Block PipelineExecGroupBuilder::getCurrentHeader()
 {
     auto & cur_group = getCurGroup();
     RUNTIME_CHECK(!cur_group.empty());
-    return cur_group.back().getCurrentHeader();
+    return cur_group.front().getCurrentHeader();
 }
 
 OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const

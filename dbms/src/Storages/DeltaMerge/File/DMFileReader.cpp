@@ -66,7 +66,7 @@ DMFileReader::Stream::Stream(
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
+        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo({reader.dmfile->getReadFileSize(col_id, reader.dmfile->colMarkFileName(file_name_base)), reader.scan_context});
         if (reader.dmfile->configuration)
         {
             if (reader.dmfile->useMetaV2()) // metav2
@@ -192,7 +192,7 @@ DMFileReader::Stream::Stream(
               buffer_size,
               aio_threshold,
               max_read_buffer_size);
-    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colDataFileName(file_name_base)));
+    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo({reader.dmfile->getReadFileSize(col_id, reader.dmfile->colDataFileName(file_name_base)), reader.scan_context});
     if (!reader.dmfile->configuration)
     {
         buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,

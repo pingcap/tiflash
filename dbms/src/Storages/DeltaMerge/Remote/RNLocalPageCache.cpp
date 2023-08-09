@@ -274,7 +274,7 @@ void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64
     cv.notify_all();
 }
 
-RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes)
+RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes, ScanContextPtr scan_context)
 {
     RUNTIME_CHECK(pages.size() == page_sizes.size(), pages.size(), page_sizes.size());
     const size_t n = pages.size();
@@ -318,11 +318,15 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
             Stopwatch watch;
 
             // There are too many occupies, wait...
-            while (true)
+
+            // Sum of wait_seconds is 1+2+4+8+16+32+64+64+64 = 255 seconds.
+            // Since the default maximum lifetime of snapshot in WriteNodes is 300 seconds, waiting for more than the maximum lifetime is meaningless.
+            constexpr std::array<Int32, 9> wait_seconds = {1, 2, 4, 8, 16, 32, 64, 64, 64};
+            bool succ = false;
+            for (int wait_second : wait_seconds)
             {
-                using namespace std::chrono_literals;
                 GET_METRIC(tiflash_storage_remote_cache, type_page_full).Increment();
-                auto cv_status = cv.wait_for(lock, 30s);
+                auto cv_status = cv.wait_for(lock, std::chrono::seconds(wait_second));
                 if (cv_status == std::cv_status::timeout)
                     LOG_WARNING(
                         log,
@@ -334,10 +338,16 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
 
                 // Some keys may be occupied, so that need_occupy_size may be changed.
                 update_need_occupy_size();
-                bool stop_waiting = occupied_size + need_occupy_size <= max_size;
-                if (stop_waiting)
+                if (succ = occupied_size + need_occupy_size <= max_size; succ)
                     break;
             }
+
+            RUNTIME_CHECK_MSG(
+                succ,
+                "PageStorage cache space is insufficient to contain living query data. occupied_size={}, need_occupy_size={}, max_size={}",
+                occupied_size,
+                need_occupy_size,
+                max_size);
 
             LOG_WARNING(
                 log,
@@ -376,8 +386,12 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
         // Pages may be occupied but not written yet, so we always return missing pages according
         // to the storage.
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
+        {
+            scan_context->total_disagg_read_cache_hit_size += page_sizes[i];
             continue;
+        }
         missing_ids.push_back(pages[i]);
+        scan_context->total_disagg_read_cache_miss_size += page_sizes[i];
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());
