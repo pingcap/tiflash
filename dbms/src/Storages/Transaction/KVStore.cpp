@@ -499,7 +499,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (!last_compact_log_applied)
     {
-        // If we just experienced a restart, we will set `last_compact_log_applied`.
+        // If we just experienced a restart, we will set `last_compact_log_applied` to current applied_index.
         curr_region.setLastCompactLogApplied(index);
     }
 

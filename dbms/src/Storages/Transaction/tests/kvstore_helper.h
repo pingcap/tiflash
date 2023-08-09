@@ -112,7 +112,7 @@ protected:
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
-        kvstore = std::make_unique<KVStore>(global_ctx);
+        kvstore = std::make_shared<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
         return *kvstore;
@@ -174,7 +174,7 @@ protected:
     {
         if (auto region = kvs.getRegion(region_id); region)
         {
-            kvs.persistRegion(*region, std::nullopt, "");
+            kvs.persistRegion(*region, std::nullopt, PersistRegionReason::Debug, "");
         }
     }
 

@@ -416,6 +416,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
     auto region = std::make_shared<Region>(std::move(meta), proxy_helper);
 
     RegionData::deserialize(buf, region->data);
+    region->setLastCompactLogApplied(region->appliedIndex());
     return region;
 }
 

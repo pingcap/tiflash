@@ -74,15 +74,24 @@ try
             tryPersistRegion(kvs, region_id);
         }
         {
+            MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
             proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, r1->getLatestCommitIndex());
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+
+            auto && [req, res] = MockRaftStoreProxy::composeCompactLog(r1, kvr1->appliedIndex());
+            auto [indexc, termc] = proxy_instance->adminCommand(region_id, std::move(req), std::move(res), std::nullopt);
+            // Reject compact log.
+            kvs.setRegionCompactLogConfig(10000000, 10000000, 10000000, 10000000);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, indexc);
+            ASSERT_EQ(kvr1->lastCompactLogApplied(), indexc);
         }
     }
 
@@ -105,7 +114,7 @@ try
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_NE(kvr1->appliedIndex(), index);
             // The persisted applied_index is `applied_index`.
-            kvs.tryPersistRegion(region_id);
+            tryPersistRegion(kvs, region_id);
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
