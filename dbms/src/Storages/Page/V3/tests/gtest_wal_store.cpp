@@ -819,7 +819,7 @@ try
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     file_snap.num_records = snap_edit.size();
-    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit), 0);
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();

@@ -88,7 +88,7 @@ PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(const String & 
 {
     PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(std::move(storage_name), nullptr);
 
-    loadEdit(dir, edit, /*from_checkpoint*/ true);
+    loadEdit(dir, edit, /*force_apply*/ true);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
 
