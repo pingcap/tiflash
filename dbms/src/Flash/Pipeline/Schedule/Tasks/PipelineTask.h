@@ -50,9 +50,10 @@ protected:
         return runAwait();
     }
 
-    void finalizeImpl() override
+    void doFinalizeImpl() override
     {
         runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
+
     }
 };
 } // namespace DB
