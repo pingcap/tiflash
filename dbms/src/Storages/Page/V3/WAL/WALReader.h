@@ -88,7 +88,7 @@ public:
 
     UInt64 getSnapSeqForCheckpoint() const;
 
-    // std::pair<in_checkpoint, record>
+    // std::pair<from_checkpoint, record>
     std::pair<bool, std::optional<String>> next();
 
     void throwIfError() const
