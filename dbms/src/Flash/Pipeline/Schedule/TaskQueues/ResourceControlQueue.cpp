@@ -50,13 +50,13 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     // name can be empty, it means resource control is disabled.
     const std::string & name = task->getResourceGroupName();
 
-    auto iter = pipeline_tasks.find(name);
-    if (iter == pipeline_tasks.end())
+    auto iter = resource_group_task_queues.find(name);
+    if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedQueueType>();
         task_queue->submit(std::move(task));
         resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
-        pipeline_tasks.insert({name, task_queue});
+        resource_group_task_queues.insert({name, task_queue});
     }
     else
     {
@@ -72,12 +72,11 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
-        // gjt todo: resource_group_infos.empty() but task_queue not empty; noway!
         while (!resource_group_infos.empty())
         {
             if unlikely (is_finished)
             {
-                // resource_group_infos and pipeline_tasks will be cleaned in destructor,
+                // resource_group_infos and resource_group_task_queues will be cleaned in destructor,
                 // and all Tasks in nested task queue will be drained in destructor of TaskQueue.
                 return false;
             }
@@ -87,31 +86,29 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-            auto priority = LocalAdmissionController::global_instance->getPriority(name);
-            std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
+            const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
+            std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
-            LOG_DEBUG(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}", name, priority, is_finished, task_queue->empty());
+            LOG_TRACE(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}",
+                    name, priority, is_finished, task_queue->empty());
 
-            // 1. When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
-            //    Should not take any task from nested task queue.
-            // 2. But if TaskScheduler has signal task_queue to finish, should drain nested task queue as soon as possible.
-            //    So will ignore checking priority.
+            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
+            // Should not take any task from nested task queue for this situation.
             if (priority <= 0)
                 break;
 
             if (task_queue->empty() || !task_queue->take(task))
             {
-                LOG_DEBUG(logger, "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}", name, task_queue->empty());
+                LOG_TRACE(logger, "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}", name, task_queue->empty());
                 // Got here only when task_queue is empty or finished, we try next resource group.
                 // If new task of this resource gorup is submited, the resource_group info will be added again.
                 resource_group_infos.pop();
-                size_t erase_num = pipeline_tasks.erase(name);
-                // gjt todo finish empty task_queue
+                size_t erase_num = resource_group_task_queues.erase(name);
                 RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
             }
             else
             {
-                LOG_DEBUG(logger, "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}", name, task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
+                LOG_TRACE(logger, "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}", name, task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
                 assert(task != nullptr);
                 break;
             }
@@ -120,7 +117,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         if (task != nullptr)
             return true;
 
-        // For situation when resource_group_infos never insert any resource group.
+        // Check is_finished again for situation when resource_group_infos never insert any resource group.
         if unlikely (is_finished)
             return false;
 
@@ -215,11 +212,11 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
 {
     std::lock_guard lock(mu);
 
-    if (pipeline_tasks.empty())
+    if (resource_group_task_queues.empty())
         return true;
 
     bool empty = true;
-    for (const auto & task_queue_iter : pipeline_tasks)
+    for (const auto & task_queue_iter : resource_group_task_queues)
     {
         if (!task_queue_iter.second->empty())
             empty = false;
@@ -232,7 +229,7 @@ void ResourceControlQueue<NestedQueueType>::finish()
 {
     std::lock_guard lock(mu);
     is_finished = true;
-    for (auto & ele : pipeline_tasks)
+    for (auto & ele : resource_group_task_queues)
         ele.second->finish();
 
     cv.notify_all();
@@ -246,9 +243,9 @@ void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, cons
     if (iter != cancel_query_ids.end())
         return;
 
-    if (pipeline_tasks.find(resource_group_name) == pipeline_tasks.end())
+    if (resource_group_task_queues.find(resource_group_name) == resource_group_task_queues.end())
     {
-        std::shared_ptr<NestedQueueType> task_queue = iter->second;
+        std::shared_ptr<NestedQueueType> & task_queue = iter->second;
         task_queue->cancel(query_id, "");
         cancel_query_ids[query_id] = task_queue;
     }

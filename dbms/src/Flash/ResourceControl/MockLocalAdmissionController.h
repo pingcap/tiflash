@@ -15,10 +15,6 @@
 #pragma once
 
 #include <Flash/Executor/toRU.h>
-#include <Storages/Transaction/Types.h>
-
-#include <cstdint>
-#include <string>
 
 namespace DB
 {

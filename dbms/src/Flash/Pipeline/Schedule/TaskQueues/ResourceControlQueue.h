@@ -48,8 +48,8 @@ public:
 private:
     bool tryTakeCancelTaskWithoutLock(TaskPtr & task);
 
-    // <resource_group_name, pipeline_tasks>
-    using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
+    // <resource_group_name, resource_group_task_queues>
+    using ResourceGroupTaskQueue = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
     // <priority, corresponding_task_queue, resource_group_name>
     using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string>;
@@ -69,7 +69,7 @@ private:
         auto priority2 = std::get<InfoIndexPriority>(info2);
 
         // Return true means lower priority.
-        // Here we want make negative priority to be lower priority than positive priority.
+        // Here we want make zero priority to be lower priority than positive priority.
         // Because negative priority means corresponding resource group has no more token.
         if (priority1 <= 0)
             return true;
@@ -78,8 +78,8 @@ private:
         return priority1 > priority2;
     }
 
-    // 1. Update cpu time of resource group.
-    // 2. Reorder resource_group_infos.
+    // 1. Update cpu time/RU of resource group.
+    // 2. Update resource_group_infos and reorder resource_group_infos by priority.
     void updateResourceGroupStatisticWithoutLock(const std::string & name, UInt64 consumed_cpu_time);
 
     // Update resource_group_infos, will reorder resource group by priority.
@@ -95,7 +95,7 @@ private:
 
     CompatorType compator = compareResourceInfo;
     ResourceGroupInfoQueue resource_group_infos{compator};
-    PipelineTasks pipeline_tasks;
+    ResourceGroupTaskQueue resource_group_task_queues;
 
     // <resource_group_name, acculumated_cpu_time>
     // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.

@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
-#include <common/logger_useful.h>
-#include <pingcap/kv/Cluster.h>
 
 namespace DB
 {
