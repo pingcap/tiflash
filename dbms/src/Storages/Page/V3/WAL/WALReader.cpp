@@ -77,11 +77,12 @@ LogFilenameSet WALStoreReader::listAllFiles(
                 break;
             }
             case LogFileStage::Temporary:
-                [[fallthrough]];
+            {
+                break;
+            }
             case LogFileStage::Invalid:
             {
-                // TODO: clean
-                break;
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown logfile name, parent_path={} filename={}", parent_path, file.filename);
             }
             }
         }
