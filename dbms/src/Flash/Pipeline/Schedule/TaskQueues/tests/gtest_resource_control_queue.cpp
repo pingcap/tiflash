@@ -79,7 +79,7 @@ public:
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
             auto resource_group_name = resource_groups[i]->name;
-            all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock_query_id-" + resource_group_name, "mock_req_id-" + resource_group_name, mem_tracker, resource_group_name, NullspaceID);
+            all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock_query_id-" + resource_group_name, "mock_req_id-" + resource_group_name, mem_tracker, resource_group_name);
         }
         return all_contexts;
     }
@@ -87,7 +87,7 @@ public:
     MemoryTrackerPtr mem_tracker;
 };
 
-void staticConsumeResource(const std::string & name, const KeyspaceID &, double ru, uint64_t cpu_time_ns)
+void staticConsumeResource(const std::string & name, double ru, uint64_t cpu_time_ns)
 {
     std::lock_guard lock(LocalAdmissionController::global_instance->mu);
     auto & resource_groups = LocalAdmissionController::global_instance->resource_groups;
@@ -96,7 +96,7 @@ void staticConsumeResource(const std::string & name, const KeyspaceID &, double 
     iter->second->consumeResource(ru, cpu_time_ns);
 }
 
-double staticGetPriority(const std::string & name, const KeyspaceID &)
+double staticGetPriority(const std::string & name)
 {
     std::lock_guard lock(LocalAdmissionController::global_instance->mu);
     auto & resource_groups = LocalAdmissionController::global_instance->resource_groups;
@@ -157,7 +157,7 @@ TEST_F(TestResourceControlQueue, BasicTest)
     for (int i = 0; i < resource_group_num; ++i)
     {
         String group_name = "rg" + std::to_string(i);
-        all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, group_name, NullspaceID);
+        all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, group_name);
 
         for (int j = 0; j < task_num_per_resource_group; ++j)
         {
@@ -186,7 +186,7 @@ TEST_F(TestResourceControlQueue, BasicTimeoutTest)
     // Because ~TaskScheduler will call destructor of TaskThreadPool, which will call destructor of Task.
     // In the destructor of Task, will use PipelineExecutorContext to log.
     String group_name = "rg1";
-    auto exec_context = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, group_name, NullspaceID);
+    auto exec_context = std::make_shared<PipelineExecutorContext>("mock-query-id", "mock-req-id", mem_tracker, group_name);
 
     auto task = std::make_unique<SimpleTask>(*exec_context);
     task->each_exec_time = std::chrono::milliseconds(100);
@@ -215,7 +215,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     TaskSchedulerConfig config{thread_num, thread_num};
     TaskScheduler task_scheduler(config);
 
-    PipelineExecutorContext exec_context("mock-query-id", "mock-req-id", mem_tracker, rg_name, NullspaceID);
+    PipelineExecutorContext exec_context("mock-query-id", "mock-req-id", mem_tracker, rg_name);
 
     auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 2*100ms cpu_time.

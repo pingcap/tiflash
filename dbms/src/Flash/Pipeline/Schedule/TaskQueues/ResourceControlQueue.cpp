@@ -49,14 +49,13 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
 
     // name can be empty, it means resource control is disabled.
     const std::string & name = task->getResourceGroupName();
-    const KeyspaceID & keyspace_id = task->getKeyspaceID();
 
     auto iter = pipeline_tasks.find(name);
     if (iter == pipeline_tasks.end())
     {
         auto task_queue = std::make_shared<NestedQueueType>();
         task_queue->submit(std::move(task));
-        resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name, keyspace_id), task_queue, name, keyspace_id});
+        resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
         pipeline_tasks.insert({name, task_queue});
     }
     else
@@ -88,8 +87,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-            const KeyspaceID & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
-            auto priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
+            auto priority = LocalAdmissionController::global_instance->getPriority(name);
             std::shared_ptr<NestedQueueType> task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
             LOG_DEBUG(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}", name, priority, is_finished, task_queue->empty());
@@ -160,7 +158,6 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
 {
     assert(task);
     const std::string & name = task->getResourceGroupName();
-    const KeyspaceID & keyspace_id = task->getKeyspaceID();
 
     std::lock_guard lock(mu);
     auto iter = resource_group_statistic.find(name);
@@ -169,7 +166,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         UInt64 accumulated_cpu_time = inc_value;
         if (pipelineTaskTimeExceedYieldThreshold(accumulated_cpu_time))
         {
-            updateResourceGroupStatisticWithoutLock(name, keyspace_id, accumulated_cpu_time);
+            updateResourceGroupStatisticWithoutLock(name, accumulated_cpu_time);
             accumulated_cpu_time = 0;
         }
         resource_group_statistic.insert({name, accumulated_cpu_time});
@@ -179,18 +176,18 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         iter->second += inc_value;
         if (pipelineTaskTimeExceedYieldThreshold(iter->second))
         {
-            updateResourceGroupStatisticWithoutLock(name, keyspace_id, iter->second);
+            updateResourceGroupStatisticWithoutLock(name, iter->second);
             iter->second = 0;
         }
     }
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(const std::string & name, UInt64 consumed_cpu_time)
 {
     auto ru = toRU(consumed_cpu_time);
     LOG_DEBUG(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
-    LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, ru, consumed_cpu_time);
+    LocalAdmissionController::global_instance->consumeResource(name, ru, consumed_cpu_time);
     updateResourceGroupInfosWithoutLock();
 
     // Notify priority info is updated.
@@ -207,9 +204,8 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock(
         resource_group_infos.pop();
 
         const auto & name = std::get<InfoIndexResourceGroupName>(group_info);
-        const auto & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
-        auto new_priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
-        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name, keyspace_id));
+        auto new_priority = LocalAdmissionController::global_instance->getPriority(name);
+        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name));
     }
     resource_group_infos = new_resource_group_infos;
 }

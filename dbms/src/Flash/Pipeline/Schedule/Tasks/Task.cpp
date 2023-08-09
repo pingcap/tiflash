@@ -196,9 +196,4 @@ const String & Task::getResourceGroupName() const
 {
     return exec_context.getResourceGroupName();
 }
-
-const KeyspaceID & Task::getKeyspaceID() const
-{
-    return exec_context.getKeyspaceID();
-}
 } // namespace DB

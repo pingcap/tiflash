@@ -83,7 +83,6 @@ public:
     const String & getQueryId() const;
 
     const String & getResourceGroupName() const;
-    const KeyspaceID & getKeyspaceID() const;
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 

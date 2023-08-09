@@ -24,8 +24,8 @@ namespace DB
 {
 
 class ResourceGroup;
-inline void nopConsumeResource(const std::string &, const KeyspaceID &, double, uint64_t) {}
-inline double nopGetPriority(const std::string &, const KeyspaceID &)
+inline void nopConsumeResource(const std::string &, double, uint64_t) {}
+inline double nopGetPriority(const std::string &)
 {
     return 10;
 }
@@ -47,18 +47,18 @@ public:
 
     ~MockLocalAdmissionController() = default;
 
-    using ConsumeResourceFuncType = void (*)(const std::string &, const KeyspaceID &, double, uint64_t);
-    using GetPriorityFuncType = double (*)(const std::string &, const KeyspaceID &);
+    using ConsumeResourceFuncType = void (*)(const std::string &, double, uint64_t);
+    using GetPriorityFuncType = double (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
-    void consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time_ns)
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns)
     {
-        consume_resource_func(name, keyspace_id, ru, cpu_time_ns);
+        consume_resource_func(name, ru, cpu_time_ns);
     }
 
-    double getPriority(const std::string & name, const KeyspaceID & keyspace_id)
+    double getPriority(const std::string & name)
     {
-        return get_priority_func(name, keyspace_id);
+        return get_priority_func(name);
     }
 
     bool isResourceGroupThrottled(const std::string & name)

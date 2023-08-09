@@ -35,14 +35,13 @@ class ResourceGroup final : private boost::noncopyable
 public:
     static const std::string DEFAULT_RESOURCE_GROUP_NAME;
 
-    explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_, KeyspaceID keyspace_id_)
+    explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
         : name(group_pb_.name())
         , user_priority(group_pb_.priority())
         , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
         , cpu_time_in_ns(0)
         , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
-        , keyspace_id(keyspace_id_)
         , log(Logger::get("resource_group-" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
@@ -55,7 +54,6 @@ public:
         , user_priority(user_priority_)
         , user_ru_per_sec(user_ru_per_sec_)
         , burstable(burstable_)
-        , keyspace_id(NullspaceID)
         , log(Logger::get("resource_group-" + group_name_))
     {
         bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
@@ -143,8 +141,6 @@ private:
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
 
     std::chrono::steady_clock::time_point last_gac_update_timepoint;
-
-    const KeyspaceID keyspace_id = NullspaceID;
 
     double ru_consumption_delta = 0.0;
 

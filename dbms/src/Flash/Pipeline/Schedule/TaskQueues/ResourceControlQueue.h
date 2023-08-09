@@ -51,8 +51,8 @@ private:
     // <resource_group_name, pipeline_tasks>
     using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
-    // <priority, corresponding_task_queue, resource_group_name, keyspace_id>
-    using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
+    // <priority, corresponding_task_queue, resource_group_name>
+    using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string>;
     using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
 
@@ -60,7 +60,6 @@ private:
     static constexpr auto InfoIndexPriority = 0;
     static constexpr auto InfoIndexPipelineTaskQueue = 1;
     static constexpr auto InfoIndexResourceGroupName = 2;
-    static constexpr auto InfoIndexResourceKeyspaceId = 3;
     static constexpr auto DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU = std::chrono::seconds(1);
 
     // ResourceGroupInfoQueue compator.
@@ -81,7 +80,7 @@ private:
 
     // 1. Update cpu time of resource group.
     // 2. Reorder resource_group_infos.
-    void updateResourceGroupStatisticWithoutLock(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
+    void updateResourceGroupStatisticWithoutLock(const std::string & name, UInt64 consumed_cpu_time);
 
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();

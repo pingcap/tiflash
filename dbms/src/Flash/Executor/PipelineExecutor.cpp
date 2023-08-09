@@ -32,8 +32,7 @@ PipelineExecutor::PipelineExecutor(
           /*query_id=*/context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
           memory_tracker_,
-          context.getDAGContext()->getResourceGroupName(),
-          context.getDAGContext()->getKeyspaceID())
+          context.getDAGContext()->getResourceGroupName())
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());

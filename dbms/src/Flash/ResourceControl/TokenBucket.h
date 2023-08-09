@@ -21,8 +21,9 @@ namespace DB
 {
 
 // There are two mode of TokenBucket:
-// 1. fill_rate == 0: Bucket is static. Will fetch tokens from GAC.
-// 2. fill_rate > 0: bucket is dynamic. Will serve as a local token bucket.
+// 1. fill_rate == 0: Bucket is static. Bucket will not fill tokens itself.
+//                    When the number of tokens is insufficient, it will retrieve them from the GAC.
+// 2. fill_rate > 0: Bucket is dynamic. Will serve as a local token bucket.
 // NOTE: not thread safe!
 class TokenBucket final
 {
