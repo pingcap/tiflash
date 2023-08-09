@@ -163,7 +163,7 @@ public:
 
     std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
 
-    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
+    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos, bool is_append = false);
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -173,7 +173,7 @@ public:
 
     std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
 
-    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos);
+    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos, bool is_append = false);
 
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);

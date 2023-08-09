@@ -309,12 +309,38 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
 {
     auto & dag_context = dagContext();
 
+    /*** stage1 build for local storage ***/
+
     if (!mvcc_query_info->regions_query_info.empty())
     {
         buildLocalExec(exec_context, group_builder, context.getSettingsRef().max_block_size);
+        if (!group_builder.empty())
+        {
+            dag_context.addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos(), /*is_append=*/true);
+
+            /// handle generated column if necessary.
+            executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
+
+            DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
+
+            /// handle timezone/duration cast for local table scan.
+            executeCastAfterTableScan(exec_context, group_builder, analyzer);
+            dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos(), /*is_append=*/true);
+
+            /// handle filter conditions for local table scan.
+            /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
+            /// TODO add runtime filter in Filter input stream.
+            if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
+            {
+                ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
+                dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos(), /*is_append=*/true);
+            }
+        }
     }
 
-    // Should build `remote_requests` and `nullSourceOp` under protect of `table_structure_lock`.
+    /*** stage2 build for remote read ***/
+
+    // Should build `remote_requests` under protect of `table_structure_lock`.
 
     // Note that `buildRemoteRequests` must be called after `buildLocalExec` because
     // `buildLocalExec` will setup `region_retry_from_local_region` and we must
@@ -343,19 +369,30 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-    size_t remote_read_start_index = group_builder.concurrency();
-
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-        buildRemoteExec(exec_context, group_builder, remote_requests);
+    {
+        PipelineExecGroupBuilder remote_builder;
+        buildRemoteExec(exec_context, remote_builder, remote_requests);
+        if (!remote_builder.empty())
+        {
+            dag_context.addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), remote_builder.getCurIOProfileInfos(), /*is_append=*/true);
+            dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), remote_builder.getCurProfileInfos(), /*is_append=*/true);
+            if (filter_conditions.hasValue())
+                dag_context.addOperatorProfileInfos(filter_conditions.executor_id, remote_builder.getCurProfileInfos(), /*is_append=*/true);
+            group_builder.merge(std::move(remote_builder));
+        }
+    }
 
-    /// record profiles of local and remote io source
-    dag_context.addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
+    /*** stage3 build null source op if group_builder is empty after building for local/remote ***/
 
     if (group_builder.empty())
     {
-        group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_context, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
-        // reset remote_read_start_index for null_source_if_empty.
-        remote_read_start_index = 1;
+        auto header = Block(getColumnWithTypeAndName(genNamesAndTypesForTableScan(table_scan)));
+        group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_context, header, log->identifier()));
+        dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos(), /*is_append=*/true);
+        if (filter_conditions.hasValue())
+            dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos(), /*is_append=*/true);
     }
 
     for (const auto & lock : drop_locks)
@@ -363,47 +400,45 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, 
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
-
-    /// handle generated column if necessary.
-    executeGeneratedColumnPlaceholder(exec_context, group_builder, remote_read_start_index, generated_column_infos, log);
-    NamesAndTypes source_columns;
-    source_columns.reserve(table_scan.getColumnSize());
-    const auto table_scan_output_header = group_builder.getCurrentHeader();
-    for (const auto & col : table_scan_output_header)
-        source_columns.emplace_back(col.name, col.type);
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-    /// If there is no local source, there is no need to execute cast and push down filter, return directly.
-    /// But we should make sure that the analyzer is initialized before return.
-    if (remote_read_start_index == 0)
-    {
-        dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
-        if (filter_conditions.hasValue())
-            dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
-        return;
-    }
-    /// handle timezone/duration cast for local table scan.
-    executeCastAfterTableScan(exec_context, group_builder, remote_read_start_index);
-    dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
-
-    /// handle filter conditions for local and remote table scan.
-    if (filter_conditions.hasValue())
-    {
-        ::DB::executePushedDownFilter(exec_context, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
-        dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
-    }
 }
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     auto & dag_context = dagContext();
 
+    /*** stage1 build for local storage ***/
+
     if (!mvcc_query_info->regions_query_info.empty())
     {
         buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
+        if (!pipeline.streams.empty())
+        {
+            auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
+            pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+
+            /// handle generated column if necessary.
+            executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
+
+            DAGExpressionAnalyzer analyzer{pipeline.firstStream()->getHeader(), context};
+
+            /// handle timezone/duration cast for local and remote table scan.
+            executeCastAfterTableScan(pipeline, analyzer);
+            recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
+
+            /// handle filter conditions for local table scan.
+            /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
+            /// TODO add runtime filter in Filter input stream.
+            if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
+            {
+                ::DB::executePushedDownFilter(filter_conditions, analyzer, log, pipeline);
+                recordProfileStreams(pipeline, filter_conditions.executor_id);
+            }
+        }
     }
 
-    // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
-    auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+    /*** stage2 build for remote read ***/
+
+    // Should build `remote_requests` under protect of `table_structure_lock`.
 
     // Note that `buildRemoteRequests` must be called after `buildLocalStreams` because
     // `buildLocalStreams` will setup `region_retry_from_local_region` and we must
@@ -432,22 +467,31 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-    // after buildRemoteStreams, remote read stream will be appended in pipeline.streams.
-    size_t remote_read_streams_start_index = pipeline.streams.size();
-
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-        buildRemoteStreams(remote_requests, pipeline);
+    {
+        DAGPipeline remote_pipeline;
+        buildRemoteStreams(remote_requests, remote_pipeline);
+        if (!remote_pipeline.streams.empty())
+        {
+            auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
+            remote_pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+            recordProfileStreams(remote_pipeline, table_scan.getTableScanExecutorID());
+            if (filter_conditions.hasValue())
+                recordProfileStreams(remote_pipeline, filter_conditions.executor_id);
+            pipeline.streams.insert(pipeline.streams.end(), remote_pipeline.streams.begin(), remote_pipeline.streams.end());
+        }
+    }
 
-    /// record local and remote io input stream
-    auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
-    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+    /*** stage3 build null stream if group_builder is empty after building for local/remote ***/
 
     if (pipeline.streams.empty())
     {
-        pipeline.streams.emplace_back(std::move(null_stream_if_empty));
-        // reset remote_read_streams_start_index for null_stream_if_empty.
-        remote_read_streams_start_index = 1;
+        auto header = Block(getColumnWithTypeAndName(genNamesAndTypesForTableScan(table_scan)));
+        pipeline.streams.push_back(std::make_shared<NullBlockInputStream>(header));
+        recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
+        if (filter_conditions.hasValue())
+            recordProfileStreams(pipeline, filter_conditions.executor_id);
     }
 
     for (const auto & lock : drop_locks)
@@ -455,35 +499,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
-    /// handle generated column if necessary.
-    executeGeneratedColumnPlaceholder(remote_read_streams_start_index, generated_column_infos, log, pipeline);
-    NamesAndTypes source_columns;
-    source_columns.reserve(table_scan.getColumnSize());
-    const auto table_scan_output_header = pipeline.firstStream()->getHeader();
-    for (const auto & col : table_scan_output_header)
-        source_columns.emplace_back(col.name, col.type);
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-    /// If there is no local stream, there is no need to execute cast and push down filter, return directly.
-    /// But we should make sure that the analyzer is initialized before return.
-    if (remote_read_streams_start_index == 0)
-    {
-        recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
-        if (filter_conditions.hasValue())
-            recordProfileStreams(pipeline, filter_conditions.executor_id);
-        return;
-    }
-    /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
-    recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
-
-    /// handle filter conditions for local and remote table scan.
-    /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
-    /// todo add runtime filter in Filter input stream
-    if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
-    {
-        ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
-        recordProfileStreams(pipeline, filter_conditions.executor_id);
-    }
 }
 
 // here we assume that, if the columns' id and data type in query is the same as the columns in TiDB,
@@ -568,37 +583,30 @@ void DAGStorageInterpreter::prepare()
 void DAGStorageInterpreter::executeCastAfterTableScan(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_start_index)
+    DAGExpressionAnalyzer & analyzer)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, may_need_add_cast_column, table_scan);
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(analyzer, may_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        RUNTIME_CHECK(remote_read_start_index <= group_builder.concurrency());
-        size_t i = 0;
-        // local sources
-        while (i < remote_read_start_index)
+        for (size_t i = 0; i < group_builder.concurrency(); ++i)
         {
-            auto & builder = group_builder.getCurBuilder(i++);
+            auto & builder = group_builder.getCurBuilder(i);
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
         }
     }
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
-    size_t remote_read_streams_start_index,
-    DAGPipeline & pipeline)
+    DAGPipeline & pipeline,
+    DAGExpressionAnalyzer & analyzer)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, may_need_add_cast_column, table_scan);
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(analyzer, may_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        RUNTIME_CHECK(remote_read_streams_start_index <= pipeline.streams.size());
-        size_t i = 0;
-        // local streams
-        while (i < remote_read_streams_start_index)
+        for (auto & stream : pipeline.streams)
         {
-            auto & stream = pipeline.streams[i++];
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
         }
