@@ -1345,6 +1345,8 @@ try
 
     auto sp_after_create_snap_for_dump = SyncPointCtl::enableInScope("after_PageDirectory::create_snap_for_dump");
     auto th_dump = std::async([&]() {
+        // ensure page 2 is deleted in the dumped snapshot
+        dir->gcInMemEntries(u128::PageDirectoryType::InMemGCOption{.need_removed_entries = false});
         ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
     });
     sp_after_create_snap_for_dump.waitAndPause();
@@ -1396,6 +1398,8 @@ try
 
     auto sp_after_create_snap_for_dump = SyncPointCtl::enableInScope("after_PageDirectory::create_snap_for_dump");
     auto th_dump = std::async([&]() {
+        // ensure page 2, page 1 is deleted in the dumped snapshot
+        dir->gcInMemEntries(u128::PageDirectoryType::InMemGCOption{.need_removed_entries = false});
         ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
     });
     sp_after_create_snap_for_dump.waitAndPause();
