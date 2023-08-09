@@ -111,7 +111,7 @@ private:
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)
             virtual_time = MAX_VIRTUAL_TIME;
 
-        uint64_t priority = (((user_priority - 1) << 60) | virtual_time); // NOLINT(shift-count-overflow)
+        uint64_t priority = (((user_priority - 1) << 60) | virtual_time);
 
         LOG_TRACE(log, "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, priority: {}", name, weight, virtual_time, user_priority, priority);
         return priority;
