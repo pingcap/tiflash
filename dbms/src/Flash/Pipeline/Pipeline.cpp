@@ -107,7 +107,7 @@ void PipelineEvents::mapInputs(const PipelineEvents & inputs)
          *     ```
          */
 
-        // If the outputs is fine grained mode, the intputs must also be.
+        // If the outputs is fine grained mode, the inputs must also be.
         RUNTIME_CHECK(inputs.is_fine_grained || !is_fine_grained);
         for (const auto & output : events)
         {
