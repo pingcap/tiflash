@@ -1358,7 +1358,9 @@ try
 {
     String query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
     auto cols = {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})};
+    WRAP_FOR_JOIN_TEST_BEGIN
     ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1471,6 +1473,7 @@ try
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     /// case 1.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
     {
@@ -1533,6 +1536,7 @@ try
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
         }
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
