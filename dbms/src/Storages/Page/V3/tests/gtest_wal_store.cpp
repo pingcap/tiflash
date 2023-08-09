@@ -411,7 +411,7 @@ TEST_P(WALStoreTest, Empty)
     ASSERT_NE(wal, nullptr);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -464,7 +464,7 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -497,7 +497,7 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -532,7 +532,7 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -603,7 +603,7 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -619,7 +619,7 @@ try
         std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto record = reader->next();
+            auto [_, record] = reader->next();
             if (!record)
             {
                 reader->throwIfError();
@@ -720,7 +720,7 @@ try
         std::set<std::shared_ptr<const String>, Comparator> result_file_ids;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -787,7 +787,7 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -819,7 +819,7 @@ try
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     file_snap.num_records = snap_edit.size();
-    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit));
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit), 0);
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
@@ -830,7 +830,7 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -901,7 +901,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         // empty
         PageEntriesEdit snap_edit;
         files.num_records = snap_edit.size();
-        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit));
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }
@@ -940,7 +940,7 @@ TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
         auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto record = reader->next();
+            auto [_, record] = reader->next();
             if (!record)
             {
                 reader->throwIfError();
