@@ -104,7 +104,6 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
-    prepareForInputStream(context, res.in);
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
