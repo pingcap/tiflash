@@ -125,7 +125,7 @@ private:
     ReportCollector reporter;
     const ReadLimiterPtr read_limiter;
 
-    bool checkpoint_read_done;
+    bool checkpoint_reader_created;
     bool reading_checkpoint_file;
     const std::optional<LogFilename> checkpoint_file;
     const LogFilenameSet files_to_read;
