@@ -146,7 +146,11 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
+<<<<<<< HEAD
                     "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
+=======
+                    "tryFlushRegionCacheInStorage can not get table, region {} table_id={}, ignored",
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
                     region.toString(),
                     table_id);
         return true;
@@ -166,12 +170,14 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     catch (DB::Exception & e)
     {
         // We can ignore if storage is already dropped.
-        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            return true;
+        else
             throw;
     }
-    return true;
 }
 
+<<<<<<< HEAD
 void KVStore::tryPersistRegion(RegionID region_id)
 {
     auto region = getRegion(region_id);
@@ -182,6 +188,9 @@ void KVStore::tryPersistRegion(RegionID region_id)
 }
 
 void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
+=======
+void KVStore::gcPersistedRegion(Seconds gc_persist_period)
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
 {
     {
         decltype(bg_gc_region_data) tmp;
@@ -239,52 +248,11 @@ RegionManager::RegionWriteLock KVStore::genRegionMgrWriteLock(const KVStoreTaskL
 }
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
-    raft_cmdpb::RaftCmdRequest && request,
+    const WriteCmdsView & cmds,
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
     TMTContext & tmt) const
-{
-    std::vector<BaseBuffView> keys;
-    std::vector<BaseBuffView> vals;
-    std::vector<WriteCmdType> cmd_types;
-    std::vector<ColumnFamilyType> cmd_cf;
-    keys.reserve(request.requests_size());
-    vals.reserve(request.requests_size());
-    cmd_types.reserve(request.requests_size());
-    cmd_cf.reserve(request.requests_size());
-
-    for (const auto & req : request.requests())
-    {
-        auto type = req.cmd_type();
-
-        switch (type)
-        {
-        case raft_cmdpb::CmdType::Put:
-            keys.push_back({req.put().key().data(), req.put().key().size()});
-            vals.push_back({req.put().value().data(), req.put().value().size()});
-            cmd_types.push_back(WriteCmdType::Put);
-            cmd_cf.push_back(NameToCF(req.put().cf()));
-            break;
-        case raft_cmdpb::CmdType::Delete:
-            keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
-            vals.push_back({nullptr, 0});
-            cmd_types.push_back(WriteCmdType::Del);
-            cmd_cf.push_back(NameToCF(req.delete_().cf()));
-            break;
-        default:
-            throw Exception(fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-    return handleWriteRaftCmd(
-        WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
-        region_id,
-        index,
-        term,
-        tmt);
-}
-
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -372,6 +340,7 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
+<<<<<<< HEAD
     if (force_persist)
     {
         auto & curr_region = *curr_region_ptr;
@@ -383,9 +352,23 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         return true;
     }
     else
+=======
+
+    if (!force_persist)
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
     {
+        // try to flush RegionData according to the mem cache rows/bytes/interval
         return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
     }
+
+    // force persist
+    auto & curr_region = *curr_region_ptr;
+    LOG_DEBUG(log, "flush region due to tryFlushRegionData by force, region_id={} term={} index={}", curr_region.id(), term, index);
+    if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Force flush region failed, region_id={}", region_id);
+    }
+    return true;
 }
 
 bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
@@ -409,11 +392,12 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     else
     {
-        // if there is little data in mem, wait until time interval reached threshold.
-        // use random period so that lots of regions will not be persisted at same time.
+        // If there is little data in mem, wait until time interval reached threshold.
+        // Use random period so that lots of regions will not be persisted at same time.
         auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
         can_flush = !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
     }
+    // one of rows/bytes/interval satisfy
     if (can_flush && flush_if_possible)
     {
         LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
@@ -430,18 +414,18 @@ bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succ
         // We set actual index when handling CompactLog.
         curr_region.handleWriteRaftCmd({}, index, term, tmt);
     }
-    if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
-    {
-        persistRegion(curr_region, &region_task_lock, "tryFlushRegionData");
-        curr_region.markCompactLog();
-        curr_region.cleanApproxMemCacheInfo();
-        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
-        return true;
-    }
-    else
+
+    if (!tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
         return false;
     }
+
+    // flush cache in storage level is done, persist the region info
+    persistRegion(curr_region, &region_task_lock, "tryFlushRegionData");
+    curr_region.markCompactLog();
+    curr_region.cleanApproxMemCacheInfo();
+    GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
+    return true;
 }
 
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(

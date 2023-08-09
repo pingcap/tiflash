@@ -19,6 +19,7 @@
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
@@ -676,7 +677,7 @@ void MockRaftStoreProxy::doApply(
     if (cmd.has_raw_write_request())
     {
         // TiFlash write
-        kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
+        RegionBench::applyWriteRaftCmd(kvs, std::move(request), region_id, index, term, tmt);
     }
     if (cmd.has_admin_request())
     {
@@ -742,6 +743,7 @@ std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
 {
     assert(freezed);
     std::vector<SSTView> sst_views;
+    sst_views.reserve(sst_files.size());
     for (const auto & sst_file : sst_files)
     {
         sst_views.push_back(SSTView{

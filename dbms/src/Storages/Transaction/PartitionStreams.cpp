@@ -60,8 +60,8 @@ static void writeRegionDataToStorage(
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
-    auto keyspace_id = region->getKeyspaceID();
-    TableID table_id = region->getMappedTableID();
+    const auto keyspace_id = region->getKeyspaceID();
+    const auto table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
@@ -121,7 +121,11 @@ static void writeRegionDataToStorage(
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
+<<<<<<< HEAD
             LOG_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
+=======
+            LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
             block_decoding_schema_version = decoding_schema_snapshot->decoding_schema_version;
@@ -159,7 +163,11 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_decoding_schema_version, std::move(block_ptr));
 
+<<<<<<< HEAD
         LOG_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
+=======
+        LOG_TRACE(log, "keyspace={} table_id={} region_id={} cost [region decode {}, write part {}] ms", keyspace_id, table_id, region->id(), region_decode_cost, write_part_cost);
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
         return true;
     };
 
@@ -187,14 +195,25 @@ static void writeRegionDataToStorage(
     /// If first try failed, sync schema and force read then write.
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
+<<<<<<< HEAD
         tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
 
+=======
+        Stopwatch watch;
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(log, "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
+<<<<<<< HEAD
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
                             ErrorCodes::LOGICAL_ERROR);
+=======
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Write region failed! region_id={} keyspace={} table_id={}", region->id(), keyspace_id, table_id);
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
         }
     }
 }
@@ -405,7 +424,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
-    LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
+    LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema, keyspace={} table_id={}", keyspace_id, table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
@@ -429,11 +448,21 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     if (!atomic_get(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
+<<<<<<< HEAD
         tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
                             ErrorCodes::LOGICAL_ERROR);
+=======
+        Stopwatch watch;
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(Logger::get("AtomicGetStorageSchema"), "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
+
+        if (!atomic_get(true))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "AtomicGetStorageSchema failed, region={} keyspace={} table_id={}", region->toString(), keyspace_id, table_id);
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
     }
 
     return {std::move(drop_lock), std::move(dm_storage), std::move(schema_snapshot)};

@@ -92,7 +92,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
+    void gcPersistedRegion(Seconds gc_persist_period = Seconds(60 * 5));
 
     void tryPersistRegion(RegionID region_id);
 
@@ -107,12 +107,11 @@ public:
         UInt64 term,
         TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(
-        raft_cmdpb::RaftCmdRequest && request,
+        const WriteCmdsView & cmds,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt) const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const;
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);

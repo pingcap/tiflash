@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Parsers/IAST.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <kvproto/raft_cmdpb.pb.h>
@@ -32,6 +33,8 @@ class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
+class KVStore;
+class TMTContext;
 } // namespace DB
 
 namespace DB::RegionBench
@@ -75,4 +78,14 @@ TableID getTableID(Context & context, const std::string & database_name, const s
 
 const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name);
 
+<<<<<<< HEAD
+=======
+EngineStoreApplyRes applyWriteRaftCmd(
+    KVStore & kvstore,
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt);
+>>>>>>> 8d28949ca3 (Some code refactor on the Raft layer (#7863))
 } // namespace DB::RegionBench
