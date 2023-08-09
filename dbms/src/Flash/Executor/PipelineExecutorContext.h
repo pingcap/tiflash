@@ -20,7 +20,6 @@
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
-#include <Storages/Transaction/Types.h>
 
 #include <atomic>
 #include <exception>

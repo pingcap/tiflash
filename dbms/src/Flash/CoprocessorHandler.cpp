@@ -109,12 +109,14 @@ grpc::Status CoprocessorHandler::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
+            const String & resource_group_name = cop_request->context().resource_control_context().resource_group_name();
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 /*is_batch_cop=*/false,
+                resource_group_name,
                 Logger::get("CoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 

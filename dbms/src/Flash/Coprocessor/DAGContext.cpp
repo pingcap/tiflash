@@ -42,7 +42,7 @@ bool strictSqlMode(UInt64 sql_mode)
 }
 
 // for non-mpp(cop/batchCop)
-DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, const String & resource_group_name_, LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -59,6 +59,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tab
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(keyspace_id_)
+    , resource_group_name(resource_group_name_)
 {
     initOutputInfo();
 }
