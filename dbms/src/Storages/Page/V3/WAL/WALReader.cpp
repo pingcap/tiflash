@@ -77,11 +77,12 @@ LogFilenameSet WALStoreReader::listAllFiles(
                 break;
             }
             case LogFileStage::Temporary:
-                [[fallthrough]];
+            {
+                break;
+            }
             case LogFileStage::Invalid:
             {
-                // TODO: clean
-                break;
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown logfile name, parent_path={} filename={}", parent_path, file.filename);
             }
             }
         }
@@ -213,7 +214,7 @@ WALStoreReader::WALStoreReader(String storage_name,
                                const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
-    , checkpoint_read_done(!checkpoint.has_value())
+    , checkpoint_reader_created(!checkpoint.has_value())
     , reading_checkpoint_file(false)
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
@@ -229,7 +230,7 @@ bool WALStoreReader::remained() const
 
     if (!reader->isEOF())
         return true;
-    if (checkpoint_read_done && next_reading_file != files_to_read.end())
+    if (checkpoint_reader_created && next_reading_file != files_to_read.end())
         return true;
     return false;
 }
@@ -262,15 +263,15 @@ std::pair<bool, std::optional<String>> WALStoreReader::next()
 
 bool WALStoreReader::openNextFile()
 {
-    if (checkpoint_read_done && next_reading_file == files_to_read.end())
+    if (checkpoint_reader_created && next_reading_file == files_to_read.end())
     {
         return false;
     }
 
-    if (!checkpoint_read_done)
+    if (!checkpoint_reader_created)
     {
         reader = createLogReader(*checkpoint_file, provider, &reporter, recovery_mode, read_limiter, logger);
-        checkpoint_read_done = true;
+        checkpoint_reader_created = true;
         reading_checkpoint_file = true;
     }
     else
