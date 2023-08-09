@@ -670,7 +670,8 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     context.getDAGContext()->addRemoteReadThreadCnt(concurrent_num);
 
-    auto cop_iter = std::make_shared<pingcap::coprocessor::ResponseIter>(std::make_unique<CopIterQueue>(context.getSettingsRef().remote_read_queue_size), std::move(all_tasks), cluster, concurrent_num, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter);
+    size_t queue_size = context.getSettingsRef().remote_read_queue_size > 0 ? context.getSettingsRef().remote_read_queue_size.get() : concurrent_num * 4;
+    auto cop_iter = std::make_shared<pingcap::coprocessor::ResponseIter>(std::make_unique<CopIterQueue>(queue_size), std::move(all_tasks), cluster, concurrent_num, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter);
 
     bool is_cop_stream = context.getSettingsRef().enable_cop_stream_for_remote_read;
     size_t reader_num = is_cop_stream ? context.getSettingsRef().max_threads.get() : concurrent_num;
@@ -699,7 +700,8 @@ void DAGStorageInterpreter::buildRemoteExec(
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     context.getDAGContext()->addRemoteReadThreadCnt(concurrent_num);
 
-    auto cop_iter = std::make_shared<pingcap::coprocessor::ResponseIter>(std::make_unique<CopIterQueue>(context.getSettingsRef().remote_read_queue_size), std::move(all_tasks), cluster, concurrent_num, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter);
+    size_t queue_size = context.getSettingsRef().remote_read_queue_size > 0 ? context.getSettingsRef().remote_read_queue_size.get() : concurrent_num * 4;
+    auto cop_iter = std::make_shared<pingcap::coprocessor::ResponseIter>(std::make_unique<CopIterQueue>(queue_size), std::move(all_tasks), cluster, concurrent_num, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter);
 
     bool is_cop_stream = context.getSettingsRef().enable_cop_stream_for_remote_read;
     size_t reader_num = is_cop_stream ? context.getSettingsRef().max_threads.get() : concurrent_num;

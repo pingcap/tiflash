@@ -312,7 +312,7 @@ struct Settings
     M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
     M(SettingUInt64, ddl_sync_interval_seconds, 60, "The interval of background DDL sync schema in seconds")                                                                                                                            \
     M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")                                                                                                                            \
-    M(SettingInt64, remote_read_queue_size, 16, "size of remote read queue for each coprocessor reader")                                                                                                                                \
+    M(SettingInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                                \
     M(SettingBool, enable_cop_stream_for_remote_read, true, "Enable cop stream for remote read")
 
 
