@@ -87,16 +87,6 @@ public:
     MemoryTrackerPtr mem_tracker;
 };
 
-void nopConsumeResource(const std::string &, const KeyspaceID &, double, uint64_t) {}
-double nopGetPriority(const std::string &, const KeyspaceID &)
-{
-    return 10;
-}
-bool nopIsResourceGroupThrottled(const std::string &)
-{
-    return false;
-}
-
 void staticConsumeResource(const std::string & name, const KeyspaceID &, double ru, uint64_t cpu_time_ns)
 {
     std::lock_guard lock(LocalAdmissionController::global_instance->mu);

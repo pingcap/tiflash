@@ -24,15 +24,25 @@ namespace DB
 {
 
 class ResourceGroup;
+inline void nopConsumeResource(const std::string &, const KeyspaceID &, double, uint64_t) {}
+inline double nopGetPriority(const std::string &, const KeyspaceID &)
+{
+    return 10;
+}
+inline bool nopIsResourceGroupThrottled(const std::string &)
+{
+    return false;
+}
+
 
 // This is only for ResourceControlQueue gtest.
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
     MockLocalAdmissionController()
-        : consume_resource_func(nullptr)
-        , get_priority_func(nullptr)
-        , is_resource_group_throttled_func(nullptr)
+        : consume_resource_func(nopConsumeResource)
+        , get_priority_func(nopGetPriority)
+        , is_resource_group_throttled_func(nopIsResourceGroupThrottled)
     {}
 
     ~MockLocalAdmissionController() = default;
