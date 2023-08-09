@@ -113,7 +113,7 @@ public:
     metapb::Region cloneMetaRegion() const;
     const raft_serverpb::MergeState & getMergeState() const;
     raft_serverpb::MergeState cloneMergeState() const;
-    const RegionState & getRegionState() const { return region_state; };
+    const RegionState & getRegionState() const;
 
     RegionMeta() = delete;
 

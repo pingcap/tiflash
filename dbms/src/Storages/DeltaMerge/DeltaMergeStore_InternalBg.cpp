@@ -402,10 +402,6 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         case TaskType::FlushDTAndKVStore:
         {
             // TODO(proactive flush)
-            // auto & tmt = task.dm_context->db_context.getTMTContext();
-            // auto & kv_store = tmt.getKVStore();
-            // kv_store->proactiveFlushCacheAndRegion(tmt, task.segment->getRowKeyRange(), keyspace_id, physical_table_id, true);
-            // task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }
         case TaskType::PlaceIndex:

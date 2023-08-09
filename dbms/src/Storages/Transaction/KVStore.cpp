@@ -313,14 +313,6 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(const WriteCmdsView & cmds,
     /// 1. No other thread can write from raft to this region even if we unlocked here.
     /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
     // TODO(proactive flush)
-    // if (write_result)
-    // {
-    //     auto & inner = write_result.value();
-    //     for (auto it = inner.pending_flush_ranges.begin(); it != inner.pending_flush_ranges.end(); it++)
-    //     {
-    //         proactiveFlushCacheAndRegion(tmt, *it, inner.keyspace_id, inner.table_id, false);
-    //     }
-    // }
     return res;
 }
 

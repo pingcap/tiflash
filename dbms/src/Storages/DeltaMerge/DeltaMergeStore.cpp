@@ -1422,7 +1422,6 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
     // TODO(proactive flush)
-    // bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes);
     bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
@@ -1536,10 +1535,6 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             }
         }
         // TODO(proactive flush)
-        // if (should_background_compact_log)
-        // {
-        //     try_add_background_task(BackgroundTask{TaskType::FlushDTAndKVStore, dm_context, segment});
-        // }
     }
 
     // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,
