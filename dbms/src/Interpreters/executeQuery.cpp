@@ -146,6 +146,18 @@ void onExceptionBeforeStart(const String & query, Context & context, time_t curr
     }
 }
 
+void prepareForInputStream(
+    Context & context,
+    const BlockInputStreamPtr & in)
+{
+    assert(in);
+    if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(in.get()))
+    {
+        stream->setProgressCallback(context.getProgressCallback());
+        stream->setProcessListElement(context.getProcessListElement());
+    }
+}
+
 std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     IQuerySource & query_src,
     Context & context,
@@ -384,18 +396,6 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
         current_query_id,
         (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
         joinLines(query));
-}
-
-void prepareForInputStream(
-    Context & context,
-    const BlockInputStreamPtr & in)
-{
-    assert(in);
-    if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(in.get()))
-    {
-        stream->setProgressCallback(context.getProgressCallback());
-        stream->setProcessListElement(context.getProcessListElement());
-    }
 }
 
 std::shared_ptr<ProcessListEntry> setProcessListElement(
