@@ -152,9 +152,10 @@ static const metapb::Peer & findPeerByStore(const metapb::Region & region, UInt6
             return peer;
     }
 
-    throw Exception(
-        std::string(__PRETTY_FUNCTION__) + ": peer with store_id " + DB::toString(store_id) + " not found",
-        ErrorCodes::LOGICAL_ERROR);
+    throw Exception(ErrorCodes::LOGICAL_ERROR,
+                    "{}: peer not found, store_id={}",
+                    __PRETTY_FUNCTION__,
+                    store_id);
 }
 
 Regions RegionRaftCommandDelegate::execBatchSplit(
@@ -421,6 +422,11 @@ std::string Region::getDebugString() const
         meta_snap.peer.ShortDebugString());
 }
 
+std::string Region::toString(bool dump_status) const
+{
+    return meta.toString(dump_status);
+}
+
 RegionID Region::id() const
 {
     return meta.regionId();
@@ -482,7 +488,7 @@ std::string Region::dataInfo() const
     return buff.toString();
 }
 
-void Region::markCompactLog() const
+void Region::markCompactLog()
 {
     last_compact_log_time = Clock::now();
 }
@@ -500,11 +506,6 @@ Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need
 Region::CommittedRemover Region::createCommittedRemover(bool use_lock)
 {
     return Region::CommittedRemover(this->shared_from_this(), use_lock);
-}
-
-std::string Region::toString(bool dump_status) const
-{
-    return meta.toString(dump_status);
 }
 
 ImutRegionRangePtr Region::getRange() const
@@ -810,7 +811,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     return EngineStoreApplyRes::None;
 }
 
-void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term)
+void Region::finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UInt64 term)
 {
     if (index <= appliedIndex())
         return;
@@ -818,17 +819,17 @@ void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
 
-        if (rhs)
+        if (temp_region)
         {
-            // Merge the uncommitted data from `rhs`
-            // (we have taken the ownership of `rhs`, so don't acquire lock on `rhs.mutex`)
-            data.mergeFrom(rhs->data);
+            // Merge the uncommitted data from `temp_region`.
+            // As we have taken the ownership of `temp_region`, so don't need to acquire lock on `temp_region.mutex`
+            data.mergeFrom(temp_region->data);
         }
 
         meta.setApplied(index, term);
     }
     LOG_INFO(log,
-             "{} finish ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
+             "{} finish ingest sst by DTFile, write_cf_keys={} default_cf_keys={} lock_cf_keys={}",
              this->toString(false),
              data.write_cf.getSize(),
              data.default_cf.getSize(),
@@ -856,8 +857,8 @@ Region::Region(RegionMeta && meta_)
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
     , log(Logger::get())
-    , mapped_table_id(meta.getRange()->getMappedTableID())
     , keyspace_id(meta.getRange()->getKeyspaceID())
+    , mapped_table_id(meta.getRange()->getMappedTableID())
     , proxy_helper(proxy_helper_)
 {}
 
