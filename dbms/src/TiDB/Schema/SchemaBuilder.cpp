@@ -479,7 +479,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_table).Increment();
     LOG_INFO(
         log,
-        "Renaming table {}.{} (display name: {}) to {} with database_id={}, table_id={}.",
+        "Renaming table {}.{} (display name: {}) to {} with database_id={}, table_id={}",
         old_mapped_db_name,
         old_mapped_tbl_name,
         old_display_table_name,
@@ -542,7 +542,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(const TiDB::DB
         if (!storage->isTombstone())
         {
             LOG_DEBUG(log,
-                      "Trying to recover table {} with database_id={}, table_id={} but it already exists and is not marked as tombstone",
+                      "Trying to recover table {} but it already exists and is not marked as tombstone, database_id={} table_id={}",
                       name_mapper.debugCanonicalName(*db_info, *table_info),
                       db_info->id,
                       table_info->id);
@@ -790,7 +790,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const TiDB::DBI
             if (!storage->isTombstone())
             {
                 LOG_DEBUG(log,
-                          "Trying to create table {} with database_id={}, table_id={}, but it already exists and is not marked as tombstone",
+                          "Trying to create table {}, but it already exists and is not marked as tombstone, database_id={} table_id={}",
                           name_mapper.debugCanonicalName(*db_info, *table_info),
                           db_info->id,
                           table_info->id);
@@ -1008,7 +1008,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     {
         if (!table_info->isLogicalPartitionTable())
         {
-            LOG_ERROR(log, "new table in TiKV is not partition table {}, database_id={}, table_id={}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id), database_id, table_info->id);
+            LOG_ERROR(log, "new table in TiKV is not partition table {}, database_id={} table_id={}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id), database_id, table_info->id);
             return;
         }
         try
@@ -1040,7 +1040,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     }
     else
     {
-        LOG_INFO(log, "Altering table {}, database_id={}, table_id={}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id), database_id, table_info->id);
+        LOG_INFO(log, "Altering table {}, database_id={} table_id={}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id), database_id, table_info->id);
         GET_METRIC(tiflash_schema_internal_ddl_count, type_modify_column).Increment();
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
 
