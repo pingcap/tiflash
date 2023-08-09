@@ -28,7 +28,7 @@ public:
     Int64 triggerAutoSpill(Int64 expected_released_memories)
     {
         std::unique_lock lock(mutex, std::try_to_lock);
-        /// under_auto_spill_check avoid concurrent check, todo maybe need add minimum check interval(like 100ms) here?
+        /// use mutex to avoid concurrent check, todo maybe need add minimum check interval(like 100ms) here?
         if (lock.owns_lock())
         {
             if unlikely (!first_check)
@@ -38,12 +38,12 @@ public:
             }
             /// vector of <index, revocable_memories>
             std::vector<std::pair<size_t, Int64>> revocable_memories(task_operator_spill_contexts_vec.size());
-            bool has_finished_mpp_task = false;
+            bool has_finished_task = false;
             for (size_t i = 0; i < task_operator_spill_contexts_vec.size(); ++i)
             {
                 revocable_memories[i] = std::make_pair(i, task_operator_spill_contexts_vec[i]->totalRevocableMemories());
                 if (task_operator_spill_contexts_vec[i]->isFinished())
-                    has_finished_mpp_task = true;
+                    has_finished_task = true;
             }
             std::sort(revocable_memories.begin(), revocable_memories.end(), [](const std::pair<size_t, Int64> & a, std::pair<size_t, Int64> & b) {
                 return a.second > b.second;
@@ -56,15 +56,16 @@ public:
                 if (expected_released_memories <= 0)
                     break;
             }
-            if (has_finished_mpp_task)
+            if (has_finished_task)
             {
-                /// clean finished mpp task
+                /// clean finished task
                 task_operator_spill_contexts_vec.erase(std::remove_if(task_operator_spill_contexts_vec.begin(), task_operator_spill_contexts_vec.end(), [](const auto & contexts) { return contexts->isFinished(); }), task_operator_spill_contexts_vec.end());
             }
             return expected_released_memories;
         }
         return expected_released_memories;
     }
+
     void registerTaskOperatorSpillContexts(const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)
     {
         std::unique_lock lock(mutex);
