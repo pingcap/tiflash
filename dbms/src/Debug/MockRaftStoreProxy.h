@@ -282,7 +282,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<Cf> && cfs,
         uint64_t index,
         uint64_t term,
-        std::optional<uint64_t> deadline_index);
+        std::optional<uint64_t> deadline_index,
+        bool cancel_after_prehandle = false);
 
     void doApply(
         KVStore & kvs,

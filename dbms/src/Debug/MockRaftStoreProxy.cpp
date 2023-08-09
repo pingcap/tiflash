@@ -19,6 +19,7 @@
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/KVStore.h>
@@ -754,7 +755,7 @@ void MockRaftStoreProxy::doApply(
     {
         // TiFlash write
         DB::DM::WriteResult write_task;
-        kvs.handleWriteRaftCmdDebug(std::move(request), region_id, index, term, tmt, write_task);
+        RegionBench::applyWriteRaftCmd(kvs, std::move(request), region_id, index, term, tmt, &write_task);
         if (check_proactive_flush)
         {
             if (check_proactive_flush.value())
@@ -864,6 +865,7 @@ std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
 {
     assert(freezed);
     std::vector<SSTView> sst_views;
+    sst_views.reserve(sst_files.size());
     for (const auto & sst_file : sst_files)
     {
         sst_views.push_back(SSTView{
@@ -905,7 +907,8 @@ RegionPtr MockRaftStoreProxy::snapshot(
     std::vector<Cf> && cfs,
     uint64_t index,
     uint64_t term,
-    std::optional<uint64_t> deadline_index)
+    std::optional<uint64_t> deadline_index,
+    bool cancel_after_prehandle)
 {
     auto region = getRegion(region_id);
     auto old_kv_region = kvs.getRegion(region_id);
@@ -939,7 +942,13 @@ RegionPtr MockRaftStoreProxy::snapshot(
         deadline_index,
         tmt);
 
-    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)}, tmt);
+    auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)};
+    if (cancel_after_prehandle)
+    {
+        kvs.releasePreHandledSnapshot(rg, tmt);
+        return kvs.getRegion(region_id);
+    }
+    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(rg, tmt);
     region->updateAppliedIndex(index);
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
     new_kv_region->setApplied(index, term);

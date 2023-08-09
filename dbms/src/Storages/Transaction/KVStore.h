@@ -120,7 +120,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
+    void gcPersistedRegion(Seconds gc_persist_period = Seconds(60 * 5));
 
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
@@ -133,21 +133,18 @@ public:
         UInt64 term,
         TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(
-        raft_cmdpb::RaftCmdRequest && request,
+        const WriteCmdsView & cmds,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmdDebug(raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result);
     EngineStoreApplyRes handleWriteRaftCmdInner(
-        raft_cmdpb::RaftCmdRequest && request,
+        const WriteCmdsView & cmds,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt,
         DM::WriteResult & write_result);
-    EngineStoreApplyRes handleWriteRaftCmdInner(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term, uint64_t truncated_index, uint64_t truncated_term);
@@ -170,6 +167,9 @@ public:
         TMTContext & tmt);
     template <typename RegionPtrWrap>
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    template <typename RegionPtrWrap>
+    void releasePreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64, UInt64);
@@ -292,6 +292,35 @@ private:
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
+    struct PreHandlingTrace : MutexLockWrap
+    {
+        std::unordered_map<uint64_t, std::shared_ptr<std::atomic_bool>> tasks;
+
+        std::shared_ptr<std::atomic_bool> registerTask(uint64_t region_id)
+        {
+            // Automaticlly override the old one.
+            genLockGuard();
+            auto b = std::make_shared<std::atomic_bool>(false);
+            tasks[region_id] = b;
+            return b;
+        }
+        std::shared_ptr<std::atomic_bool> deregisterTask(uint64_t region_id)
+        {
+            genLockGuard();
+            auto it = tasks.find(region_id);
+            if (it != tasks.end())
+            {
+                auto b = it->second;
+                tasks.erase(it);
+                return b;
+            }
+            else
+            {
+                return nullptr;
+            }
+        }
+    };
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -323,6 +352,8 @@ private:
     ReadIndexWorkerManager * read_index_worker_manager{nullptr};
 
     std::atomic_int64_t read_index_event_flag{0};
+
+    PreHandlingTrace prehandling_trace;
 
     StoreMeta store;
 };

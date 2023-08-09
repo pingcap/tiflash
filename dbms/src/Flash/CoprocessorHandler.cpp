@@ -154,6 +154,9 @@ grpc::Status CoprocessorHandler::execute()
         errorpb::Error * region_err;
         switch (e.status)
         {
+        case RegionException::RegionReadStatus::OTHER:
+        case RegionException::RegionReadStatus::NOT_LEADER:
+        case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
         case RegionException::RegionReadStatus::NOT_FOUND:
             GET_METRIC(tiflash_coprocessor_request_error, reason_region_not_found).Increment();
             region_err = cop_response->mutable_region_error();

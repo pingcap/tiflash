@@ -160,6 +160,8 @@ RawCppPtr PreHandleSnapshot(
     uint64_t index,
     uint64_t term);
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
+void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id);
+void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
@@ -208,6 +210,8 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_get_engine_store_server_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
+        .fn_abort_pre_handle_snapshot = AbortPreHandledSnapshot,
+        .fn_release_pre_handled_snapshot = ReleasePreHandledSnapshot,
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,

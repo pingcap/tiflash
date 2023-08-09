@@ -314,8 +314,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
 std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
-    uint64_t /*index*/,
-    uint64_t /*term*/,
+    uint64_t index,
+    uint64_t term,
     DM::FileConvertJobType job_type,
     TMTContext & tmt)
 {
@@ -337,6 +337,9 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 
     std::vector<DM::ExternalDTFileInfo> generated_ingest_ids;
     TableID physical_table_id = InvalidTableID;
+
+    auto region_id = new_region->id();
+    auto prehandle_task = prehandling_trace.registerTask(region_id);
     while (true)
     {
         // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
@@ -387,11 +390,18 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 job_type,
                 /* split_after_rows */ global_settings.dt_segment_limit_rows,
                 /* split_after_size */ global_settings.dt_segment_limit_size,
+                region_id,
+                prehandle_task,
                 context);
 
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
+            if (stream->isAbort())
+            {
+                LOG_INFO(log, "Apply snapshot is aborted, cancelling. region_id={} term={} index={}", region_id, term, index);
+                stream->cancel();
+            }
             generated_ingest_ids = stream->outputFiles();
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
@@ -465,6 +475,37 @@ template void KVStore::checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFile
 template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TMTContext &);
 template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, RegionPtr, UInt64, TMTContext &);
 
+template <>
+void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles & s, TMTContext & tmt)
+{
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = s.base->getKeyspaceID();
+    auto table_id = s.base->getMappedTableID();
+    auto storage = storages.get(keyspace_id, table_id);
+    if (storage->engineType() != TiDB::StorageEngine::DT)
+    {
+        return;
+    }
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    LOG_INFO(log, "Release prehandled snapshot, clean {} dmfiles, region_id={} keyspace={} table_id={}", s.external_files.size(), s.base->id(), keyspace_id, table_id);
+    auto & context = tmt.getContext();
+    dm_storage->cleanPreIngestFiles(s.external_files, context.getSettingsRef());
+}
+
+void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
+{
+    UNUSED(tmt);
+    auto task = prehandling_trace.deregisterTask(region_id);
+    if (task)
+    {
+        LOG_INFO(log, "Try cancel pre-handling from upper layer [region_id={}] but not found", region_id);
+        task->store(true, std::memory_order_seq_cst);
+    }
+    else
+    {
+        LOG_INFO(log, "Start cancel pre-handling from upper layer [region_id={}]", region_id);
+    }
+}
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
 {

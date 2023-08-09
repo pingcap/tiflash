@@ -60,8 +60,8 @@ static DM::WriteResult writeRegionDataToStorage(
     const LoggerPtr & log)
 {
     const auto & tmt = context.getTMTContext();
-    auto keyspace_id = region->getKeyspaceID();
-    TableID table_id = region->getMappedTableID();
+    const auto keyspace_id = region->getKeyspaceID();
+    const auto table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     DM::WriteResult write_result = std::nullopt;
@@ -119,7 +119,7 @@ static DM::WriteResult writeRegionDataToStorage(
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
-            LOG_TRACE(log, "begin to decode table_id={} region_id={}", table_id, region->id());
+            LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
             block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
@@ -161,7 +161,7 @@ static DM::WriteResult writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
 
-        LOG_TRACE(log, "table_id={} region_id={} cost [region decode {}, write part {}] ms", table_id, region->id(), region_decode_cost, write_part_cost);
+        LOG_TRACE(log, "keyspace={} table_id={} region_id={} cost [region decode {}, write part {}] ms", keyspace_id, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
     };
 
@@ -192,12 +192,12 @@ static DM::WriteResult writeRegionDataToStorage(
         Stopwatch watch;
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();
-        LOG_INFO(log, "Table {} sync schema cost {} ms", table_id, schema_sync_cost);
+        LOG_INFO(log, "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Write region failed! region_id={} table_id={}", region->id(), table_id);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Write region failed! region_id={} keyspace={} table_id={}", region->id(), keyspace_id, table_id);
         }
         return write_result;
     }
@@ -412,7 +412,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
-    LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
+    LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema, keyspace={} table_id={}", keyspace_id, table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
@@ -439,10 +439,10 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         Stopwatch watch;
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();
-        LOG_INFO(Logger::get("AtomicGetStorageSchema"), "Table {} sync schema cost {} ms", table_id, schema_sync_cost);
+        LOG_INFO(Logger::get("AtomicGetStorageSchema"), "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
 
         if (!atomic_get(true))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "AtomicGetStorageSchema failed, region={} table_id={}", region->toString(), table_id);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "AtomicGetStorageSchema failed, region={} keyspace={} table_id={}", region->toString(), keyspace_id, table_id);
     }
 
     return {std::move(drop_lock), std::move(dm_storage), std::move(schema_snapshot)};

@@ -43,7 +43,6 @@ extern const int UNKNOWN_DATABASE;
 namespace RegionBench
 {
 using TiDB::ColumnInfo;
-using TiDB::TableInfo;
 
 RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end, std::optional<uint64_t> index_)
 {
@@ -363,7 +362,8 @@ void insert( //
 
     raft_cmdpb::RaftCmdRequest request;
     addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStore()->handleWriteRaftCmd(
+    RegionBench::applyWriteRaftCmd(
+        *tmt.getKVStore(),
         std::move(request),
         region_id,
         MockTiKV::instance().getRaftIndex(region_id),
@@ -386,7 +386,8 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     raft_cmdpb::RaftCmdRequest request;
     addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, true);
-    tmt.getKVStore()->handleWriteRaftCmd(
+    RegionBench::applyWriteRaftCmd(
+        *tmt.getKVStore(),
         std::move(request),
         region_id,
         MockTiKV::instance().getRaftIndex(region_id),
@@ -427,7 +428,7 @@ struct BatchCtrl
     void encodeDatum(WriteBuffer & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        EncodeUInt(UInt8(flag), ss);
+        EncodeUInt(static_cast<UInt8>(flag), ss);
         switch (flag)
         {
         case TiDB::CodecFlagJson:
@@ -447,15 +448,15 @@ struct BatchCtrl
             memset(default_str.data(), target, default_str.size());
             return EncodeCompactBytes(default_str, ss);
         case TiDB::CodecFlagFloat:
-            return EncodeFloat64(Float64(magic_num) / 1111.1, ss);
+            return EncodeFloat64(static_cast<Float64>(magic_num) / 1111.1, ss);
         case TiDB::CodecFlagUInt:
-            return EncodeUInt<UInt64>(UInt64(magic_num), ss);
+            return EncodeUInt<UInt64>(static_cast<UInt64>(magic_num), ss);
         case TiDB::CodecFlagInt:
-            return EncodeInt64(Int64(magic_num), ss);
+            return EncodeInt64((magic_num), ss);
         case TiDB::CodecFlagVarInt:
-            return EncodeVarInt(Int64(magic_num), ss);
+            return EncodeVarInt((magic_num), ss);
         case TiDB::CodecFlagVarUInt:
-            return EncodeVarUInt(UInt64(magic_num), ss);
+            return EncodeVarUInt(static_cast<UInt64>(magic_num), ss);
         default:
             throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
         }
@@ -497,7 +498,13 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
             addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region->id(), MockTiKV::instance().getRaftIndex(region->id()), MockTiKV::instance().getRaftTerm(region->id()), tmt);
+        RegionBench::applyWriteRaftCmd(
+            *tmt.getKVStore(),
+            std::move(request),
+            region->id(),
+            MockTiKV::instance().getRaftIndex(region->id()),
+            MockTiKV::instance().getRaftTerm(region->id()),
+            tmt);
     }
 }
 
@@ -628,6 +635,72 @@ const TiDB::TableInfo & getTableInfo(Context & context, const String & database_
     auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
     return managed_storage->getTableInfo();
 }
+
+
+EngineStoreApplyRes applyWriteRaftCmd(
+    KVStore & kvstore,
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt,
+    DM::WriteResult * write_result_ptr
+)
+{
+    std::vector<BaseBuffView> keys;
+    std::vector<BaseBuffView> vals;
+    std::vector<WriteCmdType> cmd_types;
+    std::vector<ColumnFamilyType> cmd_cf;
+    keys.reserve(request.requests_size());
+    vals.reserve(request.requests_size());
+    cmd_types.reserve(request.requests_size());
+    cmd_cf.reserve(request.requests_size());
+
+    for (const auto & req : request.requests())
+    {
+        auto type = req.cmd_type();
+
+        switch (type)
+        {
+        case raft_cmdpb::CmdType::Put:
+            keys.push_back({req.put().key().data(), req.put().key().size()});
+            vals.push_back({req.put().value().data(), req.put().value().size()});
+            cmd_types.push_back(WriteCmdType::Put);
+            cmd_cf.push_back(NameToCF(req.put().cf()));
+            break;
+        case raft_cmdpb::CmdType::Delete:
+            keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
+            vals.push_back({nullptr, 0});
+            cmd_types.push_back(WriteCmdType::Del);
+            cmd_cf.push_back(NameToCF(req.delete_().cf()));
+            break;
+        default:
+            throw Exception(fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    if (write_result_ptr)
+    {
+        return kvstore.handleWriteRaftCmdInner(
+            WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
+            region_id,
+            index,
+            term,
+            tmt,
+            *write_result_ptr);
+    }
+    else
+    {
+        DM::WriteResult write_result;
+        return kvstore.handleWriteRaftCmdInner(
+            WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
+            region_id,
+            index,
+            term,
+            tmt,
+            write_result);
+    }
+}
+
 } // namespace RegionBench
 } // namespace DB
 namespace DB

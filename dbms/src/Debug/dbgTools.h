@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Parsers/IAST.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <kvproto/raft_cmdpb.pb.h>
@@ -32,6 +34,8 @@ class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
+class KVStore;
+class TMTContext;
 } // namespace DB
 
 namespace DB::RegionBench
@@ -74,6 +78,15 @@ Field convertField(const TiDB::ColumnInfo & column_info, const Field & field);
 TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id);
 
 const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name);
+
+EngineStoreApplyRes applyWriteRaftCmd(
+    KVStore & kvstore,
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt,
+    ::DB::DM::WriteResult * write_result_ptr = nullptr);
 } // namespace DB::RegionBench
 
 namespace DB

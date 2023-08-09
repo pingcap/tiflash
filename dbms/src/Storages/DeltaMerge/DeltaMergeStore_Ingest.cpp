@@ -102,6 +102,30 @@ void DeltaMergeStore::removePreIngestFile(PageIdU64 file_id, bool throw_on_not_e
     }
 }
 
+
+void DeltaMergeStore::cleanPreIngestFiles(const Context & db_context,
+                                          const DB::Settings & db_settings,
+                                          const std::vector<DM::ExternalDTFileInfo> & external_files)
+{
+    auto dm_context = newDMContext(db_context, db_settings);
+    auto delegate = dm_context->path_pool->getStableDiskDelegator();
+    auto file_provider = dm_context->db_context.getFileProvider();
+
+    for (const auto & f : external_files)
+    {
+        auto file_parent_path = delegate.getDTFilePath(f.id);
+        auto file = DM::DMFile::restore(
+            file_provider,
+            f.id,
+            f.id,
+            file_parent_path,
+            DM::DMFile::ReadMetaMode::memoryAndDiskSize());
+        removePreIngestFile(f.id, false);
+        file->remove(file_provider);
+    }
+}
+
+
 Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,

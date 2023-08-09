@@ -301,6 +301,10 @@ public:
     void preIngestFile(const String & parent_path, PageIdU64 file_id, size_t file_size);
     void removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist);
 
+    void cleanPreIngestFiles(const Context & db_context,
+                             const DB::Settings & db_settings,
+                             const std::vector<DM::ExternalDTFileInfo> & external_files);
+
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     /// Return the 'ingested bytes'.

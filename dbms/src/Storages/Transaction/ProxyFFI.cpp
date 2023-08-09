@@ -670,6 +670,35 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     }
 }
 
+void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+{
+    UNUSED(peer_id);
+    auto & kvstore = server->tmt->getKVStore();
+    kvstore->abortPreHandleSnapshot(region_id, *server->tmt);
+}
+
+void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
+{
+    if (static_cast<RawCppPtrTypeImpl>(type) != RawCppPtrTypeImpl::PreHandledSnapshotWithFiles)
+    {
+        LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+        exit(-1);
+    }
+
+    auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
+    try
+    {
+        auto s = RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)};
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->releasePreHandledSnapshot(s, *server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
 void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
