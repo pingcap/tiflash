@@ -113,7 +113,6 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, PageType pa
 
 Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -138,7 +137,6 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
 
 UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -190,7 +188,6 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
 
 UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
