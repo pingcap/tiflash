@@ -27,7 +27,7 @@ Block HashJoinBuildBlockInputStream::readImpl()
             if (join->finishOneBuild(stream_index))
             {
                 if (join->hasBuildSideMarkedSpillData(stream_index))
-                    join->flushBuildSideMarkedSpillData(stream_index, /*is_the_last=*/true);
+                    join->flushBuildSideMarkedSpillData(stream_index);
                 join->finalizeBuild();
             }
             return block;

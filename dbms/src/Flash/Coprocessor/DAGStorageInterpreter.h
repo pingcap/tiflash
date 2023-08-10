@@ -55,10 +55,6 @@ public:
 
     void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
-    /// Members will be transferred to DAGQueryBlockInterpreter after execute
-
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-
 private:
     struct StorageWithStructureLock
     {
@@ -120,13 +116,13 @@ private:
         const std::vector<RemoteRequest> & remote_requests);
 
     void executeCastAfterTableScan(
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
+        DAGPipeline & pipeline,
+        DAGExpressionAnalyzer & analyzer);
 
     void executeCastAfterTableScan(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
-        size_t remote_read_start_index);
+        DAGExpressionAnalyzer & analyzer);
 
     void prepare();
 

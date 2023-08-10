@@ -500,15 +500,16 @@ public:
 
     size_t copyCheckpointInfoFromEdit(const PageEntriesEdit & edit);
 
-    // Perform a GC for in-memory entries and return the removed entries.
-    // If `return_removed_entries` is false, then just return an empty set.
     struct InMemGCOption
     {
-        // if true collect the removed entries and return
+        // If true, gcInMemEntries will return the removed entries.
+        // If false, just return an empty set to reduce the memory
+        // and CPU overhead.
         bool need_removed_entries = true;
         // collect the valid size of remote ids if not nullptr
         RemoteFileValidSizes * remote_valid_sizes = nullptr;
     };
+    // Perform a GC for in-memory entries
     PageEntries gcInMemEntries(const InMemGCOption & options);
 
     // Get the external id that is not deleted or being ref by another id by

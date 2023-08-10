@@ -31,7 +31,7 @@ public:
 
     virtual void submit(std::vector<TaskPtr> & tasks) = 0;
 
-    // return false if the queue is empty and finished.
+    // Will return false if finished and all remaining tasks should be drained in destructor.
     virtual bool take(TaskPtr & task) = 0;
 
     // Update the execution metrics of the task taken from the queue.

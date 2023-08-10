@@ -288,12 +288,8 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
-                return true;
             case tipb::ExecType::TypeJoin:
-                // TODO support spill.
-                // If enforce_enable_pipeline is true, it will return true, even if the join does not actually support spill.
-                is_supported = (settings.max_bytes_before_external_join == 0 || settings.enforce_enable_pipeline);
-                return is_supported;
+                return true;
             default:
                 if (settings.enforce_enable_pipeline)
                     throw Exception(fmt::format(

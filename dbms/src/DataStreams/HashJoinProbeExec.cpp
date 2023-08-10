@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
@@ -19,6 +20,7 @@
 namespace DB
 {
 HashJoinProbeExecPtr HashJoinProbeExec::build(
+    const String & req_id,
     const JoinPtr & join,
     size_t stream_index,
     const BlockInputStreamPtr & probe_stream,
@@ -30,6 +32,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
         scan_hash_map_stream = join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), stream_index, join->getProbeConcurrency(), max_block_size);
 
     return std::make_shared<HashJoinProbeExec>(
+        req_id,
         join,
         stream_index,
         nullptr,
@@ -40,6 +43,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
 }
 
 HashJoinProbeExec::HashJoinProbeExec(
+    const String & req_id,
     const JoinPtr & join_,
     size_t stream_index_,
     const BlockInputStreamPtr & restore_build_stream_,
@@ -47,7 +51,8 @@ HashJoinProbeExec::HashJoinProbeExec(
     bool need_scan_hash_map_after_probe_,
     const BlockInputStreamPtr & scan_hash_map_after_probe_stream_,
     size_t max_block_size_)
-    : join(join_)
+    : log(Logger::get(req_id))
+    , join(join_)
     , stream_index(stream_index_)
     , restore_build_stream(restore_build_stream_)
     , probe_stream(probe_stream_)
@@ -150,17 +155,18 @@ HashJoinProbeExecPtr HashJoinProbeExec::tryGetRestoreExec()
 
 HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
 {
-    assert(join->isEnableSpill());
     /// first check if current join has a partition to restore
-    if (join->hasPartitionSpilledWithLock())
+    if (join->isSpilled() && join->hasPartitionSpilledWithLock())
     {
         /// get a restore join
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
         {
+            auto hash_join_build_stream = std::make_shared<HashJoinBuildBlockInputStream>(restore_info->build_stream, restore_info->join, restore_info->stream_index, log->identifier());
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
+                log->identifier(),
                 restore_info->join,
                 restore_info->stream_index,
-                restore_info->build_stream,
+                hash_join_build_stream,
                 restore_info->probe_stream,
                 need_scan_hash_map_after_probe,
                 restore_info->scan_hash_map_stream,
@@ -228,10 +234,15 @@ bool HashJoinProbeExec::onProbeFinish()
     if (join->finishOneProbe(stream_index))
     {
         if (join->hasProbeSideMarkedSpillData(stream_index))
-            join->flushProbeSideMarkedSpillData(stream_index, /*is_the_last=*/true);
+            join->flushProbeSideMarkedSpillData(stream_index);
         join->finalizeProbe();
     }
-    return !need_scan_hash_map_after_probe && !join->isEnableSpill();
+    /// once this function returns true, the join probe for current thread finishes completely.
+    /// it should return true if and only if
+    /// 1. no need to scan hash map after probe
+    /// 2. current join does spill
+    /// 3. current join is not a restore join
+    return !need_scan_hash_map_after_probe && !join->isSpilled() && !join->isRestoreJoin();
 }
 
 void HashJoinProbeExec::onScanHashMapAfterProbeStart()
@@ -249,14 +260,7 @@ Block HashJoinProbeExec::fetchScanHashMapData()
 bool HashJoinProbeExec::onScanHashMapAfterProbeFinish()
 {
     scan_hash_map_after_probe_stream->readSuffix();
-    if (!join->isEnableSpill())
-    {
-        return true;
-    }
-    else
-    {
-        join->finishOneNonJoin(stream_index);
-        return false;
-    }
+    join->finishOneNonJoin(stream_index);
+    return !join->isSpilled() && !join->isRestoreJoin();
 }
 } // namespace DB

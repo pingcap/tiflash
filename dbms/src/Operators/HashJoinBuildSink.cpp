@@ -21,18 +21,33 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     if unlikely (!block)
     {
+        is_finish_status = true;
         if (join_ptr->finishOneBuild(op_index))
         {
-            // TODO support spill.
-            RUNTIME_CHECK(!join_ptr->hasBuildSideMarkedSpillData(op_index));
+            if (join_ptr->hasBuildSideMarkedSpillData(op_index))
+                return OperatorStatus::IO_OUT;
             join_ptr->finalizeBuild();
         }
         return OperatorStatus::FINISHED;
     }
     join_ptr->insertFromBlock(block, op_index);
-    // TODO support spill.
-    RUNTIME_CHECK(!join_ptr->hasBuildSideMarkedSpillData(op_index));
     block.clear();
-    return OperatorStatus::NEED_INPUT;
+    return join_ptr->hasBuildSideMarkedSpillData(op_index)
+        ? OperatorStatus::IO_OUT
+        : OperatorStatus::NEED_INPUT;
+}
+
+OperatorStatus HashJoinBuildSink::executeIOImpl()
+{
+    join_ptr->flushBuildSideMarkedSpillData(op_index);
+    if (is_finish_status)
+    {
+        join_ptr->finalizeBuild();
+        return OperatorStatus::FINISHED;
+    }
+    else
+    {
+        return OperatorStatus::NEED_INPUT;
+    }
 }
 } // namespace DB

@@ -14,6 +14,8 @@
 
 #include <Flash/tests/gtest_join.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace tests
@@ -26,6 +28,15 @@ public:
         JoinTestRunner::initializeContext();
     }
 };
+
+#define WRAP_FOR_SPILL_TEST_BEGIN                  \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SPILL_TEST_END \
+    }
 
 TEST_F(SpillJoinTestRunner, SimpleJoinSpill)
 try
@@ -81,26 +92,30 @@ try
         {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
+    WRAP_FOR_SPILL_TEST_BEGIN
     for (size_t i = 0; i < join_type_num; ++i)
     {
         for (size_t j = 0; j < simple_test_num; ++j)
         {
             const auto & [l, r, k] = join_cases[j];
+            auto join_type = join_types[i];
             auto request = context.scan("simple_test", l)
-                               .join(context.scan("simple_test", r), join_types[i], {col(k)})
+                               .join(context.scan("simple_test", r), join_type, {col(k)})
                                .build(context);
 
             {
                 context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-                ASSERT_THROW(executeStreams(request), Exception);
+                ASSERT_THROW(executeStreams(request), Exception) << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j;
                 auto concurrences = {2, 5, 10};
                 for (auto concurrency : concurrences)
                 {
-                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency));
+                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency))
+                        << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j << ", concurrency = " << concurrency;
                 }
             }
         }
     }
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -119,6 +134,8 @@ try
     auto concurrences = {2, 5, 10};
     const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
     context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
+
+    WRAP_FOR_SPILL_TEST_BEGIN
     for (const auto & join_restore_concurrency : join_restore_concurrences)
     {
         context.context->setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
@@ -128,6 +145,7 @@ try
             ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request, concurrency));
         }
     }
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -142,6 +160,8 @@ try
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
     UInt64 max_bytes_before_external_join = 20000;
+
+    WRAP_FOR_SPILL_TEST_BEGIN
     /// case 1, right join without right condition
     auto request = context
                        .scan("outer_join_test", right_table_names[0])
@@ -165,11 +185,11 @@ try
                           .build(context);
             if (right_table_name == "right_table_1_concurrency")
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
         }
     }
@@ -217,11 +237,11 @@ try
                           .build(context);
             if (right_table_name == "right_table_1_concurrency")
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
         }
     }
@@ -247,6 +267,7 @@ try
             }
         }
     }
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -261,6 +282,8 @@ try
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
     UInt64 max_bytes_before_external_join_will_no_spill_happens = 1024ULL * 1024 * 1024 * 1024;
+
+    WRAP_FOR_SPILL_TEST_BEGIN
     /// case 1, right join without right condition
     auto request = context
                        .scan("outer_join_test", right_table_names[0])
@@ -337,8 +360,12 @@ try
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
         }
     }
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
+
+#undef WRAP_FOR_SPILL_TEST_BEGIN
+#undef WRAP_FOR_SPILL_TEST_END
 
 } // namespace tests
 } // namespace DB
