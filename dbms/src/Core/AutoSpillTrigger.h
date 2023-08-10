@@ -28,15 +28,22 @@ public:
         , query_operator_spill_contexts(query_operator_spill_contexts_)
     {
         RUNTIME_CHECK_MSG(memory_tracker->getLimit() > 0, "Memory limit must be set for auto spill trigger");
+        if (unlikely(auto_memory_revoke_trigger_threshold < auto_memory_revoke_target_threshold))
+        {
+            /// invalid value, set the value to default value
+            auto_memory_revoke_trigger_threshold = 0.7;
+            auto_memory_revoke_target_threshold = 0.5;
+        }
         trigger_threshold = static_cast<Int64>(memory_tracker->getLimit() * auto_memory_revoke_trigger_threshold);
         target_threshold = static_cast<Int64>(memory_tracker->getLimit() * auto_memory_revoke_target_threshold);
     }
 
     void triggerAutoSpill()
     {
-        if (memory_tracker->get() > trigger_threshold)
+        auto current_memory_usage = memory_tracker->get();
+        if (current_memory_usage > trigger_threshold)
         {
-            query_operator_spill_contexts->triggerAutoSpill(memory_tracker->get() - target_threshold);
+            query_operator_spill_contexts->triggerAutoSpill(current_memory_usage - target_threshold);
         }
     }
 

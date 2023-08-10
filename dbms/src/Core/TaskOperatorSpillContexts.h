@@ -64,7 +64,7 @@ public:
 
     Int64 totalRevocableMemories()
     {
-        if (isFinished())
+        if unlikely(isFinished())
             return 0;
         appendAdditionalOperatorSpillContexts();
         Int64 ret = 0;
@@ -89,10 +89,10 @@ private:
         }
     }
     /// access to operator_spill_contexts is thread safe
-    std::vector<OperatorSpillContextPtr> operator_spill_contexts;
+    std::list<OperatorSpillContextPtr> operator_spill_contexts;
     mutable std::mutex mutex;
     /// access to additional_operator_spill_contexts need acquire lock first
-    std::vector<OperatorSpillContextPtr> additional_operator_spill_contexts;
+    std::list<OperatorSpillContextPtr> additional_operator_spill_contexts;
     std::atomic<bool> has_additional_operator_spill_contexts{false};
     std::atomic<bool> is_task_finished{false};
 };
