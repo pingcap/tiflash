@@ -25,8 +25,11 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t /*concurrency*/)
+    size_t concurrency)
 {
+    // In order to make both probe and build have the same concurrency, restoreConcurrency is executed here.
+    restoreConcurrency(exec_context, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+
     executeExpression(exec_context, group_builder, prepare_actions, log);
 
     size_t build_index = 0;

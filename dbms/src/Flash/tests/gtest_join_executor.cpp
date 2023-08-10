@@ -14,6 +14,8 @@
 
 #include <Flash/tests/gtest_join.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace tests
@@ -1483,7 +1485,7 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
                           .build(context);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
         }
     }
     /// case 1.2 table scan join fine grained exchange receiver
