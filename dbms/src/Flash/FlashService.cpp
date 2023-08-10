@@ -67,25 +67,27 @@ namespace FailPoints
 extern const char exception_when_fetch_disagg_pages[];
 } // namespace FailPoints
 
-#define CATCH_FLASHSERVICE_EXCEPTION                                                                           \
-    catch (Exception & e)                                                                                      \
-    {                                                                                                          \
-        LOG_ERROR(log, "DB Exception: {}", e.message());                                                       \
-        return std::make_tuple(                                                                                \
-            std::make_shared<Context>(*context),                                                               \
-            grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));                            \
-    }                                                                                                          \
-    catch (const std::exception & e)                                                                           \
-    {                                                                                                          \
-        LOG_ERROR(log, "std exception: {}", e.what());                                                         \
-        return std::make_tuple(                                                                                \
-            std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));          \
-    }                                                                                                          \
-    catch (...)                                                                                                \
-    {                                                                                                          \
-        LOG_ERROR(log, "other exception");                                                                     \
-        return std::make_tuple(                                                                                \
-            std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception")); \
+#define CATCH_FLASHSERVICE_EXCEPTION                                                \
+    catch (Exception & e)                                                           \
+    {                                                                               \
+        LOG_ERROR(log, "DB Exception: {}", e.message());                            \
+        return std::make_tuple(                                                     \
+            std::make_shared<Context>(*context),                                    \
+            grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message())); \
+    }                                                                               \
+    catch (const std::exception & e)                                                \
+    {                                                                               \
+        LOG_ERROR(log, "std exception: {}", e.what());                              \
+        return std::make_tuple(                                                     \
+            std::make_shared<Context>(*context),                                    \
+            grpc::Status(grpc::StatusCode::INTERNAL, e.what()));                    \
+    }                                                                               \
+    catch (...)                                                                     \
+    {                                                                               \
+        LOG_ERROR(log, "other exception");                                          \
+        return std::make_tuple(                                                     \
+            std::make_shared<Context>(*context),                                    \
+            grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));           \
     }
 
 constexpr char tls_err_msg[] = "common name check is failed";
@@ -97,7 +99,8 @@ void FlashService::init(Context & context_)
     context = &context_;
     log = Logger::get("FlashService");
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
-        context->getGlobalContext(), context->getGlobalContext().getSettingsRef());
+        context->getGlobalContext(),
+        context->getGlobalContext().getSettingsRef());
 
     // Only when the s3 storage is enabled on write node, provide the lock service interfaces
     if (!context->getSharedContextDisagg()->isDisaggregatedComputeMode() && S3::ClientFactory::instance().isEnabled())
@@ -133,7 +136,9 @@ grpc::Status executeInThreadPool(legacy::ThreadPool & pool, std::function<grpc::
 }
 
 String getClientMetaVarWithDefault(
-    const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
+    const grpc::ServerContext * grpc_context,
+    const String & name,
+    const String & default_val)
 {
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
         return String(it->second.data(), it->second.size());
@@ -163,7 +168,9 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
 } // namespace
 
 grpc::Status FlashService::Coprocessor(
-    grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
+    grpc::ServerContext * grpc_context,
+    const coprocessor::Request * request,
+    coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
@@ -300,7 +307,9 @@ grpc::Status FlashService::BatchCoprocessor(
 }
 
 grpc::Status FlashService::DispatchMPPTask(
-    grpc::ServerContext * grpc_context, const mpp::DispatchTaskRequest * request, mpp::DispatchTaskResponse * response)
+    grpc::ServerContext * grpc_context,
+    const mpp::DispatchTaskRequest * request,
+    mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_INFO(log, "Handling mpp dispatch request, task meta: {}", request->meta().DebugString());
@@ -312,7 +321,8 @@ grpc::Status FlashService::DispatchMPPTask(
     if (auto mpp_version = request->meta().mpp_version(); !DB::CheckMppVersion(mpp_version))
     {
         auto && err_msg = fmt::format(
-            "Failed to handling mpp dispatch request, reason=`{}`", DB::GenMppVersionErrorMessage(mpp_version));
+            "Failed to handling mpp dispatch request, reason=`{}`",
+            DB::GenMppVersionErrorMessage(mpp_version));
         LOG_WARNING(log, err_msg);
         return grpc::Status(grpc::StatusCode::CANCELLED, std::move(err_msg));
     }
@@ -495,7 +505,9 @@ grpc::Status FlashService::EstablishMPPConnection(
 }
 
 grpc::Status FlashService::CancelMPPTask(
-    grpc::ServerContext * grpc_context, const mpp::CancelTaskRequest * request, mpp::CancelTaskResponse * response)
+    grpc::ServerContext * grpc_context,
+    const mpp::CancelTaskRequest * request,
+    mpp::CancelTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
@@ -527,7 +539,9 @@ grpc::Status FlashService::CancelMPPTask(
     /// `CancelMPPTask` cancels the current mpp gather. In TiDB side, each gather has its own mpp coordinator, when TiDB cancel
     /// a query, it will cancel all the coordinators
     task_manager->abortMPPGather(
-        MPPGatherId(request->meta()), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+        MPPGatherId(request->meta()),
+        "Receive cancel request from TiDB",
+        AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -555,7 +569,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 }
 
 ::grpc::Status FlashService::cancelMPPTaskForTest(
-    const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+    const ::mpp::CancelTaskRequest * request,
+    ::mpp::CancelTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
@@ -572,7 +587,9 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->abortMPPGather(
-        MPPGatherId(request->meta()), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
+        MPPGatherId(request->meta()),
+        "Receive cancel request from GTest",
+        AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -641,7 +658,9 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
 }
 
 grpc::Status FlashService::Compact(
-    grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response)
+    grpc::ServerContext * grpc_context,
+    const kvrpcpb::CompactRequest * request,
+    kvrpcpb::CompactResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     auto check_result = checkGrpcContext(grpc_context);
@@ -868,7 +887,9 @@ grpc::Status FlashService::FetchDisaggPages(
             read_ids.emplace_back(page_id);
 
         auto stream_writer = WNFetchPagesStreamWriter::build(
-            task, read_ids, context->getSettingsRef().dt_fetch_pages_packet_limit_size);
+            task,
+            read_ids,
+            context->getSettingsRef().dt_fetch_pages_packet_limit_size);
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 
@@ -878,7 +899,10 @@ grpc::Status FlashService::FetchDisaggPages(
     catch (const TiFlashException & e)
     {
         LOG_ERROR(
-            logger, "FetchDisaggPages meet TiFlashException: {}\n{}", e.displayText(), e.getStackTrace().toString());
+            logger,
+            "FetchDisaggPages meet TiFlashException: {}\n{}",
+            e.displayText(),
+            e.getStackTrace().toString());
         return record_error(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)

@@ -38,7 +38,9 @@ struct CoprocessorContext
     const grpc::ServerContext & grpc_server_context;
 
     CoprocessorContext(
-        Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_);
+        Context & db_context_,
+        const kvrpcpb::Context & kv_context_,
+        const grpc::ServerContext & grpc_server_context_);
 };
 
 /// Coprocessor request handler, deals with:

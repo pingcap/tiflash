@@ -75,7 +75,9 @@ public:
         mpp::DispatchTaskResponse * response) override;
 
     grpc::Status IsAlive(
-        grpc::ServerContext * context, const mpp::IsAliveRequest * request, mpp::IsAliveResponse * response) override;
+        grpc::ServerContext * context,
+        const mpp::IsAliveRequest * request,
+        mpp::IsAliveResponse * response) override;
 
     grpc::Status EstablishMPPConnection(
         grpc::ServerContext * grpc_context,

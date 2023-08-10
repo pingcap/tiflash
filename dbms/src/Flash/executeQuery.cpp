@@ -63,7 +63,8 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     {
         /// for MPPTask, process list entry is set in MPPTask::initProcessListEntry()
         RUNTIME_ASSERT(
-            dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
+            dag_context.getProcessListEntry() != nullptr,
+            "process list entry for MPP task must not be nullptr");
         return dag_context.getProcessListEntry();
     }
     else

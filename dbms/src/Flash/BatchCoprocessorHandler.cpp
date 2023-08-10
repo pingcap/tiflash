@@ -66,7 +66,9 @@ grpc::Status BatchCoprocessorHandler::execute()
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             auto tables_regions_info = TablesRegionsInfo::create(
-                cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
+                cop_request->regions(),
+                cop_request->table_regions(),
+                cop_context.db_context.getTMTContext());
             LOG_DEBUG(
                 log,
                 "Handling {} regions from {} physical tables in DAG request: {}",

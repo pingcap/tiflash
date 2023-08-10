@@ -74,7 +74,9 @@ catch (const std::exception & e)
 
 // get & filter(ts of last record < start-time) all files in same log directory.
 std::list<std::string> getFilesToSearch(
-    Poco::Util::LayeredConfiguration & config, Poco::Logger * log, const int64_t start_time)
+    Poco::Util::LayeredConfiguration & config,
+    Poco::Logger * log,
+    const int64_t start_time)
 {
     std::list<std::string> files_to_search;
 
@@ -114,7 +116,9 @@ std::list<std::string> getFilesToSearch(
 }
 
 grpc::Status searchLog(
-    Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream, LogIterator & log_itr)
+    Poco::Logger * log,
+    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream,
+    LogIterator & log_itr)
 {
     static constexpr size_t LOG_BATCH_SIZE = 256;
 

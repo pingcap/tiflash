@@ -44,15 +44,9 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
 
     GrpcExchangePacketReader() = default;
 
-    bool read(TrackedMppDataPacketPtr & packet) override
-    {
-        return packet->read(reader);
-    }
+    bool read(TrackedMppDataPacketPtr & packet) override { return packet->read(reader); }
 
-    grpc::Status finish() override
-    {
-        return reader->Finish();
-    }
+    grpc::Status finish() override { return reader->Finish(); }
 
     void cancel(const String &) override {}
 };
@@ -82,20 +76,11 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
         reader = rpc.call(&client_context, request.req, cq, tag);
     }
 
-    void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) override
-    {
-        packet->read(reader, tag);
-    }
+    void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) override { packet->read(reader, tag); }
 
-    void finish(::grpc::Status & status, GRPCKickTag * tag) override
-    {
-        reader->Finish(&status, tag);
-    }
+    void finish(::grpc::Status & status, GRPCKickTag * tag) override { reader->Finish(&status, tag); }
 
-    grpc::ClientContext * getClientContext() override
-    {
-        return &client_context;
-    }
+    grpc::ClientContext * getClientContext() override { return &client_context; }
 };
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)
@@ -158,7 +143,9 @@ void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
             {
                 try
                 {
-                    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(DispatchMPPTask)> rpc(cluster->rpc_client, std::get<0>(dispatch_req).meta().address());
+                    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(DispatchMPPTask)> rpc(
+                        cluster->rpc_client,
+                        std::get<0>(dispatch_req).meta().address());
                     grpc::ClientContext client_context;
                     rpc.setClientContext(client_context, 60);
                     mpp::DispatchTaskResponse resp;
@@ -191,7 +178,9 @@ void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
                     {
                         need_retry = false;
                         this->setDispatchMPPTaskErrMsg(local_err_msg);
-                        this->cluster->region_cache->onSendReqFailForBatchRegions(std::get<1>(dispatch_req), std::get<2>(dispatch_req));
+                        this->cluster->region_cache->onSendReqFailForBatchRegions(
+                            std::get<1>(dispatch_req),
+                            std::get<2>(dispatch_req));
                     }
                 }
             }
@@ -224,7 +213,10 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
         auto sender_task = std::make_unique<mpp::TaskMeta>();
         if (unlikely(!sender_task->ParseFromString(exchange_receiver_meta.encoded_task_meta(i))))
         {
-            LOG_WARNING(log, "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, will ignore this error");
+            LOG_WARNING(
+                log,
+                "parse exchange_receiver_meta.encoded_task_meta failed when canceling MPPTask on tiflash_storage node, "
+                "will ignore this error");
             return;
         }
         mpp::CancelTaskRequest cancel_req;
@@ -232,7 +224,9 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
         thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [cancel_req, log, this] {
             try
             {
-                pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(CancelMPPTask)> rpc(cluster->rpc_client, cancel_req.meta().address());
+                pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(CancelMPPTask)> rpc(
+                    cluster->rpc_client,
+                    cancel_req.meta().address());
                 grpc::ClientContext client_context;
                 rpc.setClientContext(client_context, /*timeout=*/30);
                 mpp::CancelTaskResponse resp;
@@ -246,7 +240,10 @@ void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log)
             catch (...)
             {
                 String cancel_err_msg = getCurrentExceptionMessage(true);
-                LOG_WARNING(log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+                LOG_WARNING(
+                    log,
+                    "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error",
+                    cancel_err_msg);
             }
         });
     }
@@ -285,7 +282,9 @@ std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnecti
     }
     if (!tunnel->isLocal())
     {
-        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
+        return std::make_tuple(
+            nullptr,
+            grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
     }
     tunnel->connectLocalV1(nullptr);
     return std::make_tuple(tunnel, grpc::Status::OK);

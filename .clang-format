@@ -4,8 +4,8 @@ Language:        Cpp
 AlignAfterOpenBracket: AlwaysBreak
 AlignEscapedNewlines: Left
 AlignTrailingComments: false
-AllowAllArgumentsOnNextLine: true
-AllowAllParametersOfDeclarationOnNextLine: true
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: Always
 AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline

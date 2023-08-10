@@ -39,14 +39,18 @@ extern const int NOT_IMPLEMENTED;
 }
 
 CoprocessorContext::CoprocessorContext(
-    Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_)
+    Context & db_context_,
+    const kvrpcpb::Context & kv_context_,
+    const grpc::ServerContext & grpc_server_context_)
     : db_context(db_context_)
     , kv_context(kv_context_)
     , grpc_server_context(grpc_server_context_)
 {}
 
 CoprocessorHandler::CoprocessorHandler(
-    CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * cop_response_)
+    CoprocessorContext & cop_context_,
+    const coprocessor::Request * cop_request_,
+    coprocessor::Response * cop_response_)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_response(cop_response_)
@@ -89,13 +93,15 @@ grpc::Status CoprocessorHandler::execute()
             LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
             if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
                 throw TiFlashException(
-                    "DAG request with rpn expression is not supported in TiFlash", Errors::Coprocessor::Unimplemented);
+                    "DAG request with rpn expression is not supported in TiFlash",
+                    Errors::Coprocessor::Unimplemented);
             tipb::SelectResponse dag_response;
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
             const std::unordered_set<UInt64> bypass_lock_ts(
-                cop_context.kv_context.resolved_locks().begin(), cop_context.kv_context.resolved_locks().end());
+                cop_context.kv_context.resolved_locks().begin(),
+                cop_context.kv_context.resolved_locks().end());
             table_regions_info.local_regions.emplace(
                 cop_context.kv_context.region_id(),
                 RegionInfo(

@@ -139,7 +139,9 @@ private:
 void ReadLogFile(const std::string & path, std::function<void(std::istream &)> && cb);
 
 bool FilterFileByDatetime(
-    const std::string & path, const std::vector<std::string> & ignore_log_file_prefixes, int64_t start_time);
+    const std::string & path,
+    const std::vector<std::string> & ignore_log_file_prefixes,
+    int64_t start_time);
 
 
 }; // namespace DB

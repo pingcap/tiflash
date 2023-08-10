@@ -54,10 +54,7 @@ TrackedMppDataPacketPtr ToPacket(
         return nullptr;
     const Block & header = blocks.front().cloneEmpty();
     auto && codec = CHBlockChunkCodecV1{header};
-    auto && res = codec.encode(
-        std::move(blocks),
-        method,
-        false);
+    auto && res = codec.encode(std::move(blocks), method, false);
     if unlikely (res.empty())
         return nullptr;
 
