@@ -86,7 +86,10 @@ public:
 
     bool remained() const;
 
-    std::optional<String> next();
+    UInt64 getSnapSeqForCheckpoint() const;
+
+    // std::pair<from_checkpoint, record>
+    std::pair<bool, std::optional<String>> next();
 
     void throwIfError() const
     {
@@ -122,7 +125,8 @@ private:
     ReportCollector reporter;
     const ReadLimiterPtr read_limiter;
 
-    bool checkpoint_read_done;
+    bool checkpoint_reader_created;
+    bool reading_checkpoint_file;
     const std::optional<LogFilename> checkpoint_file;
     const LogFilenameSet files_to_read;
     LogFilenameSet::const_iterator next_reading_file;

@@ -206,6 +206,7 @@ TEST(WALLognameTest, parsing)
         EXPECT_EQ(f.parent_path, parent_path);
         EXPECT_EQ(f.log_num, 1);
         EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.snap_seq, 0);
         EXPECT_EQ(f.stage, LogFileStage::Normal);
 
         EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2");
@@ -215,10 +216,25 @@ TEST(WALLognameTest, parsing)
     }
 
     {
+        LogFilename f = LogFilename::parseFrom(parent_path, "log_1_2_3", log);
+        EXPECT_EQ(f.parent_path, parent_path);
+        EXPECT_EQ(f.log_num, 1);
+        EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.snap_seq, 3);
+        EXPECT_EQ(f.stage, LogFileStage::Normal);
+
+        EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2_3");
+        EXPECT_EQ(f.fullname(LogFileStage::Temporary), "/data1/.temp.log_1_2_3");
+        EXPECT_EQ(f.filename(LogFileStage::Normal), "log_1_2_3");
+        EXPECT_EQ(f.fullname(LogFileStage::Normal), "/data1/log_1_2_3");
+    }
+
+    {
         LogFilename f = LogFilename::parseFrom(parent_path, ".temp.log_345_78", log);
         EXPECT_EQ(f.parent_path, parent_path);
         EXPECT_EQ(f.log_num, 345);
         EXPECT_EQ(f.level_num, 78);
+        EXPECT_EQ(f.snap_seq, 0);
         EXPECT_EQ(f.stage, LogFileStage::Temporary);
 
         EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_345_78");
@@ -229,8 +245,6 @@ TEST(WALLognameTest, parsing)
 
     for (const auto & n : Strings{
              "something_wrong",
-             "log_1_2_3",
-             ".temp.log_1_2_3",
              "log_1",
              ".temp.log_1",
              "log_abc_def",
@@ -411,7 +425,7 @@ TEST_P(WALStoreTest, Empty)
     ASSERT_NE(wal, nullptr);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -464,7 +478,7 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -497,7 +511,7 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -532,7 +546,7 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -603,7 +617,7 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -619,7 +633,7 @@ try
         std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto record = reader->next();
+            auto [_, record] = reader->next();
             if (!record)
             {
                 reader->throwIfError();
@@ -720,7 +734,7 @@ try
         std::set<std::shared_ptr<const String>, Comparator> result_file_ids;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -787,7 +801,7 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -819,7 +833,7 @@ try
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     file_snap.num_records = snap_edit.size();
-    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit));
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
@@ -830,7 +844,7 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -901,7 +915,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         // empty
         PageEntriesEdit snap_edit;
         files.num_records = snap_edit.size();
-        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit));
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }
@@ -940,7 +954,7 @@ TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
         auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto record = reader->next();
+            auto [_, record] = reader->next();
             if (!record)
             {
                 reader->throwIfError();
