@@ -252,5 +252,6 @@ void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, cons
 }
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;
+// For now, io_task_thread_pool is not managed by ResourceControl mechanism.
 template class ResourceControlQueue<IOPriorityQueue>;
 } // namespace DB
