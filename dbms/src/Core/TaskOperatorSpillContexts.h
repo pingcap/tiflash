@@ -64,7 +64,7 @@ public:
 
     Int64 totalRevocableMemories()
     {
-        if unlikely(isFinished())
+        if unlikely (isFinished())
             return 0;
         appendAdditionalOperatorSpillContexts();
         Int64 ret = 0;
