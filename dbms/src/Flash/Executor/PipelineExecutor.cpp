@@ -29,7 +29,7 @@ PipelineExecutor::PipelineExecutor(
     , exec_context(
           // For mpp task, there is a unique identifier MPPTaskId, so MPPTaskId is used here as the query id of PipelineExecutor.
           // But for cop/batchCop, there is no such unique identifier, so an empty value is given here, indicating that the query id of PipelineExecutor is invalid.
-          /*query_id=*/context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
+          /*query_id=*/context.getDAGContext()->isMPPTask() ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
           memory_tracker_)
 {

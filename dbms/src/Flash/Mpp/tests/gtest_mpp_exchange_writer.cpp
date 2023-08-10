@@ -41,7 +41,7 @@ protected:
     {
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-        dag_context_ptr->is_mpp_task = true;
+        dag_context_ptr->kind = DAGRequestKind::MPP;
         dag_context_ptr->is_root_mpp_task = false;
         dag_context_ptr->result_field_types = makeFields();
     }
