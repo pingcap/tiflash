@@ -1834,6 +1834,7 @@ PageDirectory<Trait>::getEntriesByBlobIdsForDifferentPageTypes(const typename Pa
     return page_type_and_gc_info;
 }
 
+template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const WriteLimiterPtr & write_limiter, bool force)
 {
     // Only apply compact logs when files snapshot is valid
