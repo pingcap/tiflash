@@ -162,7 +162,8 @@ struct CoprocessorReaderResult
     {}
 };
 
-/// this is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
+/// This is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
+/// Note that CoprocessorReader may be used concurrently.
 class CoprocessorReader
 {
 public:
@@ -170,21 +171,27 @@ public:
     static constexpr auto name = "CoprocessorReader";
 
 private:
-    DAGSchema schema;
-    bool has_enforce_encode_type;
-    std::shared_ptr<pingcap::coprocessor::ResponseIter> resp_iter;
-    bool enable_cop_stream;
+    const DAGSchema schema;
+    const bool has_enforce_encode_type;
+    const int concurrency;
+    const bool enable_cop_stream;
+    pingcap::coprocessor::ResponseIter resp_iter;
 
 public:
     CoprocessorReader(
         const DAGSchema & schema_,
+        pingcap::kv::Cluster * cluster,
+        std::vector<pingcap::coprocessor::CopTask> && tasks,
         bool has_enforce_encode_type_,
-        const std::shared_ptr<pingcap::coprocessor::ResponseIter> & resp_iter_,
+        int concurrency_,
+        const pingcap::kv::LabelFilter & tiflash_label_filter_,
+        size_t queue_size,
         bool enable_cop_stream_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(resp_iter_)
+        , concurrency(concurrency_)
         , enable_cop_stream(enable_cop_stream_)
+        , resp_iter(std::make_unique<CopIterQueue>(queue_size), std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -193,14 +200,13 @@ public:
     void open()
     {
         if (enable_cop_stream)
-            resp_iter->open<true>();
+            resp_iter.open<true>();
         else
-            resp_iter->open<false>();
+            resp_iter.open<false>();
     }
 
     // `cancel` will call the resp_iter's `cancel` to abort the data receiving and prevent the next retry.
-    void cancel() { resp_iter->cancel(); }
-
+    void cancel() { resp_iter.cancel(); }
 
     static DecodeDetail decodeChunks(
         const std::shared_ptr<tipb::SelectResponse> & resp,
@@ -247,7 +253,7 @@ public:
 
     std::pair<pingcap::coprocessor::ResponseIter::Result, bool> nonBlockingNext()
     {
-        return resp_iter->nonBlockingNext();
+        return resp_iter.nonBlockingNext();
     }
 
     CoprocessorReaderResult toResult(std::pair<pingcap::coprocessor::ResponseIter::Result, bool> & result_pair,
@@ -294,12 +300,14 @@ public:
     // stream_id, decoder_ptr are only meaningful for ExchangeReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
-        auto && result_pair = resp_iter->next();
+        auto && result_pair = resp_iter.next();
 
         return toResult(result_pair, block_queue, header);
     }
 
     static size_t getSourceNum() { return 1; }
+
+    int getExternalThreadCnt() const { return concurrency; }
 
     void close() {}
 };

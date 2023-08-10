@@ -32,12 +32,10 @@ public:
     {}
     void addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver);
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
-
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
     void close();
 
-    void addRemoteReadThreadCnt(int cnt) { external_thread_cnt += cnt; }
     int getExternalThreadCnt() const { return external_thread_cnt; }
 
 private:

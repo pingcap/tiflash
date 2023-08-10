@@ -139,11 +139,11 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             else
                 msg = "CoprocessorHandler";
 
-            CoprocessorKind kind;
+            DAGRequestKind kind;
             if constexpr (is_stream)
-                kind = CoprocessorKind::CopStream;
+                kind = DAGRequestKind::CopStream;
             else
-                kind = CoprocessorKind::Cop;
+                kind = DAGRequestKind::Cop;
 
             DAGContext dag_context(
                 dag_request,
@@ -156,13 +156,13 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
 
             if constexpr (is_stream)
             {
-                DAGDriver<CoprocessorKind::CopStream> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), cop_writer);
+                DAGDriver<DAGRequestKind::CopStream> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), cop_writer);
                 driver.execute();
             }
             else
             {
                 tipb::SelectResponse dag_response;
-                DAGDriver<CoprocessorKind::Cop> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
+                DAGDriver<DAGRequestKind::Cop> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
                 driver.execute();
                 cop_response->set_data(dag_response.SerializeAsString());
             }

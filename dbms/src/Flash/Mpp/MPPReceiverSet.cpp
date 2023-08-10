@@ -27,6 +27,7 @@ void MPPReceiverSet::addExchangeReceiver(const String & executor_id, const Excha
 void MPPReceiverSet::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
 {
     coprocessor_readers.push_back(coprocessor_reader);
+    external_thread_cnt += coprocessor_reader->getExternalThreadCnt();
 }
 
 ExchangeReceiverPtr MPPReceiverSet::getExchangeReceiver(const String & executor_id) const

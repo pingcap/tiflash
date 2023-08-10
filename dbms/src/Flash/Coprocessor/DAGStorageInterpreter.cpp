@@ -668,17 +668,14 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     pingcap::kv::LabelFilter tiflash_label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    context.getDAGContext()->addRemoteReadThreadCnt(concurrent_num);
-
     size_t queue_size = context.getSettingsRef().remote_read_queue_size > 0 ? context.getSettingsRef().remote_read_queue_size.get() : concurrent_num * 4;
-    auto cop_iter = std::make_shared<pingcap::coprocessor::ResponseIter>(std::make_unique<CopIterQueue>(queue_size), std::move(all_tasks), cluster, concurrent_num, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter);
-
     bool is_cop_stream = context.getSettingsRef().enable_cop_stream_for_remote_read;
+    auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, std::move(all_tasks), has_enforce_encode_type, concurrent_num, tiflash_label_filter, queue_size, is_cop_stream);
+    context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+
     size_t reader_num = is_cop_stream ? context.getSettingsRef().max_threads.get() : concurrent_num;
     for (size_t i = 0; i < reader_num; ++i)
     {
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, has_enforce_encode_type, cop_iter, is_cop_stream);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
         pipeline.streams.push_back(input);
     }
@@ -698,18 +695,15 @@ void DAGStorageInterpreter::buildRemoteExec(
     pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    context.getDAGContext()->addRemoteReadThreadCnt(concurrent_num);
-
     size_t queue_size = context.getSettingsRef().remote_read_queue_size > 0 ? context.getSettingsRef().remote_read_queue_size.get() : concurrent_num * 4;
-    auto cop_iter = std::make_shared<pingcap::coprocessor::ResponseIter>(std::make_unique<CopIterQueue>(queue_size), std::move(all_tasks), cluster, concurrent_num, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter);
-
     bool is_cop_stream = context.getSettingsRef().enable_cop_stream_for_remote_read;
-    size_t reader_num = is_cop_stream ? context.getSettingsRef().max_threads.get() : concurrent_num;
+    auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, std::move(all_tasks), has_enforce_encode_type, concurrent_num, tiflash_label_filter, queue_size, is_cop_stream);
+    context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+
     /// TODO: support reading data from write nodes
+    size_t reader_num = is_cop_stream ? context.getSettingsRef().max_threads.get() : concurrent_num;
     for (size_t i = 0; i < reader_num; ++i)
     {
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, has_enforce_encode_type, cop_iter, is_cop_stream);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
         group_builder.addConcurrency(std::make_unique<CoprocessorReaderSourceOp>(exec_context, log->identifier(), coprocessor_reader));
     }
 

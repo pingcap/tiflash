@@ -39,7 +39,7 @@ class Context;
 
 /// An abstraction of driver running DAG request.
 /// Now is a naive native executor. Might get evolved to drive MPP-like computation.
-template <CoprocessorKind Kind>
+template <DAGRequestKind Kind>
 class DAGDriver
 {
 public:

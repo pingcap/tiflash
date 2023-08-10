@@ -133,11 +133,12 @@ enum class ExecutionMode
     Pipeline,
 };
 
-enum class CoprocessorKind
+enum class DAGRequestKind
 {
     Cop,
     CopStream,
     BatchCop,
+    MPP,
 };
 
 /// A context used to track the information that needs to be passed around during DAG planning.
@@ -145,7 +146,7 @@ class DAGContext
 {
 public:
     // for non-mpp(Cop/CopStream/BatchCop)
-    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, CoprocessorKind cop_kind_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, DAGRequestKind cop_kind_, LoggerPtr log_);
 
     // for mpp
     DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
@@ -223,10 +224,10 @@ public:
     }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
-    bool isCop() const { return !is_mpp_task && cop_kind == CoprocessorKind::Cop; }
-    bool isCopStream() const { return !is_mpp_task && cop_kind == CoprocessorKind::CopStream; }
-    bool isBatchCop() const { return !is_mpp_task && cop_kind == CoprocessorKind::BatchCop; }
-    bool isMPPTask() const { return is_mpp_task; }
+    bool isCop() const { return kind == DAGRequestKind::Cop; }
+    bool isCopStream() const { return kind == DAGRequestKind::CopStream; }
+    bool isBatchCop() const { return kind == DAGRequestKind::BatchCop; }
+    bool isMPPTask() const { return kind == DAGRequestKind::MPP; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
     const MPPTaskId & getMPPTaskId() const
@@ -303,8 +304,6 @@ public:
     {
         return disaggregated_compute_exchange_receiver;
     }
-    int getRemoteReadThreadCnt() const { return remote_read_thread_cnt; }
-    void addRemoteReadThreadCnt(int cnt) { remote_read_thread_cnt += cnt; }
 
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
@@ -349,9 +348,8 @@ public:
     // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    /* const */ bool is_mpp_task = false;
+    /* const */ DAGRequestKind kind;
     /* const */ bool is_root_mpp_task = false;
-    /* const */ CoprocessorKind cop_kind = CoprocessorKind::Cop;
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
@@ -420,9 +418,6 @@ private:
 
     MPPReceiverSetPtr mpp_receiver_set;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
-
-    int remote_read_thread_cnt = 0;
-
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
