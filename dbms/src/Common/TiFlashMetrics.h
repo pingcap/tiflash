@@ -198,7 +198,7 @@ namespace DB
         F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                                    \
     M(tiflash_storage_page_command_count, "Total number of PageStorage's command, such as write / read / scan / snapshot", Counter,                 \
-        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}),  F(type_read_page_dir, {"type", "read_page_dir"}),                        \
+        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}), F(type_read_page_dir, {"type", "read_page_dir"}),                         \
         F(type_read_blob, {"type", "read_blob"}), F(type_scan, {"type", "scan"}), F(type_snapshot, {"type", "snapshot"}))                           \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                                    \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                                  \
