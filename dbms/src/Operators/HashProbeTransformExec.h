@@ -37,22 +37,26 @@ public:
         UInt64 max_block_size_);
 
     // For ScanHashMapAfterProbe stage
-    bool needScanHashMapAfterProbe() const { return scan_hash_map_after_probe_stream != nullptr; }
+    bool needScanHashMapAfterProbe() const
+    {
+        return !scan_hashmap_after_probe_finished && scan_hash_map_after_probe_stream != nullptr;
+    }
     void startScanHashMapAfterProbe()
     {
-        assert(scan_hash_map_after_probe_stream);
+        assert(needScanHashMapAfterProbe());
         scan_hash_map_after_probe_stream->readPrefix();
     }
     Block scanHashMapAfterProbe()
     {
-        assert(scan_hash_map_after_probe_stream);
+        assert(needScanHashMapAfterProbe());
         return scan_hash_map_after_probe_stream->read();
     }
     void endScanHashMapAfterProbe()
     {
-        assert(scan_hash_map_after_probe_stream);
+        assert(needScanHashMapAfterProbe());
         scan_hash_map_after_probe_stream->readSuffix();
         join->finishOneNonJoin(op_index);
+        scan_hashmap_after_probe_finished = true;
     }
 
     // For probe stage
@@ -94,6 +98,7 @@ private:
     JoinPtr join;
 
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
+    bool scan_hashmap_after_probe_finished = false;
 
     PartitionBlocks probe_partition_blocks;
 
