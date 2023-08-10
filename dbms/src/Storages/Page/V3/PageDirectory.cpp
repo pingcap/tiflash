@@ -1559,7 +1559,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
-    SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
@@ -1833,21 +1832,22 @@ PageDirectory<Trait>::getEntriesByBlobIdsForDifferentPageTypes(const typename Pa
 template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
-    auto identifier = fmt::format("{}.dump", wal->name());
-    auto snap = createSnapshot(identifier);
-
     // Only apply compact logs when files snapshot is valid
-    auto files_snap = wal->tryGetFilesSnapshot(
-        max_persisted_log_files,
-        snap->sequence,
-        details::getMaxSequenceForRecord<Trait>,
-        force);
+    auto files_snap = wal->tryGetFilesSnapshot(max_persisted_log_files, force);
     if (!files_snap.isValid())
         return false;
 
+    // To prevent writes from affecting dumping snapshot (and vice versa), old log files
+    // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
+    // The main reason write affect dumping snapshot is that we can not get a read-only
+    // `being_ref_count` by the function `createSnapshot()`.
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
+    auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
+    auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
 
     Stopwatch watch;
+    // The records persisted in `files_snap` is older than or equal to all records in `edit`
+    auto snap = createSnapshot(identifier);
     auto edit = dumpSnapshotToEdit(snap);
     files_snap.num_records = edit.size();
     files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();

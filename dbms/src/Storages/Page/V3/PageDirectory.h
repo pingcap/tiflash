@@ -152,18 +152,9 @@ public:
                     new_versioned_ref_counts->emplace_back(ver, ref_count_delta);
                 }
             }
-            if (ref_count_delta_in_snap == 0)
+            if (ref_count_delta_in_snap == 0 && new_versioned_ref_counts->empty())
             {
-                if (new_versioned_ref_counts->empty())
-                {
-                    versioned_ref_counts = nullptr;
-                }
-                else
-                {
-                    // There could be some new ref count created after `snap_seq`, we need to
-                    // keep the newly added ref counts
-                    versioned_ref_counts.swap(new_versioned_ref_counts);
-                }
+                versioned_ref_counts = nullptr;
                 return;
             }
             RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);
@@ -635,19 +626,6 @@ private:
     const UInt64 max_persisted_log_files;
     LoggerPtr log;
 };
-
-
-namespace details
-{
-template <typename Trait>
-UInt64 getMaxSequenceForRecord(const String & record)
-{
-    auto edit = Trait::Serializer::deserializeFrom(record, nullptr);
-    const auto & records = edit.getRecords();
-    RUNTIME_CHECK(!records.empty());
-    return records.back().version.sequence;
-}
-} // namespace details
 
 namespace u128
 {
