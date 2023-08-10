@@ -83,12 +83,20 @@ public:
 
     grpc::Status resign(const v3electionpb::LeaderKey & leader_key);
 
+    // Basically same with tidb's Domain::acquireServerID.
+    // For now this is only for resource control.
+    UInt64 acquireServerIDFromPD();
+
 private:
     EtcdConnClientPtr getOrCreateGRPCConn(const String & addr);
 
     EtcdConnClientPtr leaderClient();
 
     void updateLeader();
+
+    std::unordered_set<UInt64> getExistsServerID();
+
+    static const String TIDB_SERVER_ID_ETCD_PATH;
 
 private:
     pingcap::pd::ClientPtr pd_client;

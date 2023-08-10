@@ -1730,6 +1730,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
+    // Resource Control.
+#ifndef DBMS_PUBLIC_GTEST
+    LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
+#endif
+
     return Application::EXIT_OK;
 }
 } // namespace DB
