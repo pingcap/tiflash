@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/TiFlashMetrics.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
