@@ -19,7 +19,11 @@ namespace DB
 {
 void MPPReceiverSet::addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver)
 {
-    RUNTIME_ASSERT(exchange_receiver_map.find(executor_id) == exchange_receiver_map.end(), log, "Duplicate executor_id: {} in DAGRequest", executor_id);
+    RUNTIME_ASSERT(
+        exchange_receiver_map.find(executor_id) == exchange_receiver_map.end(),
+        log,
+        "Duplicate executor_id: {} in DAGRequest",
+        executor_id);
     exchange_receiver_map[executor_id] = exchange_receiver;
 }
 

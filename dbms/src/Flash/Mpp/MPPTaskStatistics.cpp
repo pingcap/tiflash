@@ -71,7 +71,9 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context_)
     dag_context = dag_context_;
     const auto & root_executor = dag_context->dag_request.rootExecutor();
     if unlikely (!root_executor.has_exchange_sender())
-        throw TiFlashException("The root executor isn't ExchangeSender in MPP, which is unexpected.", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            "The root executor isn't ExchangeSender in MPP, which is unexpected.",
+            Errors::Coprocessor::BadRequest);
 
     is_root = dag_context->isRootMPPTask();
     sender_executor_id = root_executor.executor_id();
@@ -82,7 +84,9 @@ void MPPTaskStatistics::collectRuntimeStatistics()
 {
     const auto & executor_statistics_res = executor_statistics_collector.getProfiles();
     auto it = executor_statistics_res.find(sender_executor_id);
-    RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");
+    RUNTIME_CHECK_MSG(
+        it != executor_statistics_res.end(),
+        "Can't find exchange sender statistics after `collectRuntimeStatistics`");
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
     // record io bytes
     output_bytes = return_statistics.bytes;
@@ -163,7 +167,8 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
                 if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); p_stream)
                 {
                     const auto & profile_info = p_stream->getProfileInfo();
-                    if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream) || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
+                    if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream)
+                        || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
                         remote_input_bytes += profile_info.bytes;
                     else
                         local_input_bytes += profile_info.bytes;

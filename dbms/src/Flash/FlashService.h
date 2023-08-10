@@ -48,7 +48,8 @@ namespace S3
 class S3LockService;
 } // namespace S3
 
-class FlashService : public tikvpb::Tikv::Service
+class FlashService
+    : public tikvpb::Tikv::Service
     , public std::enable_shared_from_this<FlashService>
     , private boost::noncopyable
 {
@@ -63,9 +64,10 @@ public:
         const coprocessor::Request * request,
         coprocessor::Response * response) override;
 
-    grpc::Status BatchCoprocessor(grpc::ServerContext * context,
-                                  const coprocessor::BatchRequest * request,
-                                  grpc::ServerWriter<coprocessor::BatchResponse> * writer) override;
+    grpc::Status BatchCoprocessor(
+        grpc::ServerContext * context,
+        const coprocessor::BatchRequest * request,
+        grpc::ServerWriter<coprocessor::BatchResponse> * writer) override;
 
     grpc::Status DispatchMPPTask(
         grpc::ServerContext * context,
@@ -77,28 +79,55 @@ public:
         const mpp::IsAliveRequest * request,
         mpp::IsAliveResponse * response) override;
 
-    grpc::Status EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer) override;
+    grpc::Status EstablishMPPConnection(
+        grpc::ServerContext * grpc_context,
+        const mpp::EstablishMPPConnectionRequest * request,
+        grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer) override;
 
-    grpc::Status CancelMPPTask(grpc::ServerContext * context, const mpp::CancelTaskRequest * request, mpp::CancelTaskResponse * response) override;
+    grpc::Status CancelMPPTask(
+        grpc::ServerContext * context,
+        const mpp::CancelTaskRequest * request,
+        mpp::CancelTaskResponse * response) override;
     grpc::Status cancelMPPTaskForTest(const mpp::CancelTaskRequest * request, mpp::CancelTaskResponse * response);
 
-    grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
+    grpc::Status Compact(
+        grpc::ServerContext * grpc_context,
+        const kvrpcpb::CompactRequest * request,
+        kvrpcpb::CompactResponse * response) override;
 
 
     // For S3 Lock Service
-    grpc::Status tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
-    grpc::Status tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
+    grpc::Status tryAddLock(
+        grpc::ServerContext * grpc_context,
+        const disaggregated::TryAddLockRequest * request,
+        disaggregated::TryAddLockResponse * response) override;
+    grpc::Status tryMarkDelete(
+        grpc::ServerContext * grpc_context,
+        const disaggregated::TryMarkDeleteRequest * request,
+        disaggregated::TryMarkDeleteResponse * response) override;
 
     // The TiFlash read node call this RPC to build the disaggregated task
     // on the TiFlash write node.
     // It returns the serialized remote segments info to the compute node.
-    grpc::Status EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response) override;
+    grpc::Status EstablishDisaggTask(
+        grpc::ServerContext * grpc_context,
+        const disaggregated::EstablishDisaggTaskRequest * request,
+        disaggregated::EstablishDisaggTaskResponse * response) override;
     // The TiFlash read node call this RPC to fetch the delta-layer data
     // from the TiFlash write node.
-    grpc::Status FetchDisaggPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
+    grpc::Status FetchDisaggPages(
+        grpc::ServerContext * grpc_context,
+        const disaggregated::FetchDisaggPagesRequest * request,
+        grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
 
-    grpc::Status GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest * request, disaggregated::GetDisaggConfigResponse * response) override;
-    grpc::Status GetTiFlashSystemTable(grpc::ServerContext * grpc_context, const kvrpcpb::TiFlashSystemTableRequest * request, kvrpcpb::TiFlashSystemTableResponse * response) override;
+    grpc::Status GetDisaggConfig(
+        grpc::ServerContext * grpc_context,
+        const disaggregated::GetDisaggConfigRequest * request,
+        disaggregated::GetDisaggConfigResponse * response) override;
+    grpc::Status GetTiFlashSystemTable(
+        grpc::ServerContext * grpc_context,
+        const kvrpcpb::TiFlashSystemTableRequest * request,
+        kvrpcpb::TiFlashSystemTableResponse * response) override;
 
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
@@ -129,10 +158,7 @@ protected:
 class AsyncFlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<FlashService>
 {
 public:
-    AsyncFlashService()
-    {
-        is_async = true;
-    }
+    AsyncFlashService() { is_async = true; }
     /// Return grpc::Status::OK when the connection is established.
     /// Return non-OK grpc::Status when the connection can not be established.
     grpc::Status establishMPPConnectionAsync(EstablishCallData * call_data);

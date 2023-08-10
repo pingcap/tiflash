@@ -77,7 +77,9 @@ grpc::Status CoprocessorHandler::execute()
 
     try
     {
-        RUNTIME_CHECK_MSG(!cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+        RUNTIME_CHECK_MSG(
+            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(),
+            "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
         {
@@ -118,7 +120,11 @@ grpc::Status CoprocessorHandler::execute()
                 Logger::get("CoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
-            DAGDriver driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
+            DAGDriver driver(
+                cop_context.db_context,
+                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(),
+                cop_request->schema_ver(),
+                &dag_response);
             driver.execute();
             cop_response->set_data(dag_response.SerializeAsString());
             LOG_DEBUG(log, "Handle DAG request done");
@@ -127,8 +133,9 @@ grpc::Status CoprocessorHandler::execute()
         case COP_REQ_TYPE_ANALYZE:
         case COP_REQ_TYPE_CHECKSUM:
         default:
-            throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
-                                   Errors::Coprocessor::Unimplemented);
+            throw TiFlashException(
+                "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
+                Errors::Coprocessor::Unimplemented);
         }
         return grpc::Status::OK;
     }
