@@ -114,7 +114,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     /// if query level memory tracker has a limit, then setup auto spill trigger
     if likely (memory_tracker != nullptr)
     {
-        if (memory_tracker->getLimit() != 0)
+        if (memory_tracker->getLimit() != 0 && auto_spill_trigger_threshold > 0)
         {
             auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(memory_tracker, dag_context.getQueryOperatorSpillContexts(), auto_spill_trigger_threshold, auto_spill_target_threshold);
             dag_context.setAutoSpillTrigger(auto_spill_trigger);
@@ -170,7 +170,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     std::unique_ptr<PipelineExecutor> executor;
     /// if query level memory tracker has a limit, then setup auto spill trigger
-    if (memory_tracker != nullptr && memory_tracker->getLimit() != 0)
+    if (memory_tracker != nullptr && memory_tracker->getLimit() != 0 && context.getSettingsRef().auto_memory_revoke_trigger_threshold.get() > 0)
     {
         auto register_operator_spill_context = [&context](const OperatorSpillContextPtr & operator_spill_context) {
             context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);

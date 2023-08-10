@@ -77,6 +77,8 @@ public:
         return task_operator_spill_contexts_vec.size();
     }
 
+    const LoggerPtr & getLogger() const { return log; }
+
 private:
     std::vector<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_vec;
     bool first_check = false;
