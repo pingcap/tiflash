@@ -91,7 +91,7 @@ OperatorStatus SourceOp::read(Block & block)
     assert(!block);
     auto op_status = readImpl(block);
 #ifndef NDEBUG
-    if (block)
+    if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
@@ -112,7 +112,7 @@ OperatorStatus TransformOp::transform(Block & block)
     profile_info.anchor();
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
-    if (block)
+    if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
@@ -134,7 +134,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     assert(!block);
     auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
-    if (block)
+    if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());

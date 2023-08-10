@@ -29,14 +29,14 @@ LogFilename LogFilename::parseFrom(const String & parent_path, const String & fi
     if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {
         LOG_INFO(log, "Ignore not log file [dir={}] [file={}]", parent_path, filename);
-        return {LogFileStage::Invalid, 0, 0, 0, ""};
+        return {LogFileStage::Invalid, 0, 0, 0, 0, ""};
     }
     Strings ss;
     boost::split(ss, filename, boost::is_any_of("_"));
-    if (ss.size() != 3)
+    if (ss.size() != 3 && ss.size() != 4)
     {
         LOG_INFO(log, "Ignore unrecognized log file [dir={}] [file={}]", parent_path, filename);
-        return {LogFileStage::Invalid, 0, 0, 0, ""};
+        return {LogFileStage::Invalid, 0, 0, 0, 0, ""};
     }
 
     String err_msg;
@@ -44,13 +44,14 @@ LogFilename LogFilename::parseFrom(const String & parent_path, const String & fi
     {
         Format::LogNumberType log_num = std::stoull(ss[1]);
         Format::LogNumberType level_num = std::stoull(ss[2]);
+        UInt64 snap_seq = (ss.size() == 4) ? std::stoull(ss[3]) : 0;
         if (ss[0] == LOG_FILE_PREFIX_TEMP)
         {
-            return {LogFileStage::Temporary, log_num, level_num, bytes, parent_path};
+            return {LogFileStage::Temporary, log_num, level_num, snap_seq, bytes, parent_path};
         }
         else if (ss[0] == LOG_FILE_PREFIX_NORMAL)
         {
-            return {LogFileStage::Normal, log_num, level_num, bytes, parent_path};
+            return {LogFileStage::Normal, log_num, level_num, snap_seq, bytes, parent_path};
         }
     }
     catch (std::invalid_argument & e)
@@ -62,7 +63,7 @@ LogFilename LogFilename::parseFrom(const String & parent_path, const String & fi
         err_msg = e.what();
     }
     LOG_INFO(log, "Ignore unrecognized log file [dir={}] [file={}] [err={}]", parent_path, filename, err_msg);
-    return {LogFileStage::Invalid, 0, 0, 0, ""};
+    return {LogFileStage::Invalid, 0, 0, 0, 0, ""};
 }
 
 } // namespace DB::PS::V3

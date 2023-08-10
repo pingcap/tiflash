@@ -36,11 +36,11 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         // compute node does not contains region
         single_thread_task_handle = background_pool.addTask(
             [this] {
-                tmt.getKVStore()->gcRegionPersistedCache();
+                tmt.getKVStore()->gcPersistedRegion();
                 return false;
             },
             false,
-            /*interval_ms*/ 5 * 60 * 1000);
+            /*interval_ms=*/5 * 60 * 1000);
 
         // compute node does not contain long-live tables and segments
         auto & global_settings = global_context.getSettingsRef();

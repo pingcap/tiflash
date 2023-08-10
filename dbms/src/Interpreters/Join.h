@@ -258,7 +258,9 @@ public:
     bool finishOneProbe(size_t stream_index);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
-    bool isAllProbeFinished() const;
+    bool quickCheckProbeFinished() const;
+
+    bool quickCheckBuildFinished() const;
 
     void finishOneNonJoin(size_t partition_index);
 
@@ -278,12 +280,12 @@ public:
     MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index);
     const MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index) const;
     bool hasBuildSideMarkedSpillData(size_t stream_index) const;
-    void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
+    void flushBuildSideMarkedSpillData(size_t stream_index);
 
     MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index);
     const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
     bool hasProbeSideMarkedSpillData(size_t stream_index) const;
-    void flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
+    void flushProbeSideMarkedSpillData(size_t stream_index);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -350,6 +352,7 @@ private:
     std::list<size_t> spilled_partition_indexes;
 
     Int64 join_restore_concurrency;
+
     std::atomic<size_t> peak_build_bytes_usage{0};
 
     std::vector<RestoreInfo> restore_infos;
