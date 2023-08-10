@@ -84,7 +84,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                     }
                     probe_transform->finalizeProbe();
                 }
-                auto next_status = probe_transform->needScanHashMapAfterProbe() || probe_transform->shouldRestore()
+                auto next_status = (probe_transform->needScanHashMapAfterProbe() || probe_transform->shouldRestore())
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;
                 switchStatus(next_status);
@@ -124,6 +124,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             }
             return OperatorStatus::WAITING;
         case ProbeStatus::FINISHED:
+            block = {};
             return OperatorStatus::HAS_OUTPUT;
         }
     }
