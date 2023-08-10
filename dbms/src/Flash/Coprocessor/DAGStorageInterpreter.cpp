@@ -703,9 +703,7 @@ void DAGStorageInterpreter::buildRemoteExec(
     /// TODO: support reading data from write nodes
     size_t reader_num = is_cop_stream ? context.getSettingsRef().max_threads.get() : concurrent_num;
     for (size_t i = 0; i < reader_num; ++i)
-    {
         group_builder.addConcurrency(std::make_unique<CoprocessorReaderSourceOp>(exec_context, log->identifier(), coprocessor_reader));
-    }
 
     LOG_DEBUG(log, "remote sourceOps built");
 }
