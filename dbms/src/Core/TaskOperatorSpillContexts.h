@@ -83,7 +83,7 @@ private:
         if (has_additional_operator_spill_contexts)
         {
             std::unique_lock lock(mutex);
-            operator_spill_contexts.insert(operator_spill_contexts.end(), additional_operator_spill_contexts.begin(), additional_operator_spill_contexts.end());
+            operator_spill_contexts.splice(operator_spill_contexts.end(), additional_operator_spill_contexts);
             has_additional_operator_spill_contexts = false;
             additional_operator_spill_contexts.clear();
         }
