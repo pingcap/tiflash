@@ -19,6 +19,7 @@
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
+#include <Core/DecimalComparison.h>
 #include <Core/Field.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
@@ -52,6 +53,70 @@ consteval bool checkIfDecimalFieldType()
     return std::is_same_v<T, DecimalField<Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>> || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
 }
 
+template <typename LeftType, typename RightType>
+bool lessEqual(LeftType left, RightType right)
+{
+    if constexpr (checkIfDecimalFieldType<LeftType>() && checkIfDecimalFieldType<RightType>())
+    {
+        // This `if` branch is necessary or the next branch's codes will be generated
+        // when these two types are all DecimalField type which will cause compilation errors.
+        return left <= right;
+    }
+    else if constexpr (checkIfDecimalFieldType<LeftType>() || checkIfDecimalFieldType<RightType>())
+    {
+        // Only one type will be Decimal as Decimal vs Decimal can be handled in the `else` branch
+        UInt32 left_scale = 0;
+        UInt32 right_scale = 0;
+
+        if constexpr (checkIfDecimalFieldType<LeftType>())
+        {
+            left_scale = left.getScale();
+            return DecimalComparison<typename LeftType::DecimalType, RightType, LessOrEqualsOp>::compare(left.getValue(), right, left_scale, right_scale);
+        }
+        else if constexpr (checkIfDecimalFieldType<RightType>())
+        {
+            right_scale = right.getScale();
+            return DecimalComparison<LeftType, typename RightType::DecimalType, LessOrEqualsOp>::compare(left, right.getValue(), left_scale, right_scale);
+        }
+    }
+    else
+    {
+        return left <= right;
+    }
+}
+
+template <typename LeftType, typename RightType>
+bool greaterEqual(LeftType left, RightType right)
+{
+    if constexpr (checkIfDecimalFieldType<LeftType>() && checkIfDecimalFieldType<RightType>())
+    {
+        // This `if` branch is necessary or the next branch's codes will be generated
+        // when these two types are all DecimalField type which will cause compilation errors.
+        return left >= right;
+    }
+    else if constexpr (checkIfDecimalFieldType<LeftType>() || checkIfDecimalFieldType<RightType>())
+    {
+        // Only one type will be Decimal as Decimal vs Decimal can be handled in the `else` branch
+        UInt32 left_scale = 0;
+        UInt32 right_scale = 0;
+
+        if constexpr (checkIfDecimalFieldType<LeftType>())
+        {
+            left_scale = left.getScale();
+            return DecimalComparison<typename LeftType::DecimalType, RightType, GreaterOrEqualsOp>::compare(left.getValue(), right, left_scale, right_scale);
+        }
+        else if constexpr (checkIfDecimalFieldType<RightType>())
+        {
+            right_scale = right.getScale();
+            return DecimalComparison<LeftType, typename RightType::DecimalType, GreaterOrEqualsOp>::compare(left, right.getValue(), left_scale, right_scale);
+        }
+    }
+    else
+    {
+        return left >= right;
+    }
+}
+
 // When T is Decimal, we should convert it to DecimalField type
 // as we need scale value when executing the comparison operation.
 template <typename T>
@@ -70,9 +135,9 @@ template <typename T, typename U, bool is_preceding, bool is_desc>
 bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
 {
     if constexpr ((is_preceding && is_desc) || (!is_preceding && !is_desc))
-        return cursor_value <= current_row_aux_value;
+        return lessEqual(cursor_value, current_row_aux_value);
     else
-        return cursor_value >= current_row_aux_value;
+        return greaterEqual(cursor_value, current_row_aux_value);
 }
 
 template <typename T, typename U, bool is_preceding, bool is_desc>
@@ -84,24 +149,7 @@ bool isInRangeIntImpl(T current_row_aux_value, U cursor_value)
 template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc>
 bool isInRangeDecimalImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
-    if constexpr (checkIfDecimalFieldType<AuxColType>() && checkIfDecimalFieldType<OrderByColType>())
-        return isInRangeCommonImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
-
-    // When comparing Decimal and Int, we convert them to the Float first.
-    Float64 current_row_aux_value_float64;
-    Float64 cursor_value_float64;
-
-    if constexpr (checkIfDecimalFieldType<AuxColType>())
-        current_row_aux_value_float64 = current_row_aux_value.getValue().template toFloat<Float64>(current_row_aux_value.getScale());
-    else
-        current_row_aux_value_float64 = static_cast<Float64>(current_row_aux_value);
-
-    if constexpr (checkIfDecimalFieldType<OrderByColType>())
-        cursor_value_float64 = cursor_value.getValue().template toFloat<Float64>(cursor_value.getScale());
-    else
-        cursor_value_float64 = static_cast<Float64>(cursor_value);
-
-    return isInRangeCommonImpl<Float64, Float64, is_preceding, is_desc>(current_row_aux_value_float64, cursor_value_float64);
+    return isInRangeCommonImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
 }
 
 template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc>
@@ -135,20 +183,21 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
                 return isInRangeIntImpl<UInt64, UInt64, is_preceding, is_desc>(current_row_aux_value, cursor_value);
             return isInRangeIntImpl<Int64, Int64, is_preceding, is_desc>(current_row_aux_value, cursor_value);
         }
-        throw Exception("Unexpected Data Type!");
+        else
+            throw Exception("Unexpected Data Type!");
     }
     else if constexpr (CmpDataType == tipb::RangeCmpDataType::Float)
     {
-        if constexpr (std::is_floating_point_v<OrderByColType> && std::is_floating_point_v<AuxColType>)
-            return isInRangeFloatImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
-        throw Exception("Both data type should be float");
+        return isInRangeFloatImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
     }
     else
     {
         if constexpr (std::is_floating_point_v<OrderByColType> || std::is_floating_point_v<AuxColType>)
             throw Exception("Occurrence of float type at here is unexpected!");
-
-        return isInRangeDecimalImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
+        else if constexpr (!checkIfDecimalFieldType<AuxColType>() && !checkIfDecimalFieldType<OrderByColType>())
+            throw Exception("At least one Decimal type is required");
+        else
+            return isInRangeDecimalImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
     }
 }
 } // namespace
@@ -793,6 +842,7 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
         {
             if (cursor_column->isNullAt(cursor.row))
             {
+                // TODO here may be wrong when <preceding, preceding> <following, following>
                 if constexpr (is_begin)
                 {
                     advanceRowNumber(cursor);
@@ -816,7 +866,7 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
             }
             else
             {
-                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(current_row_aux_value, cursor_value))
+                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(current_row_aux_value, cursor_value))
                     return cursor;
             }
         }
@@ -824,7 +874,7 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
         {
             if (window_description.frame.end_preceding)
             {
-                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(current_row_aux_value, cursor_value))
+                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(current_row_aux_value, cursor_value))
                     return cursor;
             }
             else
