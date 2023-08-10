@@ -1484,7 +1484,9 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
                           .build(context);
+            WRAP_FOR_JOIN_TEST_BEGIN
             ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            WRAP_FOR_JOIN_TEST_END
         }
     }
     /// case 1.2 table scan join fine grained exchange receiver
@@ -1496,9 +1498,11 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
                           .build(context);
+            WRAP_FOR_JOIN_TEST_BEGIN
             ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
             if (original_max_streams_small < exchange_concurrency)
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+            WRAP_FOR_JOIN_TEST_END
         }
     }
     /// case 2, right join with right condition
@@ -1519,7 +1523,9 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
                           .build(context);
+            WRAP_FOR_JOIN_TEST_BEGIN
             ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            WRAP_FOR_JOIN_TEST_END
         }
     }
     /// case 2.2 table scan join fine grained exchange receiver
@@ -1532,9 +1538,11 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
                           .build(context);
+            WRAP_FOR_JOIN_TEST_BEGIN
             ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
             if (original_max_streams_small < exchange_concurrency)
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+            WRAP_FOR_JOIN_TEST_END
         }
     }
 }
