@@ -88,7 +88,7 @@ PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(const String & 
 {
     PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(std::move(storage_name), nullptr);
 
-    loadEdit(dir, edit);
+    loadEdit(dir, edit, /*force_apply*/ true);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
 
@@ -114,7 +114,7 @@ PageDirectoryFactory<Trait>::createFromEditForTest(const String & storage_name, 
         r.version.sequence = ++mock_sequence;
     }
 
-    loadEdit(dir, edit);
+    loadEdit(dir, edit, /*force_apply*/ true);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
     RUNTIME_CHECK(dir->sequence, mock_sequence);
@@ -150,10 +150,14 @@ PageDirectoryFactory<Trait>::createFromEditForTest(const String & storage_name, 
 }
 
 template <typename Trait>
-void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit)
+void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit, bool force_apply, UInt64 filter_seq)
 {
     for (const auto & r : edit.getRecords())
     {
+        bool do_apply = force_apply || (filter_seq < r.version.sequence);
+        if (!do_apply)
+            continue;
+
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
 
@@ -295,9 +299,10 @@ template <typename Trait>
 void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader)
 {
     DataFileIdSet data_file_ids;
+    auto checkpoint_snap_seq = reader->getSnapSeqForCheckpoint();
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [from_checkpoint, record] = reader->next();
         if (!record)
         {
             // TODO: Handle error, some error could be ignored.
@@ -308,16 +313,18 @@ void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WAL
             break;
         }
 
-        // apply the edit read
+        // The edits in later log files may have some overlap with the first checkpoint file.
+        // But we want to just apply each edit exactly once.
+        // So we will skip edits in later log files if they are already applied.
         if constexpr (std::is_same_v<Trait, u128::FactoryTrait>)
         {
             auto edit = Trait::Serializer::deserializeFrom(record.value(), nullptr);
-            loadEdit(dir, edit);
+            loadEdit(dir, edit, from_checkpoint, checkpoint_snap_seq);
         }
         else if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
         {
             auto edit = Trait::Serializer::deserializeFrom(record.value(), &data_file_ids);
-            loadEdit(dir, edit);
+            loadEdit(dir, edit, from_checkpoint, checkpoint_snap_seq);
         }
         else
         {

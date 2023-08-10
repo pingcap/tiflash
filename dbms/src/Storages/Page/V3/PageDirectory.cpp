@@ -1835,6 +1835,7 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter
 {
     auto identifier = fmt::format("{}.dump", wal->name());
     auto snap = createSnapshot(identifier);
+    SYNC_FOR("after_PageDirectory::create_snap_for_dump");
 
     // Only apply compact logs when files snapshot is valid
     auto files_snap = wal->tryGetFilesSnapshot(
@@ -1853,12 +1854,12 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter
     files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();
     if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
     {
-        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit), write_limiter);
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit), snap->sequence, write_limiter);
         return done_any_io;
     }
     else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
-        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit), write_limiter);
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit), snap->sequence, write_limiter);
         return done_any_io;
     }
 }

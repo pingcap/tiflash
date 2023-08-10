@@ -99,7 +99,7 @@ Format::LogNumberType WALStore::rollToNewLogWriter(const std::lock_guard<std::mu
 {
     // Roll to a new log file
     auto log_num = last_log_num++;
-    auto [new_log_file, filename] = createLogWriter({log_num, 0}, false);
+    auto [new_log_file, filename] = createLogWriter({log_num, 0}, /*snap_sequence*/ 0, false);
     UNUSED(filename);
     log_file.swap(new_log_file);
     return log_num;
@@ -107,6 +107,7 @@ Format::LogNumberType WALStore::rollToNewLogWriter(const std::lock_guard<std::mu
 
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
+    UInt64 snap_sequence,
     bool temp_file)
 {
     String path;
@@ -133,6 +134,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
         (temp_file ? LogFileStage::Temporary : LogFileStage::Normal),
         new_log_lvl.first,
         new_log_lvl.second,
+        snap_sequence,
         0,
         path};
     auto filename = log_filename.filename(log_filename.stage);
@@ -217,6 +219,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
 bool WALStore::saveSnapshot(
     FilesSnapshot && files_snap,
     String && serialized_snap,
+    UInt64 snap_sequence,
     const WriteLimiterPtr & write_limiter)
 {
     if (files_snap.persisted_log_files.empty())
@@ -227,7 +230,7 @@ bool WALStore::saveSnapshot(
     // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     // Create a temporary file for saving directory snapshot
-    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*temp_file*/ true);
+    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, snap_sequence, /*temp_file*/ true);
 
     // TODO: split the snap into multiple records in LogFile so that the memory
     //       consumption could be more smooth.
