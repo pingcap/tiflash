@@ -185,11 +185,11 @@ try
                           .build(context);
             if (right_table_name == "right_table_1_concurrency")
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
         }
     }
@@ -237,11 +237,11 @@ try
                           .build(context);
             if (right_table_name == "right_table_1_concurrency")
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             }
         }
     }
