@@ -14,34 +14,38 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
-// The base class of event related task.
-class EventTask : public Task
+/// Used to read block from io-based block input stream like `SpilledFilesInputStream` and write block to result queue.
+///
+/// io_stream (read in io_thread_pool) --> result_queue --> caller.
+class StreamRestoreTask : public Task
 {
 public:
-    // Only used for unit test.
-    EventTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_);
-
-    EventTask(
+    StreamRestoreTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const EventPtr & event_,
-        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+        const BlockInputStreamPtr & stream_,
+        const ResultQueuePtr & result_queue_);
 
 protected:
-    void finalizeImpl() final;
-    virtual void doFinalizeImpl(){};
+    ExecTaskStatus executeImpl() override;
 
-    UInt64 getScheduleDuration() const;
+    ExecTaskStatus awaitImpl() override;
+
+    ExecTaskStatus executeIOImpl() override;
+
+    void finalizeImpl() override;
 
 private:
-    EventPtr event;
-};
+    BlockInputStreamPtr stream;
+    ResultQueuePtr result_queue;
 
+    bool is_done = false;
+    Block block;
+};
 } // namespace DB
