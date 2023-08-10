@@ -26,12 +26,10 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
 {
     switch (type)
     {
-    // the default queue is mlfq queue.
+    // the default queue is RC_MLFQ.
     case TaskQueueType::DEFAULT:
-#ifdef DBMS_PUBLIC_GTEST
     case TaskQueueType::RCQ_MLFQ:
         return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
-#endif
     case TaskQueueType::MLFQ:
         return std::make_unique<CPUMultiLevelFeedbackQueue>();
     default:
