@@ -1318,6 +1318,110 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, Issue7915Case1)
+try
+{
+    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+    // rotate the current log file
+    ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        dir->apply(std::move(edit));
+    }
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(dir, 3, snap);
+        EXPECT_EQ(normal_id, 1);
+    }
+
+    auto sp_after_create_snap_for_dump = SyncPointCtl::enableInScope("after_PageDirectory::create_snap_for_dump");
+    auto th_dump = std::async([&]() {
+        // ensure page 2 is deleted in the dumped snapshot
+        dir->gcInMemEntries(u128::PageDirectoryType::InMemGCOption{.need_removed_entries = false});
+        ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+    });
+    sp_after_create_snap_for_dump.waitAndPause();
+
+    // write an arbitrary record to the current log file to prevent it being deleted after dump snapshot
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+
+    sp_after_create_snap_for_dump.next();
+    th_dump.get();
+
+    // restart and check
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(dir, 3, snap);
+        EXPECT_EQ(normal_id, 1);
+        ASSERT_EQ(dir->numPages(), 3);
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, Issue7915Case2)
+try
+{
+    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+    // rotate the current log file
+    ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+
+    auto sp_after_create_snap_for_dump = SyncPointCtl::enableInScope("after_PageDirectory::create_snap_for_dump");
+    auto th_dump = std::async([&]() {
+        // ensure page 2, page 1 is deleted in the dumped snapshot
+        dir->gcInMemEntries(u128::PageDirectoryType::InMemGCOption{.need_removed_entries = false});
+        ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+    });
+    sp_after_create_snap_for_dump.waitAndPause();
+
+    // write an arbitrary record to the current log file to prevent it being deleted after dump snapshot
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+
+    sp_after_create_snap_for_dump.next();
+    th_dump.get();
+
+    // restart and check
+    dir = restoreFromDisk();
+    {
+        ASSERT_EQ(dir->numPages(), 1);
+    }
+}
+CATCH
+
 TEST(MultiVersionRefCount, RefAndCollapse)
 try
 {

@@ -97,6 +97,7 @@ public:
     bool saveSnapshot(
         FilesSnapshot && files_snap,
         String && serialized_snap,
+        UInt64 snap_sequence,
         const WriteLimiterPtr & write_limiter = nullptr);
 
     const String & name() { return storage_name; }
@@ -113,6 +114,7 @@ private:
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
+        UInt64 snap_sequence,
         bool temp_file);
 
     Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
