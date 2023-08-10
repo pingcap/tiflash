@@ -14,34 +14,44 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipelineTaskBase.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
-// The base class of event related task.
-class EventTask : public Task
+class SimplePipelineTask : public Task
+    , public PipelineTaskBase
 {
 public:
-    // Only used for unit test.
-    EventTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_);
-
-    EventTask(
+    SimplePipelineTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const EventPtr & event_,
-        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+        PipelineExecPtr && pipeline_exec_)
+        : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
+        , PipelineTaskBase(std::move(pipeline_exec_))
+    {
+    }
 
 protected:
-    void finalizeImpl() final;
-    virtual void doFinalizeImpl(){};
+    ExecTaskStatus executeImpl() override
+    {
+        return runExecute();
+    }
 
-    UInt64 getScheduleDuration() const;
+    ExecTaskStatus executeIOImpl() override
+    {
+        return runExecuteIO();
+    }
 
-private:
-    EventPtr event;
+    ExecTaskStatus awaitImpl() override
+    {
+        return runAwait();
+    }
+
+    void finalizeImpl() override
+    {
+        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs());
+    }
 };
-
 } // namespace DB

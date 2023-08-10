@@ -35,7 +35,7 @@ public:
     }
 
 private:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() final
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;
@@ -43,7 +43,7 @@ private:
             return ExecTaskStatus::IO_OUT;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() final
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;
