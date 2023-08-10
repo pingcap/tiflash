@@ -1475,7 +1475,6 @@ try
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
-    WRAP_FOR_JOIN_TEST_BEGIN
     /// case 1.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
     {
@@ -1538,7 +1537,6 @@ try
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
         }
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
