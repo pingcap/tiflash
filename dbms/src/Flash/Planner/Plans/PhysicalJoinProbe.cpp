@@ -26,12 +26,13 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    if (!fine_grained_shuffle.enable() && join_ptr->isSpilled() && group_builder.concurrency() == 1)
-    {
-        // When the join build operator spilled, the probe operator requires at least two or more threads to restore spilled hash partitions.
-        auto restore_concurrency = std::max(2, concurrency);
-        restoreConcurrency(exec_context, group_builder, restore_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
-    }
+    // Currently join probe does not support fine grained shuffle.
+    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+    // The concurrency level of "join probe" needs to be consistent with that of "join build" as much as possible.
+    // For spilled data restore, the probe operator requires at least two or more threads to restore spilled hash partitions.
+    // For scan hashmap after probe, try to let one thread read the non_matched_data of a segment.
+    auto restore_concurrency = std::max(join_ptr->getBuildConcurrency(), concurrency);
+    restoreConcurrency(exec_context, group_builder, restore_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     executeExpression(exec_context, group_builder, prepare_actions, log);
 
