@@ -103,7 +103,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         cur_status = after_status;
         total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (!Impl::isTargetStatus(cur_status) || pipelineTaskTimeExceedYieldThreshold(total_time_spent))
+        if (!Impl::isTargetStatus(cur_status) || timeExceedYieldThreshold(total_time_spent))
             break;
     }
     metrics.addExecuteTime(task, total_time_spent);

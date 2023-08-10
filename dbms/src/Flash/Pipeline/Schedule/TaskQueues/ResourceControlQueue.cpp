@@ -89,8 +89,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
             std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
-            LOG_TRACE(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}",
-                    name, priority, is_finished, task_queue->empty());
+            LOG_TRACE(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}", name, priority, is_finished, task_queue->empty());
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
@@ -161,7 +160,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     if (iter == resource_group_statistic.end())
     {
         UInt64 accumulated_cpu_time = inc_value;
-        if (pipelineTaskTimeExceedYieldThreshold(accumulated_cpu_time))
+        if (timeExceedYieldThreshold(accumulated_cpu_time))
         {
             updateResourceGroupStatisticWithoutLock(name, accumulated_cpu_time);
             accumulated_cpu_time = 0;
@@ -171,7 +170,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     else
     {
         iter->second += inc_value;
-        if (pipelineTaskTimeExceedYieldThreshold(iter->second))
+        if (timeExceedYieldThreshold(iter->second))
         {
             updateResourceGroupStatisticWithoutLock(name, iter->second);
             iter->second = 0;
