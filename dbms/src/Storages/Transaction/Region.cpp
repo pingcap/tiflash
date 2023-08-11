@@ -524,6 +524,7 @@ void Region::updateLastCompactLogApplied() const
     if (last_compact_log_applied != 0)
     {
         uint64_t gap = current_applied_index > last_compact_log_applied ? current_applied_index - last_compact_log_applied : 0;
+        LOG_DEBUG(log, "!!!!! updateLastCompactLogApplied region_id: {} gap {} current_applied_index {} last_compact_log_applied {}", id(), gap, current_applied_index, last_compact_log_applied);
         GET_METRIC(tiflash_raft_raft_log_lag_count, type_applied_index).Observe(gap);
     }
     last_compact_log_applied = current_applied_index;
