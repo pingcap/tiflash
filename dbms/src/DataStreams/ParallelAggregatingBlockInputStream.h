@@ -39,7 +39,8 @@ public:
         size_t max_threads_,
         Int64 max_buffered_bytes_,
         size_t temporary_data_merge_threads_,
-        const String & req_id);
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     String getName() const override { return NAME; }
 

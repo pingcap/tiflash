@@ -58,7 +58,11 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         is_final_agg,
         spill_config);
     assert(aggregate_context);
-    aggregate_context->initBuild(params, concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
+    aggregate_context->initBuild(
+        params,
+        concurrency,
+        /*hook=*/[&]() { return exec_context.isCancelled(); },
+        exec_context.getRegisterOperatorSpillContext());
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
@@ -73,7 +77,16 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
 {
     assert(aggregate_context);
     aggregate_context->getAggSpillContext()->finishSpillableStage();
-    if (!aggregate_context->hasSpilledData())
+    bool need_final_spill = false;
+    for (size_t i = 0; i < aggregate_context->getBuildConcurrency(); ++i)
+    {
+        if (aggregate_context->getAggSpillContext()->needFinalSpill(i))
+        {
+            need_final_spill = true;
+            break;
+        }
+    }
+    if (!aggregate_context->hasSpilledData() && !need_final_spill)
     {
         aggregate_context.reset();
         return nullptr;

@@ -83,7 +83,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     size_t merging_threads_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , aggregator(params, req_id, merging_threads_)
+    , aggregator(params, req_id, merging_threads_, [](const OperatorSpillContextPtr &) {})
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
     , merging_threads(merging_threads_)
@@ -349,7 +349,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                 if (!blocks_to_merge || blocks_to_merge->empty())
                 {
                     {
-                        std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
+                        std::unique_lock merged_blocks_lock(parallel_merge_data->merged_blocks_mutex);
                         parallel_merge_data->exhausted = true;
                     }
 
@@ -361,9 +361,9 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                 output_order = blocks_to_merge->front().info.bucket_num;
 
                 {
-                    std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
+                    std::unique_lock merged_blocks_lock(parallel_merge_data->merged_blocks_mutex);
 
-                    parallel_merge_data->have_space.wait(lock, [this] {
+                    parallel_merge_data->have_space.wait(merged_blocks_lock, [this] {
                         return parallel_merge_data->merged_blocks.size() < merging_threads
                             || parallel_merge_data->finish;
                     });

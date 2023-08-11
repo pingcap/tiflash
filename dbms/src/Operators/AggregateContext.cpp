@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook)
+void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook, const RegisterOperatorSpillContext & register_operator_spill_context)
 {
     assert(status.load() == AggStatus::init);
     is_cancelled = std::move(hook);
@@ -31,7 +31,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
         many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
     }
 
-    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads);
+    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads, register_operator_spill_context);
     aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     status = AggStatus::build;
@@ -65,7 +65,7 @@ bool AggregateContext::needSpill(size_t task_index, bool try_mark_need_spill)
 void AggregateContext::spillData(size_t task_index)
 {
     assert(status.load() == AggStatus::build);
-    aggregator->spill(*many_data[task_index]);
+    aggregator->spill(*many_data[task_index], task_index);
 }
 
 LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()

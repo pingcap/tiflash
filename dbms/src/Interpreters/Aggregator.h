@@ -1026,7 +1026,7 @@ public:
     };
 
 
-    Aggregator(const Params & params_, const String & req_id, size_t concurrency);
+    Aggregator(const Params & params_, const String & req_id, size_t concurrency, const RegisterOperatorSpillContext & register_operator_spill_context);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1064,7 +1064,7 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void spill(AggregatedDataVariants & data_variants);
+    void spill(AggregatedDataVariants & data_variants, size_t thread_num);
     void finishSpill();
     BlockInputStreams restoreSpilledData();
     bool hasSpilledData() const { return agg_spill_context->hasSpilledData(); }
@@ -1175,7 +1175,8 @@ protected:
     template <typename Method>
     void spillImpl(
         AggregatedDataVariants & data_variants,
-        Method & method);
+        Method & method,
+        size_t thread_num);
 
 protected:
     /// Merge data from hash table `src` into `dst`.

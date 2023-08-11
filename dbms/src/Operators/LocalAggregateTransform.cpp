@@ -36,7 +36,11 @@ LocalAggregateTransform::LocalAggregateTransform(
     , params(params_)
     , agg_context(req_id)
 {
-    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
+    agg_context.initBuild(
+        params,
+        local_concurrency,
+        /*hook=*/[&]() { return exec_context.isCancelled(); },
+        exec_context.getRegisterOperatorSpillContext());
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -47,7 +51,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         if unlikely (!block)
         {
             agg_context.getAggSpillContext()->finishSpillableStage();
-            return agg_context.hasSpilledData()
+            return agg_context.hasSpilledData() || agg_context.getAggSpillContext()->needFinalSpill(0)
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);
         }

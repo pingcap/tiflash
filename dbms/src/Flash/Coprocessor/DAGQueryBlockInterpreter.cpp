@@ -435,7 +435,13 @@ void DAGQueryBlockInterpreter::executeAggregation(
                 stream,
                 params,
                 true,
-                log->identifier());
+                log->identifier(),
+                [&](const OperatorSpillContextPtr & operator_spill_context) {
+                    if (context.getDAGContext() != nullptr)
+                    {
+                        context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                    }
+                });
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
         recordProfileStreams(pipeline, query_block.aggregation_name);
@@ -451,7 +457,13 @@ void DAGQueryBlockInterpreter::executeAggregation(
             max_streams,
             settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
-            log->identifier());
+            log->identifier(),
+            [&](const OperatorSpillContextPtr & operator_spill_context) {
+                if (context.getDAGContext() != nullptr)
+                {
+                    context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                }
+            });
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
@@ -467,7 +479,13 @@ void DAGQueryBlockInterpreter::executeAggregation(
             pipeline.firstStream(),
             params,
             true,
-            log->identifier());
+            log->identifier(),
+            [&](const OperatorSpillContextPtr & operator_spill_context) {
+                if (context.getDAGContext() != nullptr)
+                {
+                    context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                }
+            });
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
 }

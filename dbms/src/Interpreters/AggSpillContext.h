@@ -24,6 +24,7 @@ class AggSpillContext final : public OperatorSpillContext
 {
 private:
     std::vector<std::atomic<Int64>> per_thread_revocable_memories;
+    std::vector<std::atomic<AutoSpillStatus>> per_thread_auto_spill_status;
     SpillConfig spill_config;
     SpillerPtr spiller;
     UInt64 per_thread_spill_threshold;
@@ -40,6 +41,9 @@ public:
     bool updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num);
     Int64 getTotalRevocableMemoryImpl() override;
     Int64 triggerSpill(Int64 expected_released_memories) override;
+    bool supportAutoTriggerSpill() const override { return true; }
+    void finishOneSpill(size_t thread_num);
+    bool needFinalSpill(size_t thread_num) const { return per_thread_auto_spill_status[thread_num] == AutoSpillStatus::NEED_AUTO_SPILL; }
 };
 
 using AggSpillContextPtr = std::shared_ptr<AggSpillContext>;

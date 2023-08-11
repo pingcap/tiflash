@@ -47,7 +47,7 @@ public:
     {
     }
 
-    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
+    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook, const RegisterOperatorSpillContext & register_operator_spill_context);
 
     size_t getBuildConcurrency() const { return max_threads; }
 
