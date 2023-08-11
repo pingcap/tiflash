@@ -51,7 +51,7 @@ public:
         if (operator_spill_context->supportAutoTriggerSpill())
         {
             std::unique_lock lock(mutex);
-            operator_spill_contexts.push_back(operator_spill_context);
+            additional_operator_spill_contexts.push_back(operator_spill_context);
             has_additional_operator_spill_contexts = true;
         }
     }
