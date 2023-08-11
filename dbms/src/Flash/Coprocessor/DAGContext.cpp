@@ -148,6 +148,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , initialize_concurrency(concurrency)
     , collect_execution_summaries(
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
+    , kind(DAGRequestKind::Cop)
     , is_root_mpp_task(false)
     , log(Logger::get(log_identifier))
     , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())

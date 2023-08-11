@@ -167,7 +167,7 @@ public:
 private:
     const DAGSchema schema;
     const bool has_enforce_encode_type;
-    const int concurrency;
+    const size_t concurrency;
     const bool enable_cop_stream;
     pingcap::coprocessor::ResponseIter resp_iter;
 
@@ -177,10 +177,11 @@ public:
         pingcap::kv::Cluster * cluster,
         std::vector<pingcap::coprocessor::CopTask> && tasks,
         bool has_enforce_encode_type_,
-        int concurrency_,
-        const pingcap::kv::LabelFilter & tiflash_label_filter_,
+        size_t concurrency_,
+        bool enable_cop_stream_,
         size_t queue_size,
-        bool enable_cop_stream_)
+        UInt64 cop_timeout,
+        const pingcap::kv::LabelFilter & tiflash_label_filter_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , concurrency(concurrency_)
@@ -191,6 +192,7 @@ public:
               cluster,
               concurrency_,
               &Poco::Logger::get("pingcap/coprocessor"),
+              cop_timeout,
               tiflash_label_filter_)
     {}
 
@@ -315,8 +317,13 @@ public:
 
     static size_t getSourceNum() { return 1; }
 
-    int getExternalThreadCnt() const { return concurrency; }
+    size_t getConcurrency() const { return concurrency; }
+
+    bool enableCopStream() const { return enable_cop_stream; }
 
     void close() {}
 };
+
+using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
+
 } // namespace DB
