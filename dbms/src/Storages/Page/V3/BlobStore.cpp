@@ -237,8 +237,9 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
                     {
                         while (true)
                         {
-                            auto field_begin_in_buf
-                                = cur_field_begin <= buffer_begin_in_page ? 0 : cur_field_begin - buffer_begin_in_page;
+                            auto field_begin_in_buf = cur_field_begin <= buffer_begin_in_page //
+                                ? 0
+                                : cur_field_begin - buffer_begin_in_page;
                             auto field_length_in_buf = cur_field_end > buffer_end_in_page
                                 ? data_buf.size() - field_begin_in_buf
                                 : cur_field_end - buffer_begin_in_page - field_begin_in_buf;
