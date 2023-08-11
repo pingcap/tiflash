@@ -269,7 +269,8 @@ private:
         {
             // Only restore the PageDirectory
             typename Trait::PageDirectoryFactory factory;
-            factory.dump_entries = true;
+            factory.debug.dump_entries = true;
+            factory.debug.apply_entries_to_directory = false;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
             return 0;
         }

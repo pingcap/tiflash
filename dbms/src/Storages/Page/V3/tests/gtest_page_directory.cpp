@@ -43,6 +43,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Storages/Page/PageConstants.h"
+#include "Storages/Page/PageDefinesBase.h"
+
 namespace DB
 {
 namespace PS::V3::tests
@@ -1431,6 +1434,73 @@ try
         PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+
+    auto sp_after_create_snap_for_dump = SyncPointCtl::enableInScope("after_PageDirectory::create_snap_for_dump");
+    auto th_dump = std::async([&]() {
+        // ensure page 2, page 1 is deleted in the dumped snapshot
+        dir->gcInMemEntries(u128::PageDirectoryType::InMemGCOption{.need_removed_entries = false});
+        ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+    });
+    sp_after_create_snap_for_dump.waitAndPause();
+
+    // write an arbitrary record to the current log file to prevent it being deleted after dump snapshot
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+
+    sp_after_create_snap_for_dump.next();
+    th_dump.get();
+
+    // restart and check
+    dir = restoreFromDisk();
+    {
+        ASSERT_EQ(dir->numPages(), 1);
+    }
+}
+CATCH
+
+
+TEST_F(PageDirectoryTest, Issue7915Case3)
+try
+{
+    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10000), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+    // rotate the current log file
+    ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+    {
+        // Mock full gc happens and move page 10000 to another blob file
+        const auto gc_entries = dir->getEntriesByBlobIds(std::vector<BlobFileId>{50});
+        PageEntriesEdit edit;
+        for (const auto & [file_id, versioned_pageid_entry_list] : gc_entries.first)
+        {
+            for (const auto & [page_id, version, entry] : versioned_pageid_entry_list)
+            {
+                auto new_entry = entry;
+                new_entry.file_id = 5050;
+                edit.upsertPage(page_id, version, new_entry);
+            }
+        }
+        dir->gcApply(std::move(edit));
     }
     {
         PageEntriesEdit edit;

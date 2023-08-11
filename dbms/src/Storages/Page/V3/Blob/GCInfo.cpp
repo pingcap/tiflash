@@ -104,7 +104,7 @@ String BlobStoreGCInfo::toTypeTruncateString(const Type type_index) const
         return fmt::format("{{{}: [null]}}", magic_enum::enum_name(type_index));
 
     FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("{{{}: [", type_index)
+    fmt_buf.fmtAppend("{{{}: [", magic_enum::enum_name(type_index))
         .joinStr(
             blob_gc_truncate_info.begin(),
             blob_gc_truncate_info.end(),

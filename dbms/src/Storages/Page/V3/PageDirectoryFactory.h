@@ -81,12 +81,19 @@ private:
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit, bool force_apply, UInt64 filter_seq = 0);
     static void applyRecord(const PageDirectoryPtr & dir, const typename PageEntriesEdit::EditRecord & r);
 
+    void restoreBlobStats(const PageDirectoryPtr & dir);
+
     BlobStats * blob_stats = nullptr;
 
     // For debug tool
     template <typename T>
     friend class PageStorageControlV3;
-    bool dump_entries = false;
+    struct DebugOptions
+    {
+        bool dump_entries = false;
+        bool apply_entries_to_directory = true;
+    };
+    DebugOptions debug;
 };
 
 namespace u128

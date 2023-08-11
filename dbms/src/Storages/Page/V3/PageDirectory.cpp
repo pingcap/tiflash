@@ -1798,7 +1798,7 @@ void PageDirectory<Trait>::gcApply(PageEntriesEdit && migrated_edit, const Write
             iter = mvcc_table_directory.find(record.page_id);
             RUNTIME_CHECK_MSG(
                 iter != mvcc_table_directory.end(),
-                "Can't find [page_id={}] while doing gcApply",
+                "Can't find page while doing gcApply, page_id={}",
                 record.page_id);
         } // release the read lock on `table_rw_mutex`
 
@@ -1814,7 +1814,7 @@ void PageDirectory<Trait>::gcApply(PageEntriesEdit && migrated_edit, const Write
                 deref_iter = mvcc_table_directory.find(id_to_deref);
                 RUNTIME_CHECK_MSG(
                     deref_iter != mvcc_table_directory.end(),
-                    "Can't find [page_id={}] to deref after gcApply",
+                    "Can't find page to deref after gcApply, page_id={}",
                     id_to_deref);
             }
             auto deref_res
@@ -1823,7 +1823,7 @@ void PageDirectory<Trait>::gcApply(PageEntriesEdit && migrated_edit, const Write
         }
     }
 
-    LOG_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
+    LOG_INFO(log, "GC apply done, edit_size={}", migrated_edit.size());
 }
 
 template <typename Trait>

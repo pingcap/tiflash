@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
@@ -61,33 +62,12 @@ typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trai
     dir->gcInMemEntries({.need_removed_entries = false});
     LOG_INFO(
         DB::Logger::get(storage_name),
-        "PageDirectory restored [max_page_id={}] [max_applied_ver={}]",
+        "PageDirectory restored, max_page_id={} max_applied_ver={}",
         dir->getMaxIdAfterRestart(),
         dir->sequence);
 
-    if (blob_stats)
-    {
-        // After all entries restored to `mvcc_table_directory`, only apply
-        // the latest entry to `blob_stats`, or we may meet error since
-        // some entries may be removed in memory but not get compacted
-        // in the log file.
-        for (const auto & [page_id, entries] : dir->mvcc_table_directory)
-        {
-            (void)page_id;
+    restoreBlobStats(dir);
 
-            // We should restore the entry to `blob_stats` even if it is marked as "deleted",
-            // or we will mistakenly reuse the space to write other blobs down into that space.
-            // So we need to use `getLastEntry` instead of `getEntry(version)` here.
-            if (auto entry = entries->getLastEntry(std::nullopt); entry)
-            {
-                blob_stats->restoreByEntry(*entry);
-            }
-        }
-
-        blob_stats->restore();
-    }
-
-    // TODO: After restored ends, set the last offset of log file for `wal`
     return dir;
 }
 
@@ -136,30 +116,47 @@ typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trai
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore when restore, so no need to fill removed_entries.
     dir->gcInMemEntries({.need_removed_entries = false});
+    LOG_INFO(
+        DB::Logger::get(storage_name),
+        "PageDirectory restored, max_page_id={} max_applied_ver={}",
+        dir->getMaxIdAfterRestart(),
+        dir->sequence);
 
-    if (blob_stats)
+    restoreBlobStats(dir);
+
+    return dir;
+}
+
+template <typename Trait>
+void PageDirectoryFactory<Trait>::restoreBlobStats(const PageDirectoryPtr & dir)
+{
+    if (!blob_stats)
+        return;
+
+    // After all entries restored to `mvcc_table_directory`, only apply
+    // the latest entry to `blob_stats`, or we may meet error since
+    // some entries may be removed in memory but not get compacted
+    // in the log file.
+    for (const auto & [page_id, entries] : dir->mvcc_table_directory)
     {
-        // After all entries restored to `mvcc_table_directory`, only apply
-        // the latest entry to `blob_stats`, or we may meet error since
-        // some entries may be removed in memory but not get compacted
-        // in the log file.
-        for (const auto & [page_id, entries] : dir->mvcc_table_directory)
+        // We should restore the entry to `blob_stats` even if it is marked as "deleted",
+        // or we will mistakenly reuse the space to write other blobs down into that space.
+        // So we need to use `getLastEntry` instead of `getEntry(version)` here.
+        if (auto entry = entries->getLastEntry(std::nullopt); entry)
         {
-            (void)page_id;
-
-            // We should restore the entry to `blob_stats` even if it is marked as "deleted",
-            // or we will mistakenly reuse the space to write other blobs down into that space.
-            // So we need to use `getLastEntry` instead of `getEntry(version)` here.
-            if (auto entry = entries->getLastEntry(std::nullopt); entry)
+            try
             {
                 blob_stats->restoreByEntry(*entry);
             }
+            catch (DB::Exception & e)
+            {
+                e.addMessage(fmt::format("(while restoring page_id={} entry={})", page_id, *entry));
+                e.rethrow();
+            }
         }
-
-        blob_stats->restore();
     }
 
-    return dir;
+    blob_stats->restore();
 }
 
 template <typename Trait>
@@ -171,15 +168,29 @@ void PageDirectoryFactory<Trait>::loadEdit(
 {
     for (const auto & r : edit.getRecords())
     {
-        bool do_apply = force_apply || (filter_seq < r.version.sequence);
-        if (!do_apply)
+        if (unlikely(debug.dump_entries))
+        {
+            if (max_applied_ver < r.version)
+                max_applied_ver = r.version;
+
+            // for debug, we always show all entries
+            LOG_INFO(Logger::get(), "{}", r);
+            if (debug.apply_entries_to_directory)
+                applyRecord(dir, r);
+            continue;
+        }
+
+        // Because REF is not an idempotent operation, when loading edit from disk to restore
+        // the PageDirectory, it could re-apply a REF to an non-existing page_id that is already
+        // deleted in the dumped snapshot.
+        // So we filter the REF record which is less than or equal to the `filter_seq`
+        bool filter = !force_apply && r.version.sequence <= filter_seq && r.type == EditRecordType::REF;
+        if (filter)
             continue;
 
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
 
-        if (dump_entries)
-            LOG_INFO(Logger::get(), "{}", r);
         applyRecord(dir, r);
     }
 }
@@ -298,7 +309,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
                 auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);
                 RUNTIME_CHECK_MSG(
                     deref_iter != dir->mvcc_table_directory.end(),
-                    "Can't find [page_id={}] to deref when applying upsert",
+                    "Can't find page to deref when applying upsert, page_id={}",
                     id_to_deref);
                 auto deref_res
                     = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, restored_version, 1, nullptr);
