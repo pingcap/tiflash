@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/QueryOperatorSpillContexts.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
@@ -73,14 +74,16 @@ using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 struct MPPQuery
 {
-    explicit MPPQuery(bool has_meaningful_gather_id_)
-        : has_meaningful_gather_id(has_meaningful_gather_id_)
+    MPPQuery(const MPPQueryId & mpp_query_id, bool has_meaningful_gather_id_)
+        : mpp_query_operator_spill_contexts(std::make_shared<QueryOperatorSpillContexts>(mpp_query_id))
+        , has_meaningful_gather_id(has_meaningful_gather_id_)
     {}
     MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
     ~MPPQuery();
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
     std::unordered_map<MPPGatherId, MPPGatherTaskSetPtr, MPPGatherIdHash> mpp_gathers;
+    std::shared_ptr<QueryOperatorSpillContexts> mpp_query_operator_spill_contexts;
     bool has_meaningful_gather_id;
 };
 using MPPQueryPtr = std::shared_ptr<MPPQuery>;
