@@ -440,7 +440,6 @@ TEST_P(SpaceMapTest, EmptyBlob)
     ASSERT_EQ(sizes.second, 10);
 }
 
-
 INSTANTIATE_TEST_CASE_P(Type, SpaceMapTest, testing::Values(SpaceMap::SMAP64_STD_MAP));
 
 TEST(SpaceMapSTDMapTest, TestMarkFreeSearch)

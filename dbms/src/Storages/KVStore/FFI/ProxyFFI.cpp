@@ -977,7 +977,7 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
     {
         LOG_WARNING(
             &Poco::Logger::get(__FUNCTION__),
-            "Failed to get lock by key {}, region id {}",
+            "Failed to get lock by key {}, region_id={}",
             tikv_key.toDebugString(),
             region_id);
         return BaseBuffView{};

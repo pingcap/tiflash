@@ -378,14 +378,14 @@ RegionMap RegionPersister::restore(
         {
             LOG_WARNING(
                 log,
-                "Region {} skip restore because keyspace_id {} in blacklist",
+                "Region skip restore because keyspace_id in blacklist, region_id={} keyspace={}",
                 region->id(),
                 region->getKeyspaceID());
             return;
         }
         if (global_context.isRegionInBlacklist(region->id()))
         {
-            LOG_WARNING(log, "Region {} skip restore because region_id {} in blacklist", region->id(), region->id());
+            LOG_WARNING(log, "Region skip restore because region_id in blacklist, region_id={}", region->id());
             return;
         }
 
