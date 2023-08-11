@@ -137,17 +137,25 @@ enum class ExecutionMode
     Pipeline,
 };
 
+enum class DAGRequestKind
+{
+    Cop,
+    CopStream,
+    BatchCop,
+    MPP,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
-    // for non-mpp(cop/batchCop)
+    // for non-mpp(Cop/CopStream/BatchCop)
     DAGContext(
         tipb::DAGRequest & dag_request_,
         TablesRegionsInfo && tables_regions_info_,
         KeyspaceID keyspace_id_,
         const String & tidb_host_,
-        bool is_batch_cop_,
+        DAGRequestKind cop_kind_,
         const String & resource_group_name,
         LoggerPtr log_);
 
@@ -221,6 +229,18 @@ public:
             warnings_.push_back(error);
         }
     }
+    void fillWarnings(tipb::SelectResponse & response)
+    {
+        std::vector<tipb::Error> warnings_vec;
+        consumeWarnings(warnings_vec);
+        for (auto & warning : warnings_vec)
+        {
+            auto * warn = response.add_warnings();
+            // TODO: consider using allocated warnings to prevent copy?
+            warn->CopyFrom(warning);
+        }
+        response.set_warning_count(getWarningCount());
+    }
     void clearWarnings()
     {
         warnings.clear();
@@ -228,8 +248,10 @@ public:
     }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
-    bool isBatchCop() const { return is_batch_cop; }
-    bool isMPPTask() const { return is_mpp_task; }
+    bool isCop() const { return kind == DAGRequestKind::Cop; }
+    bool isCopStream() const { return kind == DAGRequestKind::CopStream; }
+    bool isBatchCop() const { return kind == DAGRequestKind::BatchCop; }
+    bool isMPPTask() const { return kind == DAGRequestKind::MPP; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
     const MPPTaskId & getMPPTaskId() const { return mpp_task_id; }
@@ -335,9 +357,8 @@ public:
     // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    /* const */ bool is_mpp_task = false;
+    /* const */ DAGRequestKind kind;
     /* const */ bool is_root_mpp_task = false;
-    /* const */ bool is_batch_cop = false;
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;

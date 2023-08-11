@@ -69,6 +69,11 @@ public:
         const coprocessor::BatchRequest * request,
         grpc::ServerWriter<coprocessor::BatchResponse> * writer) override;
 
+    grpc::Status CoprocessorStream(
+        grpc::ServerContext * context,
+        const coprocessor::Request * request,
+        grpc::ServerWriter<coprocessor::Response> * writer) override;
+
     grpc::Status DispatchMPPTask(
         grpc::ServerContext * context,
         const mpp::DispatchTaskRequest * request,
@@ -152,7 +157,7 @@ protected:
     MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<legacy::ThreadPool> cop_pool, batch_cop_pool;
+    std::unique_ptr<legacy::ThreadPool> cop_pool, cop_stream_pool, batch_cop_pool;
 };
 
 class AsyncFlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<FlashService>

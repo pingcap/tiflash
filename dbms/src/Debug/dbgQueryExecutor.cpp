@@ -399,10 +399,10 @@ tipb::SelectResponse executeDAGRequest(
         region_id,
         RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", false, "", log);
+    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", log);
     context.setDAGContext(&dag_context);
 
-    DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    DAGDriver<DAGRequestKind::Cop> driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
     LOG_DEBUG(log, "Handle DAG request done");
     return dag_response;
@@ -423,8 +423,7 @@ bool runAndCompareDagReq(
 
     bool unequal_flag = false;
     DAGProperties properties = getDAGProperties("");
-    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges
-        = CoprocessorHandler::genCopKeyRange(req.ranges());
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = genCopKeyRange(req.ranges());
     static auto log = Logger::get();
     LOG_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
     tipb::SelectResponse dag_response;
@@ -434,9 +433,10 @@ bool runAndCompareDagReq(
         region_id,
         RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", false, "", log);
+    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", log);
     context.setDAGContext(&dag_context);
-    DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    DAGDriver<DAGRequestKind::Cop>
+        driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
 
     auto resp_ptr = std::make_shared<tipb::SelectResponse>();

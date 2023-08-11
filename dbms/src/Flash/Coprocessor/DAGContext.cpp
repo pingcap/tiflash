@@ -41,13 +41,13 @@ bool strictSqlMode(UInt64 sql_mode)
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
 
-// for non-mpp(cop/batchCop)
+// for non-mpp(Cop/CopStream/BatchCop)
 DAGContext::DAGContext(
     tipb::DAGRequest & dag_request_,
     TablesRegionsInfo && tables_regions_info_,
     KeyspaceID keyspace_id_,
     const String & tidb_host_,
-    bool is_batch_cop_,
+    DAGRequestKind kind_,
     const String & resource_group_name_,
     LoggerPtr log_)
     : dag_request(&dag_request_)
@@ -56,9 +56,8 @@ DAGContext::DAGContext(
     , tidb_host(tidb_host_)
     , collect_execution_summaries(
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-    , is_mpp_task(false)
+    , kind(kind_)
     , is_root_mpp_task(false)
-    , is_batch_cop(is_batch_cop_)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
     , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
@@ -70,6 +69,7 @@ DAGContext::DAGContext(
     , keyspace_id(keyspace_id_)
     , resource_group_name(resource_group_name_)
 {
+    RUNTIME_ASSERT(kind != DAGRequestKind::MPP, log, "DAGContext non-mpp constructor get a mpp kind");
     initOutputInfo();
 }
 
@@ -80,7 +80,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , dummy_ast(makeDummyQuery())
     , collect_execution_summaries(
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-    , is_mpp_task(true)
+    , kind(DAGRequestKind::MPP)
     , is_root_mpp_task(is_root_mpp_task_)
     , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
@@ -111,9 +111,8 @@ DAGContext::DAGContext(
     , tidb_host(compute_node_host_)
     , collect_execution_summaries(
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-    , is_mpp_task(false)
+    , kind(DAGRequestKind::Cop)
     , is_root_mpp_task(false)
-    , is_batch_cop(false)
     , is_disaggregated_task(true)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
@@ -134,7 +133,7 @@ DAGContext::DAGContext(UInt64 max_error_count_)
     : dag_request(nullptr)
     , dummy_ast(makeDummyQuery())
     , collect_execution_summaries(false)
-    , is_mpp_task(false)
+    , kind(DAGRequestKind::Cop)
     , is_root_mpp_task(false)
     , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(0)
@@ -152,7 +151,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , initialize_concurrency(concurrency)
     , collect_execution_summaries(
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-    , is_mpp_task(false)
+    , kind(DAGRequestKind::Cop)
     , is_root_mpp_task(false)
     , log(Logger::get(log_identifier))
     , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())

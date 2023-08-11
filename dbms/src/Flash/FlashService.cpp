@@ -116,6 +116,9 @@ void FlashService::init(Context & context_)
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
     cop_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
+    LOG_INFO(log, "Use a thread pool with {} threads to handle cop stream requests.", cop_pool_size);
+    cop_stream_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-stream-pool"); });
+
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
@@ -224,7 +227,6 @@ grpc::Status FlashService::Coprocessor(
         }
     }
 
-
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
         auto wait_ms = watch.elapsedMilliseconds();
         if (max_queued_duration_ms > 0)
@@ -260,7 +262,7 @@ grpc::Status FlashService::Coprocessor(
                 GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Decrement();
         });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
-        CoprocessorHandler cop_handler(cop_context, request, response);
+        CoprocessorHandler<false> cop_handler(cop_context, request, response);
         return cop_handler.execute();
     });
 
@@ -303,6 +305,112 @@ grpc::Status FlashService::BatchCoprocessor(
     });
 
     LOG_INFO(log, "Handle batch coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    return ret;
+}
+
+grpc::Status FlashService::CoprocessorStream(
+    grpc::ServerContext * grpc_context,
+    const coprocessor::Request * request,
+    grpc::ServerWriter<coprocessor::Response> * writer)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
+    auto log_level = is_remote_read ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(
+        log,
+        log_level,
+        "Handling coprocessor stream request, is_remote_read: {}, start ts: {}, region info: {}, region epoch: {}",
+        is_remote_read,
+        request->start_ts(),
+        request->context().region_id(),
+        request->context().region_epoch().DebugString());
+
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    GET_METRIC(tiflash_coprocessor_request_count, type_cop_stream).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_stream).Increment();
+    if (is_remote_read)
+    {
+        GET_METRIC(tiflash_coprocessor_request_count, type_remote_read).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Increment();
+    }
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_stream).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop_stream).Observe(watch.elapsedSeconds());
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+        if (is_remote_read)
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Decrement();
+    });
+
+    context->setMockStorage(mock_storage);
+
+    const auto & settings = context->getSettingsRef();
+    auto handle_limit
+        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+    auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
+
+    if (handle_limit > 0)
+    {
+        // We use this atomic variable metrics from the prometheus-cpp library to mark the number of queued queries.
+        // TODO: Use grpc asynchronous server and a more fully-featured thread pool.
+        if (auto current = GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_stream).Value();
+            current > handle_limit)
+        {
+            coprocessor::Response response;
+            response.mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
+                "tiflash cop stream pool queued too much, current = {}, limit = {}",
+                current,
+                handle_limit));
+            writer->Write(response);
+            return grpc::Status::OK;
+        }
+    }
+
+    grpc::Status ret = executeInThreadPool(*cop_stream_pool, [&] {
+        auto wait_ms = watch.elapsedMilliseconds();
+        if (max_queued_duration_ms > 0)
+        {
+            if (wait_ms > static_cast<UInt64>(max_queued_duration_ms))
+            {
+                coprocessor::Response response;
+                response.mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
+                    "this task queued in tiflash cop stream pool too long, current = {} ms, limit = {} ms",
+                    wait_ms,
+                    max_queued_duration_ms));
+                writer->Write(response);
+                return grpc::Status::OK;
+            }
+        }
+        if (wait_ms > 1000)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
+            log,
+            log_level,
+            "Begin process cop stream request after wait {} ms, start ts: {}, region info: {}, region epoch: {}",
+            wait_ms,
+            request->start_ts(),
+            request->context().region_id(),
+            request->context().region_epoch().DebugString());
+        auto [db_context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            return status;
+        }
+        if (is_remote_read)
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Increment();
+        SCOPE_EXIT({
+            if (is_remote_read)
+                GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Decrement();
+        });
+        CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
+        CoprocessorHandler<true> cop_handler(cop_context, request, writer);
+        return cop_handler.execute();
+    });
+
+    LOG_IMPL(log, log_level, "Handle coprocessor stream request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 

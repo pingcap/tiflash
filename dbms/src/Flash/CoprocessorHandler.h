@@ -43,10 +43,21 @@ struct CoprocessorContext
         const grpc::ServerContext & grpc_server_context_);
 };
 
+std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> genCopKeyRange(
+    const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges);
+
+enum CopRequestType
+{
+    COP_REQ_TYPE_DAG = 103,
+    COP_REQ_TYPE_ANALYZE = 104,
+    COP_REQ_TYPE_CHECKSUM = 105,
+};
+
 /// Coprocessor request handler, deals with:
 /// 1. DAG request: WIP;
 /// 2. Analyze request: NOT IMPLEMENTED;
 /// 3. Checksum request: NOT IMPLEMENTED;
+template <bool is_stream>
 class CoprocessorHandler
 {
 public:
@@ -54,30 +65,24 @@ public:
         CoprocessorContext & cop_context_,
         const coprocessor::Request * cop_request_,
         coprocessor::Response * response_);
+    CoprocessorHandler(
+        CoprocessorContext & cop_context_,
+        const coprocessor::Request * cop_request_,
+        grpc::ServerWriter<coprocessor::Response> * cop_writer_);
 
-    virtual ~CoprocessorHandler() = default;
-
-    virtual grpc::Status execute();
-
-    static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> genCopKeyRange(
-        const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges);
-
-protected:
-    virtual grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
+    grpc::Status execute();
 
 protected:
-    enum
-    {
-        COP_REQ_TYPE_DAG = 103,
-        COP_REQ_TYPE_ANALYZE = 104,
-        COP_REQ_TYPE_CHECKSUM = 105,
-    };
+    grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
 
+protected:
     CoprocessorContext & cop_context;
     const coprocessor::Request * cop_request;
-    coprocessor::Response * cop_response;
 
-    Poco::Logger * log;
+    coprocessor::Response * cop_response = nullptr;
+    grpc::ServerWriter<coprocessor::Response> * cop_writer = nullptr;
+
+    const LoggerPtr log;
 };
 
 } // namespace DB
