@@ -124,11 +124,17 @@ public:
     }
 
 protected:
-    static PageIdU64 getNormalPageIdU64(const u128::PageDirectoryPtr & d, PageIdU64 page_id, const PageDirectorySnapshotPtr & snap)
+    static PageIdU64 getNormalPageIdU64(
+        const u128::PageDirectoryPtr & d,
+        PageIdU64 page_id,
+        const PageDirectorySnapshotPtr & snap)
     {
         return d->getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap, true).low;
     }
-    static PageEntryV3 getEntry(const u128::PageDirectoryPtr & d, PageIdU64 page_id, const PageDirectorySnapshotPtr & snap)
+    static PageEntryV3 getEntry(
+        const u128::PageDirectoryPtr & d,
+        PageIdU64 page_id,
+        const PageDirectorySnapshotPtr & snap)
     {
         return d->getByID(buildV3Id(TEST_NAMESPACE_ID, page_id), snap).second;
     }
@@ -168,11 +174,14 @@ try
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap2);
     {
         PageIdV3Internals ids{buildV3Id(TEST_NAMESPACE_ID, 1), buildV3Id(TEST_NAMESPACE_ID, 2)};
-        PageIDAndEntriesV3 expected_entries{{buildV3Id(TEST_NAMESPACE_ID, 1), entry1}, {buildV3Id(TEST_NAMESPACE_ID, 2), entry2}};
+        PageIDAndEntriesV3 expected_entries{
+            {buildV3Id(TEST_NAMESPACE_ID, 1), entry1},
+            {buildV3Id(TEST_NAMESPACE_ID, 2), entry2}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
-    PageEntryV3 entry2_v2{.file_id = 2 + 102, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry2_v2{.file_id = 2 + 102, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
@@ -277,8 +286,14 @@ try
     EXPECT_ENTRY_EQ(entry3, dir, 3, snap2);
     EXPECT_ENTRY_EQ(entry4, dir, 4, snap2);
     {
-        PageIdV3Internals ids{buildV3Id(TEST_NAMESPACE_ID, 1), buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 4)};
-        PageIDAndEntriesV3 expected_entries{{buildV3Id(TEST_NAMESPACE_ID, 1), entry1}, {buildV3Id(TEST_NAMESPACE_ID, 3), entry3}, {buildV3Id(TEST_NAMESPACE_ID, 4), entry4}};
+        PageIdV3Internals ids{
+            buildV3Id(TEST_NAMESPACE_ID, 1),
+            buildV3Id(TEST_NAMESPACE_ID, 3),
+            buildV3Id(TEST_NAMESPACE_ID, 4)};
+        PageIDAndEntriesV3 expected_entries{
+            {buildV3Id(TEST_NAMESPACE_ID, 1), entry1},
+            {buildV3Id(TEST_NAMESPACE_ID, 3), entry3},
+            {buildV3Id(TEST_NAMESPACE_ID, 4), entry4}};
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 }
@@ -306,14 +321,16 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
     // Update on ref page is not allowed
-    PageEntryV3 entry_updated{.file_id = 999, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
+    PageEntryV3
+        entry_updated{.file_id = 999, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry_updated);
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
 
-    PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
+    PageEntryV3
+        entry_updated2{.file_id = 777, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_updated2);
@@ -830,7 +847,13 @@ try
         SCOPED_TRACE(fmt::format("test idx={}", test_round));
         const bool del_in_same_wb = distrib(gen) % 2 == 0;
         const bool gc_or_not = distrib(gen) < 1;
-        LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
+        LOG_DEBUG(
+            log,
+            "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}",
+            test_round,
+            del_in_same_wb,
+            gc_or_not,
+            visible_page_ids.size());
 
         // Generate new ref operations to the visible pages
         const size_t num_ref_page = distrib(gen) + 1;
@@ -847,7 +870,8 @@ try
         // Generate new delete operations among the visible pages and new-generated ref page
         // Delete 1 page at least, delete until 1 page left at most
         std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
-        const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
+        const size_t num_del_page
+            = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
         std::unordered_set<PageIdU64> delete_ref_page_ids;
         for (size_t j = 0; j < num_del_page; ++j)
         {
@@ -937,7 +961,13 @@ try
         SCOPED_TRACE(fmt::format("test idx={}", test_round));
         const bool del_in_same_wb = distrib(gen) % 2 == 0;
         const bool gc_or_not = distrib(gen) < 1;
-        LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
+        LOG_DEBUG(
+            log,
+            "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}",
+            test_round,
+            del_in_same_wb,
+            gc_or_not,
+            visible_page_ids.size());
 
         const size_t num_ref_page = distrib(gen) + 1;
         std::unordered_map<PageIdU64, PageIdU64> new_ref_page_ids;
@@ -952,7 +982,8 @@ try
 
         // Delete 1 page at least, delete until 1 page left at most
         std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
-        const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
+        const size_t num_del_page
+            = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
         std::unordered_set<PageIdU64> delete_ref_page_ids;
         for (size_t j = 0; j < num_del_page; ++j)
         {
@@ -1009,7 +1040,8 @@ try
             const auto all_ids = dir->getAllPageIds();
             for (const auto & cur_id : visible_page_ids)
             {
-                EXPECT_GT(all_ids.count(buildV3Id(TEST_NAMESPACE_ID, cur_id)), 0) << fmt::format("cur_id:{}, all_id:{}, visible_ids:{}", cur_id, all_ids, visible_page_ids);
+                EXPECT_GT(all_ids.count(buildV3Id(TEST_NAMESPACE_ID, cur_id)), 0)
+                    << fmt::format("cur_id:{}, all_id:{}, visible_ids:{}", cur_id, all_ids, visible_page_ids);
             }
         }
         auto snap = dir->createSnapshot();
@@ -1089,12 +1121,18 @@ class PageDirectoryGCTest : public PageDirectoryTest
 {
 };
 
-#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                                                          \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    {                                                                                                                                            \
-        PageEntriesEdit edit;                                                                                                                    \
-        edit.put(buildV3Id(TEST_NAMESPACE_ID, (PAGE_ID)), entry_v##VERSION);                                                                     \
-        dir->apply(std::move(edit));                                                                                                             \
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                      \
+    PageEntryV3 entry_v##VERSION{                                            \
+        .file_id = (BLOB_FILE_ID),                                           \
+        .size = (VERSION),                                                   \
+        .padded_size = 0,                                                    \
+        .tag = 0,                                                            \
+        .offset = 0x123,                                                     \
+        .checksum = 0x4567};                                                 \
+    {                                                                        \
+        PageEntriesEdit edit;                                                \
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, (PAGE_ID)), entry_v##VERSION); \
+        dir->apply(std::move(edit));                                         \
     }
 // Insert an entry into mvcc directory
 #define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
@@ -1181,7 +1219,8 @@ TEST_F(PageDirectoryGCTest, DumpSnapshotDuringWrite)
     auto sp_before_apply_memory = SyncPointCtl::enableInScope("before_PageDirectory::apply_to_memory");
     auto th_write1 = std::async([&]() {
         PageEntriesEdit edit;
-        PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3
+            entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 5352), entry_1_v1);
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 5353), buildV3Id(TEST_NAMESPACE_ID, 5352));
         dir->apply(std::move(edit));
@@ -1214,7 +1253,8 @@ TEST_F(PageDirectoryTest, RestoreWithRefToDeletedPage)
 try
 {
     {
-        PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3
+            entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         PageEntriesEdit edit; // ingest
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 352), entry_1_v1);
         dir->apply(std::move(edit));
@@ -1260,7 +1300,8 @@ CATCH
 TEST_F(PageDirectoryTest, IncrRefDuringDump)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -1321,7 +1362,8 @@ CATCH
 TEST_F(PageDirectoryTest, Issue7915Case1)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -1375,7 +1417,8 @@ CATCH
 TEST_F(PageDirectoryTest, Issue7915Case2)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -1989,7 +2032,8 @@ try
     }
 
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    PageEntryV3
+        entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
     {
         // this will return ref page 11 and 12 that need to be rewritten
         // to new blob file.
@@ -2080,7 +2124,8 @@ try
     }
 
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    PageEntryV3
+        entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
     {
         // this will return ref page 11 and 12 that need to be rewritten
         // to new blob file.
@@ -2171,7 +2216,8 @@ try
     }
 
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    PageEntryV3
+        entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
     {
         // this will return ref page 11 and 12 that need to be rewritten
         // to new blob file.
@@ -2539,9 +2585,12 @@ try
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
 
-    PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x100, .checksum = 0x4567};
-    PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x400, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = file_id1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_5_v1{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x100, .checksum = 0x4567};
+    PageEntryV3
+        entry_5_v2{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x400, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -2625,7 +2674,8 @@ CATCH
 TEST_F(PageDirectoryGCTest, IncrRefDuringGC)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -2647,9 +2697,7 @@ try
     {
         // begin gc and stop after get lowest seq
         auto sp_gc = SyncPointCtl::enableInScope("after_PageDirectory::doGC_getLowestSeq");
-        auto th_gc = std::async([&]() {
-            dir->gcInMemEntries({});
-        });
+        auto th_gc = std::async([&]() { dir->gcInMemEntries({}); });
         sp_gc.waitAndPause();
 
         // add a ref during gc
@@ -2684,7 +2732,8 @@ CATCH
 TEST_F(PageDirectoryGCTest, IncrRefDuringGC2)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -2702,9 +2751,7 @@ try
     }
 
     auto after_get_gc_seq = SyncPointCtl::enableInScope("after_PageDirectory::doGC_getLowestSeq");
-    auto th_gc = std::async([&]() {
-        dir->gcInMemEntries({});
-    });
+    auto th_gc = std::async([&]() { dir->gcInMemEntries({}); });
     after_get_gc_seq.waitAndPause();
 
     // add a ref during gcInMemEntries

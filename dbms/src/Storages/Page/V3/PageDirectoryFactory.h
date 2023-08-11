@@ -51,7 +51,11 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const WALConfig & config);
+    PageDirectoryPtr create(
+        const String & storage_name,
+        FileProviderPtr & file_provider,
+        PSDiskDelegatorPtr & delegator,
+        const WALConfig & config);
 
     PageDirectoryPtr createFromReader(const String & storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
 
@@ -59,7 +63,11 @@ public:
     PageDirectoryPtr dangerouslyCreateFromEditWithoutWAL(const String & storage_name, PageEntriesEdit & edit);
 
     // just for test
-    PageDirectoryPtr createFromEditForTest(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit);
+    PageDirectoryPtr createFromEditForTest(
+        const String & storage_name,
+        FileProviderPtr & file_provider,
+        PSDiskDelegatorPtr & delegator,
+        PageEntriesEdit & edit);
 
     // just for test
     PageDirectoryFactory<Trait> & setBlobStats(BlobStats & blob_stats_)
@@ -71,9 +79,7 @@ public:
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit, bool force_apply, UInt64 filter_seq = 0);
-    static void applyRecord(
-        const PageDirectoryPtr & dir,
-        const typename PageEntriesEdit::EditRecord & r);
+    static void applyRecord(const PageDirectoryPtr & dir, const typename PageEntriesEdit::EditRecord & r);
 
     BlobStats * blob_stats = nullptr;
 

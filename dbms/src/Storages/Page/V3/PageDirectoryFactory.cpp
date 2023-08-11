@@ -33,16 +33,21 @@ extern const int PS_DIR_APPLY_INVALID_STATUS;
 namespace PS::V3
 {
 template <typename Trait>
-typename PageDirectoryFactory<Trait>::PageDirectoryPtr
-PageDirectoryFactory<Trait>::create(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const WALConfig & config)
+typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trait>::create(
+    const String & storage_name,
+    FileProviderPtr & file_provider,
+    PSDiskDelegatorPtr & delegator,
+    const WALConfig & config)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
     return createFromReader(storage_name, reader, std::move(wal));
 }
 
 template <typename Trait>
-typename PageDirectoryFactory<Trait>::PageDirectoryPtr
-PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALStoreReaderPtr reader, WALStorePtr wal)
+typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trait>::createFromReader(
+    const String & storage_name,
+    WALStoreReaderPtr reader,
+    WALStorePtr wal)
 {
     PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(storage_name, std::move(wal));
     loadFromDisk(dir, std::move(reader));
@@ -54,7 +59,11 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
     dir->gcInMemEntries({.need_removed_entries = false});
-    LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxIdAfterRestart(), dir->sequence);
+    LOG_INFO(
+        DB::Logger::get(storage_name),
+        "PageDirectory restored [max_page_id={}] [max_applied_ver={}]",
+        dir->getMaxIdAfterRestart(),
+        dir->sequence);
 
     if (blob_stats)
     {
@@ -83,8 +92,9 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
 }
 
 template <typename Trait>
-typename PageDirectoryFactory<Trait>::PageDirectoryPtr
-PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(const String & storage_name, PageEntriesEdit & edit)
+typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(
+    const String & storage_name,
+    PageEntriesEdit & edit)
 {
     PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(std::move(storage_name), nullptr);
 
@@ -100,8 +110,11 @@ PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(const String & 
 
 // just for test
 template <typename Trait>
-typename PageDirectoryFactory<Trait>::PageDirectoryPtr
-PageDirectoryFactory<Trait>::createFromEditForTest(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
+typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trait>::createFromEditForTest(
+    const String & storage_name,
+    FileProviderPtr & file_provider,
+    PSDiskDelegatorPtr & delegator,
+    PageEntriesEdit & edit)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
@@ -150,7 +163,11 @@ PageDirectoryFactory<Trait>::createFromEditForTest(const String & storage_name, 
 }
 
 template <typename Trait>
-void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit, bool force_apply, UInt64 filter_seq)
+void PageDirectoryFactory<Trait>::loadEdit(
+    const PageDirectoryPtr & dir,
+    const PageEntriesEdit & edit,
+    bool force_apply,
+    UInt64 filter_seq)
 {
     for (const auto & r : edit.getRecords())
     {
@@ -242,7 +259,10 @@ void PageDirectoryFactory<Trait>::applyRecord(
             while (true)
             {
                 const auto & current_version_list = version_list_iter->second;
-                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = current_version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = current_version_list->resolveToPageId(
+                    sequence_to_resolve,
+                    /*ignore_delete=*/id_to_resolve != r.page_id,
+                    nullptr);
                 if (resolve_state == ResolveResult::TO_NORMAL)
                 {
                     current_version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry);
@@ -267,11 +287,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
             version_list->createDelete(restored_version);
             break;
         case EditRecordType::REF:
-            Trait::PageDirectory::applyRefEditRecord(
-                dir->mvcc_table_directory,
-                version_list,
-                r,
-                restored_version);
+            Trait::PageDirectory::applyRefEditRecord(dir->mvcc_table_directory, version_list, r, restored_version);
             break;
         case EditRecordType::UPSERT:
         {
@@ -280,8 +296,12 @@ void PageDirectoryFactory<Trait>::applyRecord(
             {
                 // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page
                 auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);
-                RUNTIME_CHECK_MSG(deref_iter != dir->mvcc_table_directory.end(), "Can't find [page_id={}] to deref when applying upsert", id_to_deref);
-                auto deref_res = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, restored_version, 1, nullptr);
+                RUNTIME_CHECK_MSG(
+                    deref_iter != dir->mvcc_table_directory.end(),
+                    "Can't find [page_id={}] to deref when applying upsert",
+                    id_to_deref);
+                auto deref_res
+                    = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, restored_version, 1, nullptr);
                 RUNTIME_ASSERT(!deref_res);
             }
             break;
@@ -290,7 +310,11 @@ void PageDirectoryFactory<Trait>::applyRecord(
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", magic_enum::enum_name(r.type), r.page_id, restored_version));
+        e.addMessage(fmt::format(
+            " [type={}] [page_id={}] [ver={}]",
+            magic_enum::enum_name(r.type),
+            r.page_id,
+            restored_version));
         throw e;
     }
 }
