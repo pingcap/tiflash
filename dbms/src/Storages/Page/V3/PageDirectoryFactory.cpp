@@ -98,7 +98,7 @@ typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trai
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
-    PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(std::move(storage_name), std::move(wal));
+    PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(storage_name, std::move(wal));
 
     // Allocate mock sequence to run gc
     UInt64 mock_sequence = 0;
