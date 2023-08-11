@@ -53,20 +53,24 @@ protected:
     LoggerPtr log = Logger::get();
     ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
     TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
-    DM::PushDownFilterPtr generatePushDownFilter(String table_info_json, const String & query, TimezoneInfo & timezone_info);
+    DM::PushDownFilterPtr generatePushDownFilter(
+        String table_info_json,
+        const String & query,
+        TimezoneInfo & timezone_info);
 };
 
 
-DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const String table_info_json, const String & query, TimezoneInfo & timezone_info)
+DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
+    const String table_info_json,
+    const String & query,
+    TimezoneInfo & timezone_info)
 {
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
         *ctx,
         query,
-        [&](const String &, const String &) {
-            return table_info;
-        },
+        [&](const String &, const String &) { return table_info; },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, log);
@@ -76,7 +80,9 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
     auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions() : empty_condition;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters
+        = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions()
+                                                        : empty_condition;
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = empty_condition;
 
     std::unique_ptr<DAGQueryInfo> dag_query;
@@ -107,8 +113,15 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
 
-    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+    auto rs_operator
+        = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
+    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
+        rs_operator,
+        table_info.columns,
+        pushed_down_filters,
+        columns_to_read,
+        *ctx,
+        log);
     return push_down_filter;
 }
 
@@ -127,7 +140,10 @@ try
 
     {
         // Equal between col and literal
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 = 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -147,7 +163,10 @@ try
 
     {
         // Greater between col and literal
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 > 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 > 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -167,7 +186,10 @@ try
 
     {
         // GreaterEqual between col and literal
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 >= 667", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 >= 667",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -187,7 +209,10 @@ try
 
     {
         // Less between col and literal
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 < 777", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 < 777",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -207,7 +232,10 @@ try
 
     {
         // LessEqual between col and literal
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 <= 776", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 <= 776",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -241,7 +269,10 @@ try
     // Test cases for literal and col (inverse direction)
     {
         // Equal between literal and col (take care of direction)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 = col_2", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where 667 = col_2",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -261,7 +292,10 @@ try
 
     {
         // NotEqual between literal and col (take care of direction)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 != col_2", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where 667 != col_2",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "not_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -281,7 +315,10 @@ try
 
     {
         // Greater between literal and col (take care of direction)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 < col_2", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where 667 < col_2",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -301,7 +338,10 @@ try
 
     {
         // GreaterEqual between literal and col (take care of direction)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 <= col_2", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where 667 <= col_2",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -321,7 +361,10 @@ try
 
     {
         // Less between literal and col (take care of direction)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 777 > col_2", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where 777 > col_2",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -341,7 +384,10 @@ try
 
     {
         // LessEqual between literal and col (take care of direction)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 777 >= col_2", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where 777 >= col_2",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -377,17 +423,23 @@ try
 })json";
     {
         // Not
-        auto filter = generatePushDownFilter(table_info_json, "select col_1, col_2 from default.t_111 where NOT col_2=666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select col_1, col_2 from default.t_111 where NOT col_2=666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "not");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -399,18 +451,23 @@ try
 
     {
         // And
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' and col_2 = 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_1 = 'test1' and col_2 = 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
+        std::regex rx(
+            R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -422,7 +479,10 @@ try
 
     {
         // OR
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 789 or col_2 = 777", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 = 789 or col_2 = 777",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
@@ -430,11 +490,15 @@ try
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"777\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\","
+            "\"col\":\"col_2\",\"value\":\"777\"}]}");
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -447,18 +511,23 @@ try
     // More complicated
     {
         // And with "not supported"
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
+        std::regex rx(
+            R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -470,7 +539,10 @@ try
 
     {
         // And with not
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_3 = 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 = 789 and not col_3 = 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
@@ -478,11 +550,15 @@ try
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_3");
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\","
+            "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -494,7 +570,10 @@ try
 
     {
         // And with or
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 3);
@@ -504,11 +583,16 @@ try
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
         EXPECT_EQ(rs_operator->getAttrs()[2].col_name, "col_3");
         EXPECT_EQ(rs_operator->getAttrs()[2].col_id, 3);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"678\"}]}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"or\","
+            "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\","
+            "\"value\":\"678\"}]}]}");
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 789, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 789, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -520,18 +604,23 @@ try
 
     {
         // Or with "not supported"
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' or col_2 = 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_1 = 'test1' or col_2 = 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
+        std::regex rx(
+            R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -543,18 +632,23 @@ try
 
     {
         // Or with not
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
+        std::regex rx(
+            R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -566,14 +660,25 @@ try
 
     {
         // And between col and literal (not supported since And only support when child is ColumnExpr)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 and 1", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 and 1",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 8 flag: 4097 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
+            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
+            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
+            "}\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
+            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
+            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -586,14 +691,25 @@ try
     std::cout << " do query select * from default.t_111 where col_2 or 1 " << std::endl;
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
-        auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 or 1", default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            "select * from default.t_111 where col_2 or 1",
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 8 flag: 4097 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
+            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
+            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
+            "}\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
+            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
+            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
 
-        Block before_where_block = Block{{toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
-                                          toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
-                                          toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
+             toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
+             toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
         EXPECT_EQ(filter->extra_cast, nullptr);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -638,17 +754,38 @@ try
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
         // converted_time: 0
 
-        auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+                + String("')"),
+            timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
+                + String("\"}"));
 
-        Block before_where_block = Block{{toVec<UInt64>("col_timestamp", {12, 1, 1802216106174185472, 1802216106174185472, 1, 43, 1802216106174185472, 888439}),
-                                          toVec<UInt64>("col_datetime", {1849259496301477883, 1849559496301477888, 0, 1, 1849259496301477888, 1849559496301477888, 667, 888439}),
-                                          toVec<Int64>("col_date", {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<UInt64>(
+                 "col_timestamp",
+                 {12, 1, 1802216106174185472, 1802216106174185472, 1, 43, 1802216106174185472, 888439}),
+             toVec<UInt64>(
+                 "col_datetime",
+                 {1849259496301477883,
+                  1849559496301477888,
+                  0,
+                  1,
+                  1849259496301477888,
+                  1849559496301477888,
+                  667,
+                  888439}),
+             toVec<Int64>(
+                 "col_date",
+                 {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
         EXPECT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
@@ -667,17 +804,45 @@ try
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
         // converted_time: 1802216518491045888
 
-        auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+                + String("')"),
+            timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
+                + String("\"}"));
 
-        Block before_where_block = Block{{toVec<UInt64>("col_timestamp", {1849559496301477888, 1849560389654675456, 1949560389654675456, 1849259496301477888, 1849560389654675452, 1849559416301477888, 1849559496301477833, 888439}),
-                                          toVec<UInt64>("col_datetime", {1849259496301477883, 1849559496301477888, 0, 1, 1849259496301477888, 1849559496301477888, 667, 888439}),
-                                          toVec<Int64>("col_date", {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<UInt64>(
+                 "col_timestamp",
+                 {1849559496301477888,
+                  1849560389654675456,
+                  1949560389654675456,
+                  1849259496301477888,
+                  1849560389654675452,
+                  1849559416301477888,
+                  1849559496301477833,
+                  888439}),
+             toVec<UInt64>(
+                 "col_datetime",
+                 {1849259496301477883,
+                  1849559496301477888,
+                  0,
+                  1,
+                  1849259496301477888,
+                  1849559496301477888,
+                  667,
+                  888439}),
+             toVec<Int64>(
+                 "col_date",
+                 {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
         EXPECT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
@@ -696,17 +861,45 @@ try
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
         // converted_time: 0
 
-        auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+                + String("')"),
+            timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
+                + String("\"}"));
 
-        Block before_where_block = Block{{toVec<UInt64>("col_timestamp", {1849559496301477888, 1849560389654675456, 1949560389654675456, 1849259496301477888, 1849560389654675452, 1849559416301477888, 1849559496301477833, 888439}),
-                                          toVec<UInt64>("col_datetime", {1849259496301477883, 1849559496301477888, 0, 1, 1849259496301477888, 1849559496301477888, 667, 888439}),
-                                          toVec<Int64>("col_date", {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<UInt64>(
+                 "col_timestamp",
+                 {1849559496301477888,
+                  1849560389654675456,
+                  1949560389654675456,
+                  1849259496301477888,
+                  1849560389654675452,
+                  1849559416301477888,
+                  1849559496301477833,
+                  888439}),
+             toVec<UInt64>(
+                 "col_datetime",
+                 {1849259496301477883,
+                  1849559496301477888,
+                  0,
+                  1,
+                  1849259496301477888,
+                  1849559496301477888,
+                  667,
+                  888439}),
+             toVec<Int64>(
+                 "col_date",
+                 {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
         EXPECT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
@@ -719,17 +912,44 @@ try
 
     {
         // Greater between Datetime col and Datetime literal
-        auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"), default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"),
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_datetime");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 5);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp)
+                + String("\"}"));
 
-        Block before_where_block = Block{{toVec<UInt64>("col_timestamp", {1849559496301477888, 1849560389654675456, 1949560389654675456, 1849259496301477888, 1849560389654675452, 1849559416301477888, 1849559496301477833, 888439}),
-                                          toVec<UInt64>("col_datetime", {1849259496301477883, 1849559496301477888, 0, 1, 1849259496301477888, 1849559496301477888, 667, 888439}),
-                                          toVec<Int64>("col_date", {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<UInt64>(
+                 "col_timestamp",
+                 {1849559496301477888,
+                  1849560389654675456,
+                  1949560389654675456,
+                  1849259496301477888,
+                  1849560389654675452,
+                  1849559416301477888,
+                  1849559496301477833,
+                  888439}),
+             toVec<UInt64>(
+                 "col_datetime",
+                 {1849259496301477883,
+                  1849559496301477888,
+                  0,
+                  1,
+                  1849259496301477888,
+                  1849559496301477888,
+                  667,
+                  888439}),
+             toVec<Int64>(
+                 "col_date",
+                 {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
         EXPECT_TRUE(!filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -741,17 +961,51 @@ try
 
     {
         // Greater between Date col and Datetime literal
-        auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"), default_timezone_info);
+        auto filter = generatePushDownFilter(
+            table_info_json,
+            String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"),
+            default_timezone_info);
         const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_date");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 6);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp)
+                + String("\"}"));
 
-        Block before_where_block = Block{{toVec<UInt64>("col_timestamp", {1849559496301477888, 1849560389654675456, 1949560389654675456, 1849259496301477888, 1849560389654675452, 1849559416301477888, 1849559496301477833, 888439}),
-                                          toVec<UInt64>("col_datetime", {1849259496301477883, 1849559496301477888, 0, 1, 1849259496301477888, 1849559496301477888, 667, 888439}),
-                                          toVec<Int64>("col_date", {-1849559496301477888, 1849560046057291779, 0, 121, 1849560046057291798, 1849259496301477888, 667, 888439})}};
+        Block before_where_block = Block{
+            {toVec<UInt64>(
+                 "col_timestamp",
+                 {1849559496301477888,
+                  1849560389654675456,
+                  1949560389654675456,
+                  1849259496301477888,
+                  1849560389654675452,
+                  1849559416301477888,
+                  1849559496301477833,
+                  888439}),
+             toVec<UInt64>(
+                 "col_datetime",
+                 {1849259496301477883,
+                  1849559496301477888,
+                  0,
+                  1,
+                  1849259496301477888,
+                  1849559496301477888,
+                  667,
+                  888439}),
+             toVec<Int64>(
+                 "col_date",
+                 {-1849559496301477888,
+                  1849560046057291779,
+                  0,
+                  121,
+                  1849560046057291798,
+                  1849259496301477888,
+                  667,
+                  888439})}};
         EXPECT_TRUE(!filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);

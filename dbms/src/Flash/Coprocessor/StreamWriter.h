@@ -48,7 +48,8 @@ struct CopStreamWriter
     {
         coprocessor::Response resp;
         if (!response.SerializeToString(resp.mutable_data()))
-            throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+            throw Exception(
+                "[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
 
         GET_METRIC(tiflash_coprocessor_response_bytes, type_cop_stream).Increment(resp.ByteSizeLong());
 
@@ -71,7 +72,8 @@ struct BatchCopStreamWriter
     {
         ::coprocessor::BatchResponse resp;
         if (!response.SerializeToString(resp.mutable_data()))
-            throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+            throw Exception(
+                "[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
 
         GET_METRIC(tiflash_coprocessor_response_bytes, type_batch_cop).Increment(resp.ByteSizeLong());
 

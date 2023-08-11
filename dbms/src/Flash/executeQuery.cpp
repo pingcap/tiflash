@@ -52,7 +52,8 @@ void prepareForExecute(Context & context)
     context.setQueryContext(context);
 
     QuotaForIntervals & quota = context.getQuota();
-    quota.addQuery(); /// NOTE Seems that when new time interval has come, first query is not accounted in number of queries.
+    quota
+        .addQuery(); /// NOTE Seems that when new time interval has come, first query is not accounted in number of queries.
     quota.checkExceeded(time(nullptr));
 }
 ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_context)
@@ -60,17 +61,16 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     if (dag_context.isMPPTask())
     {
         /// for MPPTask, process list entry is set in MPPTask::initProcessListEntry()
-        RUNTIME_ASSERT(dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
+        RUNTIME_ASSERT(
+            dag_context.getProcessListEntry() != nullptr,
+            "process list entry for MPP task must not be nullptr");
         return dag_context.getProcessListEntry();
     }
     else
     {
         RUNTIME_ASSERT(dag_context.getProcessListEntry() == nullptr, "process list entry for non-MPP must be nullptr");
-        auto process_list_entry = setProcessListElement(
-            context,
-            dag_context.dummy_query_string,
-            dag_context.dummy_ast.get(),
-            true);
+        auto process_list_entry
+            = setProcessListElement(context, dag_context.dummy_query_string, dag_context.dummy_ast.get(), true);
         dag_context.setProcessListEntry(process_list_entry);
         return process_list_entry;
     }
@@ -121,12 +121,18 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
 
     if unlikely (!TaskScheduler::instance)
     {
-        LOG_WARNING(logger, "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
+        LOG_WARNING(
+            logger,
+            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary "
+            "to restart the TiFlash node.");
         return {};
     }
     if (!Pipeline::isSupported(*dag_context.dag_request, context.getSettingsRef()))
     {
-        LOG_DEBUG(logger, "Can't executed by pipeline model due to unsupported operator, and then fallback to block inputstream model");
+        LOG_DEBUG(
+            logger,
+            "Can't executed by pipeline model due to unsupported operator, and then fallback to block inputstream "
+            "model");
         return {};
     }
 
@@ -172,13 +178,16 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
     {
         RUNTIME_CHECK_MSG(
             TaskScheduler::instance,
-            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
+            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary "
+            "to restart the TiFlash node.");
         auto res = executeAsPipeline(context, internal);
-        RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
+        RUNTIME_CHECK_MSG(
+            res,
+            "Failed to execute query using pipeline model, and an error is reported because the setting "
+            "enforce_enable_pipeline is true.");
         return std::move(*res);
     }
-    if (context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline)
+    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);

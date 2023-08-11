@@ -37,7 +37,10 @@ struct CoprocessorContext
     const kvrpcpb::Context & kv_context;
     const grpc::ServerContext & grpc_server_context;
 
-    CoprocessorContext(Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_);
+    CoprocessorContext(
+        Context & db_context_,
+        const kvrpcpb::Context & kv_context_,
+        const grpc::ServerContext & grpc_server_context_);
 };
 
 std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> genCopKeyRange(
@@ -58,8 +61,14 @@ template <bool is_stream>
 class CoprocessorHandler
 {
 public:
-    CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * response_);
-    CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, grpc::ServerWriter<coprocessor::Response> * cop_writer_);
+    CoprocessorHandler(
+        CoprocessorContext & cop_context_,
+        const coprocessor::Request * cop_request_,
+        coprocessor::Response * response_);
+    CoprocessorHandler(
+        CoprocessorContext & cop_context_,
+        const coprocessor::Request * cop_request_,
+        grpc::ServerWriter<coprocessor::Response> * cop_writer_);
 
     grpc::Status execute();
 

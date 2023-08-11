@@ -118,15 +118,9 @@ public:
         }
     }
 
-    bool cancel() override
-    {
-        return queue.cancel();
-    }
+    bool cancel() override { return queue.cancel(); }
 
-    bool finish() override
-    {
-        return queue.finish();
-    }
+    bool finish() override { return queue.finish(); }
 
 private:
     DB::MPMCQueue<T> queue;
@@ -191,7 +185,13 @@ public:
         , has_enforce_encode_type(has_enforce_encode_type_)
         , concurrency(concurrency_)
         , enable_cop_stream(enable_cop_stream_)
-        , resp_iter(std::make_unique<CopIterQueue>(queue_size), std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
+        , resp_iter(
+              std::make_unique<CopIterQueue>(queue_size),
+              std::move(tasks),
+              cluster,
+              concurrency_,
+              &Poco::Logger::get("pingcap/coprocessor"),
+              tiflash_label_filter_)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -256,9 +256,10 @@ public:
         return resp_iter.nonBlockingNext();
     }
 
-    CoprocessorReaderResult toResult(std::pair<pingcap::coprocessor::ResponseIter::Result, bool> & result_pair,
-                                     std::queue<Block> & block_queue,
-                                     const Block & header)
+    CoprocessorReaderResult toResult(
+        std::pair<pingcap::coprocessor::ResponseIter::Result, bool> & result_pair,
+        std::queue<Block> & block_queue,
+        const Block & header)
     {
         auto && [result, has_next] = result_pair;
 
@@ -280,13 +281,16 @@ public:
             {
                 return {nullptr, true, resp->error().DebugString(), false};
             }
-            else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
+            else if (
+                has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock
+                && resp->chunks_size() > 0)
             {
-                return {nullptr,
-                        true,
-                        "Encode type of coprocessor response is not CHBlock, "
-                        "maybe the version of some TiFlash node in the cluster is not match with this one",
-                        false};
+                return {
+                    nullptr,
+                    true,
+                    "Encode type of coprocessor response is not CHBlock, "
+                    "maybe the version of some TiFlash node in the cluster is not match with this one",
+                    false};
             }
             auto detail = decodeChunks(resp, block_queue, header, schema);
             return {resp, false, "", false, detail};
@@ -298,7 +302,11 @@ public:
     }
 
     // stream_id, decoder_ptr are only meaningful for ExchangeReceiver.
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
+    CoprocessorReaderResult nextResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        size_t /*stream_id*/,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
         auto && result_pair = resp_iter.next();
 

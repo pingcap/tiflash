@@ -56,9 +56,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
         throw TiFlashException("Unsupported EncodeType", Errors::Coprocessor::Internal);
     }
     /// For other encode types, we will use records_per_chunk to control the batch size sent.
-    batch_send_min_limit = dag_context.encode_type == tipb::EncodeType::TypeCHBlock
-        ? batch_send_min_limit
-        : (records_per_chunk - 1);
+    batch_send_min_limit
+        = dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : (records_per_chunk - 1);
 }
 
 template <class StreamWriterPtr>

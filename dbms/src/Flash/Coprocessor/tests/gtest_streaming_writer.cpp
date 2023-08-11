@@ -41,8 +41,7 @@ protected:
     }
 
 public:
-    TestStreamingWriter()
-    {}
+    TestStreamingWriter() {}
 
     // Return 10 Int64 column.
     static std::vector<tipb::FieldType> makeFields()
@@ -76,10 +75,8 @@ public:
         {
             DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
             auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-            block.insert(ColumnWithTypeAndName{
-                std::move(int64_column),
-                int64_data_type,
-                String("col") + std::to_string(i)});
+            block.insert(
+                ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
         }
         return block;
     }

@@ -64,7 +64,8 @@ private:
     bool initialized = false;
 };
 
-class MPPTask : public std::enable_shared_from_this<MPPTask>
+class MPPTask
+    : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
 public:

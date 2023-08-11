@@ -70,15 +70,17 @@ public:
     MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     template <bool is_force>
-    bool pushPacket(size_t source_index,
-                    const String & req_info,
-                    const TrackedMppDataPacketPtr & tracked_packet,
-                    ReceiverMode mode);
+    bool pushPacket(
+        size_t source_index,
+        const String & req_info,
+        const TrackedMppDataPacketPtr & tracked_packet,
+        ReceiverMode mode);
 
-    MPMCQueueResult pushAsyncGRPCPacket(size_t source_index,
-                                        const String & req_info,
-                                        const TrackedMppDataPacketPtr & tracked_packet,
-                                        GRPCKickTag * new_tag);
+    MPMCQueueResult pushAsyncGRPCPacket(
+        size_t source_index,
+        const String & req_info,
+        const TrackedMppDataPacketPtr & tracked_packet,
+        GRPCKickTag * new_tag);
 
     void finish()
     {
@@ -96,10 +98,7 @@ public:
             channel.cancel();
     }
 
-    bool isWritable() const
-    {
-        return grpc_recv_queue.isWritable();
-    }
+    bool isWritable() const { return grpc_recv_queue.isWritable(); }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

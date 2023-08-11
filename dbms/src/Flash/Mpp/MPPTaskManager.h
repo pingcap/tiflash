@@ -43,19 +43,10 @@ struct MPPGatherTaskSet
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
-    bool isInNormalState() const
-    {
-        return state == Normal;
-    }
-    bool allowUnregisterTask() const
-    {
-        return state == Normal || state == Aborted;
-    }
+    bool isInNormalState() const { return state == Normal; }
+    bool allowUnregisterTask() const { return state == Normal || state == Aborted; }
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
-    bool isTaskRegistered(const MPPTaskId & task_id) const
-    {
-        return task_map.find(task_id) != task_map.end();
-    }
+    bool isTaskRegistered(const MPPTaskId & task_id) const { return task_map.find(task_id) != task_map.end(); }
     void registerTask(const MPPTaskId & task_id)
     {
         assert(task_map.find(task_id) == task_map.end());
@@ -73,10 +64,7 @@ struct MPPGatherTaskSet
         for (const auto & it : task_map)
             f(it);
     }
-    void removeMPPTask(const MPPTaskId & task_id)
-    {
-        task_map.erase(task_id);
-    }
+    void removeMPPTask(const MPPTaskId & task_id) { task_map.erase(task_id); }
 
 private:
     MPPTaskMap task_map;
@@ -233,9 +221,14 @@ public:
 
     void releaseThreadsFromScheduler(int needed_threads);
 
-    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
+    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        std::chrono::seconds timeout);
 
-    std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
+    std::pair<MPPTunnelPtr, String> findAsyncTunnel(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        EstablishCallData * call_data,
+        grpc::CompletionQueue * cq);
 
     void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 
