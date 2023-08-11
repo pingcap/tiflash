@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
+#include <common/logger_useful.h>
 
 #include <memory>
 #include <optional>
@@ -183,7 +184,10 @@ void PageDirectoryFactory<Trait>::loadEdit(
             // Is this entry could be duplicated with the dumped snapshot
             bool filter = !force_apply && r.version.sequence <= filter_seq && r.type == EditRecordType::REF;
             if (filter)
+            {
+                LOG_WARNING(Logger::get(), "Not idempotent REF record is ignored during restart, record={}", r);
                 continue;
+            }
 
             if (max_applied_ver < r.version)
                 max_applied_ver = r.version;
