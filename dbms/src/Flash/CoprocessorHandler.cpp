@@ -139,7 +139,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
-            std::string msg;
+            const char * msg;
             if constexpr (is_stream)
                 msg = "CoprocessorHandler(stream)";
             else
