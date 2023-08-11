@@ -472,7 +472,8 @@ const raft_serverpb::MergeState & RegionMeta::getMergeState() const
     return region_state.getMergeState();
 }
 
-const RegionState & RegionMeta::getRegionState() const {
+const RegionState & RegionMeta::getRegionState() const
+{
     std::lock_guard lock(mutex);
     return region_state;
 }

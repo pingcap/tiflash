@@ -644,8 +644,7 @@ EngineStoreApplyRes applyWriteRaftCmd(
     UInt64 index,
     UInt64 term,
     TMTContext & tmt,
-    DM::WriteResult * write_result_ptr
-)
+    DM::WriteResult * write_result_ptr)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
