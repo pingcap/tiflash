@@ -138,32 +138,17 @@ public:
 
     void cancel();
 
-    ALWAYS_INLINE bool isCancelled()
-    {
-        return is_cancelled.load(std::memory_order_acquire);
-    }
+    ALWAYS_INLINE bool isCancelled() { return is_cancelled.load(std::memory_order_acquire); }
 
     ResultQueuePtr toConsumeMode(size_t queue_size);
 
-    void update(const TaskProfileInfo & task_profile_info)
-    {
-        query_profile_info.merge(task_profile_info);
-    }
+    void update(const TaskProfileInfo & task_profile_info) { query_profile_info.merge(task_profile_info); }
 
-    const QueryProfileInfo & getQueryProfileInfo() const
-    {
-        return query_profile_info;
-    }
+    const QueryProfileInfo & getQueryProfileInfo() const { return query_profile_info; }
 
-    const String & getQueryId() const
-    {
-        return query_id;
-    }
+    const String & getQueryId() const { return query_id; }
 
-    const MemoryTrackerPtr & getMemoryTracker() const
-    {
-        return mem_tracker;
-    }
+    const MemoryTrackerPtr & getMemoryTracker() const { return mem_tracker; }
 
     void triggerAutoSpill() const
     {

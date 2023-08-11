@@ -16,7 +16,10 @@
 
 namespace DB
 {
-SortSpillContext::SortSpillContext(const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log)
+SortSpillContext::SortSpillContext(
+    const SpillConfig & spill_config_,
+    UInt64 operator_spill_threshold_,
+    const LoggerPtr & log)
     : OperatorSpillContext(operator_spill_threshold_, "sort", log)
     , spill_config(spill_config_)
 {}
@@ -31,7 +34,9 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
     if (!in_spillable_stage)
         return false;
     revocable_memory = new_value;
-    if (auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL || (enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
+    if (auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL
+        || (enable_spill && operator_spill_threshold > 0
+            && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
     {
         revocable_memory = 0;
         return true;

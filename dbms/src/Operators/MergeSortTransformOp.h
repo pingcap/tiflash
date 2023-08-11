@@ -43,10 +43,7 @@ public:
         exec_context.registerOperatorSpillContext(sort_spill_context);
     }
 
-    String getName() const override
-    {
-        return "MergeSortTransformOp";
-    }
+    String getName() const override { return "MergeSortTransformOp"; }
 
 protected:
     void operatePrefixImpl() override;

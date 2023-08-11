@@ -32,7 +32,11 @@ private:
     Int64 max_cached_bytes;
 
 public:
-    HashJoinSpillContext(const SpillConfig & build_spill_config_, const SpillConfig & probe_spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
+    HashJoinSpillContext(
+        const SpillConfig & build_spill_config_,
+        const SpillConfig & probe_spill_config_,
+        UInt64 operator_spill_threshold_,
+        const LoggerPtr & log);
     void init(size_t partition_num);
     void buildBuildSpiller(const Block & input_schema);
     void buildProbeSpiller(const Block & input_schema);

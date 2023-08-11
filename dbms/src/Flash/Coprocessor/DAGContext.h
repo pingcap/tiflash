@@ -142,13 +142,24 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    DAGContext(
+        tipb::DAGRequest & dag_request_,
+        TablesRegionsInfo && tables_regions_info_,
+        KeyspaceID keyspace_id_,
+        const String & tidb_host_,
+        bool is_batch_cop_,
+        LoggerPtr log_);
 
     // for mpp
     DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
     // for disaggregated task on write node
-    DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
+    DAGContext(
+        tipb::DAGRequest & dag_request_,
+        const disaggregated::DisaggTaskMeta & task_meta_,
+        TablesRegionsInfo && tables_regions_info_,
+        const String & compute_node_host_,
+        LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
@@ -162,7 +173,10 @@ public:
 
     std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
 
-    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos, bool is_append = false);
+    void addOperatorProfileInfos(
+        const String & executor_id,
+        OperatorProfileInfos && profile_infos,
+        bool is_append = false);
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -172,7 +186,10 @@ public:
 
     std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
 
-    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos, bool is_append = false);
+    void addInboundIOProfileInfos(
+        const String & executor_id,
+        IOProfileInfos && io_profile_infos,
+        bool is_append = false);
 
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
@@ -214,14 +231,8 @@ public:
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
-    const MPPTaskId & getMPPTaskId() const
-    {
-        return mpp_task_id;
-    }
-    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const
-    {
-        return disaggregated_id;
-    }
+    const MPPTaskId & getMPPTaskId() const { return mpp_task_id; }
+    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const { return disaggregated_id; }
 
     std::pair<bool, double> getTableScanThroughput();
 
@@ -229,55 +240,22 @@ public:
 
     bool containsRegionsInfoForTable(Int64 table_id) const;
 
-    UInt64 getFlags() const
-    {
-        return flags;
-    }
-    void setFlags(UInt64 f)
-    {
-        flags = f;
-    }
-    void addFlag(UInt64 f)
-    {
-        flags |= f;
-    }
-    void delFlag(UInt64 f)
-    {
-        flags &= (~f);
-    }
-    bool hasFlag(UInt64 f) const
-    {
-        return (flags & f);
-    }
+    UInt64 getFlags() const { return flags; }
+    void setFlags(UInt64 f) { flags = f; }
+    void addFlag(UInt64 f) { flags |= f; }
+    void delFlag(UInt64 f) { flags &= (~f); }
+    bool hasFlag(UInt64 f) const { return (flags & f); }
 
-    UInt64 getSQLMode() const
-    {
-        return sql_mode;
-    }
-    void setSQLMode(UInt64 f)
-    {
-        sql_mode = f;
-    }
-    void addSQLMode(UInt64 f)
-    {
-        sql_mode |= f;
-    }
-    void delSQLMode(UInt64 f)
-    {
-        sql_mode &= (~f);
-    }
-    bool hasSQLMode(UInt64 f) const
-    {
-        return sql_mode & f;
-    }
+    UInt64 getSQLMode() const { return sql_mode; }
+    void setSQLMode(UInt64 f) { sql_mode = f; }
+    void addSQLMode(UInt64 f) { sql_mode |= f; }
+    void delSQLMode(UInt64 f) { sql_mode &= (~f); }
+    bool hasSQLMode(UInt64 f) const { return sql_mode & f; }
 
     void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
 
     ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
-    void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set)
-    {
-        mpp_receiver_set = receiver_set;
-    }
+    void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set) { mpp_receiver_set = receiver_set; }
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
     void setDisaggregatedComputeExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & receiver)
@@ -295,9 +273,19 @@ public:
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
     void setProcessListEntry(const std::shared_ptr<ProcessListEntry> & entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
-    void setQueryOperatorSpillContexts(const std::shared_ptr<QueryOperatorSpillContexts> & query_operator_spill_contexts_) { query_operator_spill_contexts = query_operator_spill_contexts_; }
-    std::shared_ptr<QueryOperatorSpillContexts> & getQueryOperatorSpillContexts() { return query_operator_spill_contexts; }
-    void setAutoSpillTrigger(const std::shared_ptr<AutoSpillTrigger> & auto_spill_trigger_) { auto_spill_trigger = auto_spill_trigger_; }
+    void setQueryOperatorSpillContexts(
+        const std::shared_ptr<QueryOperatorSpillContexts> & query_operator_spill_contexts_)
+    {
+        query_operator_spill_contexts = query_operator_spill_contexts_;
+    }
+    std::shared_ptr<QueryOperatorSpillContexts> & getQueryOperatorSpillContexts()
+    {
+        return query_operator_spill_contexts;
+    }
+    void setAutoSpillTrigger(const std::shared_ptr<AutoSpillTrigger> & auto_spill_trigger_)
+    {
+        auto_spill_trigger = auto_spill_trigger_;
+    }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 

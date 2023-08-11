@@ -165,23 +165,14 @@ public:
     };
 
     /** Set limitations that checked on each block. */
-    void setLimits(const LocalLimits & limits_)
-    {
-        limits = limits_;
-    }
+    void setLimits(const LocalLimits & limits_) { limits = limits_; }
 
-    const LocalLimits & getLimits() const
-    {
-        return limits;
-    }
+    const LocalLimits & getLimits() const { return limits; }
 
     /** Set the quota. If you set a quota on the amount of raw data,
       * then you should also set mode = LIMITS_TOTAL to LocalLimits with setLimits.
       */
-    void setQuota(QuotaForIntervals & quota_)
-    {
-        quota = &quota_;
-    }
+    void setQuota(QuotaForIntervals & quota_) { quota = &quota_; }
 
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }

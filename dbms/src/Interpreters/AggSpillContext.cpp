@@ -17,7 +17,11 @@
 
 namespace DB
 {
-AggSpillContext::AggSpillContext(size_t concurrency, const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log)
+AggSpillContext::AggSpillContext(
+    size_t concurrency,
+    const SpillConfig & spill_config_,
+    UInt64 operator_spill_threshold_,
+    const LoggerPtr & log)
     : OperatorSpillContext(operator_spill_threshold_, "aggregator", log)
     , per_thread_revocable_memories(concurrency)
     , spill_config(spill_config_)

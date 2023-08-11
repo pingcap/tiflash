@@ -39,7 +39,7 @@ public:
             /// vector of <revocable_memories, task_operator_spill_contexts>
             std::vector<std::pair<Int64, TaskOperatorSpillContexts *>> revocable_memories;
             revocable_memories.reserve(task_operator_spill_contexts_list.size());
-            for (auto it = task_operator_spill_contexts_list.begin(); it != task_operator_spill_contexts_list.end(); )
+            for (auto it = task_operator_spill_contexts_list.begin(); it != task_operator_spill_contexts_list.end();)
             {
                 if ((*it)->isFinished())
                 {
@@ -67,7 +67,8 @@ public:
         return expected_released_memories;
     }
 
-    void registerTaskOperatorSpillContexts(const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)
+    void registerTaskOperatorSpillContexts(
+        const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)
     {
         std::unique_lock lock(mutex);
         task_operator_spill_contexts_list.push_back(task_operator_spill_contexts);

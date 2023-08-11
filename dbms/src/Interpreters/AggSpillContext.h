@@ -29,7 +29,11 @@ private:
     UInt64 per_thread_spill_threshold;
 
 public:
-    AggSpillContext(size_t concurrency, const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
+    AggSpillContext(
+        size_t concurrency,
+        const SpillConfig & spill_config_,
+        UInt64 operator_spill_threshold_,
+        const LoggerPtr & log);
     void buildSpiller(const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
     bool hasSpilledData() const { return isSpilled() && spiller->hasSpilledData(); }

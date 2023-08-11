@@ -54,7 +54,12 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
 void MergeSortingBlockInputStream::spillCurrentBlocks()
 {
     sort_spill_context->markSpilled();
-    auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), std::max(1, max_merged_block_size / 10), limit);
+    auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(
+        blocks,
+        description,
+        log->identifier(),
+        std::max(1, max_merged_block_size / 10),
+        limit);
     auto is_cancelled_pred = [this]() {
         return this->isCancelled();
     };
@@ -111,7 +116,12 @@ Block MergeSortingBlockInputStream::readImpl()
 
         if (!hasSpilledData())
         {
-            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
+            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
+                blocks,
+                description,
+                log->identifier(),
+                max_merged_block_size,
+                limit);
         }
         else
         {
@@ -133,7 +143,11 @@ Block MergeSortingBlockInputStream::readImpl()
                     limit));
 
             /// Will merge that sorted streams.
-            impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, description, max_merged_block_size, limit);
+            impl = std::make_unique<MergingSortedBlockInputStream>(
+                inputs_to_merge,
+                description,
+                max_merged_block_size,
+                limit);
         }
     }
 

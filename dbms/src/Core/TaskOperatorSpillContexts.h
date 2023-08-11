@@ -42,7 +42,12 @@ public:
         if (has_finished_operator_spill_contexts)
         {
             /// clean finished spill context
-            operator_spill_contexts.erase(std::remove_if(operator_spill_contexts.begin(), operator_spill_contexts.end(), [](const auto & context) { return context->spillableStageFinished(); }), operator_spill_contexts.end());
+            operator_spill_contexts.erase(
+                std::remove_if(
+                    operator_spill_contexts.begin(),
+                    operator_spill_contexts.end(),
+                    [](const auto & context) { return context->spillableStageFinished(); }),
+                operator_spill_contexts.end());
         }
         return expected_released_memories;
     }

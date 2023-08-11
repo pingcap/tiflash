@@ -57,10 +57,7 @@ protected:
     void appendInfo(FmtBuffer & buffer) const override;
 
 private:
-    bool hasSpilledData() const
-    {
-        return sort_spill_context->hasSpilledData();
-    }
+    bool hasSpilledData() const { return sort_spill_context->hasSpilledData(); }
 
     void spillCurrentBlocks();
     SortDescription description;

@@ -107,7 +107,12 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     assert(!cached_handler);
     sort_spill_context->markSpilled();
     cached_handler = sort_spill_context->getSpiller()->createCachedSpillHandler(
-        std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), std::max(1, max_block_size / 10), limit),
+        std::make_shared<MergeSortingBlocksBlockInputStream>(
+            sorted_blocks,
+            order_desc,
+            log->identifier(),
+            std::max(1, max_block_size / 10),
+            limit),
         /*partition_id=*/0,
         [&]() { return exec_context.isCancelled(); });
     // fallback to partial phase.
@@ -139,9 +144,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
             sort_spill_context->finishSpillableStage();
             if (!sorted_blocks.empty() && sort_spill_context->needFinalSpill())
                 return fromPartialToSpill();
-            return hasSpilledData()
-                ? fromPartialToRestore()
-                : fromPartialToMerge(block);
+            return hasSpilledData() ? fromPartialToRestore() : fromPartialToMerge(block);
         }
 
         // store the sorted block in `sorted_blocks`.
@@ -168,9 +171,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
     case MergeSortStatus::SPILL:
     {
         assert(cached_handler);
-        return cached_handler->batchRead()
-            ? OperatorStatus::IO_OUT
-            : fromSpillToPartial();
+        return cached_handler->batchRead() ? OperatorStatus::IO_OUT : fromSpillToPartial();
     }
     case MergeSortStatus::MERGE:
     {
@@ -212,9 +213,7 @@ OperatorStatus MergeSortTransformOp::executeIOImpl()
     }
 }
 
-void MergeSortTransformOp::transformHeaderImpl(Block &)
-{
-}
+void MergeSortTransformOp::transformHeaderImpl(Block &) {}
 
 bool MergeSortTransformOp::RestoredResult::hasData() const
 {

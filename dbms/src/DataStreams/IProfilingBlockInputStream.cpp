@@ -89,7 +89,8 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
         if (enabled_extremes)
             updateExtremes(res);
 
-        if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
+        if (limits.mode == LIMITS_CURRENT
+            && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
             limit_exceeded_need_break = true;
 
         if (quota != nullptr)
@@ -234,10 +235,11 @@ bool IProfilingBlockInputStream::checkTimeLimit() const
 {
     if (limits.max_execution_time != 0
         && info.total_stopwatch.elapsed() > static_cast<UInt64>(limits.max_execution_time.totalMicroseconds()) * 1000)
-        return handleOverflowMode(limits.timeout_overflow_mode,
-                                  "Timeout exceeded: elapsed " + toString(info.total_stopwatch.elapsedSeconds())
-                                      + " seconds, maximum: " + toString(limits.max_execution_time.totalMicroseconds() / 1000000.0),
-                                  ErrorCodes::TIMEOUT_EXCEEDED);
+        return handleOverflowMode(
+            limits.timeout_overflow_mode,
+            "Timeout exceeded: elapsed " + toString(info.total_stopwatch.elapsedSeconds())
+                + " seconds, maximum: " + toString(limits.max_execution_time.totalMicroseconds() / 1000000.0),
+            ErrorCodes::TIMEOUT_EXCEEDED);
 
     return true;
 }
@@ -297,13 +299,15 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
             case OverflowMode::THROW:
             {
                 if (limits.size_limits.max_rows && total_rows_estimate > limits.size_limits.max_rows)
-                    throw Exception("Limit for rows to read exceeded: " + toString(total_rows_estimate)
-                                        + " rows read (or to read), maximum: " + toString(limits.size_limits.max_rows),
-                                    ErrorCodes::TOO_MANY_ROWS);
+                    throw Exception(
+                        "Limit for rows to read exceeded: " + toString(total_rows_estimate)
+                            + " rows read (or to read), maximum: " + toString(limits.size_limits.max_rows),
+                        ErrorCodes::TOO_MANY_ROWS);
                 else
-                    throw Exception("Limit for (uncompressed) bytes to read exceeded: " + toString(progress.bytes)
-                                        + " bytes read, maximum: " + toString(limits.size_limits.max_bytes),
-                                    ErrorCodes::TOO_MANY_BYTES);
+                    throw Exception(
+                        "Limit for (uncompressed) bytes to read exceeded: " + toString(progress.bytes)
+                            + " bytes read, maximum: " + toString(limits.size_limits.max_bytes),
+                        ErrorCodes::TOO_MANY_BYTES);
                 break;
             }
 
@@ -333,22 +337,26 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
             if (total_elapsed > limits.timeout_before_checking_execution_speed.totalMicroseconds() / 1000000.0)
             {
                 if (limits.min_execution_speed && progress.rows / total_elapsed < limits.min_execution_speed)
-                    throw Exception("Query is executing too slow: " + toString(progress.rows / total_elapsed)
-                                        + " rows/sec., minimum: " + toString(limits.min_execution_speed),
-                                    ErrorCodes::TOO_SLOW);
+                    throw Exception(
+                        "Query is executing too slow: " + toString(progress.rows / total_elapsed)
+                            + " rows/sec., minimum: " + toString(limits.min_execution_speed),
+                        ErrorCodes::TOO_SLOW);
 
                 size_t total_rows = progress.total_rows;
 
                 /// If the predicted execution time is longer than `max_execution_time`.
                 if (limits.max_execution_time != 0 && total_rows)
                 {
-                    double estimated_execution_time_seconds = total_elapsed * (static_cast<double>(total_rows) / progress.rows);
+                    double estimated_execution_time_seconds
+                        = total_elapsed * (static_cast<double>(total_rows) / progress.rows);
 
                     if (estimated_execution_time_seconds > limits.max_execution_time.totalSeconds())
-                        throw Exception("Estimated query execution time (" + toString(estimated_execution_time_seconds) + " seconds)"
-                                            + " is too long. Maximum: " + toString(limits.max_execution_time.totalSeconds())
-                                            + ". Estimated rows to process: " + toString(total_rows),
-                                        ErrorCodes::TOO_SLOW);
+                        throw Exception(
+                            "Estimated query execution time (" + toString(estimated_execution_time_seconds)
+                                + " seconds)"
+                                + " is too long. Maximum: " + toString(limits.max_execution_time.totalSeconds())
+                                + ". Estimated rows to process: " + toString(total_rows),
+                            ErrorCodes::TOO_SLOW);
                 }
             }
         }
@@ -398,7 +406,9 @@ void IProfilingBlockInputStream::setProgressCallback(const ProgressCallback & ca
     setProgressCallbackImpl(callback, visited_nodes);
 }
 
-void IProfilingBlockInputStream::setProgressCallbackImpl(const ProgressCallback & callback, std::unordered_set<void *> & visited_nodes)
+void IProfilingBlockInputStream::setProgressCallbackImpl(
+    const ProgressCallback & callback,
+    std::unordered_set<void *> & visited_nodes)
 {
     if (visited_nodes.find(this) != visited_nodes.end())
         return;
