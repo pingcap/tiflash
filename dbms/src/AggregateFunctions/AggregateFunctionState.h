@@ -98,6 +98,11 @@ public:
         static_cast<ColumnAggregateFunction &>(to).getData().push_back(const_cast<AggregateDataPtr>(place));
     }
 
+    void insertMergeResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
+    {
+        assert_cast<ColumnAggregateFunction &>(to).insertFrom(place);
+    }
+
     /// Aggregate function or aggregate function state.
     bool isState() const override { return true; }
 

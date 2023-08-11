@@ -67,7 +67,7 @@ protected:
     static const size_t MAX_CONCURRENCY_LEVEL = 10;
     static constexpr auto PARTITION_COL_NAME = "partition";
     static constexpr auto ORDER_COL_NAME = "order";
-    static constexpr auto VALUE_COL_NAME = "first_value";
+    static constexpr auto VALUE_COL_NAME = "value";
 
     template <typename T>
     mock::MockWindowFrameBound buildRangeFrameBound(

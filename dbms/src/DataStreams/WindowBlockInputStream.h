@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <Common/AlignedBuffer.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -27,10 +29,19 @@ namespace DB
 // Runtime data for computing one window function.
 struct WindowFunctionWorkspace
 {
-    // TODO add aggregation function
     WindowFunctionPtr window_function = nullptr;
 
-    ColumnNumbers arguments;
+    AggregateFunctionPtr aggregate_function;
+
+    // Will not be initialized for a pure window function.
+    mutable AlignedBuffer aggregate_function_state;
+
+    ColumnNumbers argument_column_indices;
+
+    // Argument columns. Be careful, this is a per-block cache.
+    std::vector<const IColumn *> argument_columns;
+
+    UInt64 cached_block_number = std::numeric_limits<UInt64>::max();
 };
 
 struct WindowBlock
@@ -80,10 +91,9 @@ private:
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
-public:
-    WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
-
-    void cleanUp();
+    void initialWorkspaces();
+    void initialAggregateFunction(WindowFunctionWorkspace & workspace, const WindowFunctionDescription & window_function_description);
+    void initialPartitionAndOrderColumnIndices();
 
     void advancePartitionEnd();
     bool isDifferentFromPrevPartition(UInt64 current_partition_row);
@@ -96,11 +106,17 @@ public:
 
     void writeOutCurrentRow();
 
-    Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
 
-    void initialWorkspaces();
-    void initialPartitionAndOrderColumnIndices();
+    void updateAggregationState();
+
+    void reinitializeAggFuncBeforeNextPartition();
+
+public:
+    WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
+
+    void cleanUp();
+    Block tryGetOutputBlock();
 
     Columns & inputAt(const RowNumber & x)
     {
@@ -241,6 +257,9 @@ public:
     // aggregate function. We use them to determine how to update the aggregation
     // state after we find the new frame.
     RowNumber prev_frame_start;
+    RowNumber prev_frame_end;
+
+    std::unique_ptr<Arena> arena;
 
     //TODO: used as template parameters
     bool only_have_row_number = false;

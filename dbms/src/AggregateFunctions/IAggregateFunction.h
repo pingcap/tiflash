@@ -109,6 +109,18 @@ public:
     /// Inserts results into a column.
     virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
+    // Special method for aggregate functions with -State combinator, it behaves the same way as insertResultInto,
+    // but if we need to insert AggregateData into ColumnAggregateFunction we use special method
+    // insertInto that inserts default value and then performs merge with provided AggregateData
+    // instead of just copying pointer to this AggregateData. Used in WindowTransform.
+    virtual void insertMergeResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
+    {
+        if (isState())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Function is marked as State but method insertMergeResultInto is not implemented");
+
+        insertResultInto(place, to, arena);
+    }
+
     /** Returns true for aggregate functions of type -State.
       * They are executed as other aggregate functions, but not finalized (return an aggregation state that can be combined with another).
       */
