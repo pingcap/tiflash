@@ -64,25 +64,11 @@ private:
     static constexpr auto DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU = std::chrono::seconds(1);
 
     // ResourceGroupInfoQueue compator.
+    // Larger value means lower priority.
     static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)
     {
-        auto priority1 = std::get<InfoIndexPriority>(info1);
-        auto priority2 = std::get<InfoIndexPriority>(info2);
-
-        // If comparator returns false, info1 outputs before info1.
-        if (priority1 == 0)
-        {
-            // ResourceGroup-1 has no RU left, let ResourceGroup-2 output first.
-            return true;
-        }
-        if (priority2 == 0)
-        {
-            // ResourceGroup-2 has no RU left, let ResourceGroup-1 output first.
-            return false;
-        }
-
-        // Larger value means lower priority.
-        return priority1 > priority2;
+        // info1 outputs first if return false.
+        return std::get<InfoIndexPriority>(info1) > std::get<InfoIndexPriority>(info2);
     }
 
     // 1. Update cpu time/RU of resource group.

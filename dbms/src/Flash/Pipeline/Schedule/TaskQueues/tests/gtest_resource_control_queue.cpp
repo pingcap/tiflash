@@ -370,9 +370,7 @@ TEST_F(TestResourceControlQueue, LargeRUSmallCPU)
 // 3. Change other rg as burstable, the cpu usage should be same of all resource groups.
 TEST_F(TestResourceControlQueue, TestBurstable) {}
 
-// Test priority queue of ResourceControlQueue:
-// 1. Less priority value means higher priority
-// 2. Zero priority value is the lowest priority
+// Test priority queue of ResourceControlQueue: Less priority value means higher priority
 TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
 {
     std::random_device dev;
@@ -389,7 +387,11 @@ TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
     }
     for (int i = 0; i < 10; ++i)
     {
+        // some special priority value.
+        // 0 is not possible, but we still test it.
+        // uint64_max is for RU is exhausted, it's the lowest priority.
         priority_vals.push_back(0);
+        priority_vals.push_back(std::numeric_limits<uint64_t>::max());
     }
 
     ResourceControlQueue<CPUMultiLevelFeedbackQueue> test_queue;
@@ -398,31 +400,13 @@ TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
         test_queue.resource_group_infos.push(std::make_tuple(priority_vals[i], nullptr, "rg-" + std::to_string(i)));
     }
 
-    // [0, 0, 0, 100, 300, ...]
-    std::sort(priority_vals.begin(), priority_vals.end());
 
-    auto iter = std::find(priority_vals.rbegin(), priority_vals.rend(), 0);
-    auto zero_count = priority_vals.size() - (iter - priority_vals.rbegin());
-    // [0, 0, 0]
-    std::vector<uint64_t> priority_vals_only_zero(priority_vals.begin(), priority_vals.begin() + zero_count);
-    // [100, 300, ...]
-    std::vector<uint64_t> priority_vals_without_zero(priority_vals.begin() + zero_count, priority_vals.end());
-
-    EXPECT_EQ(priority_vals.size(), priority_vals_only_zero.size() + priority_vals_without_zero.size());
-
-    auto checker = [&test_queue](const std::vector<uint64_t> & expect_priority) {
-        auto cur_count = 0;
-        for (auto priority : expect_priority)
-        {
-            auto info = test_queue.resource_group_infos.top();
-            EXPECT_EQ(std::get<0>(info), priority);
-            test_queue.resource_group_infos.pop();
-            ++cur_count;
-        }
-        EXPECT_EQ(cur_count, expect_priority.size());
-    };
-    checker(priority_vals_without_zero);
-    checker(priority_vals_only_zero);
+    for (auto priority : priority_vals)
+    {
+        auto info = test_queue.resource_group_infos.top();
+        EXPECT_EQ(std::get<0>(info), priority);
+        test_queue.resource_group_infos.pop();
+    }
     EXPECT_TRUE(test_queue.resource_group_infos.empty());
 }
 

@@ -39,6 +39,8 @@ public:
     PipelineExecutorContext()
         : log(Logger::get())
         , mem_tracker(nullptr)
+        , auto_spill_trigger(nullptr)
+        , register_operator_spill_context(nullptr)
     {}
 
     PipelineExecutorContext(

@@ -81,7 +81,8 @@ private:
     static constexpr int32_t MediumPriorityValue = 8;
     static constexpr int32_t HighPriorityValue = 16;
 
-    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4);
+    // Minus 1 because uint64 max is used as special flag.
+    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
 
     friend class LocalAdmissionController;
     std::string getName() const { return name; }
@@ -101,7 +102,7 @@ private:
         std::lock_guard lock(mu);
 
         if (!burstable && bucket->peek() <= 0.0)
-            return 0;
+            return std::numeric_limits<uint64_t>::max();
 
         double weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
         uint64_t virtual_time = cpu_time_in_ns * weight;
@@ -155,6 +156,8 @@ public:
     double getPriority(const std::string &) { return 1.0; }
 
     bool isResourceGroupThrottled(const std::string &) { return false; }
+
+    static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
 #ifndef DBMS_PUBLIC_GTEST
     static std::unique_ptr<LocalAdmissionController> global_instance;

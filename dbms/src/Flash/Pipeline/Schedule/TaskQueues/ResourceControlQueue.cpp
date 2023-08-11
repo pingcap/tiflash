@@ -106,7 +106,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
-            if (priority <= 0)
+            if (LocalAdmissionController::isRUExhausted(priority))
                 break;
 
             if (task_queue->empty() || !task_queue->take(task))
