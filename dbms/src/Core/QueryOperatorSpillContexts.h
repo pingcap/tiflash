@@ -36,30 +36,31 @@ public:
                 first_check = true;
                 LOG_INFO(log, "Query memory usage exceeded threshold, trigger auto spill check");
             }
-            /// vector of <index, revocable_memories>
-            std::vector<std::pair<size_t, Int64>> revocable_memories(task_operator_spill_contexts_vec.size());
-            bool has_finished_task = false;
-            for (size_t i = 0; i < task_operator_spill_contexts_vec.size(); ++i)
+            /// vector of <revocable_memories, task_operator_spill_contexts>
+            std::vector<std::pair<Int64, TaskOperatorSpillContexts *>> revocable_memories;
+            revocable_memories.reserve(task_operator_spill_contexts_list.size());
+            for (auto it = task_operator_spill_contexts_list.begin(); it != task_operator_spill_contexts_list.end(); )
             {
-                revocable_memories[i] = std::make_pair(i, task_operator_spill_contexts_vec[i]->totalRevocableMemories());
-                if (task_operator_spill_contexts_vec[i]->isFinished())
-                    has_finished_task = true;
+                if ((*it)->isFinished())
+                {
+                    it = task_operator_spill_contexts_list.erase(it);
+                }
+                else
+                {
+                    revocable_memories.emplace_back((*it)->totalRevocableMemories(), (*it).get());
+                    ++it;
+                }
             }
-            std::sort(revocable_memories.begin(), revocable_memories.end(), [](const std::pair<size_t, Int64> & a, std::pair<size_t, Int64> & b) {
-                return a.second > b.second;
+            std::sort(revocable_memories.begin(), revocable_memories.end(), [](const auto & a, const auto & b) {
+                return a.first > b.first;
             });
             for (auto & pair : revocable_memories)
             {
-                if (pair.second < OperatorSpillContext::MIN_SPILL_THRESHOLD)
+                if (pair.first < OperatorSpillContext::MIN_SPILL_THRESHOLD)
                     break;
-                expected_released_memories = task_operator_spill_contexts_vec[pair.first]->triggerAutoSpill(expected_released_memories);
+                expected_released_memories = pair.second->triggerAutoSpill(expected_released_memories);
                 if (expected_released_memories <= 0)
                     break;
-            }
-            if (has_finished_task)
-            {
-                /// clean finished task
-                task_operator_spill_contexts_vec.erase(std::remove_if(task_operator_spill_contexts_vec.begin(), task_operator_spill_contexts_vec.end(), [](const auto & contexts) { return contexts->isFinished(); }), task_operator_spill_contexts_vec.end());
             }
             return expected_released_memories;
         }
@@ -69,21 +70,22 @@ public:
     void registerTaskOperatorSpillContexts(const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)
     {
         std::unique_lock lock(mutex);
-        task_operator_spill_contexts_vec.push_back(task_operator_spill_contexts);
+        task_operator_spill_contexts_list.push_back(task_operator_spill_contexts);
     }
     /// used for test
     size_t getTaskOperatorSpillContextsCount() const
     {
-        return task_operator_spill_contexts_vec.size();
+        std::unique_lock lock(mutex);
+        return task_operator_spill_contexts_list.size();
     }
 
     const LoggerPtr & getLogger() const { return log; }
 
 private:
-    std::vector<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_vec;
+    std::list<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_list;
     bool first_check = false;
     LoggerPtr log;
-    std::mutex mutex;
+    mutable std::mutex mutex;
 };
 
 } // namespace DB

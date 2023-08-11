@@ -17,7 +17,6 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Interpreters/AggSpillContext.h>
-#include <Interpreters/HashJoinSpillContext.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Poco/File.h>
 #include <TestUtils/TiFlashTestBasic.h>
