@@ -37,20 +37,9 @@ struct RaftWriteResult
 
     DISALLOW_COPY(RaftWriteResult);
 
-    RaftWriteResult(RaftWriteResult && other)
-    {
-        pending_flush_ranges = std::move(other.pending_flush_ranges);
-        keyspace_id = other.keyspace_id;
-        table_id = other.table_id;
-    }
+    RaftWriteResult(RaftWriteResult && other) = default;
 
-    RaftWriteResult & operator=(RaftWriteResult && other)
-    {
-        pending_flush_ranges = std::move(other.pending_flush_ranges);
-        keyspace_id = other.keyspace_id;
-        table_id = other.table_id;
-        return *this;
-    }
+    RaftWriteResult & operator=(RaftWriteResult && other) = default;
 };
 using WriteResult = std::optional<RaftWriteResult>;
 static_assert(std::is_move_constructible_v<WriteResult>);
