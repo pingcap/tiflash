@@ -23,6 +23,8 @@ namespace DB
 {
 PipelineExecutor::PipelineExecutor(
     const MemoryTrackerPtr & memory_tracker_,
+    AutoSpillTrigger * auto_spill_trigger,
+    const RegisterOperatorSpillContext & register_operator_spill_context,
     Context & context_,
     const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
@@ -31,7 +33,9 @@ PipelineExecutor::PipelineExecutor(
           // But for cop/batchCop, there is no such unique identifier, so an empty value is given here, indicating that the query id of PipelineExecutor is invalid.
           /*query_id=*/context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
-          memory_tracker_)
+          memory_tracker_,
+          auto_spill_trigger,
+          register_operator_spill_context)
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());
