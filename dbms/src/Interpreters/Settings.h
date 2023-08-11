@@ -316,7 +316,7 @@ struct Settings
     M(SettingFloat, auto_memory_revoke_target_threshold, 0.5, "When auto revoking memory, try to revoke enough that the memory usage is filled below the target percentage at the end.")                                                 \
     M(SettingUInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                    \
     M(SettingBool, enable_cop_stream_for_remote_read, true, "Enable cop stream for remote read")                                                                                                                                        \
-    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout for remote read")
+    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")
 
 
 // clang-format on
