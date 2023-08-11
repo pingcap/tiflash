@@ -41,11 +41,11 @@ public:
         , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
         , cpu_time_in_ns(0)
-        , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
         , log(Logger::get("resource_group-" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         bucket = std::make_unique<TokenBucket>(setting.fill_rate(), setting.fill_rate(), setting.burst_limit());
+        assert(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue);
     }
 
 #ifdef DBMS_PUBLIC_GTEST
@@ -57,6 +57,7 @@ public:
         , log(Logger::get("resource_group-" + group_name_))
     {
         bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
+        assert(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue);
     }
 #endif
 
@@ -96,7 +97,6 @@ private:
     uint64_t getPriority(uint64_t max_ru_per_sec) const
     {
         std::lock_guard lock(mu);
-        RUNTIME_CHECK_MSG(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue, "unexpected user_priority {}", user_priority);
 
         if (!burstable && bucket->peek() <= 0.0)
             return 0;
@@ -111,7 +111,7 @@ private:
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)
             virtual_time = MAX_VIRTUAL_TIME;
 
-        uint64_t priority = (((user_priority - 1) << 60) | virtual_time);
+        uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
         LOG_TRACE(log, "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, priority: {}", name, weight, virtual_time, user_priority, priority);
         return priority;
@@ -122,7 +122,6 @@ private:
     uint32_t user_priority;
     uint64_t user_ru_per_sec;
 
-    // gjt todo burstable?
     bool burstable = false;
 
     // Definition of the RG, e.g. RG settings, priority etc.
@@ -136,12 +135,6 @@ private:
     // Total used cpu_time_in_ns of this ResourceGroup.
     uint64_t cpu_time_in_ns = 0;
 
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
-
-    TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
-
-    std::chrono::steady_clock::time_point last_gac_update_timepoint;
-
     double ru_consumption_delta = 0.0;
 
     LoggerPtr log;
@@ -152,6 +145,18 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
+    void consumeResource(const std::string &, double, uint64_t) {}
+
+    double getPriority(const std::string &)
+    {
+        return 1.0;
+    }
+
+    bool isResourceGroupThrottled(const std::string &)
+    {
+        return false;
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #else
