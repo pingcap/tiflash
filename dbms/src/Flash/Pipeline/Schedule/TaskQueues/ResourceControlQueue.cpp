@@ -160,7 +160,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     if (iter == resource_group_statistic.end())
     {
         UInt64 accumulated_cpu_time = inc_value;
-        if (timeExceedYieldThreshold(accumulated_cpu_time))
+        if (accumulated_cpu_time >= YIELD_MAX_TIME_SPENT_NS)
         {
             updateResourceGroupStatisticWithoutLock(name, accumulated_cpu_time);
             accumulated_cpu_time = 0;
@@ -170,7 +170,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     else
     {
         iter->second += inc_value;
-        if (timeExceedYieldThreshold(iter->second))
+        if (iter->second >= YIELD_MAX_TIME_SPENT_NS)
         {
             updateResourceGroupStatisticWithoutLock(name, iter->second);
             iter->second = 0;
