@@ -42,6 +42,7 @@ public:
         , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
         , cpu_time_in_ns(0)
+        , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
         , log(Logger::get("resource_group-" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
@@ -247,6 +248,12 @@ private:
     // Total used cpu_time_in_ns of this ResourceGroup.
     uint64_t cpu_time_in_ns = 0;
 
+    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
+
+    TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
+
+    std::chrono::steady_clock::time_point last_gac_update_timepoint;
+
     double ru_consumption_delta = 0.0;
 
     LoggerPtr log;
@@ -266,6 +273,11 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 // 4. Degrade Mode:
 //   1. If cannot get resp from GAC for a while, will enter degrade mode.
 //   2. LAC runs as an independent token bucket whose refill rate is RU_PER_SEC in degrade mode.
+
+// RPC between GAC and LAC
+// 1. rpc ListResourceGroups(ListResourceGroupsRequest) returns (ListResourceGroupsResponse)
+//    return ResourceGroup pb{name, mode, r_u_settings{TokenBucket{tokens, TokenLimitSettings{fill_rate, burst_limit, max_tokens}}}, priority, runaway_settings}
+// 2. 
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
@@ -331,7 +343,6 @@ public:
 
 private:
     // Get ResourceGroup by name, if not exist, fetch from PD.
-    // If you are sure this resource group exists in GAC, you can skip the check.
     ResourceGroupPtr getOrCreateResourceGroup(const std::string & name);
     ResourceGroupPtr findResourceGroup(const std::string & name)
     {
@@ -351,14 +362,13 @@ private:
             max_ru_per_sec.store(user_ru_per_sec);
 
         std::lock_guard lock(mu);
-        for (const auto & group : resource_groups)
-        {
-            if (group.first == new_group_pb.name())
-                return std::make_pair(group.second, false);
-        }
+        auto iter = resource_groups.find(new_group_pb.name());
+        if (iter != resource_groups.end())
+            return std::make_pair(iter->second, false);
 
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
+        LOG_INFO(log, "new resource group added, info: {}", new_group_pb.DebugString());
         return std::make_pair(new_group, true);
     }
 
@@ -370,6 +380,8 @@ private:
     void handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
 
     void handleBackgroundError(const std::string & err_msg);
+
+    std::string isGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
     // Background jobs:
     // 1. Fetch tokens from GAC periodically.

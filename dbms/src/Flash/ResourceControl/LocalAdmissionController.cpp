@@ -26,11 +26,11 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
     auto resp = cluster->pd_client->getResourceGroup(req);
-    if (resp.has_error())
-    {
-        LOG_ERROR(log, "got error when fetch resource group from GAC: {}", resp.error().message());
-        return nullptr;
-    }
+    RUNTIME_CHECK_MSG(!resp.has_error(), "fetch resource group({}) info from GAC failed: {}", name, resp.error().message());
+
+    std::string err_msg = isGACRespValid(resp.group());
+    RUNTIME_CHECK_MSG(err_msg.empty(), "fetch resource group({}) info from GAC failed: {}", name, err_msg);
+
     return addResourceGroup(resp.group()).first;
 }
 
@@ -212,6 +212,18 @@ void LocalAdmissionController::handleBackgroundError(const std::string & err_msg
     // Basically, errors are all from GAC, cannot handle in tiflash.
     // So only print log.
     LOG_ERROR(log, err_msg);
+}
+
+std::string LocalAdmissionController::isGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
+{
+    String err_msg;
+    if unlikely (new_group_pb.name().empty())
+        err_msg += "resource group name from GAC pb is empty.";
+
+    if unlikely (new_group_pb.mode() != resource_manager::GroupMode::RUMode)
+        err_msg += fmt::format(" expect RUMode, got {}", new_group_pb.mode());
+
+    return err_msg;
 }
 
 #ifndef DBMS_PUBLIC_GTEST
