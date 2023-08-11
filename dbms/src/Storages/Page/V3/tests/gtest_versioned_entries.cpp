@@ -57,7 +57,10 @@ namespace PS::V3::tests
         .tag = 0,                              \
         .offset = 0x234,                       \
         .checksum = 0x5678};                   \
-    (void)entries.createUpsertEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
+    (void)entries.createUpsertEntry(           \
+        PageVersion((VERSION), (EPOCH)),       \
+        entry_gc_v##VERSION##_##EPOCH,         \
+        /*strict_check*/ true);
 
 
 class VersionedEntriesTest : public ::testing::Test

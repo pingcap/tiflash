@@ -168,6 +168,8 @@ void PageDirectoryFactory<Trait>::loadEdit(
 {
     for (const auto & r : edit.getRecords())
     {
+        // Is this entry could be duplicated with the dumped snapshot
+        bool is_duplicated_entry = !force_apply && r.version.sequence <= filter_seq;
         if (unlikely(debug.dump_entries))
         {
             if (max_applied_ver < r.version)
@@ -176,7 +178,7 @@ void PageDirectoryFactory<Trait>::loadEdit(
             // for debug, we always show all entries
             LOG_INFO(Logger::get(), "{}", r);
             if (debug.apply_entries_to_directory)
-                applyRecord(dir, r);
+                applyRecord(dir, r, /*strict_check*/ true);
             continue;
         }
 
@@ -184,21 +186,23 @@ void PageDirectoryFactory<Trait>::loadEdit(
         // the PageDirectory, it could re-apply a REF to an non-existing page_id that is already
         // deleted in the dumped snapshot.
         // So we filter the REF record which is less than or equal to the `filter_seq`
-        bool filter = !force_apply && r.version.sequence <= filter_seq && r.type == EditRecordType::REF;
+        bool filter = is_duplicated_entry && r.type == EditRecordType::REF;
         if (filter)
             continue;
 
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
 
-        applyRecord(dir, r);
+        // For duplicated entry, we relax some checking
+        applyRecord(dir, r, !is_duplicated_entry);
     }
 }
 
 template <typename Trait>
 void PageDirectoryFactory<Trait>::applyRecord(
     const PageDirectoryPtr & dir,
-    const typename PageEntriesEdit::EditRecord & r)
+    const typename PageEntriesEdit::EditRecord & r,
+    bool strict_check)
 {
     auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
     if (created)
@@ -302,7 +306,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
             break;
         case EditRecordType::UPSERT:
         {
-            auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
+            auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry, strict_check);
             if (Trait::PageIdTrait::getU64ID(id_to_deref) != INVALID_PAGE_U64_ID)
             {
                 // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page

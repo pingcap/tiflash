@@ -1397,9 +1397,10 @@ try
     sp_after_create_snap_for_dump.waitAndPause();
 
     // write an arbitrary record to the current log file to prevent it being deleted after dump snapshot
+    PageEntryV3 entry_5_v1{.file_id = 500, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x321, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_1_v1);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_5_v1);
         dir->apply(std::move(edit));
     }
 
@@ -1413,6 +1414,9 @@ try
         auto normal_id = getNormalPageIdU64(dir, 3, snap);
         EXPECT_EQ(normal_id, 1);
         ASSERT_EQ(dir->numPages(), 3);
+        EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
+        EXPECT_ENTRY_EQ(entry_1_v1, dir, 3, snap);
+        EXPECT_ENTRY_EQ(entry_5_v1, dir, 5, snap);
     }
 }
 CATCH
@@ -1464,6 +1468,8 @@ try
     dir = restoreFromDisk();
     {
         ASSERT_EQ(dir->numPages(), 1);
+        auto snap = dir->createSnapshot("");
+        EXPECT_ENTRY_EQ(entry_1_v1, dir, 5, snap);
     }
 }
 CATCH
@@ -1473,6 +1479,7 @@ TEST_F(PageDirectoryTest, Issue7915Case3)
 try
 {
     PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_full_gc{.file_id = 5050, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -1495,9 +1502,7 @@ try
         {
             for (const auto & [page_id, version, entry] : versioned_pageid_entry_list)
             {
-                auto new_entry = entry;
-                new_entry.file_id = 5050;
-                edit.upsertPage(page_id, version, new_entry);
+                edit.upsertPage(page_id, version, entry_full_gc);
             }
         }
         dir->gcApply(std::move(edit));
@@ -1530,7 +1535,11 @@ try
     // restart and check
     dir = restoreFromDisk();
     {
-        ASSERT_EQ(dir->numPages(), 1);
+        ASSERT_EQ(dir->numPages(), 2);
+        // page 1, 2 should be deleted, and page 10000, 5 is restored
+        auto snap = dir->createSnapshot("");
+        EXPECT_ENTRY_EQ(entry_full_gc, dir, 10000, snap);
+        EXPECT_ENTRY_EQ(entry_1_v1, dir, 5, snap);
     }
 }
 CATCH

@@ -134,11 +134,22 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
 template <typename Trait>
 typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::createUpsertEntry(
     const PageVersion & ver,
-    const PageEntryV3 & entry)
+    const PageEntryV3 & entry,
+    bool strict_check)
 {
     auto page_lock = acquireLock();
 
     // For applying upsert entry, only `VAR_ENTRY`/`VAR_REF` is valid state.
+    // But when `strict_check == true`, we will create a new entry when it is
+    // in `VAR_DELETE` state.
+
+    if (!strict_check && type == EditRecordType::VAR_DELETE)
+    {
+        type = EditRecordType::VAR_ENTRY;
+        assert(entries.empty());
+        entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        return Trait::PageIdTrait::getInvalidID();
+    }
 
     if (type == EditRecordType::VAR_ENTRY)
     {
@@ -1804,7 +1815,7 @@ void PageDirectory<Trait>::gcApply(PageEntriesEdit && migrated_edit, const Write
 
         // Append the gc version to version list
         const auto & versioned_entries = iter->second;
-        auto id_to_deref = versioned_entries->createUpsertEntry(record.version, record.entry);
+        auto id_to_deref = versioned_entries->createUpsertEntry(record.version, record.entry, /*strict_check*/ true);
         if (id_to_deref != Trait::PageIdTrait::getInvalidID())
         {
             // The ref-page is rewritten into a normal page, we need to decrease the ref-count of original page
