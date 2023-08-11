@@ -61,6 +61,12 @@ public:
         appendAdditionalOperatorSpillContexts();
         return operator_spill_contexts.size();
     }
+    /// for tests
+    size_t additionalOperatorSpillContextCount() const
+    {
+        std::unique_lock lock(mutex);
+        return additional_operator_spill_contexts.size();
+    }
 
     Int64 totalRevocableMemories()
     {
