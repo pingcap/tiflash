@@ -226,13 +226,12 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
     if (resource_group_task_queues.empty())
         return true;
 
-    bool empty = true;
     for (const auto & task_queue_iter : resource_group_task_queues)
     {
         if (!task_queue_iter.second->empty())
-            empty = false;
+            return false;
     }
-    return empty;
+    return true;
 }
 
 template <typename NestedQueueType>
