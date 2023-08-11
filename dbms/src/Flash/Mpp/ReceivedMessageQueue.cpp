@@ -99,13 +99,15 @@ ReceivedMessageQueue::ReceivedMessageQueue(
           /// use pushcallback to make sure that the order of messages in msg_channels_for_fine_grained_shuffle is exactly the same as it in msg_channel,
           /// because pop from msg_channel rely on this assumption. An alternative is to make msg_channel a set/map of messages for fine grained shuffle, but
           /// it need many more changes
-          !enable_fine_grained ? nullptr : std::function<void(const ReceivedMessagePtr &)>([this](const ReceivedMessagePtr & element) {
-              for (size_t i = 0; i < fine_grained_channel_size; ++i)
-              {
-                  auto result = msg_channels_for_fine_grained_shuffle[i].forcePush(element);
-                  RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
-              }
-          }))
+          !enable_fine_grained
+              ? nullptr
+              : std::function<void(const ReceivedMessagePtr &)>([this](const ReceivedMessagePtr & element) {
+                    for (size_t i = 0; i < fine_grained_channel_size; ++i)
+                    {
+                        auto result = msg_channels_for_fine_grained_shuffle[i].forcePush(element);
+                        RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
+                    }
+                }))
 {
     if (enable_fine_grained)
     {
@@ -137,9 +139,14 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
                 auto pop_result = grpc_recv_queue.tryPop(original_msg);
                 /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
                 /// so even use tryPop, the result must not be empty
-                RUNTIME_CHECK_MSG(pop_result != MPMCQueueResult::EMPTY, "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
+                RUNTIME_CHECK_MSG(
+                    pop_result != MPMCQueueResult::EMPTY,
+                    "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
                 if likely (original_msg != nullptr)
-                    RUNTIME_CHECK_MSG(*original_msg->getRemainingConsumers() == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->getRemainingConsumers());
+                    RUNTIME_CHECK_MSG(
+                        *original_msg->getRemainingConsumers() == 0,
+                        "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}",
+                        *original_msg->getRemainingConsumers());
 #else
                 grpc_recv_queue.tryDequeue();
 #endif
@@ -156,19 +163,18 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
 
     if (res == MPMCQueueResult::OK)
     {
-        ExchangeReceiverMetric::subDataSizeMetric(
-            *data_size_in_queue,
-            recv_msg->getPacket().ByteSizeLong());
+        ExchangeReceiverMetric::subDataSizeMetric(*data_size_in_queue, recv_msg->getPacket().ByteSizeLong());
     }
 
     return res;
 }
 
 template <bool is_force>
-bool ReceivedMessageQueue::pushPacket(size_t source_index,
-                                      const String & req_info,
-                                      const TrackedMppDataPacketPtr & tracked_packet,
-                                      ReceiverMode mode)
+bool ReceivedMessageQueue::pushPacket(
+    size_t source_index,
+    const String & req_info,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    ReceiverMode mode)
 {
     auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
     if (!received_message->containUsefulMessage())
@@ -187,10 +193,11 @@ bool ReceivedMessageQueue::pushPacket(size_t source_index,
     return success;
 }
 
-MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(size_t source_index,
-                                                          const String & req_info,
-                                                          const TrackedMppDataPacketPtr & tracked_packet,
-                                                          GRPCKickTag * new_tag)
+MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(
+    size_t source_index,
+    const String & req_info,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    GRPCKickTag * new_tag)
 {
     auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
     if (!received_message->containUsefulMessage())
@@ -207,13 +214,15 @@ MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(size_t source_index,
 
 template MPMCQueueResult ReceivedMessageQueue::pop<true>(size_t stream_id, ReceivedMessagePtr & recv_msg);
 template MPMCQueueResult ReceivedMessageQueue::pop<false>(size_t stream_id, ReceivedMessagePtr & recv_msg);
-template bool ReceivedMessageQueue::pushPacket<true>(size_t source_index,
-                                                     const String & req_info,
-                                                     const TrackedMppDataPacketPtr & tracked_packet,
-                                                     ReceiverMode mode);
-template bool ReceivedMessageQueue::pushPacket<false>(size_t source_index,
-                                                      const String & req_info,
-                                                      const TrackedMppDataPacketPtr & tracked_packet,
-                                                      ReceiverMode mode);
+template bool ReceivedMessageQueue::pushPacket<true>(
+    size_t source_index,
+    const String & req_info,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    ReceiverMode mode);
+template bool ReceivedMessageQueue::pushPacket<false>(
+    size_t source_index,
+    const String & req_info,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    ReceiverMode mode);
 
 } // namespace DB

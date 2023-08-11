@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Join.h>
+#include <Operators/HashProbeTransformExec.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -42,6 +43,8 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
+    OperatorStatus executeIOImpl() override;
+
     void transformHeaderImpl(Block & header_) override;
 
     void operateSuffixImpl() override;
@@ -49,25 +52,83 @@ protected:
 private:
     OperatorStatus onOutput(Block & block);
 
+    inline void onWaitProbeFinishDone();
+
+    inline void onRestoreBuildFinish();
+
+    inline void onGetRestoreJoin();
+
+    /*
+     *   spill not enabled:
+     *                                        PROBE
+     *                                          |
+     *                                          ▼
+     *                                  -----------------
+     *        has scan_after_probe data |               | no scan_after_probe data
+     *                                  ▼               ▼
+     *                         WAIT_PROBE_FINISH     FINISHED
+     *                                  |
+     *                                  ▼
+     *                        READ_SCAN_HASH_MAP_DATA
+     *                                  |
+     *                                  ▼
+     *                               FINISHED
+     *
+     *   spill enabled:
+     *                  |------------------->  PROBE/RESTORE_PROBE
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                     PROBE_FINAL_SPILL
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                     WAIT_PROBE_FINISH
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |has scan_hash_map data |             | no scan_hash_map data
+     *                  |                       ▼             |
+     *                  |           READ_SCAN_HASH_MAP_DATA   |
+     *                  |                       \             /
+     *                  |                        \           /
+     *                  |                         \         /
+     *                  |                          \       /
+     *                  |                           \     /
+     *                  |                            \   /
+     *                  |                             \ /
+     *                  |                              ▼
+     *                  |                       GET_RESTORE_JOIN
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |     has restored join |             | no restored join
+     *                  |                       ▼             ▼
+     *                  |                 RESTORE_BUILD    FINISHED
+     *                  |                       |
+     *                  ------------------------|
+     */
+    enum class ProbeStatus
+    {
+        PROBE, /// probe data
+        PROBE_FINAL_SPILL, /// final spill for probe data
+        WAIT_PROBE_FINISH, /// wait probe finish
+        READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
+        GET_RESTORE_JOIN, /// try to get restore join
+        RESTORE_BUILD, /// build for restore join
+        RESTORE_PROBE, /// probe for restore join
+        FINISHED, /// the final state
+    };
+    inline void switchStatus(ProbeStatus to);
+
 private:
-    JoinPtr join;
+    JoinPtr origin_join;
+
+    HashProbeTransformExecPtr probe_transform;
 
     ProbeProcessInfo probe_process_info;
-
-    size_t op_index;
-
-    BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     size_t joined_rows = 0;
     size_t scan_hash_map_rows = 0;
 
-    enum class ProbeStatus
-    {
-        PROBE, /// probe data
-        WAIT_PROBE_FINISH, /// wait probe finish
-        READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
-        FINISHED, /// the final state
-    };
     ProbeStatus status{ProbeStatus::PROBE};
 };
 } // namespace DB

@@ -116,7 +116,8 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
+    if (blocks.size() == fine_grained_shuffle_stream_count
+        || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
         batchWriteFineGrainedShuffle();
 }
 
@@ -156,7 +157,16 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleIm
                 // check schema
                 assertBlockSchema(expected_types, block, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
             }
-            HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
+            HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(
+                block,
+                partition_col_ids,
+                collators,
+                partition_key_containers_for_reuse,
+                partition_num,
+                fine_grained_shuffle_stream_count,
+                hash,
+                selector,
+                scattered);
             block.clear();
         }
         blocks.clear();

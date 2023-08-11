@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Core/AutoSpillTrigger.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
@@ -27,6 +28,8 @@
 
 namespace DB
 {
+class OperatorSpillContext;
+using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<OperatorSpillContext> & ptr)>;
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -38,11 +41,19 @@ public:
         , mem_tracker(nullptr)
     {}
 
-    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_, const String & resource_group_name_ = "")
+    PipelineExecutorContext(
+        const String & query_id_,
+        const String & req_id,
+        const MemoryTrackerPtr & mem_tracker_,
+        AutoSpillTrigger * auto_spill_trigger_ = nullptr,
+        const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
+        const String & resource_group_name = "")
         : query_id(query_id_)
-        , resource_group_name(resource_group_name_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
+        , auto_spill_trigger(auto_spill_trigger_)
+        , register_operator_spill_context(register_operator_spill_context_)
+        , resource_group_name(resource_group_name_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -129,38 +140,34 @@ public:
 
     void cancel();
 
-    ALWAYS_INLINE bool isCancelled()
-    {
-        return is_cancelled.load(std::memory_order_acquire);
-    }
+    ALWAYS_INLINE bool isCancelled() { return is_cancelled.load(std::memory_order_acquire); }
 
     ResultQueuePtr toConsumeMode(size_t queue_size);
 
-    void update(const TaskProfileInfo & task_profile_info)
+    void update(const TaskProfileInfo & task_profile_info) { query_profile_info.merge(task_profile_info); }
+
+    const QueryProfileInfo & getQueryProfileInfo() const { return query_profile_info; }
+
+    const String & getQueryId() const { return query_id; }
+
+    const MemoryTrackerPtr & getMemoryTracker() const { return mem_tracker; }
+
+    void triggerAutoSpill() const
     {
-        query_profile_info.merge(task_profile_info);
+        if (auto_spill_trigger != nullptr)
+            auto_spill_trigger->triggerAutoSpill();
     }
 
-    const QueryProfileInfo & getQueryProfileInfo() const
+    void registerOperatorSpillContext(const std::shared_ptr<OperatorSpillContext> & operator_spill_context)
     {
-        return query_profile_info;
-    }
-
-    const String & getQueryId() const
-    {
-        return query_id;
+        if (register_operator_spill_context != nullptr)
+            register_operator_spill_context(operator_spill_context);
     }
 
     const String & getResourceGroupName() const
     {
         return resource_group_name;
     }
-
-    const MemoryTrackerPtr & getMemoryTracker() const
-    {
-        return mem_tracker;
-    }
-
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -172,7 +179,6 @@ private:
 private:
     const String query_id;
 
-    const String resource_group_name;
 
     LoggerPtr log;
 
@@ -191,5 +197,11 @@ private:
     std::optional<ResultQueuePtr> result_queue;
 
     QueryProfileInfo query_profile_info;
+
+    AutoSpillTrigger * auto_spill_trigger;
+
+    RegisterOperatorSpillContext register_operator_spill_context;
+
+    const String resource_group_name;
 };
 } // namespace DB

@@ -78,7 +78,7 @@ MPPTaskManager::~MPPTaskManager()
 
 MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id)
 {
-    auto ptr = std::make_shared<MPPQuery>(has_meaningful_gather_id);
+    auto ptr = std::make_shared<MPPQuery>(query_id, has_meaningful_gather_id);
     mpp_query_map.insert({query_id, ptr});
     GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     return ptr;
@@ -107,7 +107,10 @@ void MPPTaskManager::removeMPPGatherTaskSet(MPPQueryPtr & query, const MPPGather
     }
 }
 
-std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq)
+std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
+    const ::mpp::EstablishMPPConnectionRequest * request,
+    EstablishCallData * call_data,
+    grpc::CompletionQueue * cq)
 {
     const auto & meta = request->sender_meta();
     MPPTaskId id{meta};
@@ -170,7 +173,9 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
     return task->getTunnel(request);
 }
 
-std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout)
+std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(
+    const ::mpp::EstablishMPPConnectionRequest * request,
+    std::chrono::seconds timeout)
 {
     const auto & meta = request->sender_meta();
     MPPTaskId id{meta};
@@ -199,18 +204,37 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
     fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
     if (cancelled)
     {
-        return {nullptr, fmt::format("{}: Task [{},{}] has been aborted, error message: {}", req_info, meta.start_ts(), meta.task_id(), error_message)};
+        return {
+            nullptr,
+            fmt::format(
+                "{}: Task [{},{}] has been aborted, error message: {}",
+                req_info,
+                meta.start_ts(),
+                meta.task_id(),
+                error_message)};
     }
     else if (!ret)
     {
-        return {nullptr, fmt::format("{}: Can't find task [{},{}] within {}s.", req_info, meta.start_ts(), meta.task_id(), timeout.count())};
+        return {
+            nullptr,
+            fmt::format(
+                "{}: Can't find task [{},{}] within {}s.",
+                req_info,
+                meta.start_ts(),
+                meta.task_id(),
+                timeout.count())};
     }
     return task->getTunnel(request);
 }
 
 void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type)
 {
-    LOG_WARNING(log, "Begin to abort gather: {}, abort type: {}, reason: {}", gather_id.toString(), magic_enum::enum_name(abort_type), reason);
+    LOG_WARNING(
+        log,
+        "Begin to abort gather: {}, abort type: {}, reason: {}",
+        gather_id.toString(),
+        magic_enum::enum_name(abort_type),
+        reason);
     MPPGatherTaskSetPtr gather_task_set;
     {
         /// abort task may take a long time, so first
@@ -252,9 +276,8 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
 
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("Remaining task in gather {} are: ", gather_id.toString());
-    gather_task_set->forEachMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
-        fmt_buf.fmtAppend("{} ", it.first.toString());
-    });
+    gather_task_set->forEachMPPTask(
+        [&](const std::pair<MPPTaskId, MPPTaskPtr> & it) { fmt_buf.fmtAppend("{} ", it.first.toString()); });
     LOG_WARNING(log, fmt_buf.toString());
 
     gather_task_set->forEachMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
@@ -265,7 +288,11 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
     {
         std::lock_guard lock(mu);
         auto [query, gather, _] = getMPPQueryAndGatherTaskSet(gather_id);
-        RUNTIME_ASSERT(gather != nullptr, log, "MPPGatherTaskSet {} should remaining in MPPTaskManager", gather_id.toString());
+        RUNTIME_ASSERT(
+            gather != nullptr,
+            log,
+            "MPPGatherTaskSet {} should remaining in MPPTaskManager",
+            gather_id.toString());
         gather->state = MPPGatherTaskSet::Aborted;
         cv.notify_all();
     }
@@ -307,6 +334,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     }
     gather_task_set->registerTask(task->id);
     task->initProcessListEntry(query->process_list_entry);
+    task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
     return {true, ""};
 }
 
@@ -320,7 +348,9 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
     auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(task->id.gather_id);
     if (!error_msg.empty())
     {
-        return {false, fmt::format("Gather {} is being aborted, error message = {}", task->id.gather_id.toString(), error_msg)};
+        return {
+            false,
+            fmt::format("Gather {} is being aborted, error message = {}", task->id.gather_id.toString(), error_msg)};
     }
     /// gather_task_set must not be nullptr if the current query is not aborted since MPPTaskManager::registerTask
     /// always create the gather_task_set
@@ -330,8 +360,9 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
     {
         return {false, "task is already visible"};
     }
-    RUNTIME_CHECK_MSG(query->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
-                      "Task process list entry should always be the same as query process list entry");
+    RUNTIME_CHECK_MSG(
+        query->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
+        "Task process list entry should always be the same as query process list entry");
     gather_task_set->makeTaskActive(task);
     /// cancel all the alarm waiting on this task
     auto alarm_it = gather_task_set->alarms.find(task->id.task_id);
@@ -382,9 +413,8 @@ String MPPTaskManager::toString()
     {
         for (auto & gather_it : query_it.second->mpp_gathers)
         {
-            gather_it.second->forEachMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
-                res += it.first.toString() + ", ";
-            });
+            gather_it.second->forEachMPPTask(
+                [&](const std::pair<MPPTaskId, MPPTaskPtr> & it) { res += it.first.toString() + ", "; });
         }
     }
     return res + ")";
@@ -396,7 +426,8 @@ std::pair<MPPGatherTaskSetPtr, String> MPPTaskManager::getGatherTaskSetWithoutLo
     return {gather, aborted_reason};
 }
 
-std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> MPPTaskManager::getMPPQueryAndGatherTaskSet(const MPPGatherId & gather_id)
+std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> MPPTaskManager::getMPPQueryAndGatherTaskSet(
+    const MPPGatherId & gather_id)
 {
     auto reason = aborted_query_gather_cache.check(gather_id);
     const auto & query = getMPPQueryWithoutLock(gather_id.query_id);
@@ -404,7 +435,9 @@ std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> MPPTaskManager::getMPPQuery
     {
         return std::make_tuple(nullptr, nullptr, reason);
     }
-    RUNTIME_CHECK_MSG(query->has_meaningful_gather_id == gather_id.hasMeaningfulGatherId(), "MPP query has gather id while mpp task does not have gather id, should be something wrong in TiDB side");
+    RUNTIME_CHECK_MSG(
+        query->has_meaningful_gather_id == gather_id.hasMeaningfulGatherId(),
+        "MPP query has gather id while mpp task does not have gather id, should be something wrong in TiDB side");
     auto gather_it = query->mpp_gathers.find(gather_id);
     if (gather_it != query->mpp_gathers.end())
     {

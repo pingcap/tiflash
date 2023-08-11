@@ -33,6 +33,7 @@ struct LogFilename
     const LogFileStage stage;
     const Format::LogNumberType log_num;
     const Format::LogNumberType level_num;
+    UInt64 snap_seq; // used to memorize the max seq in checkpoint file
     const size_t bytes_on_disk;
     const String parent_path;
 
@@ -44,11 +45,13 @@ struct LogFilename
     inline String filename(LogFileStage file_stage) const
     {
         assert(file_stage != LogFileStage::Invalid);
+        auto suffix = (snap_seq == 0) ? "" : fmt::format("_{}", snap_seq);
         return fmt::format(
-            "{}_{}_{}",
+            "{}_{}_{}{}",
             ((file_stage == LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
             log_num,
-            level_num);
+            level_num,
+            suffix);
     }
 
     inline String fullname(LogFileStage file_stage) const
