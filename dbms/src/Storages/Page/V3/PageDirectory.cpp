@@ -140,7 +140,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
     auto page_lock = acquireLock();
 
     // For applying upsert entry, only `VAR_ENTRY`/`VAR_REF` is valid state.
-    // But when `strict_check == true`, we will create a new entry when it is
+    // But when `strict_check == false`, we will create a new entry when it is
     // in `VAR_DELETE` state.
 
     if (!strict_check && type == EditRecordType::VAR_DELETE)
