@@ -33,8 +33,6 @@ class LocalAdmissionController;
 class ResourceGroup final : private boost::noncopyable
 {
 public:
-    static const std::string DEFAULT_RESOURCE_GROUP_NAME;
-
     explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
         : name(group_pb_.name())
         , user_priority(group_pb_.priority())
@@ -105,12 +103,7 @@ private:
         if (!burstable && bucket->peek() <= 0.0)
             return 0;
 
-        double weight = 0.0;
-        if (name == DEFAULT_RESOURCE_GROUP_NAME)
-            weight = 1.0;
-        else
-            weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
-
+        double weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
         uint64_t virtual_time = cpu_time_in_ns * weight;
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)
             virtual_time = MAX_VIRTUAL_TIME;

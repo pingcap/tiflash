@@ -22,6 +22,4 @@ std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_insta
 #else
 auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #endif
-
-const std::string ResourceGroup::DEFAULT_RESOURCE_GROUP_NAME = "default";
 } // namespace DB
