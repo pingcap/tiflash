@@ -45,7 +45,9 @@ public:
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         bucket = std::make_unique<TokenBucket>(setting.fill_rate(), setting.fill_rate(), setting.burst_limit());
-        assert(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue);
+        assert(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
     }
 
 #ifdef DBMS_PUBLIC_GTEST
@@ -57,7 +59,9 @@ public:
         , log(Logger::get("resource_group-" + group_name_))
     {
         bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
-        assert(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue);
+        assert(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
     }
 #endif
 
@@ -113,7 +117,15 @@ private:
 
         uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
-        LOG_TRACE(log, "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, priority: {}", name, weight, virtual_time, user_priority, priority);
+        LOG_TRACE(
+            log,
+            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, "
+            "priority: {}",
+            name,
+            weight,
+            virtual_time,
+            user_priority,
+            priority);
         return priority;
     }
 
@@ -147,15 +159,9 @@ class LocalAdmissionController final : private boost::noncopyable
 public:
     void consumeResource(const std::string &, double, uint64_t) {}
 
-    double getPriority(const std::string &)
-    {
-        return 1.0;
-    }
+    double getPriority(const std::string &) { return 1.0; }
 
-    bool isResourceGroupThrottled(const std::string &)
-    {
-        return false;
-    }
+    bool isResourceGroupThrottled(const std::string &) { return false; }
 
 #ifndef DBMS_PUBLIC_GTEST
     static std::unique_ptr<LocalAdmissionController> global_instance;

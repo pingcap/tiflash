@@ -145,7 +145,9 @@ void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
         io_out_task_queue.push_back(std::move(task));
         break;
     default:
-        throw Exception(fmt::format("Unexpected status: {}, IOPriorityQueue only accepts tasks with IO status", magic_enum::enum_name(status)));
+        throw Exception(fmt::format(
+            "Unexpected status: {}, IOPriorityQueue only accepts tasks with IO status",
+            magic_enum::enum_name(status)));
     }
 }
 

@@ -24,7 +24,8 @@
 namespace DB
 {
 template <typename NestedQueueType>
-class ResourceControlQueue : public TaskQueue
+class ResourceControlQueue
+    : public TaskQueue
     , private boost::noncopyable
 {
 public:

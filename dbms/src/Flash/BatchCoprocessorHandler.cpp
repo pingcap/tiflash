@@ -76,7 +76,8 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
-            const String & resource_group_name = cop_request->context().resource_control_context().resource_group_name();
+            const String & resource_group_name
+                = cop_request->context().resource_control_context().resource_group_name();
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),

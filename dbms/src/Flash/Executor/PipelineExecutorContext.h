@@ -164,10 +164,8 @@ public:
             register_operator_spill_context(operator_spill_context);
     }
 
-    const String & getResourceGroupName() const
-    {
-        return resource_group_name;
-    }
+    const String & getResourceGroupName() const { return resource_group_name; }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 

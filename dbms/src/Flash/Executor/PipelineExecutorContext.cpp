@@ -22,9 +22,7 @@ namespace DB
 ExecutionResult PipelineExecutorContext::toExecutionResult()
 {
     std::lock_guard lock(mu);
-    return exception_ptr
-        ? ExecutionResult::fail(exception_ptr)
-        : ExecutionResult::success();
+    return exception_ptr ? ExecutionResult::fail(exception_ptr) : ExecutionResult::success();
 }
 
 std::exception_ptr PipelineExecutorContext::getExceptionPtr()

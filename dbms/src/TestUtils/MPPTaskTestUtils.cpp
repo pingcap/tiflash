@@ -23,7 +23,12 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id, int query_ts, int gather_id)
+DAGProperties getDAGPropertiesForTest(
+    int server_num,
+    int local_query_id,
+    int tidb_server_id,
+    int query_ts,
+    int gather_id)
 {
     DAGProperties properties;
     // enable mpp
@@ -95,7 +100,10 @@ void MPPTaskTestUtils::setCancelTest()
 BlockInputStreamPtr MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder, const DAGProperties & properties)
 {
     auto tasks = prepareMPPTasks(builder, properties);
-    return executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
+    return executeMPPQueryWithMultipleContext(
+        properties,
+        tasks,
+        MockComputeServerManager::instance().getServerConfigMap());
 }
 
 std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties)
@@ -109,7 +117,10 @@ std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder build
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties)
 {
-    auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
+    auto res = executeMPPQueryWithMultipleContext(
+        properties,
+        tasks,
+        MockComputeServerManager::instance().getServerConfigMap());
     return readBlock(res);
 }
 
@@ -138,9 +149,10 @@ ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<
 
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
 
-    auto addr = MockComputeServerManager::instance().getServerConfigMap()[0].addr; // Since we only have started 1 server currently.
-    MockComputeClient client(
-        grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
+    auto addr = MockComputeServerManager::instance()
+                    .getServerConfigMap()[0]
+                    .addr; // Since we only have started 1 server currently.
+    MockComputeClient client(grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
     auto resp = client.runCoprocessor(req);
     auto resp_ptr = std::make_shared<tipb::SelectResponse>();
     if (unlikely(!resp_ptr->ParseFromString(resp.data())))
@@ -157,7 +169,8 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     FmtBuffer buf;
     buf.fmtAppend("server id: {}, tasks: ", server_id);
-    buf.fmtAppend(fmt::runtime(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString()));
+    buf.fmtAppend(
+        fmt::runtime(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString()));
     return buf.toString();
 }
 
@@ -168,7 +181,8 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
-        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getMPPQuery(query_id) != nullptr)
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getMPPQuery(query_id)
+               != nullptr)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
@@ -189,7 +203,9 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
-        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first != nullptr)
+        while (
+            TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first
+            != nullptr)
         {
             std::this_thread::sleep_for(seconds);
             ++retry_times;
@@ -219,7 +235,8 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
-        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first == nullptr)
+        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first
+            == nullptr)
         {
             return ::testing::AssertionFailure() << "Gather " << gather_id.toString() << "not active" << std::endl;
         }
