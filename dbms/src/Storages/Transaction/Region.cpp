@@ -57,10 +57,7 @@ std::optional<RegionDataReadInfo> Region::readDataByWriteIt(const RegionData::Co
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(fmt::format("(region id {}, applied_index:{}, applied_term:{})",
-                                 meta.regionId(),
-                                 appliedIndex(),
-                                 appliedIndexTerm()));
+        e.addMessage(fmt::format("(applied_term: {})", appliedIndexTerm()));
         throw;
     }
 }

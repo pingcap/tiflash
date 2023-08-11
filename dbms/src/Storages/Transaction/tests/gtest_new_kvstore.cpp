@@ -91,7 +91,7 @@ try
             // Reject compact log.
             kvs.setRegionCompactLogConfig(10000000, 10000000, 10000000, 10000000);
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, indexc);
-            ASSERT_EQ(kvr1->lastCompactLogApplied(), indexc);
+            ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
         }
     }
 

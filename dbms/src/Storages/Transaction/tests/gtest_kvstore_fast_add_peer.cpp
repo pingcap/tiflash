@@ -196,6 +196,7 @@ try
 
     // Write some data, and persist meta.
     auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();

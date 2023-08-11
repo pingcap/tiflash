@@ -177,13 +177,13 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
             }
             if (!hard_error)
             {
-                orphan_key_debug_msg = fmt::format("{}, snapshot_index: {}, {}, orphan key size {}",
+                orphan_key_debug_msg = fmt::format("orphan_info: ({}, snapshot_index: {}, {}, orphan key size {})",
                                                    hard_error ? "" : ", not orphan key",
                                                    orphan_keys_info.snapshot_index.has_value() ? std::to_string(orphan_keys_info.snapshot_index.value()) : "",
                                                    orphan_keys_info.removed_remained_keys.contains(*key) ? "duplicated write" : "missing default",
                                                    orphan_keys_info.remainedKeyCount());
             }
-            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}{}",
+            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied_index: {}{}",
                                         pk.toDebugString(),
                                         decoded_val.prewrite_ts,
                                         key->toDebugString(),

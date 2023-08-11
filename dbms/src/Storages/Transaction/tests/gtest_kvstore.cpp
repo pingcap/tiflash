@@ -679,7 +679,7 @@ TEST_F(RegionKVStoreTest, Writes)
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), "Raw TiDB PK: 800000000000091D, Prewrite ts: 2333 can not found in default cf for key: 7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE: (region id 1, applied_index:5, applied_term:5)");
+                ASSERT_EQ(e.message(), "Raw TiDB PK: 800000000000091D, Prewrite ts: 2333 can not found in default cf for key: 7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE, region_id: 1, applied_index: 5: (applied_term: 5)");
                 ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[write 1 lock 1 ]");
                 kvs.getRegion(1)->tryCompactionFilter(1000);
             }

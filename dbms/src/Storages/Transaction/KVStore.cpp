@@ -452,6 +452,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     else
     {
         GET_METRIC(tiflash_raft_region_flush_size, type_unflushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_raft_log_lag_count, type_unflushed_applied_index).Observe(current_applied_gap);
     }
     return can_flush;
 }

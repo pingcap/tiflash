@@ -265,7 +265,8 @@ namespace DB
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                              \
     M(tiflash_raft_raft_log_lag_count, "Bucketed histogram raft index lag", Histogram,                                                              \
         F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}),                                                           \
-        F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 200, 5}))                                                           \
+        F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 200, 5}),                                                           \
+        F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 200, 5}))                                       \
     M(tiflash_raft_raft_events_count, "Raft event counter", Counter,                                                                                \
         F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}),                                                                                   \
         F(type_flush_apply_snapshot, {{"type", "flush_apply_snapshot"}}),                                                                           \
