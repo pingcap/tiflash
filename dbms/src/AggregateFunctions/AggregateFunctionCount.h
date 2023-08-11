@@ -46,7 +46,7 @@ public:
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeInt64>();
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
@@ -137,7 +137,7 @@ public:
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeInt64>();
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -193,7 +193,7 @@ public:
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeInt64>();
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
