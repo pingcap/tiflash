@@ -49,7 +49,7 @@ public:
 
     void cancel(const String & query_id, const String & resource_group_name) override;
 
-    bool isCancelQueueEmpty() const;
+    void collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id);
 
 private:
     void submitTaskWithoutLock(TaskPtr && task);

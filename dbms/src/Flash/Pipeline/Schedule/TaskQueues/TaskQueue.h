@@ -51,4 +51,18 @@ protected:
 };
 using TaskQueuePtr = std::unique_ptr<TaskQueue>;
 
+template <typename Queue>
+bool popTask(Queue & queue, TaskPtr & task)
+{
+    if (!queue.empty())
+    {
+        task = std::move(queue.front());
+        queue.pop_front();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
 } // namespace DB

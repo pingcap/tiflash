@@ -20,21 +20,6 @@ namespace DB
 {
 namespace
 {
-template <typename Queue>
-bool popTask(Queue & queue, TaskPtr & task)
-{
-    if (!queue.empty())
-    {
-        task = std::move(queue.front());
-        queue.pop_front();
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
 void moveCancelledTasks(std::list<TaskPtr> & normal_queue, std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
     assert(!query_id.empty());
@@ -193,15 +178,14 @@ void IOPriorityQueue::cancel(const String & query_id, const String &)
     std::lock_guard lock(mu);
     if (cancel_query_id_cache.add(query_id))
     {
-        moveCancelledTasks(io_in_task_queue, cancel_task_queue, query_id);
-        moveCancelledTasks(io_out_task_queue, cancel_task_queue, query_id);
+        collectCancelledTasks(cancel_task_queue, query_id);
         cv.notify_all();
     }
 }
 
-bool IOPriorityQueue::isCancelQueueEmpty() const
+void IOPriorityQueue::collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
-    std::lock_guard lock(mu);
-    return cancel_task_queue.empty();
+    moveCancelledTasks(io_in_task_queue, cancel_queue, query_id);
+    moveCancelledTasks(io_out_task_queue, cancel_queue, query_id);
 }
 } // namespace DB

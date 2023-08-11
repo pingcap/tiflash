@@ -46,6 +46,12 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
         FINALIZE_TASK(task);
         return;
     }
+    const auto & query_id = task->getQueryId();
+    if unlikely (cancel_query_id_cache.contains(query_id))
+    {
+        cancel_task_queue.push_back(std::move(task));
+        return;
+    }
 
     // name can be empty, it means resource control is disabled.
     const std::string & name = task->getResourceGroupName();
@@ -54,13 +60,6 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedQueueType>();
-        const auto & query_id = task->getQueryId();
-        if (cancel_query_ids.find(query_id) != cancel_query_ids.end())
-        {
-            // Got here when cancel this query first, then submit tasks of this query.
-            cancel_query_ids[query_id] = task_queue;
-            task_queue->cancel(query_id, name);
-        }
 
         task_queue->submit(std::move(task));
         resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
@@ -80,6 +79,9 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        if (popTask(cancel_task_queue, task))
+            return true;
+
         while (!resource_group_infos.empty())
         {
             if unlikely (is_finished)
@@ -88,9 +90,6 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 // and all Tasks in nested task queue will be drained in destructor of TaskQueue.
                 return false;
             }
-
-            if (tryTakeCancelTaskWithoutLock(task))
-                break;
 
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
@@ -151,31 +150,6 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         cv.wait_for(lock, DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU);
         updateResourceGroupInfosWithoutLock();
     }
-}
-
-template <typename NestedQueueType>
-bool ResourceControlQueue<NestedQueueType>::tryTakeCancelTaskWithoutLock(TaskPtr & task)
-{
-    if (cancel_query_ids.empty())
-        return false;
-
-    for (auto iter = cancel_query_ids.begin(); iter != cancel_query_ids.end(); ++iter)
-    {
-        std::shared_ptr<NestedQueueType> task_queue = iter->second.lock();
-        if (task_queue && !task_queue->isCancelQueueEmpty())
-        {
-            assert(!task_queue->empty());
-            task_queue->take(task);
-            break;
-        }
-        // Dont remove item from cancel_query_ids when task_queue lock failed or it's empty.
-        // Because we may got situation like:
-        // 1. cancel query.
-        // 2. try take task of this query.
-        // 3. submit task of this query.
-        // If we remove item of cancel_query_ids, will miss cancel this task.
-    }
-    return task != nullptr;
 }
 
 template <typename NestedQueueType>
@@ -243,6 +217,9 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
 {
     std::lock_guard lock(mu);
 
+    if (!cancel_task_queue.empty())
+        return false;
+
     if (resource_group_task_queues.empty())
         return true;
 
@@ -268,18 +245,16 @@ void ResourceControlQueue<NestedQueueType>::finish()
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, const String & resource_group_name)
 {
+    if unlikely (query_id.empty())
+        return;
+
     std::lock_guard lock(mu);
-    auto iter = cancel_query_ids.find(query_id);
-    if (iter == cancel_query_ids.end())
+    if (cancel_query_id_cache.add(query_id))
     {
-        auto task_queue_iter = resource_group_task_queues.find(resource_group_name);
-        if (task_queue_iter == resource_group_task_queues.end())
+        auto iter = resource_group_task_queues.find(resource_group_name);
+        if (iter != resource_group_task_queues.end())
         {
-            cancel_query_ids[query_id] = std::weak_ptr<NestedQueueType>();
-        }
-        else
-        {
-            task_queue_iter->second->cancel(query_id, resource_group_name);
+            iter->second->collectCancelledTasks(cancel_task_queue, query_id);
         }
     }
 }

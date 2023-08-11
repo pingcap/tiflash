@@ -116,9 +116,9 @@ public:
 
     void cancel(const String & query_id, const String & resource_group_name) override;
 
-    bool isCancelQueueEmpty() const;
-
 public:
+    void collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id);
+
     static constexpr size_t QUEUE_SIZE = 8;
 
     // The time slice of the i-th level is (i+1)*LEVEL_TIME_SLICE_BASE ns,

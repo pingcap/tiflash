@@ -49,8 +49,6 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    bool tryTakeCancelTaskWithoutLock(TaskPtr & task);
-
     // <resource_group_name, resource_group_task_queues>
     using ResourceGroupTaskQueue = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
@@ -111,6 +109,7 @@ private:
     // This is to prevent the resource group from being updated too frequently.
     std::unordered_map<std::string, UInt64> resource_group_statistic;
 
-    std::unordered_map<std::string, std::weak_ptr<NestedQueueType>> cancel_query_ids;
+    FIFOQueryIdCache cancel_query_id_cache;
+    std::deque<TaskPtr> cancel_task_queue;
 };
 } // namespace DB
