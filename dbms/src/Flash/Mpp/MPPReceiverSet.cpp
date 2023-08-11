@@ -25,11 +25,13 @@ void MPPReceiverSet::addExchangeReceiver(const String & executor_id, const Excha
         "Duplicate executor_id: {} in DAGRequest",
         executor_id);
     exchange_receiver_map[executor_id] = exchange_receiver;
+    external_thread_cnt += exchange_receiver->getExternalThreadCnt();
 }
 
 void MPPReceiverSet::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
 {
     coprocessor_readers.push_back(coprocessor_reader);
+    external_thread_cnt += coprocessor_reader->getConcurrency();
 }
 
 ExchangeReceiverPtr MPPReceiverSet::getExchangeReceiver(const String & executor_id) const
@@ -56,13 +58,4 @@ void MPPReceiverSet::close()
         cop_reader->close();
 }
 
-int MPPReceiverSet::getExternalThreadCnt()
-{
-    int cnt = 0;
-    for (auto & it : exchange_receiver_map)
-        cnt += it.second->getExternalThreadCnt();
-    for (auto & cop_reader : coprocessor_readers)
-        cnt += cop_reader->getExternalThreadCnt();
-    return cnt;
-}
 } // namespace DB
