@@ -185,7 +185,7 @@ void PageDirectoryFactory<Trait>::loadEdit(
             bool filter = !force_apply && r.version.sequence <= filter_seq && r.type == EditRecordType::REF;
             if (filter)
             {
-                LOG_WARNING(Logger::get(), "Not idempotent REF record is ignored during restart, record={}", r);
+                LOG_INFO(Logger::get(), "Not idempotent REF record is ignored during restart, record={}", r);
                 continue;
             }
 
