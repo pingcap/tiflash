@@ -18,6 +18,8 @@
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/PageConstants.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -42,9 +44,6 @@
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "Storages/Page/PageConstants.h"
-#include "Storages/Page/PageDefinesBase.h"
 
 namespace DB
 {
@@ -1397,7 +1396,8 @@ try
     sp_after_create_snap_for_dump.waitAndPause();
 
     // write an arbitrary record to the current log file to prevent it being deleted after dump snapshot
-    PageEntryV3 entry_5_v1{.file_id = 500, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x321, .checksum = 0x4567};
+    PageEntryV3
+        entry_5_v1{.file_id = 500, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x321, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_5_v1);
@@ -1478,8 +1478,10 @@ CATCH
 TEST_F(PageDirectoryTest, Issue7915Case3)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_full_gc{.file_id = 5050, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_full_gc{.file_id = 5050, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
@@ -1526,6 +1528,7 @@ try
     {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_1_v1);
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 10005), buildV3Id(TEST_NAMESPACE_ID, 10000));
         dir->apply(std::move(edit));
     }
 
@@ -1535,11 +1538,13 @@ try
     // restart and check
     dir = restoreFromDisk();
     {
-        ASSERT_EQ(dir->numPages(), 2);
+        ASSERT_EQ(dir->numPages(), 3);
         // page 1, 2 should be deleted, and page 10000, 5 is restored
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot();
         EXPECT_ENTRY_EQ(entry_full_gc, dir, 10000, snap);
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 5, snap);
+        // the ref 10005 -> 10000 is not ignored
+        EXPECT_ENTRY_EQ(entry_full_gc, dir, 10005, snap);
     }
 }
 CATCH

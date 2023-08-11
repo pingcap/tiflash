@@ -166,35 +166,38 @@ void PageDirectoryFactory<Trait>::loadEdit(
     bool force_apply,
     UInt64 filter_seq)
 {
+    // Relax some check at the beginning
+    bool strict_check = false;
     for (const auto & r : edit.getRecords())
     {
-        // Is this entry could be duplicated with the dumped snapshot
-        bool is_duplicated_entry = !force_apply && r.version.sequence <= filter_seq;
-        if (unlikely(debug.dump_entries))
+        // Turn on strict check once we meet a record that is larger than `filter_seq`
+        if (r.version.sequence > filter_seq)
+            strict_check = true;
+
+        if (likely(!debug.dump_entries))
         {
+            // Because REF is not an idempotent operation, when loading edit from disk to restore
+            // the PageDirectory, it could re-apply a REF to an non-existing page_id that is already
+            // deleted in the dumped snapshot.
+            // So we filter the REF record which is less than or equal to the `filter_seq`
+            // Is this entry could be duplicated with the dumped snapshot
+            bool filter = !force_apply && r.version.sequence <= filter_seq && r.type == EditRecordType::REF;
+            if (filter)
+                continue;
+
             if (max_applied_ver < r.version)
                 max_applied_ver = r.version;
 
-            // for debug, we always show all entries
-            LOG_INFO(Logger::get(), "{}", r);
-            if (debug.apply_entries_to_directory)
-                applyRecord(dir, r, /*strict_check*/ true);
+            applyRecord(dir, r, strict_check);
             continue;
         }
 
-        // Because REF is not an idempotent operation, when loading edit from disk to restore
-        // the PageDirectory, it could re-apply a REF to an non-existing page_id that is already
-        // deleted in the dumped snapshot.
-        // So we filter the REF record which is less than or equal to the `filter_seq`
-        bool filter = is_duplicated_entry && r.type == EditRecordType::REF;
-        if (filter)
-            continue;
-
+        // for debug, we always show all entries
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
-
-        // For duplicated entry, we relax some checking
-        applyRecord(dir, r, !is_duplicated_entry);
+        LOG_INFO(Logger::get(), "{}", r);
+        if (debug.apply_entries_to_directory)
+            applyRecord(dir, r, strict_check);
     }
 }
 
