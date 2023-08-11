@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>

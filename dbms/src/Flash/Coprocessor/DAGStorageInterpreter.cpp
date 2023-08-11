@@ -26,7 +26,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
