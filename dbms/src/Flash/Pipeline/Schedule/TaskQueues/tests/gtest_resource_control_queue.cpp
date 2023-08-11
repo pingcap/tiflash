@@ -13,12 +13,15 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/ResourceControl/MockLocalAdmissionController.h>
 #include <gtest/gtest.h>
 
+#include <random>
 #include <vector>
 
 namespace DB::tests
@@ -72,14 +75,14 @@ public:
         mem_tracker->reset();
     }
 
-    std::vector<std::shared_ptr<PipelineExecutorContext>> setupExecContextForEachResourceGroup(const std::vector<ResourceGroupPtr> & resource_groups)
+    std::vector<std::shared_ptr<PipelineExecutorContext>> setupExecContextForEachResourceGroup(const std::vector<ResourceGroupPtr> & resource_groups, const String & query_id_prefix = "", const String & req_id_prefix = "")
     {
         std::vector<std::shared_ptr<PipelineExecutorContext>> all_contexts;
         all_contexts.resize(resource_groups.size());
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
             auto resource_group_name = resource_groups[i]->name;
-            all_contexts[i] = std::make_shared<PipelineExecutorContext>("mock_query_id-" + resource_group_name, "mock_req_id-" + resource_group_name, mem_tracker, resource_group_name);
+            all_contexts[i] = std::make_shared<PipelineExecutorContext>(query_id_prefix + resource_group_name, req_id_prefix + resource_group_name, mem_tracker, resource_group_name);
         }
         return all_contexts;
     }
@@ -241,7 +244,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
 
 // CPU resource is not enough, and RU is small. Task execution is restricted by RU.
 // The proportion of CPU time used by each resource group should be same with the proportion of RU.
-TEST_F(TestResourceControlQueue, SamllRUSmallCPU)
+TEST_F(TestResourceControlQueue, SmallRUSmallCPU)
 {
     // RU proportion is 1:5:10.
     auto resource_groups = std::vector<ResourceGroupPtr>{
@@ -353,8 +356,131 @@ TEST_F(TestResourceControlQueue, TestBurstable)
 {
 }
 
-TEST_F(TestResourceControlQueue, TestAddAndDelResourceGroup)
+// Test priority queue of ResourceControlQueue:
+// 1. Less priority value means higher priority
+// 2. Zero priority value is the lowest priority
+TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
 {
+    std::random_device dev;
+    std::mt19937 gen(dev());
+    std::uniform_int_distribution dist;
+
+    // Generate 1000 random priority values.
+    const int count = 1000;
+    std::vector<uint64_t> priority_vals;
+    priority_vals.resize(count);
+    for (int i = 0; i < count; ++i)
+    {
+        priority_vals[i] = dist(gen);
+    }
+    for (int i = 0; i < 10; ++i)
+    {
+        priority_vals.push_back(0);
+    }
+
+    ResourceControlQueue<CPUMultiLevelFeedbackQueue> test_queue;
+    for (size_t i = 0; i < priority_vals.size(); ++i)
+    {
+        test_queue.resource_group_infos.push(std::make_tuple(priority_vals[i], nullptr, "rg-" + std::to_string(i)));
+    }
+
+    // [0, 0, 0, 100, 300, ...]
+    std::sort(priority_vals.begin(), priority_vals.end());
+
+    auto iter = std::find(priority_vals.rbegin(), priority_vals.rend(), 0);
+    auto zero_count = priority_vals.size() - (iter - priority_vals.rbegin());
+    // [0, 0, 0]
+    std::vector<uint64_t> priority_vals_only_zero(priority_vals.begin(), priority_vals.begin() + zero_count);
+    // [100, 300, ...]
+    std::vector<uint64_t> priority_vals_without_zero(priority_vals.begin() + zero_count, priority_vals.end());
+
+    EXPECT_EQ(priority_vals.size(), priority_vals_only_zero.size() + priority_vals_without_zero.size());
+
+    auto checker = [&test_queue](const std::vector<uint64_t> & expect_priority) {
+        auto cur_count = 0;
+        for (auto priority : expect_priority)
+        {
+            auto info = test_queue.resource_group_infos.top();
+            EXPECT_EQ(std::get<0>(info), priority);
+            test_queue.resource_group_infos.pop();
+            ++cur_count;
+        }
+        EXPECT_EQ(cur_count, expect_priority.size());
+    };
+    checker(priority_vals_without_zero);
+    checker(priority_vals_only_zero);
+    EXPECT_TRUE(test_queue.resource_group_infos.empty());
 }
 
+TEST_F(TestResourceControlQueue, cancel)
+{
+    const auto rg_names = std::vector<String>{"rg-ru20K", "rg-ru100K", "rg-ru200K"};
+    auto resource_groups = std::vector<ResourceGroupPtr>{
+        std::make_shared<ResourceGroup>(rg_names[0], ResourceGroup::MediumPriorityValue, 20000, false),
+        std::make_shared<ResourceGroup>(rg_names[1], ResourceGroup::MediumPriorityValue, 100000, false),
+        std::make_shared<ResourceGroup>(rg_names[2], ResourceGroup::MediumPriorityValue, 200000, false),
+    };
+    const String query_id_prefix = "mock_query_id";
+    const String req_id_prefix = "mock_req_id";
+    const int tasks_per_resource_group = 1000;
+
+    setupStaticLocalAdmissionController(resource_groups);
+
+    auto setup_tasks = [&](std::vector<std::shared_ptr<PipelineExecutorContext>> & all_contexts, std::vector<TaskPtr> & tasks) {
+        for (size_t i = 0; i < resource_groups.size(); ++i)
+        {
+            for (size_t j = 0; j < tasks_per_resource_group; ++j)
+            {
+                auto task = std::make_unique<SimpleTask>(*(all_contexts[i]));
+                task->each_exec_time = std::chrono::milliseconds(5);
+                task->total_exec_times = 100;
+                tasks.push_back(std::move(task));
+            }
+        }
+    };
+
+    // submit then cancel.
+    {
+        std::vector<TaskPtr> tasks;
+        auto all_contexts = setupExecContextForEachResourceGroup(resource_groups, query_id_prefix, req_id_prefix);
+        setup_tasks(all_contexts, tasks);
+
+        ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
+        queue.submit(tasks);
+        for (size_t i = 0; i < resource_groups.size(); ++i)
+        {
+            queue.cancel(query_id_prefix + rg_names[i], rg_names[i]);
+            for (size_t j = 0; j < tasks_per_resource_group; ++j)
+            {
+                TaskPtr task;
+                queue.take(task);
+                EXPECT_EQ(task->getQueryId(), query_id_prefix + rg_names[i]);
+                FINALIZE_TASK(task);
+            }
+        }
+    }
+
+    // cancel then submit.
+    {
+        std::vector<TaskPtr> tasks;
+        auto all_contexts = setupExecContextForEachResourceGroup(resource_groups, query_id_prefix, req_id_prefix);
+        setup_tasks(all_contexts, tasks);
+
+        ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
+        for (size_t i = 0; i < resource_groups.size(); ++i)
+        {
+            queue.cancel(query_id_prefix + rg_names[i], rg_names[i]);
+            if (i == 0)
+                queue.submit(tasks);
+
+            for (size_t j = 0; j < tasks_per_resource_group; ++j)
+            {
+                TaskPtr task;
+                queue.take(task);
+                EXPECT_EQ(task->getQueryId(), query_id_prefix + rg_names[i]);
+                FINALIZE_TASK(task);
+            }
+        }
+    }
+}
 } // namespace DB::tests

@@ -54,6 +54,14 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedQueueType>();
+        const auto & query_id = task->getQueryId();
+        if (cancel_query_ids.find(query_id) != cancel_query_ids.end())
+        {
+            // Got here when cancel this query first, then submit tasks of this query.
+            cancel_query_ids[query_id] = task_queue;
+            task_queue->cancel(query_id, name);
+        }
+
         task_queue->submit(std::move(task));
         resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
         resource_group_task_queues.insert({name, task_queue});
@@ -136,15 +144,19 @@ bool ResourceControlQueue<NestedQueueType>::tryTakeCancelTaskWithoutLock(TaskPtr
 
     for (auto iter = cancel_query_ids.begin(); iter != cancel_query_ids.end(); ++iter)
     {
-        if (!iter->second->isCancelQueueEmpty())
+        std::shared_ptr<NestedQueueType> task_queue = iter->second.lock();
+        if (task_queue && !task_queue->isCancelQueueEmpty())
         {
-            std::shared_ptr<NestedQueueType> & task_queue = iter->second;
             assert(!task_queue->empty());
             task_queue->take(task);
             break;
         }
-        // todo: remove item from cancel_query_ids when this query is cancelled successfully,
-        // otherwise we may need to iterate all nested task queue to check if cancel task is empty or not.
+        // Dont remove item from cancel_query_ids when task_queue lock failed or it's empty.
+        // Because we may got situation like:
+        // 1. cancel query.
+        // 2. try take task of this query.
+        // 3. submit task of this query.
+        // If we remove item of cancel_query_ids, will miss cancel this task.
     }
     return task != nullptr;
 }
@@ -239,14 +251,17 @@ void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, cons
 {
     std::lock_guard lock(mu);
     auto iter = cancel_query_ids.find(query_id);
-    if (iter != cancel_query_ids.end())
-        return;
-
-    if (resource_group_task_queues.find(resource_group_name) == resource_group_task_queues.end())
+    if (iter == cancel_query_ids.end())
     {
-        std::shared_ptr<NestedQueueType> & task_queue = iter->second;
-        task_queue->cancel(query_id, "");
-        cancel_query_ids[query_id] = task_queue;
+        auto task_queue_iter = resource_group_task_queues.find(resource_group_name);
+        if (task_queue_iter == resource_group_task_queues.end())
+        {
+            cancel_query_ids[query_id] = std::weak_ptr<NestedQueueType>();
+        }
+        else
+        {
+            task_queue_iter->second->cancel(query_id, resource_group_name);
+        }
     }
 }
 

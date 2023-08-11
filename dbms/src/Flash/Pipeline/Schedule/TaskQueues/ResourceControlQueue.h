@@ -45,7 +45,9 @@ public:
 
     void cancel(const String & query_id, const String & resource_group_name) override;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     bool tryTakeCancelTaskWithoutLock(TaskPtr & task);
 
     // <resource_group_name, resource_group_task_queues>
@@ -68,13 +70,19 @@ private:
         auto priority1 = std::get<InfoIndexPriority>(info1);
         auto priority2 = std::get<InfoIndexPriority>(info2);
 
-        // Return true means lower priority.
-        // Here we want make zero priority to be lower priority than positive priority.
-        // Because negative priority means corresponding resource group has no more token.
-        if (priority1 <= 0)
+        // If comparator returns false, info1 outputs before info1.
+        if (priority1 == 0)
+        {
+            // ResourceGroup-1 has no RU left, let ResourceGroup-2 output first.
             return true;
-        if (priority2 <= 0)
+        }
+        if (priority2 == 0)
+        {
+            // ResourceGroup-2 has no RU left, let ResourceGroup-1 output first.
             return false;
+        }
+
+        // Larger value means lower priority.
         return priority1 > priority2;
     }
 
@@ -102,6 +110,6 @@ private:
     // This is to prevent the resource group from being updated too frequently.
     std::unordered_map<std::string, UInt64> resource_group_statistic;
 
-    std::unordered_map<std::string, std::shared_ptr<NestedQueueType>> cancel_query_ids;
+    std::unordered_map<std::string, std::weak_ptr<NestedQueueType>> cancel_query_ids;
 };
 } // namespace DB
