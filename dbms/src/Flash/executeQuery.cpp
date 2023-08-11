@@ -58,10 +58,9 @@ void prepareForExecute(Context & context)
         .addQuery(); /// NOTE Seems that when new time interval has come, first query is not accounted in number of queries.
     quota.checkExceeded(time(nullptr));
 }
-
 ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_context)
 {
-    if (dag_context.is_mpp_task)
+    if (dag_context.isMPPTask())
     {
         /// for MPPTask, process list entry is set in MPPTask::initProcessListEntry()
         RUNTIME_ASSERT(
