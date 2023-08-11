@@ -1206,7 +1206,7 @@ TEST_F(RegionKVStoreTest, RegionRange)
         auto res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
         auto res2 = region_index.findByRangeChecked(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
-        ASSERT(std::holds_alternative<RegionsRangeIndex::OverlapInfo>(res2));
+        ASSERT_TRUE(std::holds_alternative<RegionsRangeIndex::OverlapInfo>(res2));
 
         region_index.add(makeRegion(4, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 4)));
 
