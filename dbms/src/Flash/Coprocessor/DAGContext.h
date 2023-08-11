@@ -24,6 +24,8 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
+#include <Core/QueryOperatorSpillContexts.h>
+#include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
@@ -51,6 +53,8 @@ class MPPReceiverSet;
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
+
+class AutoSpillTrigger;
 
 struct JoinProfileInfo;
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
@@ -171,6 +175,8 @@ public:
     // for tests need to run query tasks.
     DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
+    ~DAGContext();
+
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
     std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
@@ -287,8 +293,21 @@ public:
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
-    void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
+    void setProcessListEntry(const std::shared_ptr<ProcessListEntry> & entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
+    void setQueryOperatorSpillContexts(
+        const std::shared_ptr<QueryOperatorSpillContexts> & query_operator_spill_contexts_)
+    {
+        query_operator_spill_contexts = query_operator_spill_contexts_;
+    }
+    std::shared_ptr<QueryOperatorSpillContexts> & getQueryOperatorSpillContexts()
+    {
+        return query_operator_spill_contexts;
+    }
+    void setAutoSpillTrigger(const std::shared_ptr<AutoSpillTrigger> & auto_spill_trigger_)
+    {
+        auto_spill_trigger = auto_spill_trigger_;
+    }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
@@ -307,6 +326,16 @@ public:
         execution_mode = ExecutionMode::Pipeline;
     }
     ExecutionMode getExecutionMode() const { return execution_mode; }
+
+    void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
+    {
+        operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
+    }
+
+    void registerTaskOperatorSpillContexts()
+    {
+        query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
+    }
 
 public:
     DAGRequest dag_request;
@@ -359,6 +388,9 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    std::shared_ptr<TaskOperatorSpillContexts> operator_spill_contexts;
+    std::shared_ptr<QueryOperatorSpillContexts> query_operator_spill_contexts;
+    std::shared_ptr<AutoSpillTrigger> auto_spill_trigger;
     /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;

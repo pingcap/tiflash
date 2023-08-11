@@ -23,7 +23,7 @@ namespace DB
 class HashJoinSpillContext final : public OperatorSpillContext
 {
 private:
-    std::unique_ptr<std::vector<std::atomic<SpillStatus>>> partition_spill_status;
+    std::unique_ptr<std::vector<std::atomic<bool>>> partition_is_spilled;
     std::unique_ptr<std::vector<std::atomic<Int64>>> partition_revocable_memories;
     SpillConfig build_spill_config;
     SpillerPtr build_spiller;
@@ -32,19 +32,24 @@ private:
     Int64 max_cached_bytes;
 
 public:
-    HashJoinSpillContext(const SpillConfig & build_spill_config_, const SpillConfig & probe_spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
+    HashJoinSpillContext(
+        const SpillConfig & build_spill_config_,
+        const SpillConfig & probe_spill_config_,
+        UInt64 operator_spill_threshold_,
+        const LoggerPtr & log);
     void init(size_t partition_num);
     void buildBuildSpiller(const Block & input_schema);
     void buildProbeSpiller(const Block & input_schema);
     SpillerPtr & getBuildSpiller() { return build_spiller; }
     SpillerPtr & getProbeSpiller() { return probe_spiller; }
-    bool isPartitionSpilled(size_t partition_index) const { return (*partition_spill_status)[partition_index] != SpillStatus::NOT_SPILL; }
-    void markPartitionSpill(size_t partition_index);
+    bool isPartitionSpilled(size_t partition_index) const { return (*partition_is_spilled)[partition_index]; }
+    void markPartitionSpilled(size_t partition_index);
     bool updatePartitionRevocableMemory(size_t partition_id, Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override;
     SpillConfig createBuildSpillConfig(const String & spill_id) const;
     SpillConfig createProbeSpillConfig(const String & spill_id) const;
     std::vector<size_t> getPartitionsToSpill();
+    Int64 triggerSpill(Int64 expected_released_memories) override;
 };
 
 using HashJoinSpillContextPtr = std::shared_ptr<HashJoinSpillContext>;

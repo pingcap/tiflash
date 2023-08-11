@@ -59,6 +59,7 @@ DAGContext::DAGContext(
     , is_root_mpp_task(false)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
@@ -79,6 +80,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
     , kind(DAGRequestKind::MPP)
     , is_root_mpp_task(is_root_mpp_task_)
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , mpp_task_meta(meta_)
@@ -111,6 +113,7 @@ DAGContext::DAGContext(
     , is_disaggregated_task(true)
     , tables_regions_info(std::move(tables_regions_info_))
     , log(std::move(log_))
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_meta_))
@@ -129,6 +132,7 @@ DAGContext::DAGContext(UInt64 max_error_count_)
     , collect_execution_summaries(false)
     , kind(DAGRequestKind::Cop)
     , is_root_mpp_task(false)
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(0)
     , sql_mode(0)
     , max_recorded_error_count(max_error_count_)
@@ -146,6 +150,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
           dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
     , is_root_mpp_task(false)
     , log(Logger::get(log_identifier))
+    , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
@@ -153,6 +158,11 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , warning_count(0)
 {
     initOutputInfo();
+}
+
+DAGContext::~DAGContext()
+{
+    operator_spill_contexts->finish();
 }
 
 void DAGContext::initOutputInfo()
