@@ -39,13 +39,29 @@ namespace PS::V3::tests
 {
 
 
-#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                               \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION) \
+    PageEntryV3 entry_v##VERSION{            \
+        .file_id = (BLOBID),                 \
+        .size = (VERSION),                   \
+        .padded_size = 0,                    \
+        .tag = 0,                            \
+        .offset = 0x123,                     \
+        .checksum = 0x4567};                 \
     entries.createNewEntry(PageVersion(VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
-#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                          \
-    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .padded_size = 0, .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
-    (void)entries.createUpsertEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
+#define INSERT_GC_ENTRY(VERSION, EPOCH)        \
+    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{ \
+        .file_id = 2,                          \
+        .size = 100 * (VERSION) + (EPOCH),     \
+        .padded_size = 0,                      \
+        .tag = 0,                              \
+        .offset = 0x234,                       \
+        .checksum = 0x5678};                   \
+    (void)entries.createUpsertEntry(           \
+        PageVersion((VERSION), (EPOCH)),       \
+        entry_gc_v##VERSION##_##EPOCH,         \
+        /*strict_check*/ true);
+
 
 class VersionedEntriesTest : public ::testing::Test
 {
@@ -55,14 +71,16 @@ public:
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, &removed_entries, nullptr, entries.acquireLock());
+        bool all_removed
+            = entries.cleanOutdatedEntries(seq, &deref_counter, &removed_entries, nullptr, entries.acquireLock());
         return {all_removed, removed_entries, deref_counter};
     }
 
     std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersion ver, Int64 decrease_num)
     {
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, &removed_entries);
+        bool all_removed
+            = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, &removed_entries);
         return {all_removed, removed_entries};
     }
 
@@ -539,7 +557,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
-        PageSize total_size = entries.getEntriesByBlobIds({/*empty*/}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({/*empty*/}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.size(), 0);
         ASSERT_EQ(total_size, 0);
@@ -549,7 +568,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         const BlobFileId blob_id = 1;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[blob_id].size(), 1);
@@ -561,7 +581,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         const BlobFileId blob_id = 2;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.empty(), true);
         ASSERT_EQ(total_size, 0);
@@ -571,7 +592,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         const BlobFileId blob_id = 3;
-        PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.empty(), true);
         ASSERT_EQ(total_size, 0);
@@ -581,7 +603,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({1, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[1].size(), 1);
@@ -593,7 +616,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
-        PageSize total_size = entries.getEntriesByBlobIds({3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.empty(), true);
         ASSERT_EQ(total_size, 0);
@@ -603,7 +627,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({1, 3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[1].size(), 1);
@@ -615,7 +640,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     {
         PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap blob_entries;
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
-        PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
+        PageSize total_size
+            = entries.getEntriesByBlobIds({1, 3, 2, 4}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.size(), 1);
         ASSERT_EQ(blob_entries[1].size(), 1);

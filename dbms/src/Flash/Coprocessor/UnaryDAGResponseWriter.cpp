@@ -78,7 +78,7 @@ void UnaryDAGResponseWriter::flush()
         encodeChunkToDAGResponse();
     }
     // TODO separate from UnaryDAGResponseWriter and support mpp/batchCop.
-    appendWarningsToDAGResponse();
+    dag_context.fillWarnings(*dag_response);
 
     // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
     // Throw exception to prevent receiver from getting wrong response.

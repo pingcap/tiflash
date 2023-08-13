@@ -31,8 +31,8 @@ grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
     /// do not use switch statement because ErrorCodes::XXXX is not a compile time constant
     if (error_code == ErrorCodes::NOT_IMPLEMENTED)
         return grpc::StatusCode::UNIMPLEMENTED;
-    if (error_code == ErrorCodes::UNKNOWN_USER || error_code == ErrorCodes::WRONG_PASSWORD || error_code == ErrorCodes::REQUIRED_PASSWORD
-        || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
+    if (error_code == ErrorCodes::UNKNOWN_USER || error_code == ErrorCodes::WRONG_PASSWORD
+        || error_code == ErrorCodes::REQUIRED_PASSWORD || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
         return grpc::StatusCode::UNAUTHENTICATED;
     return grpc::StatusCode::INTERNAL;
 }

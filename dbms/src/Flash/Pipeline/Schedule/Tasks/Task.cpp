@@ -86,8 +86,7 @@ Task::Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecT
 
 Task::Task(PipelineExecutorContext & exec_context_)
     : Task(exec_context_, "")
-{
-}
+{}
 
 Task::~Task()
 {
@@ -95,7 +94,8 @@ Task::~Task()
     {
         LOG_WARNING(
             log,
-            "Task should be finalized before destructing, but not, the status at this time is {}. The possible reason is that an error was reported during task creation",
+            "Task should be finalized before destructing, but not, the status at this time is {}. The possible reason "
+            "is that an error was reported during task creation",
             magic_enum::enum_name(task_status));
     }
 
@@ -154,10 +154,7 @@ ExecTaskStatus Task::await()
 void Task::finalize()
 {
     // To make sure that `finalize` only called once.
-    RUNTIME_ASSERT(
-        !is_finalized,
-        log,
-        "finalize can only be called once.");
+    RUNTIME_ASSERT(!is_finalized, log, "finalize can only be called once.");
     is_finalized = true;
 
     try
@@ -171,7 +168,11 @@ void Task::finalize()
 
     profile_info.reportMetrics();
 #ifndef NDEBUG
-    LOG_TRACE(log, "task(resource group: {}) finalize with profile info: {}", getQueryExecContext().getResourceGroupName(), profile_info.toJson());
+    LOG_TRACE(
+        log,
+        "task(resource group: {}) finalize with profile info: {}",
+        getQueryExecContext().getResourceGroupName(),
+        profile_info.toJson());
 #endif // !NDEBUG
 }
 

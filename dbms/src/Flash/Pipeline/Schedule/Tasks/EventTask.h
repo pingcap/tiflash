@@ -35,7 +35,7 @@ public:
         ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
 protected:
-    void finalizeImpl() override;
+    void finalizeImpl() final;
     virtual void doFinalizeImpl(){};
 
     UInt64 getScheduleDuration() const;

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/QueryOperatorSpillContexts.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
@@ -43,19 +44,10 @@ struct MPPGatherTaskSet
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
-    bool isInNormalState() const
-    {
-        return state == Normal;
-    }
-    bool allowUnregisterTask() const
-    {
-        return state == Normal || state == Aborted;
-    }
+    bool isInNormalState() const { return state == Normal; }
+    bool allowUnregisterTask() const { return state == Normal || state == Aborted; }
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
-    bool isTaskRegistered(const MPPTaskId & task_id) const
-    {
-        return task_map.find(task_id) != task_map.end();
-    }
+    bool isTaskRegistered(const MPPTaskId & task_id) const { return task_map.find(task_id) != task_map.end(); }
     void registerTask(const MPPTaskId & task_id)
     {
         assert(task_map.find(task_id) == task_map.end());
@@ -73,10 +65,7 @@ struct MPPGatherTaskSet
         for (const auto & it : task_map)
             f(it);
     }
-    void removeMPPTask(const MPPTaskId & task_id)
-    {
-        task_map.erase(task_id);
-    }
+    void removeMPPTask(const MPPTaskId & task_id) { task_map.erase(task_id); }
 
 private:
     MPPTaskMap task_map;
@@ -85,14 +74,16 @@ using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 struct MPPQuery
 {
-    explicit MPPQuery(bool has_meaningful_gather_id_)
-        : has_meaningful_gather_id(has_meaningful_gather_id_)
+    MPPQuery(const MPPQueryId & mpp_query_id, bool has_meaningful_gather_id_)
+        : mpp_query_operator_spill_contexts(std::make_shared<QueryOperatorSpillContexts>(mpp_query_id))
+        , has_meaningful_gather_id(has_meaningful_gather_id_)
     {}
     MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
     ~MPPQuery();
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
     std::unordered_map<MPPGatherId, MPPGatherTaskSetPtr, MPPGatherIdHash> mpp_gathers;
+    std::shared_ptr<QueryOperatorSpillContexts> mpp_query_operator_spill_contexts;
     bool has_meaningful_gather_id;
 };
 using MPPQueryPtr = std::shared_ptr<MPPQuery>;
@@ -245,9 +236,14 @@ public:
 
     void releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads);
 
-    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
+    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        std::chrono::seconds timeout);
 
-    std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
+    std::pair<MPPTunnelPtr, String> findAsyncTunnel(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        EstablishCallData * call_data,
+        grpc::CompletionQueue * cq);
 
     void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 

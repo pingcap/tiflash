@@ -179,12 +179,8 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
             if (unlikely(is_finished))
                 return false;
 
-            if (!cancel_task_queue.empty())
-            {
-                task = std::move(cancel_task_queue.front());
-                cancel_task_queue.pop_front();
+            if (popTask(cancel_task_queue, task))
                 return true;
-            }
 
             // Find the queue with the smallest execution time.
             for (size_t i = 0; i < QUEUE_SIZE; ++i)
@@ -216,17 +212,15 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
 {
-    while (!cancel_task_queue.empty())
+    TaskPtr task;
+    while (popTask(cancel_task_queue, task))
     {
-        auto task = std::move(cancel_task_queue.front());
-        cancel_task_queue.pop_front();
         FINALIZE_TASK(task);
     }
 
     for (size_t i = 0; i < QUEUE_SIZE; ++i)
     {
         auto & cur_queue = level_queues[i];
-        TaskPtr task;
         while (!cur_queue->empty())
         {
             cur_queue->take(task);
@@ -280,17 +274,18 @@ void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id, const 
     std::lock_guard lock(mu);
     if (cancel_query_id_cache.add(query_id))
     {
-        for (const auto & queue : level_queues)
-            moveCancelledTasks(*queue, cancel_task_queue, query_id);
+        collectCancelledTasks(cancel_task_queue, query_id);
         cv.notify_all();
     }
 }
 
 template <typename TimeGetter>
-bool MultiLevelFeedbackQueue<TimeGetter>::isCancelQueueEmpty() const
+void MultiLevelFeedbackQueue<TimeGetter>::collectCancelledTasks(
+    std::deque<TaskPtr> & cancel_queue,
+    const String & query_id)
 {
-    std::lock_guard lock(mu);
-    return cancel_task_queue.empty();
+    for (const auto & queue : level_queues)
+        moveCancelledTasks(*queue, cancel_queue, query_id);
 }
 
 template class MultiLevelFeedbackQueue<CPUTimeGetter>;

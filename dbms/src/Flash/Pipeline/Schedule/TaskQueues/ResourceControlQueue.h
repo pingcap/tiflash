@@ -24,7 +24,8 @@
 namespace DB
 {
 template <typename NestedQueueType>
-class ResourceControlQueue : public TaskQueue
+class ResourceControlQueue
+    : public TaskQueue
     , private boost::noncopyable
 {
 public:
@@ -45,9 +46,9 @@ public:
 
     void cancel(const String & query_id, const String & resource_group_name) override;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    bool tryTakeCancelTaskWithoutLock(TaskPtr & task);
-
+#endif
     // <resource_group_name, resource_group_task_queues>
     using ResourceGroupTaskQueue = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
@@ -63,19 +64,11 @@ private:
     static constexpr auto DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU = std::chrono::seconds(1);
 
     // ResourceGroupInfoQueue compator.
+    // Larger value means lower priority.
     static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)
     {
-        auto priority1 = std::get<InfoIndexPriority>(info1);
-        auto priority2 = std::get<InfoIndexPriority>(info2);
-
-        // Return true means lower priority.
-        // Here we want make zero priority to be lower priority than positive priority.
-        // Because negative priority means corresponding resource group has no more token.
-        if (priority1 <= 0)
-            return true;
-        if (priority2 <= 0)
-            return false;
-        return priority1 > priority2;
+        // info1 outputs first if return false.
+        return std::get<InfoIndexPriority>(info1) > std::get<InfoIndexPriority>(info2);
     }
 
     // 1. Update cpu time/RU of resource group.
@@ -102,6 +95,7 @@ private:
     // This is to prevent the resource group from being updated too frequently.
     std::unordered_map<std::string, UInt64> resource_group_statistic;
 
-    std::unordered_map<std::string, std::shared_ptr<NestedQueueType>> cancel_query_ids;
+    FIFOQueryIdCache cancel_query_id_cache;
+    std::deque<TaskPtr> cancel_task_queue;
 };
 } // namespace DB

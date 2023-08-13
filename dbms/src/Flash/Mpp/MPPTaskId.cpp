@@ -66,7 +66,8 @@ bool MPPQueryId::operator<(const MPPQueryId & mpp_query_id) const
 }
 bool MPPQueryId::operator==(const MPPQueryId & rid) const
 {
-    return query_ts == rid.query_ts && local_query_id == rid.local_query_id && server_id == rid.server_id && start_ts == rid.start_ts;
+    return query_ts == rid.query_ts && local_query_id == rid.local_query_id && server_id == rid.server_id
+        && start_ts == rid.start_ts;
 }
 bool MPPQueryId::operator!=(const MPPQueryId & rid) const
 {
@@ -83,7 +84,8 @@ size_t MPPQueryIdHash::operator()(MPPQueryId const & mpp_query_id) const noexcep
     {
         return std::hash<UInt64>()(mpp_query_id.start_ts);
     }
-    return std::hash<UInt64>()(mpp_query_id.query_ts) ^ std::hash<UInt64>()(mpp_query_id.local_query_id) ^ std::hash<UInt64>()(mpp_query_id.server_id);
+    return std::hash<UInt64>()(mpp_query_id.query_ts) ^ std::hash<UInt64>()(mpp_query_id.local_query_id)
+        ^ std::hash<UInt64>()(mpp_query_id.server_id);
 }
 
 bool MPPGatherId::operator==(const MPPGatherId & rid) const
@@ -98,7 +100,8 @@ size_t MPPGatherIdHash::operator()(MPPGatherId const & mpp_gather_id) const noex
 
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>" : fmt::format("MPP<gather_id:{},task_id:{}>", gather_id.toString(), task_id);
+    return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>"
+                       : fmt::format("MPP<gather_id:{},task_id:{}>", gather_id.toString(), task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};

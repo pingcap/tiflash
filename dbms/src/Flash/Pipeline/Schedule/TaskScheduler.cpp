@@ -26,8 +26,7 @@ TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
     : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_config)
     , io_task_thread_pool(*this, config.io_task_thread_pool_config)
     , wait_reactor(*this)
-{
-}
+{}
 
 TaskScheduler::~TaskScheduler()
 {

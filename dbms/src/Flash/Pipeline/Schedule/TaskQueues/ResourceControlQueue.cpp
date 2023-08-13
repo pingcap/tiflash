@@ -46,6 +46,12 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
         FINALIZE_TASK(task);
         return;
     }
+    const auto & query_id = task->getQueryId();
+    if unlikely (cancel_query_id_cache.contains(query_id))
+    {
+        cancel_task_queue.push_back(std::move(task));
+        return;
+    }
 
     // name can be empty, it means resource control is disabled.
     const std::string & name = task->getResourceGroupName();
@@ -54,6 +60,7 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedQueueType>();
+
         task_queue->submit(std::move(task));
         resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
         resource_group_task_queues.insert({name, task_queue});
@@ -72,6 +79,9 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        if (popTask(cancel_task_queue, task))
+            return true;
+
         while (!resource_group_infos.empty())
         {
             if unlikely (is_finished)
@@ -81,33 +91,47 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 return false;
             }
 
-            if (tryTakeCancelTaskWithoutLock(task))
-                break;
-
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
             const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
             std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
 
-            LOG_TRACE(logger, "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}", name, priority, is_finished, task_queue->empty());
+            LOG_TRACE(
+                logger,
+                "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}",
+                name,
+                priority,
+                is_finished,
+                task_queue->empty());
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
-            if (priority <= 0)
+            if (LocalAdmissionController::isRUExhausted(priority))
                 break;
 
             if (task_queue->empty() || !task_queue->take(task))
             {
-                LOG_TRACE(logger, "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}", name, task_queue->empty());
+                LOG_TRACE(
+                    logger,
+                    "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}",
+                    name,
+                    task_queue->empty());
                 // Got here only when task_queue is empty or finished, we try next resource group.
                 // If new task of this resource gorup is submited, the resource_group info will be added again.
                 resource_group_infos.pop();
                 size_t erase_num = resource_group_task_queues.erase(name);
-                RUNTIME_CHECK_MSG(erase_num == 1, "cannot erase corresponding TaskQueue for task of resource group {}", name);
+                RUNTIME_CHECK_MSG(
+                    erase_num == 1,
+                    "cannot erase corresponding TaskQueue for task of resource group {}",
+                    name);
             }
             else
             {
-                LOG_TRACE(logger, "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}", name, task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
+                LOG_TRACE(
+                    logger,
+                    "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}",
+                    name,
+                    task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
                 assert(task != nullptr);
                 break;
             }
@@ -126,27 +150,6 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         cv.wait_for(lock, DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU);
         updateResourceGroupInfosWithoutLock();
     }
-}
-
-template <typename NestedQueueType>
-bool ResourceControlQueue<NestedQueueType>::tryTakeCancelTaskWithoutLock(TaskPtr & task)
-{
-    if (cancel_query_ids.empty())
-        return false;
-
-    for (auto iter = cancel_query_ids.begin(); iter != cancel_query_ids.end(); ++iter)
-    {
-        if (!iter->second->isCancelQueueEmpty())
-        {
-            std::shared_ptr<NestedQueueType> & task_queue = iter->second;
-            assert(!task_queue->empty());
-            task_queue->take(task);
-            break;
-        }
-        // todo: remove item from cancel_query_ids when this query is cancelled successfully,
-        // otherwise we may need to iterate all nested task queue to check if cancel task is empty or not.
-    }
-    return task != nullptr;
 }
 
 template <typename NestedQueueType>
@@ -179,7 +182,9 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(const std::string & name, UInt64 consumed_cpu_time)
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(
+    const std::string & name,
+    UInt64 consumed_cpu_time)
 {
     auto ru = toRU(consumed_cpu_time);
     LOG_DEBUG(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
@@ -201,7 +206,8 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock(
 
         const auto & name = std::get<InfoIndexResourceGroupName>(group_info);
         auto new_priority = LocalAdmissionController::global_instance->getPriority(name);
-        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name));
+        new_resource_group_infos.push(
+            std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name));
     }
     resource_group_infos = new_resource_group_infos;
 }
@@ -211,16 +217,18 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
 {
     std::lock_guard lock(mu);
 
+    if (!cancel_task_queue.empty())
+        return false;
+
     if (resource_group_task_queues.empty())
         return true;
 
-    bool empty = true;
     for (const auto & task_queue_iter : resource_group_task_queues)
     {
         if (!task_queue_iter.second->empty())
-            empty = false;
+            return false;
     }
-    return empty;
+    return true;
 }
 
 template <typename NestedQueueType>
@@ -237,16 +245,17 @@ void ResourceControlQueue<NestedQueueType>::finish()
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, const String & resource_group_name)
 {
-    std::lock_guard lock(mu);
-    auto iter = cancel_query_ids.find(query_id);
-    if (iter != cancel_query_ids.end())
+    if unlikely (query_id.empty())
         return;
 
-    if (resource_group_task_queues.find(resource_group_name) == resource_group_task_queues.end())
+    std::lock_guard lock(mu);
+    if (cancel_query_id_cache.add(query_id))
     {
-        std::shared_ptr<NestedQueueType> & task_queue = iter->second;
-        task_queue->cancel(query_id, "");
-        cancel_query_ids[query_id] = task_queue;
+        auto iter = resource_group_task_queues.find(resource_group_name);
+        if (iter != resource_group_task_queues.end())
+        {
+            iter->second->collectCancelledTasks(cancel_task_queue, query_id);
+        }
     }
 }
 

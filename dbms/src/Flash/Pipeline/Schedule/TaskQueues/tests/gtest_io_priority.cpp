@@ -28,8 +28,7 @@ class MockIOTask : public Task
 public:
     MockIOTask(PipelineExecutorContext & exec_context_, bool is_io_in)
         : Task(exec_context_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
-    {
-    }
+    {}
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 };
@@ -47,9 +46,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     IOPriorityQueue queue;
 
@@ -100,9 +97,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     // in 0 : out 0
     {
@@ -142,7 +137,10 @@ try
     {
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
+        queue.updateStatistics(
+            nullptr,
+            ExecTaskStatus::IO_OUT,
+            time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
         queue.submit(std::make_unique<MockIOTask>(context, true));
         queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
@@ -160,7 +158,10 @@ try
     {
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
+        queue.updateStatistics(
+            nullptr,
+            ExecTaskStatus::IO_OUT,
+            time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
         queue.submit(std::make_unique<MockIOTask>(context, true));
         queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
@@ -182,16 +183,12 @@ try
     PipelineExecutorContext context1("id1", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     context1.incActiveRefCount();
-    SCOPE_EXIT({
-        context1.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context1.decActiveRefCount(); });
 
     PipelineExecutorContext context2("id2", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     context2.incActiveRefCount();
-    SCOPE_EXIT({
-        context2.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context2.decActiveRefCount(); });
 
     // case1 submit first.
     {

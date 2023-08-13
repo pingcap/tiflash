@@ -48,7 +48,10 @@ class PipelineExecutorContext;
 class Task
 {
 public:
-    Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+    Task(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     // Only used for unit test.
     explicit Task(PipelineExecutorContext & exec_context_);

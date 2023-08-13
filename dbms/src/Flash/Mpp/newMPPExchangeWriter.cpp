@@ -55,12 +55,9 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
     else
     {
         auto mpp_version = dag_context.getMPPTaskMeta().mpp_version();
-        auto data_codec_version = mpp_version == MppVersionV0
-            ? MPPDataPacketV0
-            : MPPDataPacketV1;
-        auto chosen_batch_send_min_limit = mpp_version == MppVersionV0
-            ? batch_send_min_limit
-            : batch_send_min_limit_compression;
+        auto data_codec_version = mpp_version == MppVersionV0 ? MPPDataPacketV0 : MPPDataPacketV1;
+        auto chosen_batch_send_min_limit
+            = mpp_version == MppVersionV0 ? batch_send_min_limit : batch_send_min_limit_compression;
 
         if (exchange_type == tipb::ExchangeType::Hash)
         {
@@ -121,7 +118,8 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     RUNTIME_CHECK_MSG(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, "exchange writer only run in MPP");
     if (is_async)
     {
-        auto writer = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
+        auto writer
+            = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
         return buildMPPExchangeWriter(
             writer,
             partition_col_ids,
@@ -138,7 +136,8 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     }
     else
     {
-        auto writer = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
+        auto writer
+            = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
         return buildMPPExchangeWriter(
             writer,
             partition_col_ids,

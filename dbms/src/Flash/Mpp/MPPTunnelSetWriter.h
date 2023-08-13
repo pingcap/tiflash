@@ -41,7 +41,12 @@ public:
     // data codec version V0
     void partitionWrite(Blocks & blocks, int16_t partition_id);
     // data codec version > V0
-    void partitionWrite(const Block & header, std::vector<MutableColumns> && part_columns, int16_t partition_id, MPPDataPacketVersion version, CompressionMethod compression_method);
+    void partitionWrite(
+        const Block & header,
+        std::vector<MutableColumns> && part_columns,
+        int16_t partition_id,
+        MPPDataPacketVersion version,
+        CompressionMethod compression_method);
     // this is a fine grained shuffle writing.
     // data codec version V0
     void fineGrainedShuffleWrite(

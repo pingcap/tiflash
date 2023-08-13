@@ -24,6 +24,8 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
+#include <Core/QueryOperatorSpillContexts.h>
+#include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
@@ -51,6 +53,8 @@ class MPPReceiverSet;
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
+
+class AutoSpillTrigger;
 
 struct JoinProfileInfo;
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
@@ -133,18 +137,38 @@ enum class ExecutionMode
     Pipeline,
 };
 
+enum class DAGRequestKind
+{
+    Cop,
+    CopStream,
+    BatchCop,
+    MPP,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
-    // for non-mpp(cop/batchCop)
-    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, const String & resource_group_name, LoggerPtr log_);
+    // for non-mpp(Cop/CopStream/BatchCop)
+    DAGContext(
+        tipb::DAGRequest & dag_request_,
+        TablesRegionsInfo && tables_regions_info_,
+        KeyspaceID keyspace_id_,
+        const String & tidb_host_,
+        DAGRequestKind cop_kind_,
+        const String & resource_group_name,
+        LoggerPtr log_);
 
     // for mpp
     DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
     // for disaggregated task on write node
-    DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
+    DAGContext(
+        tipb::DAGRequest & dag_request_,
+        const disaggregated::DisaggTaskMeta & task_meta_,
+        TablesRegionsInfo && tables_regions_info_,
+        const String & compute_node_host_,
+        LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
@@ -152,11 +176,16 @@ public:
     // for tests need to run query tasks.
     DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
+    ~DAGContext();
+
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
     std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
 
-    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos, bool is_append = false);
+    void addOperatorProfileInfos(
+        const String & executor_id,
+        OperatorProfileInfos && profile_infos,
+        bool is_append = false);
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -166,7 +195,10 @@ public:
 
     std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
 
-    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos, bool is_append = false);
+    void addInboundIOProfileInfos(
+        const String & executor_id,
+        IOProfileInfos && io_profile_infos,
+        bool is_append = false);
 
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
@@ -197,6 +229,18 @@ public:
             warnings_.push_back(error);
         }
     }
+    void fillWarnings(tipb::SelectResponse & response)
+    {
+        std::vector<tipb::Error> warnings_vec;
+        consumeWarnings(warnings_vec);
+        for (auto & warning : warnings_vec)
+        {
+            auto * warn = response.add_warnings();
+            // TODO: consider using allocated warnings to prevent copy?
+            warn->CopyFrom(warning);
+        }
+        response.set_warning_count(getWarningCount());
+    }
     void clearWarnings()
     {
         warnings.clear();
@@ -204,18 +248,14 @@ public:
     }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
-    bool isBatchCop() const { return is_batch_cop; }
-    bool isMPPTask() const { return is_mpp_task; }
+    bool isCop() const { return kind == DAGRequestKind::Cop; }
+    bool isCopStream() const { return kind == DAGRequestKind::CopStream; }
+    bool isBatchCop() const { return kind == DAGRequestKind::BatchCop; }
+    bool isMPPTask() const { return kind == DAGRequestKind::MPP; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
-    const MPPTaskId & getMPPTaskId() const
-    {
-        return mpp_task_id;
-    }
-    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const
-    {
-        return disaggregated_id;
-    }
+    const MPPTaskId & getMPPTaskId() const { return mpp_task_id; }
+    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const { return disaggregated_id; }
 
     std::pair<bool, double> getTableScanThroughput();
 
@@ -223,55 +263,22 @@ public:
 
     bool containsRegionsInfoForTable(Int64 table_id) const;
 
-    UInt64 getFlags() const
-    {
-        return flags;
-    }
-    void setFlags(UInt64 f)
-    {
-        flags = f;
-    }
-    void addFlag(UInt64 f)
-    {
-        flags |= f;
-    }
-    void delFlag(UInt64 f)
-    {
-        flags &= (~f);
-    }
-    bool hasFlag(UInt64 f) const
-    {
-        return (flags & f);
-    }
+    UInt64 getFlags() const { return flags; }
+    void setFlags(UInt64 f) { flags = f; }
+    void addFlag(UInt64 f) { flags |= f; }
+    void delFlag(UInt64 f) { flags &= (~f); }
+    bool hasFlag(UInt64 f) const { return (flags & f); }
 
-    UInt64 getSQLMode() const
-    {
-        return sql_mode;
-    }
-    void setSQLMode(UInt64 f)
-    {
-        sql_mode = f;
-    }
-    void addSQLMode(UInt64 f)
-    {
-        sql_mode |= f;
-    }
-    void delSQLMode(UInt64 f)
-    {
-        sql_mode &= (~f);
-    }
-    bool hasSQLMode(UInt64 f) const
-    {
-        return sql_mode & f;
-    }
+    UInt64 getSQLMode() const { return sql_mode; }
+    void setSQLMode(UInt64 f) { sql_mode = f; }
+    void addSQLMode(UInt64 f) { sql_mode |= f; }
+    void delSQLMode(UInt64 f) { sql_mode &= (~f); }
+    bool hasSQLMode(UInt64 f) const { return sql_mode & f; }
 
     void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
 
     ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
-    void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set)
-    {
-        mpp_receiver_set = receiver_set;
-    }
+    void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set) { mpp_receiver_set = receiver_set; }
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
     void setDisaggregatedComputeExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & receiver)
@@ -287,8 +294,21 @@ public:
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
-    void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
+    void setProcessListEntry(const std::shared_ptr<ProcessListEntry> & entry) { process_list_entry = entry; }
     std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
+    void setQueryOperatorSpillContexts(
+        const std::shared_ptr<QueryOperatorSpillContexts> & query_operator_spill_contexts_)
+    {
+        query_operator_spill_contexts = query_operator_spill_contexts_;
+    }
+    std::shared_ptr<QueryOperatorSpillContexts> & getQueryOperatorSpillContexts()
+    {
+        return query_operator_spill_contexts;
+    }
+    void setAutoSpillTrigger(const std::shared_ptr<AutoSpillTrigger> & auto_spill_trigger_)
+    {
+        auto_spill_trigger = auto_spill_trigger_;
+    }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
@@ -309,6 +329,16 @@ public:
     }
     ExecutionMode getExecutionMode() const { return execution_mode; }
 
+    void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
+    {
+        operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
+    }
+
+    void registerTaskOperatorSpillContexts()
+    {
+        query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
+    }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -327,9 +357,8 @@ public:
     // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    /* const */ bool is_mpp_task = false;
+    /* const */ DAGRequestKind kind;
     /* const */ bool is_root_mpp_task = false;
-    /* const */ bool is_batch_cop = false;
     /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
@@ -361,6 +390,9 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    std::shared_ptr<TaskOperatorSpillContexts> operator_spill_contexts;
+    std::shared_ptr<QueryOperatorSpillContexts> query_operator_spill_contexts;
+    std::shared_ptr<AutoSpillTrigger> auto_spill_trigger;
     /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;

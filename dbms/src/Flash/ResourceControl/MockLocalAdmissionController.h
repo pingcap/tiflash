@@ -52,15 +52,9 @@ public:
         consume_resource_func(name, ru, cpu_time_ns);
     }
 
-    double getPriority(const std::string & name)
-    {
-        return get_priority_func(name);
-    }
+    double getPriority(const std::string & name) { return get_priority_func(name); }
 
-    bool isResourceGroupThrottled(const std::string & name)
-    {
-        return is_resource_group_throttled_func(name);
-    }
+    bool isResourceGroupThrottled(const std::string & name) { return is_resource_group_throttled_func(name); }
 
     void resetAll()
     {

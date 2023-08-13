@@ -34,8 +34,6 @@ class LocalAdmissionController;
 class ResourceGroup final : private boost::noncopyable
 {
 public:
-    static const std::string DEFAULT_RESOURCE_GROUP_NAME;
-
     explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
         : name(group_pb_.name())
         , user_priority(group_pb_.priority())
@@ -47,7 +45,9 @@ public:
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         bucket = std::make_unique<TokenBucket>(setting.fill_rate(), setting.fill_rate(), setting.burst_limit());
-        assert(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue);
+        assert(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
     }
 
 #ifdef DBMS_PUBLIC_GTEST
@@ -59,7 +59,9 @@ public:
         , log(Logger::get("resource_group-" + group_name_))
     {
         bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
-        assert(user_priority == LowPriorityValue || user_priority == MediumPriorityValue || user_priority == HighPriorityValue);
+        assert(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
     }
 #endif
 
@@ -81,7 +83,8 @@ private:
     static constexpr int32_t MediumPriorityValue = 8;
     static constexpr int32_t HighPriorityValue = 16;
 
-    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4);
+    // Minus 1 because uint64 max is used as special flag.
+    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
 
     friend class LocalAdmissionController;
     std::string getName() const { return name; }
@@ -101,21 +104,24 @@ private:
         std::lock_guard lock(mu);
 
         if (!burstable && bucket->peek() <= 0.0)
-            return 0;
+            return std::numeric_limits<uint64_t>::max();
 
-        double weight = 0.0;
-        if (name == DEFAULT_RESOURCE_GROUP_NAME)
-            weight = 1.0;
-        else
-            weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
-
+        double weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
         uint64_t virtual_time = cpu_time_in_ns * weight;
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)
             virtual_time = MAX_VIRTUAL_TIME;
 
         uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
-        LOG_TRACE(log, "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, priority: {}", name, weight, virtual_time, user_priority, priority);
+        LOG_TRACE(
+            log,
+            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, "
+            "priority: {}",
+            name,
+            weight,
+            virtual_time,
+            user_priority,
+            priority);
         return priority;
     }
 
