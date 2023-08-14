@@ -91,29 +91,25 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
             const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
             std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
+            const bool ru_exhausted = LocalAdmissionController::isRUExhausted(priority);
 
             LOG_TRACE(
                 logger,
-                "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}",
+                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, task_queue.empty(): {}",
                 name,
                 priority,
+                ru_exhausted,
                 is_finished,
                 task_queue->empty());
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
-            if (LocalAdmissionController::isRUExhausted(priority))
+            if (ru_exhausted)
                 break;
 
-            if (task_queue->empty() || !task_queue->take(task))
+            if (task_queue->empty())
             {
-                LOG_TRACE(
-                    logger,
-                    "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}",
-                    name,
-                    task_queue->empty());
-                // Got here only when task_queue is empty or finished, we try next resource group.
-                // If new task of this resource gorup is submited, the resource_group info will be added again.
+                // Nested task queue is empty, continue and try next resource group.
                 resource_group_infos.pop();
                 size_t erase_num = resource_group_task_queues.erase(name);
                 RUNTIME_CHECK_MSG(
@@ -123,11 +119,9 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             }
             else
             {
-                LOG_TRACE(
-                    logger,
-                    "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}",
-                    name,
-                    task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
+                // Take task from nested task queue, and should always take succeed.
+                // Because this task queue should not be finished inside lock_guard.
+                RUNTIME_CHECK(task_queue->take(task));
                 assert(task != nullptr);
                 break;
             }
