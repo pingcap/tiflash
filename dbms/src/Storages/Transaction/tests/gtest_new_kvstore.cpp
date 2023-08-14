@@ -664,7 +664,6 @@ try
         region_id = 2;
         initStorages();
         KVStore & kvs = getKVS();
-        // ctx.getTMTContext().debugSetKVStore(kvstore);
         table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
         auto start = RecordKVFormat::genKey(table_id, 0);
         auto end = RecordKVFormat::genKey(table_id, 10);

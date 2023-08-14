@@ -51,7 +51,6 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/FastAddPeerCache.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
