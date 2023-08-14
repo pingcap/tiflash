@@ -151,12 +151,6 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-    void consumeResource(const std::string &, double, uint64_t) {}
-
-    double getPriority(const std::string &) { return 1.0; }
-
-    bool isResourceGroupThrottled(const std::string &) { return false; }
-
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
