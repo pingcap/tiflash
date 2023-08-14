@@ -95,7 +95,8 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 
             LOG_TRACE(
                 logger,
-                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, task_queue.empty(): {}",
+                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
+                "task_queue.empty(): {}",
                 name,
                 priority,
                 ru_exhausted,
@@ -133,8 +134,9 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         // Other TaskQueue like MultiLevelFeedbackQueue and IOPriorityQueue will wake up when new task submit or is_finished become true.
         // But for ResourceControlQueue, when all resource groups's RU are exhausted, will go to sleep, and should wakeup when RU is updated.
         // But LAC has no way to notify ResourceControlQueue for now, so ResourceControlQueue should wakeup to check if RU is updated or not.
-        if (cv.wait_until(lock, std::chrono::steady_clock::now() + DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU,
-                [this]() { return is_finished; }))
+        if (cv.wait_until(lock, std::chrono::steady_clock::now() + DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU, [this]() {
+                return is_finished;
+            }))
             return false;
 
         updateResourceGroupInfosWithoutLock();
