@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Stopwatch.h>
 #include <Core/TaskOperatorSpillContexts.h>
 #include <Flash/Mpp/MPPTaskId.h>
 
@@ -22,9 +23,14 @@ namespace DB
 class QueryOperatorSpillContexts
 {
 public:
-    explicit QueryOperatorSpillContexts(const MPPQueryId & query_id)
-        : log(Logger::get(query_id.toString()))
-    {}
+    QueryOperatorSpillContexts(const MPPQueryId & query_id, UInt64 auto_spill_check_min_interval_ms_)
+        : auto_spill_check_min_interval_ms(
+            auto_spill_check_min_interval_ms_ == 0 ? std::numeric_limits<UInt64>::max()
+                                                   : auto_spill_check_min_interval_ms_)
+        , log(Logger::get(query_id.toString()))
+    {
+        watch.start();
+    }
     Int64 triggerAutoSpill(Int64 expected_released_memories)
     {
         std::unique_lock lock(mutex, std::try_to_lock);
@@ -35,6 +41,11 @@ public:
             {
                 first_check = true;
                 LOG_INFO(log, "Query memory usage exceeded threshold, trigger auto spill check");
+            }
+            else
+            {
+                if (watch.elapsedMillisecondsFromLastTime() < auto_spill_check_min_interval_ms)
+                    return expected_released_memories;
             }
             /// vector of <revocable_memories, task_operator_spill_contexts>
             std::vector<std::pair<Int64, TaskOperatorSpillContexts *>> revocable_memories;
@@ -85,8 +96,10 @@ public:
 private:
     std::list<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_list;
     bool first_check = false;
+    const UInt64 auto_spill_check_min_interval_ms;
     LoggerPtr log;
     mutable std::mutex mutex;
+    Stopwatch watch;
 };
 
 } // namespace DB
