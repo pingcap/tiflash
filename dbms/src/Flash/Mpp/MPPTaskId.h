@@ -107,6 +107,7 @@ struct MPPTaskId
         : task_id(unknown_task_id)
         , gather_id(0, 0, 0, 0, 0){};
 
+    // gjt todo rg name
     MPPTaskId(
         UInt64 start_ts,
         Int64 task_id_,
@@ -121,10 +122,12 @@ struct MPPTaskId
     explicit MPPTaskId(const mpp::TaskMeta & task_meta)
         : task_id(task_meta.task_id())
         , gather_id(task_meta)
+        , resource_group_name(task_meta.resource_group_name())
     {}
 
     Int64 task_id;
     MPPGatherId gather_id;
+    const String resource_group_name;
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 

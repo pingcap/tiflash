@@ -39,6 +39,7 @@ void LocalAdmissionController::startBackgroudJob()
     setupUniqueClientID();
     while (!stopped.load())
     {
+        LOG_DEBUG(log, "LocalAdmissionController::startBackgroudJob");
         {
             auto now = std::chrono::steady_clock::now();
             std::unique_lock<std::mutex> lock(mu);
@@ -69,13 +70,16 @@ void LocalAdmissionController::fetchTokensFromGAC()
                 continue;
             need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getAndCleanConsumptionDelta()));
         }
+        // gjt todo here ok?
+        // last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
     }
 
     if (need_tokens.empty())
         return;
 
     resource_manager::TokenBucketsRequest gac_req;
-    gac_req.set_client_unique_id(unique_client_id);
+    // gjt todo:
+    gac_req.set_client_unique_id(10010);
     gac_req.set_target_request_period_ms(TARGET_REQUEST_PERIOD_MS);
 
     for (const auto & ele : need_tokens)
@@ -91,6 +95,7 @@ void LocalAdmissionController::fetchTokensFromGAC()
         auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
         tiflash_consumption->set_r_r_u(std::get<2>(ele));
     }
+    LOG_DEBUG(log, "trying to fetch token from GAC: {}", gac_req.DebugString());
 
     auto resps = cluster->pd_client->acquireTokenBuckets(gac_req);
     for (const auto & resp : resps)
@@ -109,6 +114,7 @@ void LocalAdmissionController::checkDegradeMode()
 
 void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp)
 {
+    LOG_DEBUG(log, "got TokenBucketsResponse: {}", resp.DebugString());
     if unlikely (resp.has_error())
     {
         handleBackgroundError(resp.error().message());
@@ -142,6 +148,7 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
 
                 int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
 
+                // Check GAC code, fill_rate is never setted.
                 RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
 
                 auto resource_group = findResourceGroup(one_resp.resource_group_name());

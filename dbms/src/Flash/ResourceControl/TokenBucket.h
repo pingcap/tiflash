@@ -62,6 +62,7 @@ public:
 
     bool lowToken() const { return peek() <= low_token_threshold; }
 
+    std::string toString() const;
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
 

@@ -91,4 +91,10 @@ double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) c
     return elapsed_second * fill_rate;
 }
 
+std::string TokenBucket::toString() const
+{
+    // gjt todo
+    return "";
+}
+
 } // namespace DB

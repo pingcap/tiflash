@@ -46,6 +46,7 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
         FINALIZE_TASK(task);
         return;
     }
+
     const auto & query_id = task->getQueryId();
     if unlikely (cancel_query_id_cache.contains(query_id))
     {
@@ -59,6 +60,7 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     auto iter = resource_group_task_queues.find(name);
     if (iter == resource_group_task_queues.end())
     {
+        LOG_TRACE(logger, "gjt debug add new rg info when submit {}", name);
         auto task_queue = std::make_shared<NestedQueueType>();
 
         task_queue->submit(std::move(task));
@@ -67,6 +69,7 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     }
     else
     {
+        LOG_TRACE(logger, "gjt debug add task to nested queue {}", name);
         iter->second->submit(std::move(task));
     }
     cv.notify_one();
@@ -79,6 +82,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        LOG_TRACE(logger, "gjt debug take iter begin: {}, {}", resource_group_infos.empty(), cancel_task_queue.size());
         if (popTask(cancel_task_queue, task))
             return true;
 

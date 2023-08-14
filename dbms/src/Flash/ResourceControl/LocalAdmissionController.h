@@ -41,10 +41,13 @@ public:
         , group_pb(group_pb_)
         , cpu_time_in_ns(0)
         , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
-        , log(Logger::get("resource_group-" + group_pb_.name()))
+        , log(Logger::get("rg:" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
-        bucket = std::make_unique<TokenBucket>(setting.fill_rate(), setting.fill_rate(), setting.burst_limit());
+        const double init_fill_rate = 0.0;
+        const double init_tokens = setting.fill_rate();
+        const double init_cap = setting.burst_limit();
+        bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, init_cap);
         assert(
             user_priority == LowPriorityValue || user_priority == MediumPriorityValue
             || user_priority == HighPriorityValue);
@@ -56,7 +59,7 @@ public:
         , user_priority(user_priority_)
         , user_ru_per_sec(user_ru_per_sec_)
         , burstable(burstable_)
-        , log(Logger::get("resource_group-" + group_name_))
+        , log(Logger::get("rg:" + group_name_))
     {
         bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
         assert(
@@ -168,9 +171,9 @@ private:
     }
 
     // New tokens fetched from GAC, update remaining tokens.
-    // gjt todo new_capacity < 0? ==0? >0?
     void reConfigTokenBucketInNormalMode(double add_tokens, double new_capacity)
     {
+        LOG_INFO(log, "token bucket of rg {} reconfig. add_token: {}, new_capacity: {}", name, add_tokens, new_capacity);
         std::lock_guard lock(mu);
         bucket_mode = TokenBucketMode::normal_mode;
         if (new_capacity <= 0.0)
@@ -180,11 +183,13 @@ private:
         }
         auto [ori_tokens, ori_fill_rate, ori_capacity] = bucket->getCurrentConfig();
         bucket->reConfig(ori_tokens + add_tokens, ori_fill_rate, ori_capacity);
+        LOG_INFO(log, "token bucket of rg {} reconfig in normal mode done: {}", name, bucket->toString());
     }
 
     // Tokens of GAC is not enough, enter trickling mode.
     void reConfigTokenBucketInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
     {
+        LOG_INFO(log, "token bucket of rg {} reconfig to trickle mode. add_token: {}, new_capacity: {}, trickle_ms: {}", name, add_tokens, new_capacity, trickle_ms);
         std::lock_guard lock(mu);
         if (new_capacity <= 0.0)
         {
@@ -193,10 +198,16 @@ private:
         }
 
         bucket_mode = TokenBucketMode::trickle_mode;
-        double new_tokens = bucket->peek() + add_tokens;
-        double trickle_sec = static_cast<double>(trickle_ms) / 1000;
-        double new_fill_rate = new_tokens / trickle_sec;
+        const double ori_tokens = bucket->peek();
+        const double new_tokens = ori_tokens + add_tokens;
+        const double trickle_sec = static_cast<double>(trickle_ms) / 1000;
+        double new_fill_rate = 0.0;
+        if (ori_tokens > 0.0)
+            new_fill_rate = new_tokens / trickle_sec;
+        else
+            new_fill_rate = add_tokens / trickle_sec;
         bucket->reConfig(new_tokens, new_fill_rate, new_capacity);
+        LOG_INFO(log, "token bucket of rg {} reconfig to trickle mode done: {}", name, bucket->toString());
     }
 
     // If we have network problem with GAC, enter degrade mode.
@@ -207,6 +218,7 @@ private:
         double avg_speed = bucket->getAvgSpeedPerSec();
         auto [ori_tokens, _, ori_capacity] = bucket->getCurrentConfig();
         bucket->reConfig(ori_tokens, avg_speed, ori_capacity);
+        LOG_INFO(log, "token bucket of rg {} reconfig in normal mode done: {}", name, bucket->toString());
     }
 
     void stepIntoDegradeModeIfNecessary(uint64_t dura_seconds)
@@ -254,6 +266,7 @@ private:
     // Total used cpu_time_in_ns of this ResourceGroup.
     uint64_t cpu_time_in_ns = 0;
 
+    // gjt todo update this
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
 
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
@@ -293,6 +306,7 @@ public:
         , mpp_task_manager(mpp_task_manager_)
         , thread_manager(newThreadManager())
     {
+        LOG_DEBUG(log, "gjt debug");
         thread_manager->scheduleThenDetach(true, "LocalAdmissionController", [this] { this->startBackgroudJob(); });
     }
 
@@ -308,6 +322,9 @@ public:
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
+        if (name.empty())
+            return;
+
         ResourceGroupPtr group = getOrCreateResourceGroup(name);
         group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken())
@@ -316,18 +333,29 @@ public:
 
     uint64_t getPriority(const std::string & name)
     {
+        if (name.empty())
+            return EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
+
         ResourceGroupPtr group = getOrCreateResourceGroup(name);
         return group->getPriority(max_ru_per_sec.load());
     }
 
     bool isResourceGroupThrottled(const std::string & name)
     {
+        if (name.empty())
+            return false;
+
         // todo: refine: ResourceControlQueue can record the statics of running pipeline task.
         // If the proportion of scheduled pipeline task is less than 10%, we say this resource group is throttled.
         ResourceGroupPtr group = findResourceGroup(name);
         if (group == nullptr)
             return false;
         return group->getRU() <= 0.0;
+    }
+
+    static bool isRUExhausted(uint64_t priority)
+    {
+        return priority == std::numeric_limits<uint64_t>::max();
     }
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -346,6 +374,8 @@ public:
     static constexpr auto DEGRADE_MODE_DURATION = 120;
     static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
+    // For tidb_enable_resource_control is disabled.
+    static constexpr uint64_t EMPTY_RESOURCE_GROUP_DEF_PRIORITY = 1;
 
 private:
     // Get ResourceGroup by name, if not exist, fetch from PD.
@@ -372,9 +402,9 @@ private:
         if (iter != resource_groups.end())
             return std::make_pair(iter->second, false);
 
+        LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
-        LOG_INFO(log, "new resource group added, info: {}", new_group_pb.DebugString());
         return std::make_pair(new_group, true);
     }
 
@@ -387,7 +417,7 @@ private:
 
     void handleBackgroundError(const std::string & err_msg);
 
-    std::string isGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
+    static std::string isGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
     // Background jobs:
     // 1. Fetch tokens from GAC periodically.
@@ -405,6 +435,7 @@ private:
 
     std::atomic<bool> stopped = false;
 
+    // gjt todo when to del
     std::unordered_map<std::string, ResourceGroupPtr> resource_groups;
 
     ::pingcap::kv::Cluster * cluster = nullptr;

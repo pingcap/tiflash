@@ -46,6 +46,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
@@ -1703,6 +1704,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         });
 
+        // Resource Control.
+#ifndef DBMS_PUBLIC_GTEST
+        LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
+#else
+        static_assert(0, "gjt test");
+#endif
+
         {
             // Report the unix timestamp, git hash, release version
             Poco::Timestamp ts;
@@ -1730,10 +1738,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    // Resource Control.
-#ifndef DBMS_PUBLIC_GTEST
-    LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
-#endif
 
     return Application::EXIT_OK;
 }
