@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
-
+#include <WindowFunctions/WindowUtils.h>
 
 namespace DB
 {
@@ -45,8 +45,25 @@ public:
 
 protected:
     DataTypes argument_types;
+
+private:
+    // Return true when the frame is valid
+    //
+    // Check if the frame is invalid, or we will insert null value into result column
+    // Frame is invalid when:
+    //   1. partition_end <= frame_start
+    //   2. frame_end < partition_start
+    virtual bool checkFrameValidAndHandle(WindowTransformAction &, size_t) { return true; }
 };
 
 using WindowFunctionPtr = std::shared_ptr<IWindowFunction>;
 
+// Runtime data for computing one window function.
+struct WindowFunctionWorkspace
+{
+    // TODO add aggregation function
+    WindowFunctionPtr window_function = nullptr;
+
+    ColumnNumbers arguments;
+};
 } // namespace DB
