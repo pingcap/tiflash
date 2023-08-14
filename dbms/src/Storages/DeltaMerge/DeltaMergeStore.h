@@ -552,7 +552,7 @@ private:
         std::vector<RowKeyRange> ranges;
         if (thread_type != ThreadType::Write)
             return result;
-        for (Iter it = begin; it != end; it++)
+        for (auto it = begin; it != end; ++it)
         {
             if (checkSegmentUpdate(context, *it, thread_type, input_type))
             {
