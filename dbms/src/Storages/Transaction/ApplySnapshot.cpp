@@ -125,25 +125,6 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         }
     }
 
-    {
-        auto keyspace_id = new_region->getKeyspaceID();
-        auto table_id = new_region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
-        {
-            switch (storage->engineType())
-            {
-            case TiDB::StorageEngine::DT:
-            {
-                break;
-            }
-            default:
-                throw Exception(
-                    "Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-    }
-
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
@@ -743,8 +724,11 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
                 // Call `ingestFiles` to ingest external DTFiles.
                 // Note that ingest sst won't remove the data in the key range
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                dm_storage
-                    ->ingestFiles(key_range, external_files, /*clear_data_in_range=*/false, context.getSettingsRef());
+                dm_storage->ingestFiles( //
+                    key_range,
+                    external_files,
+                    /*clear_data_in_range=*/false,
+                    context.getSettingsRef());
             }
             catch (DB::Exception & e)
             {
