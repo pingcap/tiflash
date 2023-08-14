@@ -79,18 +79,14 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        if unlikely (is_finished)
+            return false;
+
         if (popTask(cancel_task_queue, task))
             return true;
 
         while (!resource_group_infos.empty())
         {
-            if unlikely (is_finished)
-            {
-                // resource_group_infos and resource_group_task_queues will be cleaned in destructor,
-                // and all Tasks in nested task queue will be drained in destructor of TaskQueue.
-                return false;
-            }
-
             ResourceGroupInfo group_info = resource_group_infos.top();
             const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
             const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
@@ -140,14 +136,13 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         if (task != nullptr)
             return true;
 
-        // Check is_finished again for situation when resource_group_infos never insert any resource group.
-        if unlikely (is_finished)
-            return false;
-
         // Other TaskQueue like MultiLevelFeedbackQueue and IOPriorityQueue will wake up when new task submit or is_finished become true.
         // But for ResourceControlQueue, when all resource groups's RU are exhausted, will go to sleep, and should wakeup when RU is updated.
         // But LAC has no way to notify ResourceControlQueue for now, so ResourceControlQueue should wakeup to check if RU is updated or not.
-        cv.wait_for(lock, DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU);
+        if (cv.wait_until(lock, std::chrono::steady_clock::now() + DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU,
+                [this]() { return is_finished; }))
+            return false;
+
         updateResourceGroupInfosWithoutLock();
     }
 }
