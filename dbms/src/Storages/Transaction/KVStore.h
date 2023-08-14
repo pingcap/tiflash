@@ -261,14 +261,14 @@ private:
         std::shared_ptr<std::atomic_bool> registerTask(uint64_t region_id)
         {
             // Automaticlly override the old one.
-            genLockGuard();
+            auto _ = genLockGuard();
             auto b = std::make_shared<std::atomic_bool>(false);
             tasks[region_id] = b;
             return b;
         }
         std::shared_ptr<std::atomic_bool> deregisterTask(uint64_t region_id)
         {
-            genLockGuard();
+            auto _ = genLockGuard();
             auto it = tasks.find(region_id);
             if (it != tasks.end())
             {
