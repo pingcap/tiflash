@@ -17,9 +17,6 @@
 namespace DB
 {
 
-#ifndef DBMS_PUBLIC_GTEST
-std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
-#else
 auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
-#endif
+
 } // namespace DB

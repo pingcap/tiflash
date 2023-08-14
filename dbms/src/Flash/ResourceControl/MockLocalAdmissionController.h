@@ -23,7 +23,7 @@ class ResourceGroup;
 inline void nopConsumeResource(const std::string &, double, uint64_t) {}
 inline double nopGetPriority(const std::string &)
 {
-    return 10;
+    return 1.0;
 }
 inline bool nopIsResourceGroupThrottled(const std::string &)
 {

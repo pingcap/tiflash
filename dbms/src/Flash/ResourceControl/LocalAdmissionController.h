@@ -159,10 +159,6 @@ public:
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
-#ifndef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#else
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
-#endif
 };
 } // namespace DB
