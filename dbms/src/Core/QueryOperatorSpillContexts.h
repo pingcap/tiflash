@@ -34,7 +34,7 @@ public:
     Int64 triggerAutoSpill(Int64 expected_released_memories)
     {
         std::unique_lock lock(mutex, std::try_to_lock);
-        /// use mutex to avoid concurrent check, todo maybe need add minimum check interval(like 100ms) here?
+        /// use mutex to avoid concurrent check
         if (lock.owns_lock())
         {
             if unlikely (!first_check)
