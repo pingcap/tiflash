@@ -26,10 +26,11 @@ namespace
 {
 // The return column must not be nullable are following functions:
 //   Window: row_number, rank, dense_rank, cume_dist, percent_rank,
-//           lead and lag(When receiving 3 parameters and the first parameter is not nullable column)
-//   Aggregation: count, count distinct, bit_and, bit_or. bit_xor
+//           lead and lag(When receiving 3 parameters and the first and the third parameters
+//                        are both not related with nullable)
+//   Aggregation: count, count distinct, bit_and, bit_or, bit_xor
 //
-// Other window or aggregation functions always return not nullable column and we need to
+// Other window or aggregation functions always return nullable column and we need to
 // remove the not null flag for them.
 void setWindowFieldType(
     const tipb::ExprType window_sig,
