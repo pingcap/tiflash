@@ -48,16 +48,11 @@ public:
 
     Block getHeader() const override;
 
-    void collectNewThreadCountOfThisLevel(int & cnt) override
-    {
-        cnt += processor.getMaxThreads();
-    }
+    void collectNewThreadCountOfThisLevel(int & cnt) override { cnt += processor.getMaxThreads(); }
 
 protected:
     /// Do nothing that preparation to execution of the query be done in parallel, in ParallelInputsProcessor.
-    void readPrefix() override
-    {
-    }
+    void readPrefix() override {}
 
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
@@ -111,10 +106,7 @@ private:
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
-        static String getName()
-        {
-            return "ParallelAgg";
-        }
+        static String getName() { return "ParallelAgg"; }
 
         ParallelAggregatingBlockInputStream & parent;
     };

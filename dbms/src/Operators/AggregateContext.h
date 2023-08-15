@@ -41,13 +41,15 @@ struct ThreadData
 class AggregateContext
 {
 public:
-    explicit AggregateContext(
-        const String & req_id)
+    explicit AggregateContext(const String & req_id)
         : log(Logger::get(req_id))
-    {
-    }
+    {}
 
-    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook, const RegisterOperatorSpillContext & register_operator_spill_context);
+    void initBuild(
+        const Aggregator::Params & params,
+        size_t max_threads_,
+        Aggregator::CancellationHook && hook,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     size_t getBuildConcurrency() const { return max_threads; }
 

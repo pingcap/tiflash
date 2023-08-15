@@ -189,10 +189,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
         {
             auto & child = children[i];
 
-            reading_pool->schedule(
-                wrapInvocable(true, [&child] {
-                    child->readPrefix();
-                }));
+            reading_pool->schedule(wrapInvocable(true, [&child] { child->readPrefix(); }));
         }
 
         reading_pool->wait();
@@ -270,7 +267,8 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
                     parallel_merge_data->merged_blocks.erase(it);
 
                     lock.unlock();
-                    parallel_merge_data->have_space.notify_one(); /// We consumed block. Merging thread may merge next block for us.
+                    parallel_merge_data->have_space
+                        .notify_one(); /// We consumed block. Merging thread may merge next block for us.
                     res = popBlocksListFront(current_result);
                     assert(res);
                     break;
@@ -409,7 +407,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
 }
 
 
-MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregatedMemoryEfficientBlockInputStream::getNextBlocksToMerge()
+MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregatedMemoryEfficientBlockInputStream::
+    getNextBlocksToMerge()
 {
     /** There are several input sources.
       * From each of them, data may be received in one of following forms:
@@ -431,8 +430,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
     /// Read from source next block with bucket number not greater than 'current_bucket_num'.
 
     auto need_that_input = [this](Input & input) {
-        return !input.is_exhausted
-            && input.block.info.bucket_num < current_bucket_num;
+        return !input.is_exhausted && input.block.info.bucket_num < current_bucket_num;
     };
 
     auto read_from_input = [this](Input & input) {
@@ -474,9 +472,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] {
-                    read_from_input(input);
-                }));
+                reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] { read_from_input(input); }));
             }
         }
 

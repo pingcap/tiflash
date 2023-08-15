@@ -16,7 +16,11 @@
 
 namespace DB
 {
-void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook, const RegisterOperatorSpillContext & register_operator_spill_context)
+void AggregateContext::initBuild(
+    const Aggregator::Params & params,
+    size_t max_threads_,
+    Aggregator::CancellationHook && hook,
+    const RegisterOperatorSpillContext & register_operator_spill_context)
 {
     assert(status.load() == AggStatus::init);
     is_cancelled = std::move(hook);
@@ -42,7 +46,12 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
 void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
 {
     assert(status.load() == AggStatus::build);
-    aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index]->key_columns, threads_data[task_index]->aggregate_columns, task_index);
+    aggregator->executeOnBlock(
+        block,
+        *many_data[task_index],
+        threads_data[task_index]->key_columns,
+        threads_data[task_index]->aggregate_columns,
+        task_index);
     threads_data[task_index]->src_bytes += block.bytes();
     threads_data[task_index]->src_rows += block.rows();
 }
@@ -86,7 +95,8 @@ std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(Pi
     LOG_INFO(log, "Begin restore data from disk for shared aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
-    auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_context, input_streams, log->identifier(), max_threads);
+    auto loader
+        = std::make_shared<SharedSpilledBucketDataLoader>(exec_context, input_streams, log->identifier(), max_threads);
     std::vector<SharedAggregateRestorerPtr> ret;
     for (size_t i = 0; i < max_threads; ++i)
         ret.push_back(std::make_unique<SharedAggregateRestorer>(*aggregator, loader));

@@ -111,9 +111,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
         block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;
     case LocalAggStatus::restore:
-        return restorer->tryPop(block)
-            ? OperatorStatus::HAS_OUTPUT
-            : OperatorStatus::IO_IN;
+        return restorer->tryPop(block) ? OperatorStatus::HAS_OUTPUT : OperatorStatus::IO_IN;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }

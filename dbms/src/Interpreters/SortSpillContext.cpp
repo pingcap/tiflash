@@ -34,7 +34,8 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
     if (!in_spillable_stage || !enable_spill)
         return false;
     revocable_memory = new_value;
-    if (auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL || (operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
+    if (auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL
+        || (operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
     {
         revocable_memory = 0;
         return true;

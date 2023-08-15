@@ -99,12 +99,21 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 {
                     BlockInputStreams merging_streams;
                     for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
-                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, max_buffered_bytes, log->identifier());
+                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(
+                            merging_buckets,
+                            i,
+                            log->identifier()));
+                    impl = std::make_unique<UnionBlockInputStream<>>(
+                        merging_streams,
+                        BlockInputStreams{},
+                        max_threads,
+                        max_buffered_bytes,
+                        log->identifier());
                 }
                 else
                 {
-                    impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
+                    impl
+                        = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
                 }
             }
         }
@@ -193,7 +202,11 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
 {
     parent.exceptions[thread_num] = exception;
     Int32 old_value = -1;
-    parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
+    parent.first_exception_index.compare_exchange_strong(
+        old_value,
+        static_cast<Int32>(thread_num),
+        std::memory_order_seq_cst,
+        std::memory_order_relaxed);
 
     if (!parent.executed)
         /// use cancel instead of kill to avoid too many useless error message

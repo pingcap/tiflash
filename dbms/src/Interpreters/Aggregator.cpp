@@ -240,7 +240,11 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_, const String & req_id, size_t concurrency, const RegisterOperatorSpillContext & register_operator_spill_context)
+Aggregator::Aggregator(
+    const Params & params_,
+    const String & req_id,
+    size_t concurrency,
+    const RegisterOperatorSpillContext & register_operator_spill_context)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
@@ -919,11 +923,11 @@ void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num
 {
     assert(data_variants.need_spill);
     /// Flush only two-level data and possibly overflow data.
-#define M(NAME)                                                                                         \
-    case AggregationMethodType(NAME):                                                                   \
-    {                                                                                                   \
+#define M(NAME)                                                                                                     \
+    case AggregationMethodType(NAME):                                                                               \
+    {                                                                                                               \
         spillImpl(data_variants, *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl), thread_num); \
-        break;                                                                                          \
+        break;                                                                                                      \
     }
 
     switch (data_variants.type)
@@ -1011,10 +1015,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
 
 
 template <typename Method>
-void Aggregator::spillImpl(
-    AggregatedDataVariants & data_variants,
-    Method & method,
-    size_t thread_num)
+void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & method, size_t thread_num)
 {
     RUNTIME_ASSERT(
         agg_spill_context->getSpiller() != nullptr,

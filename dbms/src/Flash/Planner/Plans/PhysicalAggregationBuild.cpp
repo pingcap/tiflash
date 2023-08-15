@@ -66,7 +66,8 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_context, build_index++, aggregate_context, log->identifier()));
+        builder.setSinkOp(
+            std::make_unique<AggregateBuildSinkOp>(exec_context, build_index++, aggregate_context, log->identifier()));
     });
 
     // The profile info needs to be updated for the second stage's agg final spill.
@@ -107,7 +108,12 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
     }
     if (!indexes.empty())
     {
-        auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(exec_context, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
+        auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(
+            exec_context,
+            log->identifier(),
+            aggregate_context,
+            std::move(indexes),
+            std::move(profile_infos));
         aggregate_context.reset();
         return final_spill_event;
     }
