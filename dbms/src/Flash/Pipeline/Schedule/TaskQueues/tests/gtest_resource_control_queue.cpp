@@ -344,7 +344,7 @@ public:
             }
 
             task_scheduler.submit(tasks);
-            std::this_thread::sleep_for(std::chrono::seconds(50));
+            std::this_thread::sleep_for(std::chrono::seconds(10));
         }
 
         for (auto & exec_context : all_contexts)
@@ -526,6 +526,8 @@ TEST_F(TestResourceControlQueue, LargeRUSmallCPUDynamicTokenBucket)
 // Maybe too trivial, no need to test.
 // TEST_F(TestResourceControlQueue, LargeRULargeCPU) {}
 
+// Make resource group with small RU to be burstable.
+// Expect it use more cpu than resource group with large RU.
 TEST_F(TestResourceControlQueue, TestBurstableStaticTokenBucket)
 {
     auto rate = testSmallRULargeCPU(true, true);
