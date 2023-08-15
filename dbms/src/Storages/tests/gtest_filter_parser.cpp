@@ -71,7 +71,10 @@ protected:
 
 TimezoneInfo FilterParserTest::default_timezone_info;
 
-DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_json, const String & query, TimezoneInfo & timezone_info = default_timezone_info)
+DM::RSOperatorPtr FilterParserTest::generateRsOperator(
+    const String table_info_json,
+    const String & query,
+    TimezoneInfo & timezone_info = default_timezone_info)
 {
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
@@ -79,18 +82,18 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     std::tie(query_tasks, std::ignore) = compileQuery(
         *ctx,
         query,
-        [&](const String &, const String &) {
-            return table_info;
-        },
+        [&](const String &, const String &) { return table_info; },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request, {}, NullspaceID, "", false, log);
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
     DAGQuerySource dag(*ctx);
     auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions() : empty_condition;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr
+        ? query_block.children[0]->selection->selection().conditions()
+        : empty_condition;
 
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());
@@ -275,64 +278,82 @@ try
 })json";
     {
         // Not
-        auto rs_operator = generateRsOperator(table_info_json, "select col_1, col_2 from default.t_111 where NOT col_2=666");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select col_1, col_2 from default.t_111 where NOT col_2=666");
         EXPECT_EQ(rs_operator->name(), "not");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
     }
 
     {
         // And
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' and col_2 = 666");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' and col_2 = 666");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
+        std::regex rx(
+            R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
         // OR
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 or col_2 = 777");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 or col_2 = 777");
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"777\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\","
+            "\"col\":\"col_2\",\"value\":\"777\"}]}");
     }
 
     // More complicated
     {
         // And with "not supported"
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666");
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
+        std::regex rx(
+            R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
         // And with not
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_3 = 666");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_3 = 666");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_3");
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\","
+            "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
     }
 
     {
         // And with or
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)");
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 3);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -341,48 +362,68 @@ try
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
         EXPECT_EQ(rs_operator->getAttrs()[2].col_name, "col_3");
         EXPECT_EQ(rs_operator->getAttrs()[2].col_id, 3);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"678\"}]}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"or\","
+            "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\","
+            "\"value\":\"678\"}]}]}");
     }
 
     {
         // Or with "not supported"
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' or col_2 = 666");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' or col_2 = 666");
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
+        std::regex rx(
+            R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
         // Or with not
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666");
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666");
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        std::regex rx(R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
+        std::regex rx(
+            R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
         // And with IsNULL
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and col_3 is null");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and col_3 is null");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_3");
         EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"isnull\",\"col\":\"col_3\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"isnull\","
+            "\"col\":\"col_3\"}]}");
     }
 
     {
         // And between col and literal (not supported since And only support when child is ColumnExpr)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 and 1");
         EXPECT_EQ(rs_operator->name(), "and");
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 8 flag: 4097 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
+            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
+            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
+            "}\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
+            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
+            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
     }
 
     std::cout << " do query select * from default.t_111 where col_6 or 1 " << std::endl;
@@ -390,7 +431,14 @@ try
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 or 1");
         EXPECT_EQ(rs_operator->name(), "or");
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 8 flag: 4097 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
+            "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
+            "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
+            "}\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
+            "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
+            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
     }
 
     {
@@ -429,12 +477,19 @@ try
         auto & timezone_info = ctx->getTimezoneInfo();
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
-        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+                + String("')"),
+            timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
+                + String("\"}"));
     }
 
     {
@@ -444,12 +499,19 @@ try
         timezone_info.resetByTimezoneName("America/Chicago");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
-        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+                + String("')"),
+            timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
+                + String("\"}"));
     }
 
     {
@@ -459,32 +521,50 @@ try
         timezone_info.resetByTimezoneOffset(28800);
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
 
-        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+                + String("')"),
+            timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
+                + String("\"}"));
     }
 
     {
         // Greater between Datetime col and Datetime literal
-        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"));
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime
+                + String("')"));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_datetime");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 5);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp)
+                + String("\"}"));
     }
 
     {
         // Greater between Date col and Datetime literal
-        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"));
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_date");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 6);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp)
+                + String("\"}"));
     }
 }
 CATCH
@@ -506,7 +586,8 @@ try
 })json";
     {
         // Greater between col and literal (not supported since the type of col_3 is floating point)
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_3 > 1234568.890123");
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_3 > 1234568.890123");
         EXPECT_EQ(rs_operator->name(), "unsupported");
     }
 

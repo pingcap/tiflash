@@ -96,13 +96,16 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    TunnelSender(
+        MemoryTrackerPtr & memory_tracker_,
+        const LoggerPtr & log_,
+        const String & tunnel_id_,
+        std::atomic<Int64> * data_size_in_queue_)
         : memory_tracker(memory_tracker_)
         , log(log_)
         , tunnel_id(tunnel_id_)
         , data_size_in_queue(data_size_in_queue_)
-    {
-    }
+    {}
 
     virtual bool push(TrackedMppDataPacketPtr &&) = 0;
     virtual bool forcePush(TrackedMppDataPacketPtr &&) = 0;
@@ -114,23 +117,11 @@ public:
     virtual bool isWritable() const = 0;
 
     void consumerFinish(const String & err_msg);
-    String getConsumerFinishMsg()
-    {
-        return consumer_state.getMsg();
-    }
-    bool isConsumerFinished()
-    {
-        return consumer_state.msgHasSet();
-    }
+    String getConsumerFinishMsg() { return consumer_state.getMsg(); }
+    bool isConsumerFinished() { return consumer_state.msgHasSet(); }
     const LoggerPtr & getLogger() const { return log; }
-    String getTunnelId()
-    {
-        return tunnel_id;
-    }
-    MemoryTracker * getMemoryTracker() const
-    {
-        return memory_tracker != nullptr ? memory_tracker.get() : nullptr;
-    }
+    String getTunnelId() { return tunnel_id; }
+    MemoryTracker * getMemoryTracker() const { return memory_tracker != nullptr ? memory_tracker.get() : nullptr; }
 
 protected:
     /// TunnelSender use consumer state to inform tunnel that whether sender has finished its work
@@ -139,8 +130,7 @@ protected:
     public:
         ConsumerState()
             : future(promise.get_future())
-        {
-        }
+        {}
         String getMsg()
         {
             future.wait();
@@ -149,14 +139,12 @@ protected:
         void setMsg(const String & msg)
         {
             bool old_value = false;
-            if (!msg_has_set.compare_exchange_strong(old_value, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+            if (!msg_has_set
+                     .compare_exchange_strong(old_value, true, std::memory_order_seq_cst, std::memory_order_relaxed))
                 return;
             promise.set_value(msg);
         }
-        bool msgHasSet() const
-        {
-            return msg_has_set.load();
-        }
+        bool msgHasSet() const { return msg_has_set.load(); }
 
     private:
         std::promise<String> promise;
@@ -176,7 +164,12 @@ protected:
 class SyncTunnelSender : public TunnelSender
 {
 public:
-    SyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    SyncTunnelSender(
+        const CapacityLimits & queue_limits,
+        MemoryTrackerPtr & memory_tracker_,
+        const LoggerPtr & log_,
+        const String & tunnel_id_,
+        std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
         , send_queue(LooseBoundedMPMCQueue<TrackedMppDataPacketPtr>(queue_limits))
     {}
@@ -194,20 +187,11 @@ public:
         return send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
-    void cancelWith(const String & reason) override
-    {
-        send_queue.cancelWith(reason);
-    }
+    void cancelWith(const String & reason) override { send_queue.cancelWith(reason); }
 
-    bool finish() override
-    {
-        return send_queue.finish();
-    }
+    bool finish() override { return send_queue.finish(); }
 
-    bool isWritable() const override
-    {
-        return send_queue.isWritable();
-    }
+    bool isWritable() const override { return send_queue.isWritable(); }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -220,64 +204,55 @@ private:
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(
+        const CapacityLimits & queue_limits,
+        MemoryTrackerPtr & memory_tracker,
+        const LoggerPtr & log_,
+        const String & tunnel_id_,
+        std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(
-              log_,
-              queue_limits,
-              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
+        , queue(log_, queue_limits, [](const TrackedMppDataPacketPtr & element) {
+            return element->getPacket().ByteSizeLong();
+        })
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue, GRPCKickFunc && func)
+    AsyncTunnelSender(
+        const CapacityLimits & queue_limits,
+        MemoryTrackerPtr & memoryTracker,
+        const LoggerPtr & log_,
+        const String & tunnel_id_,
+        std::atomic<Int64> * data_size_in_queue,
+        GRPCKickFunc && func)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(
-              log_,
-              queue_limits,
-              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
+        , queue(log_, queue_limits, [](const TrackedMppDataPacketPtr & element) {
+            return element->getPacket().ByteSizeLong();
+        })
     {
         queue.setKickFuncForTest(std::move(func));
     }
 
-    bool push(TrackedMppDataPacketPtr && data) override
-    {
-        return queue.push(std::move(data)) == MPMCQueueResult::OK;
-    }
+    bool push(TrackedMppDataPacketPtr && data) override { return queue.push(std::move(data)) == MPMCQueueResult::OK; }
 
     bool forcePush(TrackedMppDataPacketPtr && data) override
     {
         return queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
-    bool finish() override
-    {
-        return queue.finish();
-    }
+    bool finish() override { return queue.finish(); }
 
-    bool isWritable() const override
-    {
-        return queue.isWritable();
-    }
+    bool isWritable() const override { return queue.isWritable(); }
 
-    void cancelWith(const String & reason) override
-    {
-        queue.cancelWith(reason);
-    }
+    void cancelWith(const String & reason) override { queue.cancelWith(reason); }
 
-    const String & getCancelReason() const
-    {
-        return queue.getCancelReason();
-    }
+    const String & getCancelReason() const { return queue.getCancelReason(); }
 
     MPMCQueueResult popWithTag(TrackedMppDataPacketPtr & data, GRPCKickTag * new_tag)
     {
         return queue.popWithTag(data, new_tag);
     }
 
-    void subDataSizeMetric(size_t size)
-    {
-        ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size);
-    }
+    void subDataSizeMetric(size_t size) { ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size); }
 
 private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
@@ -313,20 +288,11 @@ public:
         local_request_handler.closeConnection();
     }
 
-    bool push(TrackedMppDataPacketPtr && data) override
-    {
-        return pushImpl<false>(std::move(data));
-    }
+    bool push(TrackedMppDataPacketPtr && data) override { return pushImpl<false>(std::move(data)); }
 
-    bool forcePush(TrackedMppDataPacketPtr && data) override
-    {
-        return pushImpl<true>(std::move(data));
-    }
+    bool forcePush(TrackedMppDataPacketPtr && data) override { return pushImpl<true>(std::move(data)); }
 
-    void cancelWith(const String & reason) override
-    {
-        finishWrite(true, reason);
-    }
+    void cancelWith(const String & reason) override { finishWrite(true, reason); }
 
     bool finish() override
     {
@@ -387,7 +353,12 @@ private:
         {
             consumer_state.setMsg(local_err_msg);
             local_request_handler.writeDone(meet_error, local_err_msg);
-            LOG_INFO(log, "connection for {} cost {} ms, including {} ms to wait task.", tunnel_id, local_request_handler.getTotalElapsedTime(), local_request_handler.getWaitingTaskTime());
+            LOG_INFO(
+                log,
+                "connection for {} cost {} ms, including {} ms to wait task.",
+                tunnel_id,
+                local_request_handler.getTotalElapsedTime(),
+                local_request_handler.getWaitingTaskTime());
         }
     }
 
@@ -404,7 +375,12 @@ public:
     using Base = TunnelSender;
     using Base::Base;
 
-    LocalTunnelSenderV1(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    LocalTunnelSenderV1(
+        const CapacityLimits & queue_limits,
+        MemoryTrackerPtr & memory_tracker_,
+        const LoggerPtr & log_,
+        const String & tunnel_id_,
+        std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
         , send_queue(queue_limits)
     {}
@@ -421,20 +397,11 @@ public:
         return send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
-    void cancelWith(const String & reason) override
-    {
-        send_queue.cancelWith(reason);
-    }
+    void cancelWith(const String & reason) override { send_queue.cancelWith(reason); }
 
-    bool finish() override
-    {
-        return send_queue.finish();
-    }
+    bool finish() override { return send_queue.finish(); }
 
-    bool isWritable() const override
-    {
-        return send_queue.isWritable();
-    }
+    bool isWritable() const override { return send_queue.isWritable(); }
 
 private:
     bool cancel_reason_sent = false;
@@ -523,10 +490,7 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocalV2(
-        size_t source_index,
-        LocalRequestHandler & local_request_handler,
-        bool has_remote_conn);
+    void connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool has_remote_conn);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
@@ -568,10 +532,7 @@ private:
 
     void waitForSenderFinish(bool allow_throw);
 
-    MemoryTracker * getMemTracker()
-    {
-        return mem_tracker ? mem_tracker.get() : nullptr;
-    }
+    MemoryTracker * getMemTracker() { return mem_tracker ? mem_tracker.get() : nullptr; }
 
     void updateConnProfileInfo(size_t pushed_data_size)
     {
@@ -598,7 +559,8 @@ private:
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
     TunnelSenderMode mode; // Tunnel transfer data mode
-    TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
+    TunnelSenderPtr
+        tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
     // According to mode value, among the sync/async/local_tunnel_senders, only the responding sender is not null and do actual work
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;

@@ -26,35 +26,39 @@ void materializeBlocks(std::vector<Block> & input_blocks);
 std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num);
 
 /// Will resize 'hash' inside to ensure enough space
-void computeHash(const Block & block,
-                 const std::vector<Int64> & partition_col_ids,
-                 const TiDB::TiDBCollators & collators,
-                 std::vector<String> & partition_key_containers,
-                 WeakHash32 & hash);
+void computeHash(
+    const Block & block,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    WeakHash32 & hash);
 
 /// Will resize 'hash' inside to ensure enough space
-void computeHash(size_t rows,
-                 const ColumnRawPtrs & key_columns,
-                 const TiDB::TiDBCollators & collators,
-                 std::vector<String> & partition_key_containers,
-                 WeakHash32 & hash);
+void computeHash(
+    size_t rows,
+    const ColumnRawPtrs & key_columns,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    WeakHash32 & hash);
 
-void scatterColumns(const Block & input_block,
-                    const std::vector<Int64> & partition_col_ids,
-                    const TiDB::TiDBCollators & collators,
-                    std::vector<String> & partition_key_containers,
-                    uint32_t bucket_num,
-                    std::vector<std::vector<MutableColumnPtr>> & result_columns);
+void scatterColumns(
+    const Block & input_block,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    uint32_t bucket_num,
+    std::vector<std::vector<MutableColumnPtr>> & result_columns);
 
-void scatterColumnsForFineGrainedShuffle(const Block & block,
-                                         const std::vector<Int64> & partition_col_ids,
-                                         const TiDB::TiDBCollators & collators,
-                                         std::vector<String> & partition_key_containers,
-                                         uint32_t part_num,
-                                         uint32_t fine_grained_shuffle_stream_count,
-                                         WeakHash32 & hash,
-                                         IColumn::Selector & selector,
-                                         std::vector<IColumn::ScatterColumns> & scattered);
+void scatterColumnsForFineGrainedShuffle(
+    const Block & block,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    uint32_t part_num,
+    uint32_t fine_grained_shuffle_stream_count,
+    WeakHash32 & hash,
+    IColumn::Selector & selector,
+    std::vector<IColumn::ScatterColumns> & scattered);
 
 // Used to hold expected types for codec
 struct HashPartitionWriterHelperV1

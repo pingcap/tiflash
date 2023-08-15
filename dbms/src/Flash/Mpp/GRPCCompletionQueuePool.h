@@ -31,10 +31,7 @@ public:
 
     ::grpc::CompletionQueue & pickQueue();
 
-    void markShutdown()
-    {
-        is_shutdown = true;
-    }
+    void markShutdown() { is_shutdown = true; }
 
 private:
     void thread(size_t index);
