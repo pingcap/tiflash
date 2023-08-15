@@ -131,7 +131,6 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
-        // 3. resource group priority changed because of task consuming RU.(maybe useless?)
         cv.wait(lock);
         updateResourceGroupInfosWithoutLock();
     }
@@ -175,9 +174,6 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutL
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
     LocalAdmissionController::global_instance->consumeResource(name, ru, consumed_cpu_time);
     updateResourceGroupInfosWithoutLock();
-
-    // Notify priority info is updated.
-    cv.notify_one();
 }
 
 template <typename NestedQueueType>
