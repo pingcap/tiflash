@@ -885,7 +885,8 @@ void InterpreterSelectQuery::executeAggregation(
             settings.aggregation_memory_efficient_merge_threads
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                 : static_cast<size_t>(settings.max_threads),
-            /*req_id=*/"");
+            /*req_id=*/"",
+            [&](const OperatorSpillContextPtr &) {});
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
@@ -902,7 +903,8 @@ void InterpreterSelectQuery::executeAggregation(
             std::make_shared<ConcatBlockInputStream>(inputs, /*req_id=*/""),
             params,
             final,
-            /*req_id=*/"");
+            /*req_id=*/"",
+            [](const OperatorSpillContextPtr &) {});
     }
 }
 

@@ -58,11 +58,16 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         is_final_agg,
         spill_config);
     assert(aggregate_context);
-    aggregate_context->initBuild(params, concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
+    aggregate_context->initBuild(
+        params,
+        concurrency,
+        /*hook=*/[&]() { return exec_context.isCancelled(); },
+        exec_context.getRegisterOperatorSpillContext());
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_context, build_index++, aggregate_context, log->identifier()));
+        builder.setSinkOp(
+            std::make_unique<AggregateBuildSinkOp>(exec_context, build_index++, aggregate_context, log->identifier()));
     });
 
     // The profile info needs to be updated for the second stage's agg final spill.
@@ -73,7 +78,16 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
 {
     assert(aggregate_context);
     aggregate_context->getAggSpillContext()->finishSpillableStage();
-    if (!aggregate_context->hasSpilledData())
+    bool need_final_spill = false;
+    for (size_t i = 0; i < aggregate_context->getBuildConcurrency(); ++i)
+    {
+        if (aggregate_context->getAggSpillContext()->needFinalSpill(i))
+        {
+            need_final_spill = true;
+            break;
+        }
+    }
+    if (!aggregate_context->hasSpilledData() && !need_final_spill)
     {
         aggregate_context.reset();
         return nullptr;
@@ -94,7 +108,12 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
     }
     if (!indexes.empty())
     {
-        auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(exec_context, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
+        auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(
+            exec_context,
+            log->identifier(),
+            aggregate_context,
+            std::move(indexes),
+            std::move(profile_infos));
         aggregate_context.reset();
         return final_spill_event;
     }
