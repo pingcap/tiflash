@@ -125,7 +125,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                 stream,
                 params,
                 true,
-                log->identifier());
+                log->identifier(),
+                [&](const OperatorSpillContextPtr & operator_spill_context) {
+                    if (context.getDAGContext() != nullptr)
+                    {
+                        context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                    }
+                });
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
@@ -140,13 +146,25 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
             true,
             max_streams,
             settings.max_buffered_bytes_in_executor,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
-            log->identifier());
+            settings.aggregation_memory_efficient_merge_threads
+                ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+                : static_cast<size_t>(settings.max_threads),
+            log->identifier(),
+            [&](const OperatorSpillContextPtr & operator_spill_context) {
+                if (context.getDAGContext() != nullptr)
+                {
+                    context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                }
+            });
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
 
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        restoreConcurrency(
+            pipeline,
+            context.getDAGContext()->final_concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
     }
     else
     {
@@ -155,7 +173,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
             pipeline.firstStream(),
             params,
             true,
-            log->identifier());
+            log->identifier(),
+            [&](const OperatorSpillContextPtr & operator_spill_context) {
+                if (context.getDAGContext() != nullptr)
+                {
+                    context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                }
+            });
     }
 
     // we can record for agg after restore concurrency.
