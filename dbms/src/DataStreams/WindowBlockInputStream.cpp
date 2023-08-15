@@ -14,12 +14,11 @@
 
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
+#include <WindowFunctions/WindowUtils.h>
 
 #include <magic_enum.hpp>
 #include <tuple>
 #include <type_traits>
-
-#include "WindowFunctions/WindowUtils.h"
 
 namespace DB
 {
@@ -296,49 +295,60 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(
     const RowNumber & current_row,
     const WindowFrame & frame)
 {
-    // Range of rows is [frame_start, frame_end),
-    // and frame_end position is behind the position of the last frame row.
-    // So we need to +1
-    auto step_num = frame.end_offset + 1;
     if (window_description.frame.end_preceding)
-        return std::make_tuple(stepInPreceding(current_row, step_num), true);
+    {
+        if (frame.end_offset == 0)
+        {
+            RowNumber frame_end_tmp = current_row;
+            advanceRowNumber(frame_end_tmp);
+            return std::make_tuple(frame_end_tmp, true);
+        }
+
+        // Range of rows is [frame_start, frame_end),
+        // and frame_end position is behind the position of the last frame row.
+        // So we need to -1
+        return std::make_tuple(stepInPreceding(current_row, frame.end_offset - 1), true);
+    }
     else
-        return stepInFollowing(current_row, step_num);
+    {
+        // Range of rows is [frame_start, frame_end),
+        // and frame_end position is behind the position of the last frame row.
+        // So we need to +1
+        return stepInFollowing(current_row, frame.end_offset + 1);
+    }
 }
 
 RowNumber WindowTransformAction::stepInPreceding(const RowNumber & moved_row, size_t step_num)
 {
-    auto dist = distance(moved_row, partition_start);
-
-    if (dist <= step_num)
-        return partition_start;
-
     RowNumber result_row = moved_row;
-
-    // The step happens only in a block
-    if (result_row.row >= step_num)
+    while (step_num > 0 && (prev_frame_start < result_row))
     {
-        result_row.row -= step_num;
-        return result_row;
-    }
-
-    // The step happens between blocks
-    step_num -= (result_row.row + 1);
-    --result_row.block;
-    result_row.row = blockAt(result_row).rows - 1;
-    while (step_num > 0)
-    {
-        auto & block = blockAt(result_row);
-        if (block.rows > step_num)
+        // The step happens only in a block
+        if (result_row.row >= step_num)
         {
-            result_row.row = block.rows - step_num - 1; // index, so we need to -1
+            result_row.row -= step_num;
             break;
         }
-        step_num -= block.rows;
+
+        // The step happens between blocks
+        step_num -= result_row.row + 1;
+        if (result_row.block == 0)
+        {
+            result_row.row = 0;
+            break;
+        }
         --result_row.block;
+
+        // We need to break the while loop when prev_frame_start.block > result_row.block
+        // as the result_row.block may have been released and the calling for blockAt(result_row)
+        // will trigger the assert.
+        if (prev_frame_start.block > result_row.block)
+            break;
         result_row.row = blockAt(result_row).rows - 1;
     }
-    return result_row;
+
+    // prev_frame_start is the farthest position we can reach to.
+    return result_row < prev_frame_start ? prev_frame_start : result_row;
 }
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepInFollowing(const RowNumber & moved_row, size_t step_num)

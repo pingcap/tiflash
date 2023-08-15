@@ -34,23 +34,13 @@ struct RowNumber
 
     bool operator<(const RowNumber & other) const
     {
-        return block < other.block
-            || (block == other.block && row < other.row);
+        return block < other.block || (block == other.block && row < other.row);
     }
 
-    bool operator==(const RowNumber & other) const
-    {
-        return block == other.block && row == other.row;
-    }
+    bool operator==(const RowNumber & other) const { return block == other.block && row == other.row; }
 
-    bool operator<=(const RowNumber & other) const
-    {
-        return *this < other || *this == other;
-    }
+    bool operator<=(const RowNumber & other) const { return *this < other || *this == other; }
 
-    String toString() const
-    {
-        return fmt::format("[block={},row={}]", block, row);
-    }
+    String toString() const { return fmt::format("[block={},row={}]", block, row); }
 };
 } // namespace DB

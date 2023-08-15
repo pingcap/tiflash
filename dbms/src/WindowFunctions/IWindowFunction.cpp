@@ -36,7 +36,7 @@ namespace
 {
 bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partition_start, RowNumber partition_end)
 {
-    return !((partition_end <= frame_start) || (frame_end < partition_start));
+    return !((partition_end <= frame_start) || (frame_end <= partition_start));
 }
 
 bool defaultCheckFrameValidAndHandle(WindowTransformAction & action, size_t function_index)

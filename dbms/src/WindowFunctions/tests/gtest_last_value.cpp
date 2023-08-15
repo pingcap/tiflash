@@ -140,6 +140,28 @@ try
                  toNullableVec<String>(/*value*/ {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}})},
                 frame);
         }
+
+        // The following are <preceding, preceding> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 2);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 1);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, {}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12"}),
+            LastValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
+
+        // The following are <following, folloing> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 1);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 2);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, "4", "5", "5", {}, "8", "9", "10", "10", {}, "13", "13", {}}),
+            LastValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
     }
 
     // TODO support unsigned int.
