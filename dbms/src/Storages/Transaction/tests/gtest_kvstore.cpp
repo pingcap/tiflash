@@ -1041,11 +1041,14 @@ try
                 region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
-                9,
+                20,
                 5,
                 std::nullopt,
                 ctx.getTMTContext());
-            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(9), true);
+            auto region_after_snapshot = kvs.getRegion(region_id);
+            ASSERT_EQ(region_after_snapshot->appliedIndex(), 20);
+            ASSERT_EQ(region_after_snapshot->appliedIndexTerm(), 5);
+            ASSERT_EQ(region_after_snapshot->checkIndex(20), true);
         }
     }
     {
@@ -1058,7 +1061,7 @@ try
     {
         auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
         auto && [request, response] = MockRaftStoreProxy::composeChangePeer(std::move(meta), {3});
-        kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 10, 6, ctx.getTMTContext());
+        kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 21, 6, ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id), nullptr);
     }
     {
@@ -1144,23 +1147,30 @@ try
 
         {
             // Snapshot will be rejected if region overlaps.
+            const TableID table_id = 55;
             {
+                // create an empty region 22, range=[50,100)
                 auto region = makeRegion(
                     22,
-                    RecordKVFormat::genKey(55, 50),
-                    RecordKVFormat::genKey(55, 100),
+                    RecordKVFormat::genKey(table_id, 50),
+                    RecordKVFormat::genKey(table_id, 100),
                     kvs.getProxyHelper());
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
                     RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)},
                     ctx.getTMTContext());
+                auto region_applied_22 = kvs.getRegion(22);
+                ASSERT_NE(region_applied_22, nullptr);
+                ASSERT_EQ(region->appliedIndex(), region_applied_22->appliedIndex());
+                ASSERT_EQ(region->appliedIndexTerm(), region_applied_22->appliedIndexTerm());
             }
             try
             {
+                // try apply snapshot to region 20, range=[50, 100) that is overlapped with region 22, should be rejected
                 auto region = makeRegion(
                     20,
-                    RecordKVFormat::genKey(55, 50),
-                    RecordKVFormat::genKey(55, 100),
+                    RecordKVFormat::genKey(table_id, 50),
+                    RecordKVFormat::genKey(table_id, 100),
                     kvs.getProxyHelper());
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(

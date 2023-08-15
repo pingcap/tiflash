@@ -19,6 +19,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -101,6 +102,22 @@ try
                     ASSERT_EQ(table_info.getColumnID("column_7"), 7);
                     ASSERT_EQ(table_info.getColumnID("column_8"), 8);
                 }},
+            ParseCase{
+                R"json({"cols": [{"comment": "","default": null,"default_bit": null,"id": 1,"name": {"L": "ol_o_id","O": "ol_o_id"},"offset": 0,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4099,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 2,"name": {"L": "ol_d_id","O": "ol_d_id"},"offset": 1,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4099,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 3,"name": {"L": "ol_w_id","O": "ol_w_id"},"offset": 2,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4099,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 4,"name": {"L": "ol_number","O": "ol_number"},"offset": 3,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4099,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 5,"name": {"L": "ol_i_id","O": "ol_i_id"},"offset": 4,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4097,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 6,"name": {"L": "ol_supply_w_id","O": "ol_supply_w_id"},"offset": 5,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 0,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 7,"name": {"L": "ol_delivery_d","O": "ol_delivery_d"},"offset": 6,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 128,"Flen": 19,"Tp": 12}}, {"comment": "","default": null,"default_bit": null,"id": 8,"name": {"L": "ol_quantity","O": "ol_quantity"},"offset": 7,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 0,"Flen": 11,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 9,"name": {"L": "ol_amount","O": "ol_amount"},"offset": 8,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 2,"Elems": null,"Flag": 0,"Flen": 6,"Tp": 246}}, {"comment": "","default": null,"default_bit": null,"id": 10,"name": {"L": "ol_dist_info","O": "ol_dist_info"},"offset": 9,"origin_default": null,"state": 5,"type": {"Charset": "utf8mb4","Collate": "utf8mb4_bin","Decimal": 0,"Elems": null,"Flag": 0,"Flen": 24,"Tp": 254}}],"comment": "","id": 122,"index_info": [],"is_common_handle": false,"keyspace_id": 9936,"name": {"L": "order_line","O": "order_line"},"partition": null,"pk_is_handle": false,"schema_version": -1,"state": 5,"tiflash_replica": {"Available": true,"Count": 2},"update_timestamp": 443420630548480022})json",
+                [](const TableInfo & table_info) {
+                    for (const auto & ci : table_info.columns)
+                    {
+                        getDataTypeByColumnInfo(ci);
+                    }
+                }},
+            ParseCase{
+                R"json({"cols": [{"comment": "","default": null,"default_bit": null,"id": 1,"name": {"L": "help_topic_id","O": "help_topic_id"},"offset": 0,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4131,"Flen": 10,"Tp": 3}}, {"comment": "","default": null,"default_bit": null,"id": 2,"name": {"L": "name","O": "name"},"offset": 1,"origin_default": null,"state": 5,"type": {"Charset": "utf8","Collate": "utf8_bin","Decimal": 0,"Elems": null,"Flag": 4101,"Flen": 64,"Tp": 254}}, {"comment": "","default": null,"default_bit": null,"id": 3,"name": {"L": "help_category_id","O": "help_category_id"},"offset": 2,"origin_default": null,"state": 5,"type": {"Charset": "binary","Collate": "binary","Decimal": 0,"Elems": null,"Flag": 4129,"Flen": 5,"Tp": 2}}, {"comment": "","default": null,"default_bit": null,"id": 4,"name": {"L": "description","O": "description"},"offset": 3,"origin_default": null,"state": 5,"type": {"Charset": "utf8","Collate": "utf8_bin","Decimal": 0,"Elems": null,"Flag": 4097,"Flen": 65535,"Tp": 252}}, {"comment": "","default": null,"default_bit": null,"id": 5,"name": {"L": "example","O": "example"},"offset": 4,"origin_default": null,"state": 5,"type": {"Charset": "utf8","Collate": "utf8_bin","Decimal": 0,"Elems": null,"Flag": 4097,"Flen": 65535,"Tp": 252}}, {"comment": "","default": null,"default_bit": null,"id": 6,"name": {"L": "url","O": "url"},"offset": 5,"origin_default": null,"state": 5,"type": {"Charset": "utf8","Collate": "utf8_bin","Decimal": 0,"Elems": null,"Flag": 4097,"Flen": 65535,"Tp": 252}}],"comment": "help topics","id": 20,"index_info": [],"is_common_handle": false,"keyspace_id": 9936,"name": {"L": "help_topic","O": "help_topic"},"partition": null,"pk_is_handle": true,"schema_version": -1,"state": 5,"tiflash_replica": {"Count": 0},"update_timestamp": 443411710574854188})json",
+                [](const TableInfo & table_info) {
+                    for (const auto & ci : table_info.columns)
+                    {
+                        getDataTypeByColumnInfo(ci);
+                    }
+                }},
     };
 
     for (const auto & c : cases)
@@ -150,8 +167,7 @@ private:
         ParserCreateQuery parser;
         ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from verifyTableInfo " + tbl_name, 0);
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-        ASTExpressionList & ast_arguments
-            = typeid_cast<ASTExpressionList &>(*(ast_create_query.storage->engine->arguments));
+        auto & ast_arguments = typeid_cast<ASTExpressionList &>(*(ast_create_query.storage->engine->arguments));
         ASTLiteral & ast_literal = typeid_cast<ASTLiteral &>(*(ast_arguments.children.back()));
         return safeGet<String>(ast_literal.value);
     }

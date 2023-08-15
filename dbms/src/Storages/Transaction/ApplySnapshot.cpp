@@ -477,7 +477,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             else
             {
                 // Other unrecoverable error, throw
-                e.addMessage(fmt::format("physical_table_id={}", physical_table_id));
+                e.addMessage(fmt::format("keyspace={} physical_table_id={}", keyspace_id, physical_table_id));
                 throw;
             }
         }
@@ -500,7 +500,11 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(true));
+    LOG_INFO(
+        log,
+        "Finish apply snapshot, cost={:.3f}s new_region={}",
+        watch.elapsedSeconds(),
+        new_region->toString(true));
 }
 
 template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
