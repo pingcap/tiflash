@@ -348,9 +348,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
     auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(task->id.gather_id);
     if (!error_msg.empty())
     {
-        return {
-            false,
-            fmt::format("Gather {} is being aborted, error message = {}", task->id.gather_id.toString(), error_msg)};
+        return {false, fmt::format("Gather is aborted, error message = {}", error_msg)};
     }
     /// gather_task_set must not be nullptr if the current query is not aborted since MPPTaskManager::registerTask
     /// always create the gather_task_set

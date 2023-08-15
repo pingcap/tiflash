@@ -37,10 +37,11 @@ public:
         const BlockInputStreamPtr & input,
         const Aggregator::Params & params_,
         bool final_,
-        const String & req_id)
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context)
         : log(Logger::get(req_id))
         , params(params_)
-        , aggregator(params, req_id, 1)
+        , aggregator(params, req_id, 1, register_operator_spill_context)
         , final(final_)
     {
         children.push_back(input);

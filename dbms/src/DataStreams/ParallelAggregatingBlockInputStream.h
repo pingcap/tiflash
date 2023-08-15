@@ -39,7 +39,8 @@ public:
         size_t max_threads_,
         Int64 max_buffered_bytes_,
         size_t temporary_data_merge_threads_,
-        const String & req_id);
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     String getName() const override { return NAME; }
 
@@ -47,16 +48,11 @@ public:
 
     Block getHeader() const override;
 
-    void collectNewThreadCountOfThisLevel(int & cnt) override
-    {
-        cnt += processor.getMaxThreads();
-    }
+    void collectNewThreadCountOfThisLevel(int & cnt) override { cnt += processor.getMaxThreads(); }
 
 protected:
     /// Do nothing that preparation to execution of the query be done in parallel, in ParallelInputsProcessor.
-    void readPrefix() override
-    {
-    }
+    void readPrefix() override {}
 
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
@@ -110,10 +106,7 @@ private:
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
-        static String getName()
-        {
-            return "ParallelAgg";
-        }
+        static String getName() { return "ParallelAgg"; }
 
         ParallelAggregatingBlockInputStream & parent;
     };
