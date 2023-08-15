@@ -24,7 +24,7 @@ namespace DB::mock
 {
 namespace
 {
-// The return column must not be nullable are following functions:
+// The following functions must return not nullable column:
 //   Window: row_number, rank, dense_rank, cume_dist, percent_rank,
 //           lead and lag(When receiving 3 parameters and the first and the third parameters
 //                        are both not related with nullable)
