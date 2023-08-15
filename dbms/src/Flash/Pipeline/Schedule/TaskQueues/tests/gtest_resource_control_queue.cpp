@@ -556,15 +556,15 @@ TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
     ResourceControlQueue<CPUMultiLevelFeedbackQueue> test_queue;
     for (size_t i = 0; i < priority_vals.size(); ++i)
     {
-        test_queue.resource_group_infos.push(std::make_tuple(priority_vals[i], nullptr, "rg-" + std::to_string(i)));
+        test_queue.resource_group_infos.push({"rg-" + std::to_string(i), priority_vals[i], nullptr});
     }
 
     std::sort(priority_vals.begin(), priority_vals.end());
 
     for (auto priority : priority_vals)
     {
-        auto info = test_queue.resource_group_infos.top();
-        EXPECT_EQ(std::get<0>(info), priority);
+        const auto & info = test_queue.resource_group_infos.top();
+        EXPECT_EQ(info.priority, priority);
         test_queue.resource_group_infos.pop();
     }
     EXPECT_TRUE(test_queue.resource_group_infos.empty());

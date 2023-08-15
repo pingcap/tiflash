@@ -59,24 +59,23 @@ private:
     // <resource_group_name, resource_group_task_queues>
     using ResourceGroupTaskQueue = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
-    // <priority, corresponding_task_queue, resource_group_name>
-    using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string>;
-    using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
-    using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
-
-    // Index of ResourceGroupInfo.
-    static constexpr auto InfoIndexPriority = 0;
-    static constexpr auto InfoIndexPipelineTaskQueue = 1;
-    static constexpr auto InfoIndexResourceGroupName = 2;
-    static constexpr auto DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU = std::chrono::seconds(1);
-
-    // ResourceGroupInfoQueue compator.
-    // Larger value means lower priority.
-    static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)
+    struct ResourceGroupInfo
     {
-        // info1 outputs first if return false.
-        return std::get<InfoIndexPriority>(info1) > std::get<InfoIndexPriority>(info2);
-    }
+        ResourceGroupInfo(const std::string & name_, UInt64 priority_, const std::shared_ptr<NestedQueueType> & task_queue_)
+            : name(name_)
+            , priority(priority_)
+            , task_queue(task_queue_) {}
+
+        std::string name;
+        UInt64 priority;
+        std::shared_ptr<NestedQueueType> task_queue;
+
+        bool operator<(const ResourceGroupInfo & rhs) const
+        {
+            // Larger value means lower priority.
+            return priority > rhs.priority;
+        }
+    };
 
     // 1. Update cpu time/RU of resource group.
     // 2. Update resource_group_infos and reorder resource_group_infos by priority.
@@ -93,8 +92,7 @@ private:
 
     bool is_finished = false;
 
-    CompatorType compator = compareResourceInfo;
-    ResourceGroupInfoQueue resource_group_infos{compator};
+    std::priority_queue<ResourceGroupInfo> resource_group_infos;
     ResourceGroupTaskQueue resource_group_task_queues;
 
     // <resource_group_name, acculumated_cpu_time>

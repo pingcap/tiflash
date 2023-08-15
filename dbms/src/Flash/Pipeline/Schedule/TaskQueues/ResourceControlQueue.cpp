@@ -62,7 +62,7 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
         auto task_queue = std::make_shared<NestedQueueType>();
 
         task_queue->submit(std::move(task));
-        resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
+        resource_group_infos.push({name, LocalAdmissionController::global_instance->getPriority(name), task_queue});
         resource_group_task_queues.insert({name, task_queue});
     }
     else
@@ -87,44 +87,39 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 
         while (!resource_group_infos.empty())
         {
-            ResourceGroupInfo group_info = resource_group_infos.top();
-            const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-            const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
-            std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
-            const bool ru_exhausted = LocalAdmissionController::isRUExhausted(priority);
-            const std::string dump_resource_groups = LocalAdmissionController::global_instance->dump();
+            const ResourceGroupInfo & group_info = resource_group_infos.top();
+            const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
 
             LOG_TRACE(
                 logger,
                 "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
-                "task_queue.empty(): {}, dump all rgs: {}",
-                name,
-                priority,
+                "task_queue.empty(): {}",
+                group_info.name,
+                group_info.priority,
                 ru_exhausted,
                 is_finished,
-                task_queue->empty(),
-                dump_resource_groups);
+                group_info.task_queue->empty());
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
             if (ru_exhausted)
                 break;
 
-            if (task_queue->empty())
+            if (group_info.task_queue->empty())
             {
                 // Nested task queue is empty, continue and try next resource group.
                 resource_group_infos.pop();
-                size_t erase_num = resource_group_task_queues.erase(name);
+                size_t erase_num = resource_group_task_queues.erase(group_info.name);
                 RUNTIME_CHECK_MSG(
                     erase_num == 1,
                     "cannot erase corresponding TaskQueue for task of resource group {}",
-                    name);
+                    group_info.name);
             }
             else
             {
                 // Take task from nested task queue, and should always take succeed.
                 // Because this task queue should not be finished inside lock_guard.
-                RUNTIME_CHECK(task_queue->take(task));
+                RUNTIME_CHECK(group_info.task_queue->take(task));
                 assert(task != nullptr);
                 break;
             }
@@ -188,16 +183,14 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutL
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock()
 {
-    ResourceGroupInfoQueue new_resource_group_infos{compator};
+    std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
     while (!resource_group_infos.empty())
     {
-        ResourceGroupInfo group_info = resource_group_infos.top();
-        resource_group_infos.pop();
+        const ResourceGroupInfo & group_info = resource_group_infos.top();
 
-        const auto & name = std::get<InfoIndexResourceGroupName>(group_info);
-        auto new_priority = LocalAdmissionController::global_instance->getPriority(name);
-        new_resource_group_infos.push(
-            std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name));
+        auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+        new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
+        resource_group_infos.pop();
     }
     resource_group_infos = new_resource_group_infos;
 }
