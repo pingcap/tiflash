@@ -133,8 +133,10 @@ struct PageStorageConfig
     String toDebugStringV2() const
     {
         return fmt::format(
-            "PageStorageConfig V2 {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
-            "gc_min_legacy_num: {}, gc_max_expect_legacy: {}, gc_max_valid_rate_bound: {:.3f}, prob_do_gc_when_write_is_low: {}, "
+            "PageStorageConfig V2 {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, "
+            "gc_max_valid_rate: {:.3f}, "
+            "gc_min_legacy_num: {}, gc_max_expect_legacy: {}, gc_max_valid_rate_bound: {:.3f}, "
+            "prob_do_gc_when_write_is_low: {}, "
             "open_file_max_idle_time: {}}}",
             gc_min_files,
             gc_min_bytes,

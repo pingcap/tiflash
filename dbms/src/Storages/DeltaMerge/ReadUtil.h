@@ -38,5 +38,8 @@ size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStrea
   * Return: <Block, from_delta>
   * The block containing only the rows that pass the filter and a flag indicating whether the block is from the delta.
   */
-std::pair<Block, bool> readBlockWithFilter(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter);
+std::pair<Block, bool> readBlockWithFilter(
+    SkippableBlockInputStreamPtr & stable,
+    SkippableBlockInputStreamPtr & delta,
+    const IColumn::Filter & filter);
 } // namespace DB::DM

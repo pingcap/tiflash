@@ -111,7 +111,9 @@ SnapshotsStatistics PageEntriesVersionSetWithDelta::getSnapshotsStat() const
 }
 
 
-PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(const String & tracing_id, BackgroundProcessingPool::TaskHandle handle)
+PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot(
+    const String & tracing_id,
+    BackgroundProcessingPool::TaskHandle handle)
 {
     // acquire for unique_lock since we need to add all snapshots to link list
     std::unique_lock<std::shared_mutex> lock(read_write_mutex);
@@ -135,7 +137,9 @@ void PageEntriesVersionSetWithDelta::appendVersion(VersionPtr && v, const std::u
     current = v;
 }
 
-PageEntriesVersionSetWithDelta::RebaseResult PageEntriesVersionSetWithDelta::rebase(const VersionPtr & old_base, const VersionPtr & new_base)
+PageEntriesVersionSetWithDelta::RebaseResult PageEntriesVersionSetWithDelta::rebase(
+    const VersionPtr & old_base,
+    const VersionPtr & new_base)
 {
     assert(old_base != nullptr);
     std::unique_lock lock(read_write_mutex);
@@ -264,7 +268,8 @@ SnapshotsStatistics PageEntriesVersionSetWithDelta::removeExpiredSnapshots() con
                     stats.longest_living_from_thread_id = snapshot_or_invalid->create_thread;
                     stats.longest_living_from_tracing_id = snapshot_or_invalid->tracing_id;
                 }
-                valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
+                valid_snapshots.emplace_back(
+                    snapshot_or_invalid); // Save valid snapshot and release them without lock later
                 iter++;
             }
         }
@@ -307,8 +312,9 @@ PageEntriesVersionSetWithDelta::gcApply( //
     return listAllLiveFiles(std::move(lock), need_scan_page_ids);
 }
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
-PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mutex> && lock, bool need_scan_page_ids)
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::listAllLiveFiles(
+    std::unique_lock<std::shared_mutex> && lock,
+    bool need_scan_page_ids)
 {
     constexpr const double exist_stale_snapshot = 60.0;
 
@@ -343,12 +349,14 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
             {
                 LOG_WARNING(
                     log,
-                    "Suspicious stale snapshot detected lifetime {:.3f} seconds, created from thread_id {}, tracing_id {}",
+                    "Suspicious stale snapshot detected lifetime {:.3f} seconds, created from thread_id {}, tracing_id "
+                    "{}",
                     snapshot_lifetime,
                     snapshot_or_invalid->create_thread,
                     snapshot_or_invalid->tracing_id);
             }
-            valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
+            valid_snapshots.emplace_back(
+                snapshot_or_invalid); // Save valid snapshot and release them without lock later
             iter++;
         }
     }
@@ -364,16 +372,12 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     if (num_invalid_snapshot_to_clean > 0)
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
-#define STALE_SNAPSHOT_LOG_PARAMS                          \
-    "{} gcApply remove {} invalid snapshots, "             \
-    "{} snapshots left, longest lifetime {:.3f} seconds, " \
-    "created from thread_id {}, tracing_id {}",            \
-        name,                                              \
-        num_invalid_snapshot_to_clean,                     \
-        stats.num_snapshots,                               \
-        stats.longest_living_seconds,                      \
-        stats.longest_living_from_thread_id,               \
-        stats.longest_living_from_tracing_id
+#define STALE_SNAPSHOT_LOG_PARAMS                                                               \
+    "{} gcApply remove {} invalid snapshots, "                                                  \
+    "{} snapshots left, longest lifetime {:.3f} seconds, "                                      \
+    "created from thread_id {}, tracing_id {}",                                                 \
+        name, num_invalid_snapshot_to_clean, stats.num_snapshots, stats.longest_living_seconds, \
+        stats.longest_living_from_thread_id, stats.longest_living_from_tracing_id
         if (stats.longest_living_seconds > exist_stale_snapshot)
             LOG_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
         else
@@ -415,10 +419,11 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
 // DeltaVersionEditAcceptor
 //==========================================================================================
 
-DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_,
-                                                   const String & name_,
-                                                   bool ignore_invalid_ref_,
-                                                   Poco::Logger * log_)
+DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(
+    const PageEntriesView * view_,
+    const String & name_,
+    bool ignore_invalid_ref_,
+    Poco::Logger * log_)
     : view(const_cast<PageEntriesView *>(view_))
     , current_version(view->getSharedTailVersion())
     , ignore_invalid_ref(ignore_invalid_ref_)
@@ -455,7 +460,10 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
             this->applyRef(rec);
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "DeltaVersionEditAcceptor::apply with invalid type {}", magic_enum::enum_name(rec.type));
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "DeltaVersionEditAcceptor::apply with invalid type {}",
+                magic_enum::enum_name(rec.type));
             break;
         default:
             throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
@@ -481,8 +489,9 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
     const auto old_entry = view->findNormalPageEntry(normal_page_id);
     if (is_ref_exist && !old_entry)
     {
-        throw DB::Exception("Accessing RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(normal_page_id),
-                            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception(
+            "Accessing RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!old_entry)
@@ -556,20 +565,27 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // The Page to be ref is not exist.
         if (ignore_invalid_ref)
         {
-            LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
+            LOG_WARNING(
+                log,
+                "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}",
+                name,
+                rec.page_id,
+                rec.ori_page_id);
         }
         else
         {
-            throw Exception("Try to add RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Try to add RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 }
 
-void DeltaVersionEditAcceptor::applyInplace(const String & name,
-                                            const PageEntriesVersionSetWithDelta::VersionPtr & current,
-                                            const PageEntriesEdit & edit,
-                                            Poco::Logger * log)
+void DeltaVersionEditAcceptor::applyInplace(
+    const String & name,
+    const PageEntriesVersionSetWithDelta::VersionPtr & current,
+    const PageEntriesEdit & edit,
+    Poco::Logger * log)
 {
     assert(current->isBase());
     assert(current.use_count() == 1);
@@ -592,7 +608,13 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             }
             catch (DB::Exception & e)
             {
-                LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
+                LOG_WARNING(
+                    log,
+                    "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist "
+                    "Page{}",
+                    name,
+                    rec.page_id,
+                    rec.ori_page_id);
             }
             break;
         case WriteBatchWriteType::UPSERT:

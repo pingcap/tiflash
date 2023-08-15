@@ -25,7 +25,8 @@ class Context;
 
 /** Implements system table 'columns', that allows to get information about columns for every table.
   */
-class StorageSystemColumns : public ext::SharedPtrHelper<StorageSystemColumns>
+class StorageSystemColumns
+    : public ext::SharedPtrHelper<StorageSystemColumns>
     , public IStorage
 {
 public:

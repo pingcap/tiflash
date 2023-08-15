@@ -52,7 +52,8 @@ public:
 
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
-class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetSnapshot>
+class ColumnFileSetSnapshot
+    : public std::enable_shared_from_this<ColumnFileSetSnapshot>
     , private boost::noncopyable
 {
     friend class MemTableSet;

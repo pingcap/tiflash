@@ -115,7 +115,13 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status);
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, UInt64 small_file_size_threshold, UInt64 merged_file_max_size, DMFileFormat::Version version)
+DMFilePtr DMFile::create(
+    UInt64 file_id,
+    const String & parent_path,
+    DMConfigurationOpt configuration,
+    UInt64 small_file_size_threshold,
+    UInt64 merged_file_max_size,
+    DMFileFormat::Version version)
 {
     // if small_file_size_threshold == 0 we should use DMFileFormat::V2
     if (version == DMFileFormat::V3 and small_file_size_threshold == 0)
@@ -129,14 +135,15 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigura
         LOG_WARNING(Logger::get(), "!!!force use DMFileFormat::V3!!!");
     });
     // On create, ref_id is the same as file_id.
-    DMFilePtr new_dmfile(new DMFile(file_id,
-                                    file_id,
-                                    parent_path,
-                                    Status::WRITABLE,
-                                    small_file_size_threshold,
-                                    merged_file_max_size,
-                                    std::move(configuration),
-                                    version));
+    DMFilePtr new_dmfile(new DMFile(
+        file_id,
+        file_id,
+        parent_path,
+        Status::WRITABLE,
+        small_file_size_threshold,
+        merged_file_max_size,
+        std::move(configuration),
+        version));
 
     auto path = new_dmfile->path();
     Poco::File file(path);
@@ -167,10 +174,7 @@ DMFilePtr DMFile::restore(
     if (!is_s3_file)
     {
         // Unrecognized xx:// protocol.
-        RUNTIME_CHECK_MSG(
-            parent_path.find("://") == std::string::npos,
-            "Unsupported protocol in path {}",
-            parent_path);
+        RUNTIME_CHECK_MSG(parent_path.find("://") == std::string::npos, "Unsupported protocol in path {}", parent_path);
         String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
         // The path may be dropped by another thread in some cases
         auto poco_file = Poco::File(path);
@@ -178,11 +182,7 @@ DMFilePtr DMFile::restore(
             return nullptr;
     }
 
-    DMFilePtr dmfile(new DMFile(
-        file_id,
-        page_id,
-        parent_path,
-        Status::READABLE));
+    DMFilePtr dmfile(new DMFile(file_id, page_id, parent_path, Status::READABLE));
     if (is_s3_file || Poco::File(dmfile->metav2Path()).exists())
     {
         auto s = dmfile->readMetaV2(file_provider);
@@ -388,7 +388,8 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     String property_path = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
+        WriteBufferFromFileProvider
+            buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
@@ -486,7 +487,9 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
             digest->update(meta_buf.data(), meta_buf.size());
             if (unlikely(!digest->compareRaw(location->second)))
             {
-                throw TiFlashException(fmt::format("checksum mismatch for {}", metaPath()), Errors::Checksum::DataCorruption);
+                throw TiFlashException(
+                    fmt::format("checksum mismatch for {}", metaPath()),
+                    Errors::Checksum::DataCorruption);
             }
             buf = &meta_reader;
         }
@@ -527,7 +530,8 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
             configuration->getChecksumAlgorithm(),
             configuration->getChecksumFrameLength());
         buf->seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs
+            != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -536,7 +540,8 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     {
         auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
         buf.seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs
+            != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -547,7 +552,8 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider)
 {
     if (Poco::File(configurationPath()).exists())
     {
-        auto file = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
+        auto file
+            = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
         auto stream = InputStreamWrapper{file};
         configuration.emplace(stream);
         version = DMFileFormat::V2;
@@ -563,7 +569,11 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
 {
     String tmp_buf;
     const auto name = packPropertyFileName();
-    auto buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
+    auto buf = openForRead(
+        file_provider,
+        packPropertyPath(),
+        encryptionPackPropertyPath(),
+        meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
 
     readStringBinary(tmp_buf, buf);
@@ -579,7 +589,9 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
             digest->update(tmp_buf.data(), tmp_buf.size());
             if (unlikely(!digest->compareRaw(target)))
             {
-                throw TiFlashException(fmt::format("checksum mismatch for {}", packPropertyPath()), Errors::Checksum::DataCorruption);
+                throw TiFlashException(
+                    fmt::format("checksum mismatch for {}", packPropertyPath()),
+                    Errors::Checksum::DataCorruption);
             }
         }
         else
@@ -603,9 +615,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
     auto recheck = [&](size_t size) {
         if (this->configuration)
         {
-            auto total_size = this->configuration->getChecksumFrameLength() + this->configuration->getChecksumHeaderLength();
-            auto frame_count = size / total_size
-                + (0 != size % total_size);
+            auto total_size
+                = this->configuration->getChecksumFrameLength() + this->configuration->getChecksumHeaderLength();
+            auto frame_count = size / total_size + (0 != size % total_size);
             size -= frame_count * this->configuration->getChecksumHeaderLength();
         }
         return size;
@@ -679,7 +691,8 @@ std::vector<String> DMFile::listS3(const String & parent_path)
         [&filenames, &list_prefix](const Aws::S3::Model::CommonPrefix & prefix) {
             RUNTIME_CHECK(prefix.GetPrefix().size() > list_prefix.size(), prefix.GetPrefix(), list_prefix);
             auto short_name_size = prefix.GetPrefix().size() - list_prefix.size() - 1; // `1` for the delimiter in last.
-            filenames.push_back(prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
+            filenames.push_back(
+                prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
             return S3::PageResult{.num_keys = 1, .more = true};
         });
     return filenames;
@@ -822,7 +835,8 @@ void DMFile::initializeIndices()
     {
         if (endsWith(name, details::INDEX_FILE_SUFFIX))
         {
-            column_indices.insert(decode(removeSuffix(name, strlen(details::INDEX_FILE_SUFFIX)))); // strip tailing `.idx`
+            column_indices.insert(
+                decode(removeSuffix(name, strlen(details::INDEX_FILE_SUFFIX)))); // strip tailing `.idx`
         }
     }
 }
@@ -935,7 +949,10 @@ void DMFile::parseMetaV2(std::string_view buffer)
     const auto * footer = reinterpret_cast<const MetaFooter *>(buffer.data() + buffer.size() - sizeof(MetaFooter));
     if (footer->checksum_algorithm != 0 && footer->checksum_frame_length != 0)
     {
-        configuration = DMChecksumConfig{/*embedded_checksum*/ {}, footer->checksum_frame_length, static_cast<ChecksumAlgo>(footer->checksum_algorithm)};
+        configuration = DMChecksumConfig{
+            /*embedded_checksum*/ {},
+            footer->checksum_frame_length,
+            static_cast<ChecksumAlgo>(footer->checksum_algorithm)};
     }
     else
     {
@@ -983,7 +1000,10 @@ void DMFile::parseMetaV2(std::string_view buffer)
             parseMergedSubFilePos(buffer.substr(handle->offset, handle->size));
             break;
         default:
-            throw Exception(ErrorCodes::INCORRECT_DATA, "MetaBlockType {} is not recognized", magic_enum::enum_name(handle->type));
+            throw Exception(
+                ErrorCodes::INCORRECT_DATA,
+                "MetaBlockType {} is not recognized",
+                magic_enum::enum_name(handle->type));
         }
     }
 }
@@ -1042,7 +1062,11 @@ void DMFile::parsePackStat(std::string_view buffer)
 
 void DMFile::finalizeDirName()
 {
-    RUNTIME_CHECK_MSG(status == Status::WRITING, "FileId={} Expected WRITING status, but {}", file_id, statusString(status));
+    RUNTIME_CHECK_MSG(
+        status == Status::WRITING,
+        "FileId={} Expected WRITING status, but {}",
+        file_id,
+        statusString(status));
     Poco::File old_file(path());
     setStatus(Status::READABLE);
     auto new_path = path();
@@ -1089,7 +1113,10 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
 }
 
 
-void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+void DMFile::checkMergedFile(
+    MergedFileWriter & writer,
+    FileProviderPtr & file_provider,
+    WriteLimiterPtr & write_limiter)
 {
     if (writer.file_info.size >= merged_file_max_size)
     {
@@ -1112,18 +1139,28 @@ void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_p
     }
 }
 
-void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+void DMFile::finalizeSmallFiles(
+    MergedFileWriter & writer,
+    FileProviderPtr & file_provider,
+    WriteLimiterPtr & write_limiter)
 {
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
         checkMergedFile(writer, file_provider, write_limiter);
 
-        auto read_file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
+        auto read_file
+            = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
         std::vector<char> read_buf(fsize);
         auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
 
         writer.buffer->write(read_buf.data(), read_buf.size());
-        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, writer.file_info.number, /*offset*/ writer.file_info.size, /*size*/ read_buf.size()));
+        merged_sub_file_infos.emplace(
+            fname,
+            MergedSubFileInfo(
+                fname,
+                writer.file_info.number,
+                /*offset*/ writer.file_info.size,
+                /*size*/ read_buf.size()));
         writer.file_info.size += read_buf.size();
     };
 
@@ -1207,12 +1244,9 @@ UInt64 DMFile::getReadFileSize(ColId col_id, const String & filename) const
 UInt64 DMFile::getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const
 {
     // Get filesize of merged file.
-    auto itr = std::find_if(
-        merged_files.begin(),
-        merged_files.end(),
-        [&file_info](const auto & merged_file) {
-            return merged_file.number == file_info.number;
-        });
+    auto itr = std::find_if(merged_files.begin(), merged_files.end(), [&file_info](const auto & merged_file) {
+        return merged_file.number == file_info.number;
+    });
     RUNTIME_CHECK(itr != merged_files.end());
     return itr->size;
 }

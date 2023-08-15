@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/CurrentMetrics.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/CurrentMetrics.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
 #include <Storages/System/StorageSystemMetrics.h>
 
 
@@ -30,7 +30,7 @@ StorageSystemMetrics::StorageSystemMetrics(const std::string & name_)
 {
     setColumns(ColumnsDescription({
         {"metric", std::make_shared<DataTypeString>()},
-        {"value",  std::make_shared<DataTypeInt64>()},
+        {"value", std::make_shared<DataTypeInt64>()},
     }));
 }
 
@@ -56,8 +56,10 @@ BlockInputStreams StorageSystemMetrics::read(
         res_columns[1]->insert(value);
     }
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
 
-}
+} // namespace DB

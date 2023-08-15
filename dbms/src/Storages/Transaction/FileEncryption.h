@@ -53,11 +53,12 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
     FileEncryptionInfo(const FileEncryptionInfoRaw & src)
         : FileEncryptionInfoRaw(src)
     {}
-    FileEncryptionInfo(const FileEncryptionRes & res_,
-                       const EncryptionMethod & method_,
-                       RawCppStringPtr key_,
-                       RawCppStringPtr iv_,
-                       RawCppStringPtr error_msg_)
+    FileEncryptionInfo(
+        const FileEncryptionRes & res_,
+        const EncryptionMethod & method_,
+        RawCppStringPtr key_,
+        RawCppStringPtr iv_,
+        RawCppStringPtr error_msg_)
         : FileEncryptionInfoRaw{res_, method_, key_, iv_, error_msg_}
     {}
     DISALLOW_COPY(FileEncryptionInfo);

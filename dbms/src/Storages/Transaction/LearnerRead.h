@@ -34,12 +34,14 @@ struct RegionLearnerReadSnapshot : RegionPtr
         : RegionPtr(region)
         , snapshot_event_flag(region->getSnapshotEventFlag())
     {}
-    bool operator!=(const RegionPtr & rhs) const { return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag()); }
+    bool operator!=(const RegionPtr & rhs) const
+    {
+        return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag());
+    }
 };
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 
-[[nodiscard]] LearnerReadSnapshot
-doLearnerRead(
+[[nodiscard]] LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     bool for_batch_cop,

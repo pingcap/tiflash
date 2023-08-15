@@ -42,7 +42,12 @@ public:
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
 
-    std::optional<RegionDataReadInfo> readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied, bool hard_error);
+    std::optional<RegionDataReadInfo> readDataByWriteIt(
+        const ConstWriteCFIter & write_it,
+        bool need_value,
+        RegionID region_id,
+        UInt64 applied,
+        bool hard_error);
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 

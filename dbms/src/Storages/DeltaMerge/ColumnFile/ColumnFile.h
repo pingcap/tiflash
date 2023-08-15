@@ -130,13 +130,19 @@ public:
     virtual ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const = 0;
+        const ColumnDefinesPtr & col_defs) const
+        = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
-    virtual bool append(const DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
+    virtual bool append(
+        const DMContext & /*dm_context*/,
+        const Block & /*data*/,
+        size_t /*offset*/,
+        size_t /*limit*/,
+        size_t /*data_bytes*/)
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
@@ -155,7 +161,11 @@ public:
     /// Read data from this reader and store the result into output_cols.
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.
     /// Returns <actual_offset, actual_limit>
-    virtual std::pair<size_t, size_t> readRows(MutableColumns & /*output_cols*/, size_t /*rows_offset*/, size_t /*rows_limit*/, const RowKeyRange * /*range*/)
+    virtual std::pair<size_t, size_t> readRows(
+        MutableColumns & /*output_cols*/,
+        size_t /*rows_offset*/,
+        size_t /*rows_limit*/,
+        const RowKeyRange * /*range*/)
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }

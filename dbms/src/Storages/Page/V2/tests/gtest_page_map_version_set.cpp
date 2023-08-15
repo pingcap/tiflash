@@ -88,11 +88,8 @@ TYPED_TEST_P(PageMapVersionSetTest, ApplyEdit)
 TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock)
 {
     TypeParam versions("vset_test", this->config, this->log);
-    auto ver_compact_handle
-        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
-    SCOPE_EXIT({
-        this->bkg_pool->removeTask(ver_compact_handle);
-    });
+    auto ver_compact_handle = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({ this->bkg_pool->removeTask(ver_compact_handle); });
     auto s1 = versions.getSnapshot("", ver_compact_handle);
     EXPECT_EQ(versions.size(), 1UL);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
@@ -156,11 +153,8 @@ TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock)
 TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock2)
 {
     TypeParam versions("vset_test", this->config, this->log);
-    auto ver_compact_handle
-        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
-    SCOPE_EXIT({
-        this->bkg_pool->removeTask(ver_compact_handle);
-    });
+    auto ver_compact_handle = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({ this->bkg_pool->removeTask(ver_compact_handle); });
     auto s1 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     PageEntriesEdit edit;
@@ -191,11 +185,8 @@ TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock2)
 TYPED_TEST_P(PageMapVersionSetTest, ApplyEditWithReadLock3)
 {
     TypeParam versions("vset_test", this->config, this->log);
-    auto ver_compact_handle
-        = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
-    SCOPE_EXIT({
-        this->bkg_pool->removeTask(ver_compact_handle);
-    });
+    auto ver_compact_handle = this->bkg_pool->addTask([&] { return false; }, /*multi*/ false);
+    SCOPE_EXIT({ this->bkg_pool->removeTask(ver_compact_handle); });
     auto s1 = versions.getSnapshot("", ver_compact_handle);
     LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
@@ -879,23 +870,24 @@ TYPED_TEST_P(PageMapVersionSetTest, PutOnTombstonePageEntry)
     }
 }
 
-REGISTER_TYPED_TEST_CASE_P(PageMapVersionSetTest,
-                           ApplyEdit,
-                           ApplyEditWithReadLock,
-                           ApplyEditWithReadLock2,
-                           ApplyEditWithReadLock3,
-                           Restore,
-                           GcConcurrencyDelPage,
-                           GcPageMove,
-                           GcConcurrencySetPage,
-                           PutOrDelRefPage,
-                           IdempotentDel,
-                           UpdateOnRefPage,
-                           UpdateOnRefPage2,
-                           IsRefId,
-                           Snapshot,
-                           LiveFiles,
-                           PutOnTombstonePageEntry);
+REGISTER_TYPED_TEST_CASE_P(
+    PageMapVersionSetTest,
+    ApplyEdit,
+    ApplyEditWithReadLock,
+    ApplyEditWithReadLock2,
+    ApplyEditWithReadLock3,
+    Restore,
+    GcConcurrencyDelPage,
+    GcPageMove,
+    GcConcurrencySetPage,
+    PutOrDelRefPage,
+    IdempotentDel,
+    UpdateOnRefPage,
+    UpdateOnRefPage2,
+    IsRefId,
+    Snapshot,
+    LiveFiles,
+    PutOnTombstonePageEntry);
 
 using VersionSetTypes = ::testing::Types<PageEntriesVersionSetWithDelta>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSetTest, VersionSetTypes);

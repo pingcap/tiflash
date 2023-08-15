@@ -29,10 +29,7 @@ protected:
         map = std::make_unique<PageEntries>();
     }
 
-    void TearDown() override
-    {
-        map.reset();
-    }
+    void TearDown() override { map.reset(); }
 
     std::unique_ptr<PageEntries> map;
 };

@@ -44,7 +44,8 @@ public:
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit);
 
     /// List all PageFile that are used by any version
-    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &) const;
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(
+        const std::unique_lock<std::shared_mutex> &) const;
 };
 
 

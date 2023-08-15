@@ -67,8 +67,10 @@ public:
     using ReaderPtr = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
-    using MetaMergingQueue
-        = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
+    using MetaMergingQueue = std::priority_queue<
+        PageFile::MetaMergingReaderPtr,
+        std::vector<PageFile::MetaMergingReaderPtr>,
+        PageFile::MergingPtrComparator>;
 
 
     // Statistics for write
@@ -86,12 +88,13 @@ public:
     };
 
 public:
-    PageStorage(String name,
-                PSDiskDelegatorPtr delegator, //
-                const PageStorageConfig & config_,
-                const FileProviderPtr & file_provider_,
-                BackgroundProcessingPool & ver_compact_pool_,
-                bool no_more_insert_ = false);
+    PageStorage(
+        String name,
+        PSDiskDelegatorPtr delegator, //
+        const PageStorageConfig & config_,
+        const FileProviderPtr & file_provider_,
+        BackgroundProcessingPool & ver_compact_pool_,
+        bool no_more_insert_ = false);
     ~PageStorage() override { shutdown(); } // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
 
     void restore() override;
@@ -100,7 +103,8 @@ public:
 
     PageId getMaxId() override;
 
-    PageId getNormalPageIdImpl(NamespaceID ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageId getNormalPageIdImpl(NamespaceID ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
+        override;
 
     DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
@@ -118,13 +122,33 @@ public:
 
     DB::PageEntry getEntryImpl(NamespaceID ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::Page readImpl(NamespaceID ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    DB::Page readImpl(
+        NamespaceID ns_id,
+        PageId page_id,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
-    PageMap readImpl(NamespaceID ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMap readImpl(
+        NamespaceID ns_id,
+        const PageIds & page_ids,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
-    PageMap readImpl(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMap readImpl(
+        NamespaceID ns_id,
+        const std::vector<PageReadFields> & page_fields,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
-    DB::Page readImpl(NamespaceID ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    DB::Page readImpl(
+        NamespaceID ns_id,
+        const PageReadFields & page_field,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
@@ -220,10 +244,11 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    WriterPtr checkAndRenewWriter(PageFile & page_file,
-                                  const String & parent_path_hint,
-                                  WriterPtr && old_writer = nullptr,
-                                  const String & logging_msg = "");
+    WriterPtr checkAndRenewWriter(
+        PageFile & page_file,
+        const String & parent_path_hint,
+        WriterPtr && old_writer = nullptr,
+        const String & logging_msg = "");
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
@@ -231,9 +256,10 @@ private:
     void archivePageFiles(const PageFileSet & page_files_to_archive, bool remove_size);
 
     std::tuple<size_t, size_t> //
-    gcRemoveObsoleteData(PageFileSet & page_files,
-                         const PageFileIdAndLevel & writing_file_id_level,
-                         const std::set<PageFileIdAndLevel> & live_files);
+    gcRemoveObsoleteData(
+        PageFileSet & page_files,
+        const PageFileIdAndLevel & writing_file_id_level,
+        const std::set<PageFileIdAndLevel> & live_files);
 
     void getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const;
 

@@ -26,7 +26,13 @@ namespace DB::DM::tests
 std::vector<std::string> TableInfo::toStrings() const
 {
     std::vector<std::string> v;
-    v.push_back(fmt::format("db_name {} table_name {} columns count {} is_common_handle {} rowkey_column_indexes {}", db_name, table_name, columns->size(), is_common_handle, rowkey_column_indexes));
+    v.push_back(fmt::format(
+        "db_name {} table_name {} columns count {} is_common_handle {} rowkey_column_indexes {}",
+        db_name,
+        table_name,
+        columns->size(),
+        is_common_handle,
+        rowkey_column_indexes));
     for (size_t i = 0; i < columns->size(); i++)
     {
         auto col = (*columns)[i];
@@ -36,7 +42,8 @@ std::vector<std::string> TableInfo::toStrings() const
         }
         else
         {
-            v.push_back(fmt::format("columns[{}]: id {} name {} type {}", i, col.id, col.name, col.type->getFamilyName()));
+            v.push_back(
+                fmt::format("columns[{}]: id {} name {} type {}", i, col.id, col.name, col.type->getFamilyName()));
         }
     }
     return v;
@@ -67,10 +74,7 @@ public:
         PkIsHandleInt32,
     };
 
-    PkType randomPkType()
-    {
-        return pk_types[rand_gen() % pk_types.size()].second;
-    }
+    PkType randomPkType() { return pk_types[rand_gen() % pk_types.size()].second; }
 
     PkType getPkType(const std::string & name)
     {
@@ -279,10 +283,7 @@ private:
         return TablePkType::instance().getPkType(pk_type);
     }
 
-    static DataTypePtr getDataType()
-    {
-        return TableDataType::instance().randomDataType();
-    }
+    static DataTypePtr getDataType() { return TableDataType::instance().randomDataType(); }
 
     const std::string pk_type;
     const int cols_count;
@@ -325,7 +326,8 @@ class ConstantTableGenerator : public TableGenerator
         {
             int id = i + 3;
             auto name = fmt::format("col_{}", id);
-            auto data_type = TableDataType::instance().getDataType(data_cols[i], 10 /*enum_cnt*/, 20 /*prec*/, 10 /*scale*/);
+            auto data_type
+                = TableDataType::instance().getDataType(data_cols[i], 10 /*enum_cnt*/, 20 /*prec*/, 10 /*scale*/);
             table_info.columns->emplace_back(ColumnDefine(id, name, data_type));
         }
         table_info.handle = (*table_info.columns)[0];

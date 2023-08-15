@@ -48,11 +48,14 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         auto query = path.substr(api_name.size());
         std::vector<std::string> query_parts;
         boost::split(query_parts, query, boost::is_any_of("/"));
-        if (query_parts.size() != 1 && (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table"))
+        if (query_parts.size() != 1
+            && (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table"))
         {
             LOG_ERROR(log, "invalid SyncStatus request: {}", query);
             status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+            return HttpRequestRes{
+                .status = status,
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
         }
 
 
@@ -74,7 +77,9 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         }
 
         if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+            return HttpRequestRes{
+                .status = status,
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
     }
 
     auto & tmt = *server->tmt;
@@ -104,7 +109,11 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             }
             else if (can_log && print_count < max_print_region)
             {
-                lag_regions_log.fmtAppend("lag_region_id={}, leader_safe_ts={}, self_safe_ts={}; ", region.first, leader_safe_ts, self_safe_ts);
+                lag_regions_log.fmtAppend(
+                    "lag_region_id={}, leader_safe_ts={}, self_safe_ts={}; ",
+                    region.first,
+                    leader_safe_ts,
+                    self_safe_ts);
                 print_count++;
                 last_print_log_time = Clock::now();
             }
@@ -112,7 +121,13 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         ready_region_count = region_list.size();
         if (ready_region_count < regions.size())
         {
-            LOG_DEBUG(Logger::get(__FUNCTION__), "table_id={} total_region_count={} ready_region_count={} lag_region_info={}", table_id, regions.size(), ready_region_count, lag_regions_log.toString());
+            LOG_DEBUG(
+                Logger::get(__FUNCTION__),
+                "table_id={} total_region_count={} ready_region_count={} lag_region_info={}",
+                table_id,
+                regions.size(),
+                ready_region_count,
+                lag_regions_log.toString());
         }
     });
     FmtBuffer buf;
@@ -120,16 +135,16 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     buf.joinStr(
         region_list.begin(),
         region_list.end(),
-        [](const RegionID & region_id, FmtBuffer & fmt_buf) {
-            fmt_buf.fmtAppend("{}", region_id);
-        },
+        [](const RegionID & region_id, FmtBuffer & fmt_buf) { fmt_buf.fmtAppend("{}", region_id); },
         " ");
     buf.append("\n");
 
     auto * s = RawCppString::New(buf.toString());
     return HttpRequestRes{
         .status = status,
-        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{s->data(), s->size()}}};
 }
 
 // Return store status of this tiflash node
@@ -164,9 +179,8 @@ HttpRequestRes HandleHttpRequestRemoteStoreSync(
             magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
         return HttpRequestRes{
             .status = HttpRequestStatus::ErrorParam,
-            .res = CppStrWithView{
-                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{body->data(), body->size()}},
+            .res
+            = CppStrWithView{.inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String), .view = BaseBuffView{body->data(), body->size()}},
         };
     }
 
@@ -174,13 +188,17 @@ HttpRequestRes HandleHttpRequestRemoteStoreSync(
     auto * body = RawCppString::New(fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
     return HttpRequestRes{
         .status = flag_set ? HttpRequestStatus::Ok : HttpRequestStatus::ErrorParam,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()}},
+        .res
+        = CppStrWithView{.inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String), .view = BaseBuffView{body->data(), body->size()}},
     };
 }
 
-using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(EngineStoreServerWrap *, std::string_view, const std::string &, std::string_view, std::string_view);
+using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
+    EngineStoreServerWrap *,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view);
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
@@ -200,17 +218,28 @@ uint8_t CheckHttpUriAvailable(BaseBuffView path_)
     return false;
 }
 
-HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_, BaseBuffView query, BaseBuffView body)
+HttpRequestRes HandleHttpRequest(
+    EngineStoreServerWrap * server,
+    BaseBuffView path_,
+    BaseBuffView query,
+    BaseBuffView body)
 {
     std::string_view path(path_.data, path_.len);
     for (const auto & [str, method] : AVAILABLE_HTTP_URI)
     {
         if (path.size() >= str.size() && path.substr(0, str.size()) == str)
         {
-            return method(server, path, str, std::string_view(query.data, query.len), std::string_view(body.data, body.len));
+            return method(
+                server,
+                path,
+                str,
+                std::string_view(query.data, query.len),
+                std::string_view(body.data, body.len));
         }
     }
-    return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+    return HttpRequestRes{
+        .status = HttpRequestStatus::ErrorParam,
+        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
 }
 
 } // namespace DB

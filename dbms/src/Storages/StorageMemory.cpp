@@ -31,7 +31,11 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 class MemoryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    MemoryBlockInputStream(const Names & column_names_, BlocksList::iterator begin_, BlocksList::iterator end_, const StorageMemory & storage_)
+    MemoryBlockInputStream(
+        const Names & column_names_,
+        BlocksList::iterator begin_,
+        BlocksList::iterator end_,
+        const StorageMemory & storage_)
         : column_names(column_names_)
         , begin(begin_)
         , end(end_)
@@ -97,8 +101,7 @@ private:
 StorageMemory::StorageMemory(String table_name_, ColumnsDescription columns_description_)
     : IStorage{std::move(columns_description_)}
     , table_name(std::move(table_name_))
-{
-}
+{}
 
 
 BlockInputStreams StorageMemory::read(
@@ -136,9 +139,7 @@ BlockInputStreams StorageMemory::read(
 }
 
 
-BlockOutputStreamPtr StorageMemory::write(
-    const ASTPtr & /*query*/,
-    const Settings & /*settings*/)
+BlockOutputStreamPtr StorageMemory::write(const ASTPtr & /*query*/, const Settings & /*settings*/)
 {
     return std::make_shared<MemoryBlockOutputStream>(*this);
 }
@@ -156,7 +157,8 @@ void registerStorageMemory(StorageFactory & factory)
     factory.registerStorage("Memory", [](const StorageFactory::Arguments & args) {
         if (!args.engine_args.empty())
             throw Exception(
-                "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size()) + " given)",
+                "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size())
+                    + " given)",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return StorageMemory::create(args.table_name, args.columns);

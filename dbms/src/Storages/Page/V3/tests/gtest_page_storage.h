@@ -55,10 +55,7 @@ public:
         return log_files.size();
     }
 
-    ReadBufferPtr getDefaultBuffer() const
-    {
-        return std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz);
-    }
+    ReadBufferPtr getDefaultBuffer() const { return std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz); }
 
 protected:
     FileProviderPtr file_provider;

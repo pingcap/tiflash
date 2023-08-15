@@ -28,8 +28,11 @@ namespace DM
 namespace RowKeyFilter
 {
 /// return <offset, limit>
-inline std::pair<size_t, size_t>
-getPosRangeOfSorted(const RowKeyRange & rowkey_range, const ColumnPtr & rowkey_column, const size_t offset, const size_t limit)
+inline std::pair<size_t, size_t> getPosRangeOfSorted(
+    const RowKeyRange & rowkey_range,
+    const ColumnPtr & rowkey_column,
+    const size_t offset,
+    const size_t limit)
 {
     return rowkey_range.getPosRange(rowkey_column, offset, limit);
 }
@@ -113,13 +116,17 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
     offset_and_limits.reserve(rowkey_ranges.size());
     for (const auto & rowkey_range : rowkey_ranges)
     {
-        offset_and_limits.emplace_back(getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_pos).column, 0, block.rows()));
+        offset_and_limits.emplace_back(
+            getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_pos).column, 0, block.rows()));
     }
     if (offset_and_limits.empty())
         return {};
 
     // try combine adjacent range before cut blocks
-    std::sort(offset_and_limits.begin(), offset_and_limits.end(), [](const std::pair<size_t, size_t> & a, const std::pair<size_t, size_t> & b) { return a.first < b.first; });
+    std::sort(
+        offset_and_limits.begin(),
+        offset_and_limits.end(),
+        [](const std::pair<size_t, size_t> & a, const std::pair<size_t, size_t> & b) { return a.first < b.first; });
     size_t current_offset = offset_and_limits[0].first;
     size_t current_limit = offset_and_limits[0].second;
     std::vector<std::pair<size_t, size_t>> combined_offset_and_limits;
@@ -149,7 +156,8 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
 inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, size_t handle_pos)
 {
     size_t rows = block.rows();
-    auto rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_pos).column, rowkey_ranges[0].is_common_handle);
+    auto rowkey_column
+        = RowKeyColumnContainer(block.getByPosition(handle_pos).column, rowkey_ranges[0].is_common_handle);
 
     IColumn::Filter filter(rows, 0);
     for (size_t i = 0; i < rows; ++i)
@@ -191,7 +199,10 @@ template <bool is_block_sorted>
 class DMRowKeyFilterBlockInputStream : public IBlockInputStream
 {
 public:
-    DMRowKeyFilterBlockInputStream(const BlockInputStreamPtr & input, const RowKeyRanges & rowkey_ranges_, size_t handle_col_pos_)
+    DMRowKeyFilterBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const RowKeyRanges & rowkey_ranges_,
+        size_t handle_col_pos_)
         : rowkey_ranges(rowkey_ranges_)
         , handle_col_pos(handle_col_pos_)
     {
@@ -211,7 +222,8 @@ public:
             if (!block.rows())
                 continue;
 
-            auto rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_col_pos).column, rowkey_ranges[0].is_common_handle);
+            auto rowkey_column
+                = RowKeyColumnContainer(block.getByPosition(handle_col_pos).column, rowkey_ranges[0].is_common_handle);
             /// If clean read optimized, only first row's (the smallest) handle is returned as a ColumnConst.
             if (rowkey_column.column->isColumnConst())
             {

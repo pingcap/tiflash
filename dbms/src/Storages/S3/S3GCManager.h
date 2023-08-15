@@ -131,7 +131,9 @@ public:
 
     std::unordered_set<String> getValidLocksFromManifest(const Strings & manifest_keys);
 
-    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
+    void removeOutdatedManifest(
+        const CheckpointManifestS3Set & manifests,
+        const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
 
 private:
     const pingcap::pd::ClientPtr pd_client;

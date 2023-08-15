@@ -107,7 +107,12 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->pool_id, ref_no, total_rows);
+        LOG_DEBUG(
+            log,
+            "Finish read from storage, pool_id={} ref_no={} rows={}",
+            task_pool->pool_id,
+            ref_no,
+            total_rows);
     }
 
     void addReadTaskPoolToScheduler()
@@ -118,7 +123,8 @@ protected:
         }
         std::call_once(task_pool->addToSchedulerFlag(), [&]() {
             prepareRuntimeFilter();
-            SegmentReadTaskScheduler::instance().add(task_pool); });
+            SegmentReadTaskScheduler::instance().add(task_pool);
+        });
         task_pool_added = true;
     }
 

@@ -44,10 +44,11 @@ extern const int INCORRECT_FILE_NAME;
 class SetOrJoinBlockOutputStream : public IBlockOutputStream
 {
 public:
-    SetOrJoinBlockOutputStream(StorageSetOrJoinBase & table_,
-                               const String & backup_path_,
-                               const String & backup_tmp_path_,
-                               const String & backup_file_name_);
+    SetOrJoinBlockOutputStream(
+        StorageSetOrJoinBase & table_,
+        const String & backup_path_,
+        const String & backup_tmp_path_,
+        const String & backup_file_name_);
 
     Block getHeader() const override { return table.getSampleBlock(); }
     void write(const Block & block) override;
@@ -64,10 +65,11 @@ private:
 };
 
 
-SetOrJoinBlockOutputStream::SetOrJoinBlockOutputStream(StorageSetOrJoinBase & table_,
-                                                       const String & backup_path_,
-                                                       const String & backup_tmp_path_,
-                                                       const String & backup_file_name_)
+SetOrJoinBlockOutputStream::SetOrJoinBlockOutputStream(
+    StorageSetOrJoinBase & table_,
+    const String & backup_path_,
+    const String & backup_tmp_path_,
+    const String & backup_file_name_)
     : table(table_)
     , backup_path(backup_path_)
     , backup_tmp_path(backup_tmp_path_)
@@ -75,8 +77,7 @@ SetOrJoinBlockOutputStream::SetOrJoinBlockOutputStream(StorageSetOrJoinBase & ta
     , backup_buf(backup_tmp_path + backup_file_name)
     , compressed_backup_buf(backup_buf)
     , backup_stream(compressed_backup_buf, 0, table.getSampleBlock())
-{
-}
+{}
 
 void SetOrJoinBlockOutputStream::write(const Block & block)
 {
@@ -118,10 +119,7 @@ StorageSetOrJoinBase::StorageSetOrJoinBase(
 }
 
 
-StorageSet::StorageSet(
-    const String & path_,
-    const String & name_,
-    const ColumnsDescription & columns_)
+StorageSet::StorageSet(const String & path_, const String & name_, const ColumnsDescription & columns_)
     : StorageSetOrJoinBase{path_, name_, columns_}
     , set(std::make_shared<Set>(SizeLimits()))
 {
@@ -160,9 +158,7 @@ void StorageSetOrJoinBase::restore()
     {
         const auto & name = dir_it.name();
 
-        if (dir_it->isFile()
-            && endsWith(name, file_suffix)
-            && dir_it->getSize() > 0)
+        if (dir_it->isFile() && endsWith(name, file_suffix) && dir_it->getSize() > 0)
         {
             /// Calculate the maximum number of available files with a backup to add the following files with large numbers.
             auto file_num = parse<UInt64>(name.substr(0, name.size() - file_suffix_size));
@@ -197,7 +193,10 @@ void StorageSetOrJoinBase::restoreFromFile(const String & file_path)
 }
 
 
-void StorageSetOrJoinBase::rename(const String & new_path_to_db, const String & /*new_database_name*/, const String & new_table_name)
+void StorageSetOrJoinBase::rename(
+    const String & new_path_to_db,
+    const String & /*new_database_name*/,
+    const String & new_table_name)
 {
     /// Rename directory with data.
     String new_path = new_path_to_db + escapeForFileName(new_table_name);
@@ -213,7 +212,10 @@ void registerStorageSet(StorageFactory & factory)
     factory.registerStorage("Set", [](const StorageFactory::Arguments & args) {
         if (!args.engine_args.empty())
             throw Exception(
-                fmt::format("Engine {} doesn't support any arguments ({} given)", args.engine_name, args.engine_args.size()),
+                fmt::format(
+                    "Engine {} doesn't support any arguments ({} given)",
+                    args.engine_name,
+                    args.engine_args.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return StorageSet::create(args.data_path, args.table_name, args.columns);

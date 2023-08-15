@@ -120,11 +120,15 @@ public:
         }
         else
         {
-            throw DB::Exception("Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
-                                ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception(
+                "Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
-    inline const PageEntry & at(const PageId page_id) const { return const_cast<PageEntriesMixin *>(this)->at(page_id); }
+    inline const PageEntry & at(const PageId page_id) const
+    {
+        return const_cast<PageEntriesMixin *>(this)->at(page_id);
+    }
 
     inline std::pair<bool, PageId> isRefId(PageId page_id) const
     {
@@ -325,7 +329,9 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
     else
     {
         // The Page to be ref is not exist.
-        throw Exception("Adding RefPage" + DB::toString(ref_id) + " to non-exist Page" + DB::toString(page_id), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Adding RefPage" + DB::toString(ref_id) + " to non-exist Page" + DB::toString(page_id),
+            ErrorCodes::LOGICAL_ERROR);
     }
     max_page_id = std::max(max_page_id, std::max(ref_id, page_id));
 }
@@ -339,7 +345,9 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
     {
         if (unlikely(iter == normal_pages.end()))
         {
-            throw Exception("Decreasing non-exist normal page[" + DB::toString(page_id) + "] ref-count", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Decreasing non-exist normal page[" + DB::toString(page_id) + "] ref-count",
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
     if (iter != normal_pages.end())
@@ -354,7 +362,8 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
 }
 
 /// For PageEntriesVersionSet
-class PageEntries : public PageEntriesMixin<PageEntries>
+class PageEntries
+    : public PageEntriesMixin<PageEntries>
     , public MVCC::MultiVersionCountable<PageEntries>
 {
 public:
@@ -371,11 +380,12 @@ public:
     class iterator
     {
     public:
-        iterator(const std::unordered_map<PageId, PageId>::iterator & iter, std::unordered_map<PageId, PageEntry> & normal_pages)
+        iterator(
+            const std::unordered_map<PageId, PageId>::iterator & iter,
+            std::unordered_map<PageId, PageEntry> & normal_pages)
             : _iter(iter)
             , _normal_pages(normal_pages)
-        {
-        }
+        {}
         bool operator==(const iterator & rhs) const { return _iter == rhs._iter; }
         bool operator!=(const iterator & rhs) const { return _iter != rhs._iter; }
         // prefix incr
@@ -401,8 +411,10 @@ public:
             }
             else
             {
-                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
-                                    ErrorCodes::LOGICAL_ERROR);
+                throw DB::Exception(
+                    "Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page"
+                        + DB::toString(_iter->second),
+                    ErrorCodes::LOGICAL_ERROR);
             }
         }
 
@@ -415,12 +427,12 @@ public:
     class const_iterator
     {
     public:
-        const_iterator(const std::unordered_map<PageId, PageId>::const_iterator & iter,
-                       const std::unordered_map<PageId, PageEntry> & normal_pages)
+        const_iterator(
+            const std::unordered_map<PageId, PageId>::const_iterator & iter,
+            const std::unordered_map<PageId, PageEntry> & normal_pages)
             : _iter(iter)
             , _normal_pages(const_cast<std::unordered_map<PageId, PageEntry> &>(normal_pages))
-        {
-        }
+        {}
         bool operator==(const const_iterator & rhs) const { return _iter == rhs._iter; }
         bool operator!=(const const_iterator & rhs) const { return _iter != rhs._iter; }
         // prefix incr
@@ -446,8 +458,10 @@ public:
             }
             else
             {
-                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
-                                    ErrorCodes::LOGICAL_ERROR);
+                throw DB::Exception(
+                    "Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page"
+                        + DB::toString(_iter->second),
+                    ErrorCodes::LOGICAL_ERROR);
             }
         }
 
@@ -466,21 +480,22 @@ public:
 /// For PageEntriesVersionSetWithDelta
 class PageEntriesForDelta;
 using PageEntriesForDeltaPtr = std::shared_ptr<PageEntriesForDelta>;
-class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>
+class PageEntriesForDelta
+    : public PageEntriesMixin<PageEntriesForDelta>
     , public MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
 {
 public:
     explicit PageEntriesForDelta(bool is_base_)
         : PageEntriesMixin(is_base_)
         , MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
-    {
-    }
+    {}
 
     bool shouldCompactToBase(const MVCC::VersionSetConfig & config)
     {
         assert(!this->isBase());
         return numDeletions() >= config.compact_hint_delta_deletions //
-            || numRefEntries() >= config.compact_hint_delta_entries || numNormalEntries() >= config.compact_hint_delta_entries;
+            || numRefEntries() >= config.compact_hint_delta_entries
+            || numNormalEntries() >= config.compact_hint_delta_entries;
     }
 
     //==========================================================================================

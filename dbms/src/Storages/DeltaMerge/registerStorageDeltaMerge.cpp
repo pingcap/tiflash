@@ -93,7 +93,9 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 }
             }
             else
-                throw Exception("Engine DeltaMerge table info must be a string" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "Engine DeltaMerge table info must be a string" + getDeltaMergeVerboseHelp(),
+                    ErrorCodes::BAD_ARGUMENTS);
         }
         if (args.engine_args.size() == 3)
         {
@@ -101,7 +103,9 @@ void registerStorageDeltaMerge(StorageFactory & factory)
             if (ast && ast->value.getType() == Field::Types::UInt64)
                 tombstone = safeGet<UInt64>(ast->value);
             else
-                throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(),
+                    ErrorCodes::BAD_ARGUMENTS);
         }
         return StorageDeltaMerge::create(
             args.database_engine,

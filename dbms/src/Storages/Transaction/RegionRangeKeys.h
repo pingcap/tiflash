@@ -41,10 +41,7 @@ struct TiKVRangeKey : boost::noncopyable
     TiKVRangeKey copy() const;
     TiKVRangeKey & operator=(TiKVRangeKey &&);
     std::string toDebugString() const;
-    std::string toString() const
-    {
-        return key.toString();
-    }
+    std::string toString() const { return key.toString(); }
 
     State state;
     TiKVKey key;

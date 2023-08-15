@@ -83,7 +83,10 @@ public:
         current_stream = children.begin();
     }
 
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_, const ScanContextPtr & scan_context_)
+    ConcatSkippableBlockInputStream(
+        SkippableBlockInputStreams inputs_,
+        std::vector<size_t> && rows_,
+        const ScanContextPtr & scan_context_)
         : rows(std::move(rows_))
         , precede_stream_rows(0)
         , scan_context(scan_context_)

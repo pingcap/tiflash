@@ -70,11 +70,7 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         nullptr,
         nullptr);
 
-    auto segment_snap = Serializer::deserializeSegmentSnapshotFrom(
-        *dm_context,
-        store_id,
-        physical_table_id,
-        proto);
+    auto segment_snap = Serializer::deserializeSegmentSnapshotFrom(*dm_context, store_id, physical_table_id, proto);
 
     // Note: At this moment, we still cannot read from `task->segment_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
@@ -102,23 +98,22 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
         segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
 
-    return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(
-        RNReadSegmentMeta{
-            .keyspace_id = keyspace_id,
-            .physical_table_id = physical_table_id,
-            .segment_id = proto.segment_id(),
-            .store_id = store_id,
+    return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(RNReadSegmentMeta{
+        .keyspace_id = keyspace_id,
+        .physical_table_id = physical_table_id,
+        .segment_id = proto.segment_id(),
+        .store_id = store_id,
 
-            .delta_tinycf_page_ids = delta_tinycf_ids,
-            .delta_tinycf_page_sizes = delta_tinycf_sizes,
-            .segment = segment,
-            .segment_snap = segment_snap,
-            .store_address = store_address,
+        .delta_tinycf_page_ids = delta_tinycf_ids,
+        .delta_tinycf_page_sizes = delta_tinycf_sizes,
+        .segment = segment,
+        .segment_snap = segment_snap,
+        .store_address = store_address,
 
-            .read_ranges = read_ranges,
-            .snapshot_id = snapshot_id,
-            .dm_context = dm_context,
-        }));
+        .read_ranges = read_ranges,
+        .snapshot_id = snapshot_id,
+        .dm_context = dm_context,
+    }));
 }
 
 void RNReadSegmentTask::initColumnFileDataProvider(const RNLocalPageCacheGuardPtr & pages_guard)

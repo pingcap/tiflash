@@ -34,10 +34,7 @@ namespace DB
 /// Estimate of number of bytes in cache for marks.
 struct MarksWeightFunction
 {
-    size_t operator()(const MarksInCompressedFile & marks) const
-    {
-        return marks.allocated_bytes();
-    }
+    size_t operator()(const MarksInCompressedFile & marks) const { return marks.allocated_bytes(); }
 };
 
 

@@ -25,24 +25,19 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "HeavyMemoryCostInGCWorkload";
-    }
+    static String name() { return "HeavyMemoryCostInGCWorkload"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 1;
-    }
+    static UInt64 mask() { return 1 << 1; }
 
     String desc() override
     {
-        return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}"
-                           "Please cleanup folder after this test."
-                           "The current workload will elapse near 30 seconds, and GC will be performed at the end.",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored"
+            "`paths` will only used first one. which is {}. Data will store in {}"
+            "Please cleanup folder after this test."
+            "The current workload will elapse near 30 seconds, and GC will be performed at the end.",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     void run() override
@@ -66,17 +61,15 @@ public:
         gc->doGcOnce();
     }
 
-    bool verify() override
-    {
-        return (metrics_dumper->getMemoryPeak() < 5UL * 1024 * 1024);
-    }
+    bool verify() override { return (metrics_dumper->getMemoryPeak() < 5UL * 1024 * 1024); }
 
     void onFailed() override
     {
-        LOG_WARNING(StressEnv::logger,
-                    "Memory Peak is {}, it should not bigger than {}",
-                    metrics_dumper->getMemoryPeak(),
-                    5 * 1024 * 1024);
+        LOG_WARNING(
+            StressEnv::logger,
+            "Memory Peak is {}, it should not bigger than {}",
+            metrics_dumper->getMemoryPeak(),
+            5 * 1024 * 1024);
     }
 };
 } // namespace DB::PS::tests

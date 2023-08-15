@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/ColumnsDescription.h>
+#include <Common/Exception.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/ReadBufferFromString.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <Common/Exception.h>
-
-#include <ext/collection_cast.h>
-#include <ext/map.h>
+#include <Storages/ColumnsDescription.h>
 
 #include <boost/range/join.hpp>
+#include <ext/collection_cast.h>
+#include <ext/map.h>
 
 
 namespace DB
@@ -36,9 +35,9 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
-    extern const int CANNOT_PARSE_TEXT;
-}
+extern const int NO_SUCH_COLUMN_IN_TABLE;
+extern const int CANNOT_PARSE_TEXT;
+} // namespace ErrorCodes
 
 
 NamesAndTypesList ColumnsDescription::getAllPhysical() const
@@ -55,7 +54,7 @@ NamesAndTypesList ColumnsDescription::getAll() const
 
 Names ColumnsDescription::getNamesOfPhysical() const
 {
-    return ext::map<Names>(boost::join(ordinary, materialized), [] (const auto & it) { return it.name; });
+    return ext::map<Names>(boost::join(ordinary, materialized), [](const auto & it) { return it.name; });
 }
 
 
@@ -85,8 +84,7 @@ String ColumnsDescription::toString() const
     writeText(ordinary.size() + materialized.size() + aliases.size(), buf);
     writeString(" columns:\n", buf);
 
-    const auto write_columns = [this, &buf] (const NamesAndTypesList & columns)
-    {
+    const auto write_columns = [this, &buf](const NamesAndTypesList & columns) {
         for (const auto & column : columns)
         {
             const auto it = defaults.find(column.name);
@@ -176,4 +174,4 @@ ColumnsDescription ColumnsDescription::parse(const String & str)
     return result;
 }
 
-}
+} // namespace DB

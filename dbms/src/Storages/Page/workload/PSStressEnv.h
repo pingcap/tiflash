@@ -54,20 +54,14 @@ public:
         return instance;
     }
 
-    bool isRunning() const
-    {
-        return status == STATUS_LOOP;
-    }
+    bool isRunning() const { return status == STATUS_LOOP; }
     int isSuccess() const
     {
         auto code = status.load();
         return code > 0 ? 0 : static_cast<int>(code);
     }
 
-    void setStat(enum StressEnvStat status_)
-    {
-        status = status_;
-    }
+    void setStat(enum StressEnvStat status_) { status = status_; }
 };
 
 struct StressEnv

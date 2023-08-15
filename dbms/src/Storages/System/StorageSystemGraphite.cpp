@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/System/StorageSystemGraphite.h>
-
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/Field.h>
@@ -21,15 +19,15 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
-
 #include <Poco/Util/Application.h>
+#include <Storages/System/StorageSystemGraphite.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int NO_ELEMENTS_IN_CONFIG;
+extern const int NO_ELEMENTS_IN_CONFIG;
 }
 
 namespace
@@ -52,9 +50,7 @@ struct Pattern
     UInt8 is_default;
 };
 
-static Pattern readOnePattern(
-    const AbstractConfiguration & config,
-    const std::string & path)
+static Pattern readOnePattern(const AbstractConfiguration & config, const std::string & path)
 {
     Pattern pattern;
     AbstractConfiguration::Keys keys;
@@ -87,9 +83,7 @@ static Pattern readOnePattern(
     return pattern;
 }
 
-static std::vector<Pattern> readPatterns(
-    const AbstractConfiguration & config,
-    const std::string & section)
+static std::vector<Pattern> readPatterns(const AbstractConfiguration & config, const std::string & section)
 {
     AbstractConfiguration::Keys keys;
     std::vector<Pattern> result;
@@ -141,12 +135,12 @@ StorageSystemGraphite::StorageSystemGraphite(const std::string & name_)
 {
     setColumns(ColumnsDescription({
         {"config_name", std::make_shared<DataTypeString>()},
-        {"regexp",      std::make_shared<DataTypeString>()},
-        {"function",    std::make_shared<DataTypeString>()},
-        {"age",         std::make_shared<DataTypeUInt64>()},
-        {"precision",   std::make_shared<DataTypeUInt64>()},
-        {"priority",    std::make_shared<DataTypeUInt16>()},
-        {"is_default",  std::make_shared<DataTypeUInt8>()},
+        {"regexp", std::make_shared<DataTypeString>()},
+        {"function", std::make_shared<DataTypeString>()},
+        {"age", std::make_shared<DataTypeUInt64>()},
+        {"precision", std::make_shared<DataTypeUInt64>()},
+        {"priority", std::make_shared<DataTypeUInt16>()},
+        {"is_default", std::make_shared<DataTypeUInt8>()},
     }));
 }
 
@@ -185,7 +179,9 @@ BlockInputStreams StorageSystemGraphite::read(
         }
     }
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
-}
+} // namespace DB

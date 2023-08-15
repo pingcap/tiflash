@@ -72,7 +72,8 @@ try
     UniversalWriteBatch wb;
     StoreID old_store_id = 5;
     UInt64 old_store_seq = 44;
-    auto s3name_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
+    auto s3name_dtfile
+        = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
     auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
     {
         S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", s3name_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
@@ -144,7 +145,8 @@ try
     UniversalWriteBatch wb;
     StoreID old_store_id = 5;
     UInt64 old_store_seq = 44;
-    auto s3name_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
+    auto s3name_dtfile
+        = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
     auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
     {
         S3::uploadEmptyFile(*s3_client, s3name_dtfile.toFullKey());

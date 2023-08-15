@@ -33,7 +33,8 @@ class Context;
   *  (and result could be out of order). If both multithreaded and limit are specified,
   *  the table could give you not exactly 1..limit range, but some arbitary 'limit' numbers.
   */
-class StorageSystemNumbers : public ext::SharedPtrHelper<StorageSystemNumbers>
+class StorageSystemNumbers
+    : public ext::SharedPtrHelper<StorageSystemNumbers>
     , public IStorage
 {
 public:

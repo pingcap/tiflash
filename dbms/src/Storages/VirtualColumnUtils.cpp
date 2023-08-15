@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Core/NamesAndTypes.h>
-
-#include <Interpreters/Context.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
-
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTSelectQuery.h>
-
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnsCommon.h>
-
-#include <Storages/VirtualColumnUtils.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
+#include <Core/NamesAndTypes.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Storages/VirtualColumnUtils.h>
 
 
 namespace DB
@@ -50,7 +46,8 @@ String chooseSuffix(const NamesAndTypesList & columns, const String & name)
                 done = false;
                 break;
             }
-        if (done) break;
+        if (done)
+            break;
         ++id;
         current_suffix = toString<Int32>(id);
     }
@@ -139,7 +136,7 @@ static ASTPtr buildWhereExpression(const ASTs & functions)
     if (functions.size() == 1)
         return functions[0];
     ASTPtr new_query = std::make_shared<ASTFunction>();
-    ASTFunction & new_function = typeid_cast<ASTFunction & >(*new_query);
+    ASTFunction & new_function = typeid_cast<ASTFunction &>(*new_query);
     new_function.name = "and";
     new_function.arguments = std::make_shared<ASTExpressionList>();
     new_function.arguments->children = functions;
@@ -149,7 +146,7 @@ static ASTPtr buildWhereExpression(const ASTs & functions)
 
 void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & context)
 {
-    const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery & >(*query);
+    const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery &>(*query);
     if (!select.where_expression && !select.prewhere_expression)
         return;
 
@@ -189,6 +186,6 @@ void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & c
     }
 }
 
-}
+} // namespace VirtualColumnUtils
 
-}
+} // namespace DB

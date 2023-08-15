@@ -49,7 +49,8 @@ public:
                 Field f = static_cast<Int64>(key);
                 mut_col->insert(f);
             }
-            else if (family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
+            else if (
+                family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
             {
                 Field f = static_cast<UInt64>(key);
                 mut_col->insert(f);
@@ -73,7 +74,10 @@ public:
             auto & col_def = (*table_info.columns)[1];
             if (col_def.id != VERSION_COLUMN_ID)
             {
-                throw std::invalid_argument(fmt::format("(*table_info.columns)[1].id is {} not VERSION_COLUMN_ID {}.", col_def.id, VERSION_COLUMN_ID));
+                throw std::invalid_argument(fmt::format(
+                    "(*table_info.columns)[1].id is {} not VERSION_COLUMN_ID {}.",
+                    col_def.id,
+                    VERSION_COLUMN_ID));
             }
             ColumnWithTypeAndName col({}, col_def.type, col_def.name, col_def.id);
             IColumn::MutablePtr mut_col = col.type->createColumn();
@@ -88,7 +92,8 @@ public:
             auto & col_def = (*table_info.columns)[2];
             if (col_def.id != TAG_COLUMN_ID)
             {
-                throw std::invalid_argument(fmt::format("(*table_info.columns)[2].id is {} not TAG_COLUMN_ID {}.", col_def.id, TAG_COLUMN_ID));
+                throw std::invalid_argument(
+                    fmt::format("(*table_info.columns)[2].id is {} not TAG_COLUMN_ID {}.", col_def.id, TAG_COLUMN_ID));
             }
             ColumnWithTypeAndName col({}, col_def.type, col_def.name, col_def.id);
             IColumn::MutablePtr mut_col = col.type->createColumn();
@@ -128,7 +133,8 @@ private:
             Field f = static_cast<Int64>(rand_gen());
             mut_col->insert(f);
         }
-        else if (family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
+        else if (
+            family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
         {
             Field f = static_cast<UInt64>(rand_gen());
             mut_col->insert(f);
@@ -180,7 +186,12 @@ private:
             }
             else
             {
-                throw std::invalid_argument(fmt::format("RandomDataGenerator parseDecimal({}, {}) prec {} scale {} fail", s, negative, prec, scale));
+                throw std::invalid_argument(fmt::format(
+                    "RandomDataGenerator parseDecimal({}, {}) prec {} scale {} fail",
+                    s,
+                    negative,
+                    prec,
+                    scale));
             }
         }
         col.column = std::move(mut_col);
@@ -210,13 +221,17 @@ private:
     std::string randomDateTime()
     {
         auto res = randomLocalTime();
-        return fmt::format("{}-{}-{} {}:{}:{}", res.tm_year + 1900, res.tm_mon + 1, res.tm_mday, res.tm_hour, res.tm_min, res.tm_sec);
+        return fmt::format(
+            "{}-{}-{} {}:{}:{}",
+            res.tm_year + 1900,
+            res.tm_mon + 1,
+            res.tm_mday,
+            res.tm_hour,
+            res.tm_min,
+            res.tm_sec);
     }
 
-    time_t randomUTCTimestamp()
-    {
-        return ::time(nullptr) + randomTimeOffset();
-    }
+    time_t randomUTCTimestamp() { return ::time(nullptr) + randomTimeOffset(); }
 
     int randomTimeOffset()
     {
@@ -252,7 +267,10 @@ private:
     const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
 };
 
-std::unique_ptr<DataGenerator> DataGenerator::create([[maybe_unused]] const WorkloadOptions & opts, const TableInfo & table_info, TimestampGenerator & ts_gen)
+std::unique_ptr<DataGenerator> DataGenerator::create(
+    [[maybe_unused]] const WorkloadOptions & opts,
+    const TableInfo & table_info,
+    TimestampGenerator & ts_gen)
 {
     return std::make_unique<RandomDataGenerator>(table_info, ts_gen);
 }

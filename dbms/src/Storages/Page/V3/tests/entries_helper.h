@@ -85,7 +85,8 @@ inline ::testing::AssertionResult getEntryCompare(
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
-    auto check_id_entry = [&](const PageIDAndEntryV3 & expected_id_entry, const PageIDAndEntryV3 & actual_id_entry) -> ::testing::AssertionResult {
+    auto check_id_entry = [&](const PageIDAndEntryV3 & expected_id_entry,
+                              const PageIDAndEntryV3 & actual_id_entry) -> ::testing::AssertionResult {
         const auto & [pid, entry] = actual_id_entry;
         String err_msg;
         if (pid != expected_id_entry.first)
@@ -117,7 +118,12 @@ inline ::testing::AssertionResult getEntryCompare(
         if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS)
             error = fmt::format("Try to get entry [id={}] but not exists. Err message: {}", page_id_expr, ex.message());
         else if (ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            error = fmt::format("Try to get entry [id={}] with version {} from {} but failed. Err message: {}", page_id_expr, snap->sequence, snap_expr, ex.message());
+            error = fmt::format(
+                "Try to get entry [id={}] with version {} from {} but failed. Err message: {}",
+                page_id_expr,
+                snap->sequence,
+                snap_expr,
+                ex.message());
         else
             error = ex.displayText();
         return ::testing::AssertionFailure(::testing::Message(error.c_str()));
@@ -144,7 +150,8 @@ inline ::testing::AssertionResult getEntriesCompare(
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
-    auto check_id_entries = [&](const PageIDAndEntriesV3 & expected_id_entries, const PageIDAndEntriesV3 & actual_id_entries) -> ::testing::AssertionResult {
+    auto check_id_entries = [&](const PageIDAndEntriesV3 & expected_id_entries,
+                                const PageIDAndEntriesV3 & actual_id_entries) -> ::testing::AssertionResult {
         if (expected_id_entries.size() == actual_id_entries.size())
         {
             for (size_t idx = 0; idx == expected_id_entries.size(); ++idx)
@@ -153,7 +160,11 @@ inline ::testing::AssertionResult getEntriesCompare(
                 const auto & actual_id_entry = expected_id_entries[idx];
                 if (actual_id_entry.first != expected_id_entry.first)
                 {
-                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}] at [index={}]", expected_id_entry.first, actual_id_entry.first, idx);
+                    auto err_msg = fmt::format(
+                        "Try to get entry [id={}] but get [id={}] at [index={}]",
+                        expected_id_entry.first,
+                        actual_id_entry.first,
+                        idx);
                     return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
                 }
                 if (!isSameEntry(expected_id_entry.second, actual_id_entry.second))
@@ -161,7 +172,12 @@ inline ::testing::AssertionResult getEntriesCompare(
                     // not the expected entry we want
                     String err_msg;
                     auto expect_expr = fmt::format("Entry at {} [index={}]", idx, idx);
-                    auto actual_expr = fmt::format("Get entries {} from {} with snap {} [index={}", page_ids_expr, dir_expr, snap_expr, idx);
+                    auto actual_expr = fmt::format(
+                        "Get entries {} from {} with snap {} [index={}",
+                        page_ids_expr,
+                        dir_expr,
+                        snap_expr,
+                        idx);
                     return testing::internal::EqFailure(
                         expect_expr.c_str(),
                         actual_expr.c_str(),
@@ -175,7 +191,12 @@ inline ::testing::AssertionResult getEntriesCompare(
 
         // else not the expected entry we want
         auto expected_expr = fmt::format("Entries from {} [size={}]", expected_entries_expr, expected_entries.size());
-        auto actual_expr = fmt::format("Get entries {} from {} with snap {}, [size={}]", page_ids_expr, dir_expr, snap_expr, actual_id_entries.size());
+        auto actual_expr = fmt::format(
+            "Get entries {} from {} with snap {}, [size={}]",
+            page_ids_expr,
+            dir_expr,
+            snap_expr,
+            actual_id_entries.size());
         return testing::internal::EqFailure(
             expected_expr.c_str(),
             actual_expr.c_str(),
@@ -192,9 +213,17 @@ inline ::testing::AssertionResult getEntriesCompare(
     catch (DB::Exception & ex)
     {
         if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS)
-            error = fmt::format("Try to get entries with [ids={}] but not exists. Err message: {}", page_ids_expr, ex.message());
+            error = fmt::format(
+                "Try to get entries with [ids={}] but not exists. Err message: {}",
+                page_ids_expr,
+                ex.message());
         else if (ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            error = fmt::format("Try to get entries with [ids={}] with version {} from {} but failed. Err message: {}", page_ids_expr, snap->sequence, snap_expr, ex.message());
+            error = fmt::format(
+                "Try to get entries with [ids={}] with version {} from {} but failed. Err message: {}",
+                page_ids_expr,
+                snap->sequence,
+                snap_expr,
+                ex.message());
         else
             error = ex.displayText();
         return ::testing::AssertionFailure(::testing::Message(error.c_str()));
@@ -283,8 +312,7 @@ inline ::testing::AssertionResult getEntriesNotExist(
     }
     return ::testing::AssertionFailure(::testing::Message(error.c_str()));
 }
-#define EXPECT_ENTRIES_NOT_EXIST(dir, pids, snap) \
-    EXPECT_PRED_FORMAT3(getEntriesNotExist, dir, pids, snap)
+#define EXPECT_ENTRIES_NOT_EXIST(dir, pids, snap) EXPECT_PRED_FORMAT3(getEntriesNotExist, dir, pids, snap)
 
 using PageVersionAndEntryV3 = std::tuple<UInt64, UInt64, PageEntryV3>;
 using PageVersionAndEntriesV3 = std::vector<PageVersionAndEntryV3>;

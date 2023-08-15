@@ -80,7 +80,11 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("random_kill", value<uint64_t>()->default_value(0), "") //
         ("max_sleep_sec", value<uint64_t>()->default_value(600), "") //
         //
-        ("work_dirs", value<std::vector<std::string>>()->multitoken()->default_value(std::vector<std::string>{"tmp1", "tmp2", "tmp3"}, "tmp1 tmp2 tmp3"), "dir1 dir2 dir3...") //
+        ("work_dirs",
+         value<std::vector<std::string>>()->multitoken()->default_value(
+             std::vector<std::string>{"tmp1", "tmp2", "tmp3"},
+             "tmp1 tmp2 tmp3"),
+         "dir1 dir2 dir3...") //
         ("config_file", value<std::string>()->default_value(""), "Configuation file of DeltaTree") //
         //
         ("read_thread_count", value<uint64_t>()->default_value(1), "") //
@@ -90,13 +94,19 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         //
-        ("ps_run_mode", value<uint64_t>()->default_value(2, "possible value: 1(only_v2), 2(only_v3), 3(mix_mode), and note that in mix_mode, the test will run twice, first round in only_v2 mode and second round in mix_mode")) //
+        ("ps_run_mode",
+         value<uint64_t>()->default_value(
+             2,
+             "possible value: 1(only_v2), 2(only_v3), 3(mix_mode), and note that in mix_mode, the test will run twice, "
+             "first round in only_v2 mode and second round in mix_mode")) //
         //
         ("bg_thread_count", value<uint64_t>()->default_value(4), "") //
         //
         ("table_name", value<std::string>()->default_value(""), "") //
         ("table_id", value<int64_t>()->default_value(-1), "") //
-        ("is_fast_scan", value<bool>()->default_value(false), "default is false, means normal mode. When we in fast mode, we should set verification as false") //
+        ("is_fast_scan",
+         value<bool>()->default_value(false),
+         "default is false, means normal mode. When we in fast mode, we should set verification as false") //
         ("enable_read_thread", value<bool>()->default_value(true), "") //
         //
         ("s3_bucket", value<std::string>()->default_value(""), "") //
@@ -156,7 +166,12 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     // Randomly kill could cause DeltaMergeStore loss some data, so disallow verification and random_kill both enable.
     if (verification && random_kill > 0)
     {
-        return {false, fmt::format("Disallow verification({}) and randomly kill({}) are enabled simultaneously.", verification, random_kill)};
+        return {
+            false,
+            fmt::format(
+                "Disallow verification({}) and randomly kill({}) are enabled simultaneously.",
+                verification,
+                random_kill)};
     }
 
     if (log_file.empty())

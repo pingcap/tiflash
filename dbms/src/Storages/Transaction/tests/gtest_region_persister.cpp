@@ -68,13 +68,9 @@ class RegionSeriTest : public ::testing::Test
 public:
     RegionSeriTest()
         : dir_path(TiFlashTestEnv::getTemporaryPath("RegionSeriTest"))
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true);
-    }
+    void SetUp() override { TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true); }
 
     std::string dir_path;
 };
@@ -171,16 +167,14 @@ try
             apply_state.mutable_truncated_state()->set_index(6672);
             apply_state.mutable_truncated_state()->set_term(6673);
 
-            *region_state.mutable_region() = createRegionInfo(1001, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300));
+            *region_state.mutable_region()
+                = createRegionInfo(1001, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300));
             region_state.mutable_merge_state()->set_commit(888);
             region_state.mutable_merge_state()->set_min_index(777);
-            *region_state.mutable_merge_state()->mutable_target() = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
+            *region_state.mutable_merge_state()->mutable_target()
+                = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
         };
-        region = std::make_shared<Region>(RegionMeta(
-            createPeer(31, true),
-            apply_state,
-            5,
-            region_state));
+        region = std::make_shared<Region>(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
@@ -282,7 +276,10 @@ try
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
             region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
             region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-            region->insert(ColumnFamilyType::Lock, TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+            region->insert(
+                ColumnFamilyType::Lock,
+                TiKVKey::copyFrom(key),
+                RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
             persister.persist(*region);
 
@@ -371,8 +368,14 @@ try
                 }
                 TiKVKey key = RecordKVFormat::genKey(table_id, handle_id, tso++);
                 region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue(large_value.data()));
-                region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-                region->insert(ColumnFamilyType::Lock, TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+                region->insert(
+                    ColumnFamilyType::Write,
+                    TiKVKey::copyFrom(key),
+                    RecordKVFormat::encodeWriteCfValue('P', 0));
+                region->insert(
+                    ColumnFamilyType::Lock,
+                    TiKVKey::copyFrom(key),
+                    RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
                 handle_id += 1;
             }
             return region;

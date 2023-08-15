@@ -27,20 +27,11 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "Normal workload";
-    }
+    static String name() { return "Normal workload"; }
 
-    static UInt64 mask()
-    {
-        return NORMAL_WORKLOAD;
-    }
+    static UInt64 mask() { return NORMAL_WORKLOAD; }
 
-    String desc() override
-    {
-        return options.toDebugString();
-    }
+    String desc() override { return options.toDebugString(); }
 
     void run() override
     {

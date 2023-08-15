@@ -155,7 +155,8 @@ protected:
                 {
                     if (decoding_schema->is_common_handle)
                     {
-                        ASSERT_FIELD_EQ((*column_element.column)[row], Field(*std::get<0>(data_list_read[row]))) << gen_error_log();
+                        ASSERT_FIELD_EQ((*column_element.column)[row], Field(*std::get<0>(data_list_read[row])))
+                            << gen_error_log();
                     }
                     else
                     {
@@ -168,14 +169,20 @@ protected:
                 }
                 else if (column_element.name == TAG_COLUMN_NAME)
                 {
-                    ASSERT_FIELD_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value))) << gen_error_log();
+                    ASSERT_FIELD_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value)))
+                        << gen_error_log();
                 }
                 else
                 {
                     if (fields_map.count(column_element.column_id) > 0)
-                        ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id)) << gen_error_log();
+                        ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id))
+                            << gen_error_log();
                     else
-                        LOG_INFO(logger, "ignore value check for new added column, id={}, name={}", column_element.column_id, column_element.name);
+                        LOG_INFO(
+                            logger,
+                            "ignore value check for new added column, id={}, name={}",
+                            column_element.column_id,
+                            column_element.name);
                 }
             }
         }
@@ -192,7 +199,9 @@ protected:
         return true;
     }
 
-    std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(const ColumnIDs & pk_col_ids, bool is_common_handle) const
+    std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(
+        const ColumnIDs & pk_col_ids,
+        bool is_common_handle) const
     {
         return getTableInfoAndFields(
             pk_col_ids,
@@ -430,7 +439,11 @@ try
     //    primary key (`column3`) /*T![clustered_index] NONCLUSTERED */
     //    -- _tidb_rowid bigint, // hidden handle
     // }
-    auto [table_info, fields] = getTableInfoAndFields(/*pk_col_ids*/ {3}, false, ColumnIDValue<String>(3, "hello"), ColumnIDValueNull<String>(4));
+    auto [table_info, fields] = getTableInfoAndFields(
+        /*pk_col_ids*/ {3},
+        false,
+        ColumnIDValue<String>(3, "hello"),
+        ColumnIDValueNull<String>(4));
     ASSERT_EQ(table_info.is_common_handle, false);
     ASSERT_EQ(table_info.pk_is_handle, false);
     ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
@@ -449,7 +462,11 @@ try
     //    -- _tidb_rowid bigint, // hidden handle
     // }
     TableInfo new_table_info;
-    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(
+        /*pk_col_ids*/ {3, 4},
+        false,
+        ColumnIDValueNull<String>(3),
+        ColumnIDValueNull<String>(4));
     ASSERT_EQ(new_table_info.is_common_handle, false);
     ASSERT_EQ(new_table_info.pk_is_handle, false);
     ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
@@ -477,7 +494,11 @@ try
     //    primary key (`column3`) /*T![clustered_index] NONCLUSTERED */
     //    -- _tidb_rowid bigint, // hidden handle
     // }
-    auto [table_info, fields] = getTableInfoAndFields(/*pk_col_ids*/ {3}, false, ColumnIDValue<String>(3, "hello"), ColumnIDValueNull<String>(4));
+    auto [table_info, fields] = getTableInfoAndFields(
+        /*pk_col_ids*/ {3},
+        false,
+        ColumnIDValue<String>(3, "hello"),
+        ColumnIDValueNull<String>(4));
     ASSERT_EQ(table_info.is_common_handle, false);
     ASSERT_EQ(table_info.pk_is_handle, false);
     ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
@@ -493,7 +514,11 @@ try
     //    -- _tidb_rowid bigint, // hidden handle
     // }
     TableInfo new_table_info;
-    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(
+        /*pk_col_ids*/ {3, 4},
+        false,
+        ColumnIDValueNull<String>(3),
+        ColumnIDValueNull<String>(4));
     ASSERT_EQ(new_table_info.is_common_handle, false);
     ASSERT_EQ(new_table_info.pk_is_handle, false);
     ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
@@ -529,7 +554,11 @@ try
     //    -- _tidb_rowid bigint, // hidden handle
     // }
     TableInfo new_table_info;
-    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(
+        /*pk_col_ids*/ {3, 4},
+        false,
+        ColumnIDValueNull<String>(3),
+        ColumnIDValueNull<String>(4));
     ASSERT_EQ(new_table_info.is_common_handle, false);
     ASSERT_EQ(new_table_info.pk_is_handle, false);
     ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
@@ -569,7 +598,11 @@ try
     //    -- _tidb_rowid bigint, // hidden handle
     // }
     TableInfo new_table_info;
-    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(
+        /*pk_col_ids*/ {3, 4},
+        false,
+        ColumnIDValueNull<String>(3),
+        ColumnIDValueNull<String>(4));
     ASSERT_EQ(new_table_info.is_common_handle, false);
     ASSERT_EQ(new_table_info.pk_is_handle, false);
     ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
@@ -587,12 +620,13 @@ CATCH
 TEST_F(RegionBlockReaderTest, ReadFromRegion)
 try
 {
-    TableInfo table_info(R"({"cols":[
+    TableInfo table_info(
+        R"({"cols":[
         {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"case_no","O":"case_no"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":32,"Tp":15}},
         {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"p","O":"p"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":12,"Tp":15}},
         {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"source","O":"source"},"offset":2,"origin_default":"","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":20,"Tp":15}}
     ],"comment":"","id":77,"index_info":[],"is_common_handle":false,"name":{"L":"t_case","O":"t_case"},"partition":null,"pk_is_handle":false,"schema_version":62,"state":5,"tiflash_replica":{"Count":1},"update_timestamp":435984541435559947})",
-                         NullspaceID);
+        NullspaceID);
 
     RegionID region_id = 4;
     String region_start_key(bytesFromHexString("7480000000000000FF445F720000000000FA"));
@@ -601,13 +635,17 @@ try
     // the hex kv dump from SSTFile
     std::vector<std::tuple<std::string_view, std::string_view>> kvs = {
         {"7480000000000000FF4D5F728000000000FF0000010000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
-        {"7480000000000000FF4D5F728000000000FF0000010000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010031"},
+        {"7480000000000000FF4D5F728000000000FF0000010000000000FAF9F3126548ABFFFC",
+         "508180D0BAABB3BB8606760A80000100000001010031"},
         {"7480000000000000FF4D5F728000000000FF0000020000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
-        {"7480000000000000FF4D5F728000000000FF0000020000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010032"},
+        {"7480000000000000FF4D5F728000000000FF0000020000000000FAF9F3126548ABFFFC",
+         "508180D0BAABB3BB8606760A80000100000001010032"},
         {"7480000000000000FF4D5F728000000000FF0000030000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
-        {"7480000000000000FF4D5F728000000000FF0000030000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010033"},
+        {"7480000000000000FF4D5F728000000000FF0000030000000000FAF9F3126548ABFFFC",
+         "508180D0BAABB3BB8606760A80000100000001010033"},
         {"7480000000000000FF4D5F728000000000FF0000040000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
-        {"7480000000000000FF4D5F728000000000FF0000040000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010034"},
+        {"7480000000000000FF4D5F728000000000FF0000040000000000FAF9F3126548ABFFFC",
+         "508180D0BAABB3BB8606760A80000100000001010034"},
     };
     for (const auto & [k, v] : kvs)
     {

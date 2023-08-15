@@ -46,10 +46,7 @@ private:
 private:
     void fillColumns(const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
 
-    const DataTypePtr & getDataType(ColId column_id) const
-    {
-        return schema->getDataType(column_id);
-    }
+    const DataTypePtr & getDataType(ColId column_id) const { return schema->getDataType(column_id); }
 
 public:
     explicit ColumnFileInMemory(const ColumnFileSchemaPtr & schema_, const CachePtr & cache_ = nullptr)
@@ -70,25 +67,17 @@ public:
     /// The schema of this pack.
     ColumnFileSchemaPtr getSchema() const { return schema; }
 
-    ColumnFileInMemoryPtr clone()
-    {
-        return std::make_shared<ColumnFileInMemory>(*this);
-    }
+    ColumnFileInMemoryPtr clone() { return std::make_shared<ColumnFileInMemory>(*this); }
 
     ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
         const ColumnDefinesPtr & col_defs) const override;
 
-    bool isAppendable() const override
-    {
-        return !disable_append;
-    }
-    void disableAppend() override
-    {
-        disable_append = true;
-    }
-    bool append(const DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes) override;
+    bool isAppendable() const override { return !disable_append; }
+    void disableAppend() override { disable_append = true; }
+    bool append(const DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
+        override;
 
     Block readDataForFlush() const;
 
@@ -116,26 +105,29 @@ private:
     bool read_done = false;
 
 public:
-    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_,
-                             const ColumnDefinesPtr & col_defs_,
-                             const Columns & cols_data_cache_)
+    ColumnFileInMemoryReader(
+        const ColumnFileInMemory & memory_file_,
+        const ColumnDefinesPtr & col_defs_,
+        const Columns & cols_data_cache_)
         : memory_file(memory_file_)
         , col_defs(col_defs_)
         , cols_data_cache(cols_data_cache_)
-    {
-    }
+    {}
 
     ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
         : memory_file(memory_file_)
         , col_defs(col_defs_)
-    {
-    }
+    {}
 
     /// This is a ugly hack to fast return PK & Version column.
     ColumnPtr getPKColumn();
     ColumnPtr getVersionColumn();
 
-    std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
+    std::pair<size_t, size_t> readRows(
+        MutableColumns & output_cols,
+        size_t rows_offset,
+        size_t rows_limit,
+        const RowKeyRange * range) override;
 
     Block readNextBlock() override;
 

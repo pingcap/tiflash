@@ -48,8 +48,9 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     // RefPage exists, but normal Page do NOT exist. Should NOT call here
     if (!entry)
     {
-        throw DB::Exception("Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
-                            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception(
+            "Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+            ErrorCodes::LOGICAL_ERROR);
     }
     return entry;
 }

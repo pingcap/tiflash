@@ -41,13 +41,14 @@
 
 namespace DB
 {
-extern void GenMockSSTData(const TiDB::TableInfo & table_info,
-                           TableID table_id,
-                           const String & store_key,
-                           UInt64 start_handle,
-                           UInt64 end_handle,
-                           UInt64 num_fields = 1,
-                           const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default});
+extern void GenMockSSTData(
+    const TiDB::TableInfo & table_info,
+    TableID table_id,
+    const String & store_key,
+    UInt64 start_handle,
+    UInt64 end_handle,
+    UInt64 num_fields = 1,
+    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default});
 
 namespace FailPoints
 {
@@ -62,7 +63,10 @@ extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const Ti
 } // namespace RegionBench
 
 extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
-extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state);
+extern void ChangeRegionStateRange(
+    RegionState & region_state,
+    bool source_at_left,
+    const RegionState & source_region_state);
 
 namespace tests
 {
@@ -70,10 +74,7 @@ namespace tests
 class RegionKVStoreTest : public ::testing::Test
 {
 public:
-    RegionKVStoreTest()
-    {
-        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
-    }
+    RegionKVStoreTest() { test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test"); }
 
     static void SetUpTestCase() {}
 
@@ -94,10 +95,7 @@ public:
         }
     }
 
-    void TearDown() override
-    {
-        proxy_instance->clear();
-    }
+    void TearDown() override { proxy_instance->clear(); }
 
 protected:
     KVStore & getKVS() { return *kvstore; }
@@ -112,10 +110,7 @@ protected:
         kvstore->restore(*path_pool, proxy_helper.get());
         return *kvstore;
     }
-    void createDefaultRegions()
-    {
-        proxy_instance->init(100);
-    }
+    void createDefaultRegions() { proxy_instance->init(100); }
     void initStorages()
     {
         bool v = false;
@@ -144,15 +139,9 @@ protected:
         over.store(false);
         ctx.getTMTContext().setStatusRunning();
         // Start mock proxy in other thread
-        proxy_runner.reset(new std::thread([&]() {
-            proxy_instance->testRunNormal(over);
-        }));
+        proxy_runner.reset(new std::thread([&]() { proxy_instance->testRunNormal(over); }));
         ASSERT_EQ(kvstore->getProxyHelper(), proxy_helper.get());
-        kvstore->initReadIndexWorkers(
-            []() {
-                return std::chrono::milliseconds(10);
-            },
-            1);
+        kvstore->initReadIndexWorkers([]() { return std::chrono::milliseconds(10); }, 1);
         ASSERT_NE(kvstore->read_index_worker_manager, nullptr);
         kvstore->asyncRunReadIndexWorkers();
     }
