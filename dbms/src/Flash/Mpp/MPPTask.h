@@ -40,6 +40,7 @@ class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 class DAGContext;
 class ProcessListEntry;
+class QueryOperatorSpillContexts;
 
 enum class AbortType
 {
@@ -126,6 +127,9 @@ private:
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
 
     void initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry);
+
+    void initQueryOperatorSpillContexts(
+        const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts);
 
     void initExchangeReceivers();
 

@@ -60,10 +60,7 @@ public:
         CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
-    ~PageDirectorySnapshot() override
-    {
-        CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
-    }
+    ~PageDirectorySnapshot() override { CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots); }
 
     double elapsedSeconds() const
     {
@@ -246,14 +243,8 @@ struct EntryOrDelete
         return result;
     }
 
-    bool isDelete() const
-    {
-        return is_delete;
-    }
-    bool isEntry() const
-    {
-        return !is_delete;
-    }
+    bool isDelete() const { return is_delete; }
+    bool isEntry() const { return !is_delete; }
 };
 
 using PageLock = std::lock_guard<std::mutex>;
@@ -286,10 +277,7 @@ public:
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
 
-    [[nodiscard]] PageLock acquireLock() const
-    {
-        return std::lock_guard(m);
-    }
+    [[nodiscard]] PageLock acquireLock() const { return std::lock_guard(m); }
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
@@ -297,7 +285,7 @@ public:
     // Return a PageId, if the page id is valid, it means it rewrite a RefPage into
     // a normal Page. Caller must call `derefAndClean` to decrease the ref-count of
     // the returing page id.
-    [[nodiscard]] PageId createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
+    [[nodiscard]] PageId createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry, bool strict_check);
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
 
@@ -311,8 +299,7 @@ public:
 
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 
-    std::tuple<ResolveResult, PageId, PageVersion>
-    resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
+    std::tuple<ResolveResult, PageId, PageVersion> resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
     Int64 incrRefCount(const PageVersion & target_ver, const PageVersion & ref_ver);
 
@@ -442,7 +429,10 @@ public:
     using PageIdAndEntries = std::vector<PageIdAndEntry>;
 
 public:
-    explicit PageDirectory(String storage_name, WALStorePtr && wal, UInt64 max_persisted_log_files_ = MAX_PERSISTED_LOG_FILES);
+    explicit PageDirectory(
+        String storage_name,
+        WALStorePtr && wal,
+        UInt64 max_persisted_log_files_ = MAX_PERSISTED_LOG_FILES);
 
     PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 
@@ -461,12 +451,15 @@ public:
     {
         return std::get<0>(getByIDsImpl(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true));
     }
-    std::pair<PageIdAndEntries, PageIds> getByIDsOrNull(const PageIds & page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    std::pair<PageIdAndEntries, PageIds> getByIDsOrNull(
+        const PageIds & page_ids,
+        const DB::PageStorageSnapshotPtr & snap) const
     {
         return getByIDsImpl(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-    PageId getNormalPageId(const PageId & page_id, const DB::PageStorageSnapshotPtr & snap_, bool throw_on_not_exist) const;
+    PageId getNormalPageId(const PageId & page_id, const DB::PageStorageSnapshotPtr & snap_, bool throw_on_not_exist)
+        const;
 
     UInt64 getMaxIdAfterRestart() const;
 
@@ -485,10 +478,12 @@ public:
     std::unordered_set<String> apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     // return ignored entries, and the corresponding space in BlobFile should be reclaimed
-    PageEntries updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntries updateLocalCacheForRemotePages(
+        PageEntriesEdit && edit,
+        const DB::PageStorageSnapshotPtr & snap_,
+        const WriteLimiterPtr & write_limiter = nullptr);
 
-    std::pair<GcEntriesMap, PageSize>
-    getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
+    std::pair<GcEntriesMap, PageSize> getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
     using PageTypeAndBlobIds = std::map<PageType, std::vector<BlobFileId>>;
     using PageTypeAndGcInfo = std::vector<std::tuple<PageType, GcEntriesMap, PageSize>>;
@@ -547,10 +542,7 @@ public:
 
     // `writers` should be used under the protection of apply_mutex
     // So don't use this function in production code
-    size_t getWritersQueueSizeForTest()
-    {
-        return writers.size();
-    }
+    size_t getWritersQueueSizeForTest() { return writers.size(); }
 
     // No copying and no moving
     DISALLOW_COPY_AND_MOVE(PageDirectory);
@@ -561,9 +553,12 @@ public:
     friend class PageStorageControlV3;
 
 private:
-    PageIdAndEntry getByIDImpl(const PageId & page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
-    std::pair<PageIdAndEntries, PageIds>
-    getByIDsImpl(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
+    PageIdAndEntry getByIDImpl(const PageId & page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist)
+        const;
+    std::pair<PageIdAndEntries, PageIds> getByIDsImpl(
+        const PageIds & page_ids,
+        const PageDirectorySnapshotPtr & snap,
+        bool throw_on_not_exist) const;
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
@@ -578,8 +573,7 @@ private:
         const typename PageEntriesEdit::EditRecord & rec,
         const PageVersion & version);
 
-    static inline PageDirectorySnapshotPtr
-    toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)
+    static inline PageDirectorySnapshotPtr toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)
     {
         return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
     }
@@ -682,10 +676,7 @@ using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 template <>
 struct fmt::formatter<DB::PS::V3::EntryOrDelete>
 {
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        return ctx.begin();
-    }
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const DB::PS::V3::EntryOrDelete & entry, FormatContext & ctx) const

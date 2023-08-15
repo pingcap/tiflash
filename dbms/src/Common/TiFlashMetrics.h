@@ -50,6 +50,8 @@ namespace DB
       Counter,                                                                                                                      \
       F(type_cop, {"type", "cop"}),                                                                                                 \
       F(type_cop_executing, {"type", "cop_executing"}),                                                                             \
+      F(type_cop_stream, {"type", "cop_stream"}),                                                                                   \
+      F(type_cop_stream_executing, {"type", "cop_stream_executing"}),                                                               \
       F(type_batch, {"type", "batch"}),                                                                                             \
       F(type_batch_executing, {"type", "batch_executing"}),                                                                         \
       F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                                                                     \
@@ -66,6 +68,8 @@ namespace DB
       Gauge,                                                                                                                        \
       F(type_cop, {"type", "cop"}),                                                                                                 \
       F(type_cop_executing, {"type", "cop_executing"}),                                                                             \
+      F(type_cop_stream, {"type", "cop_stream"}),                                                                                   \
+      F(type_cop_stream_executing, {"type", "cop_stream_executing"}),                                                               \
       F(type_batch, {"type", "batch"}),                                                                                             \
       F(type_batch_executing, {"type", "batch_executing"}),                                                                         \
       F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                                                                     \
@@ -97,6 +101,7 @@ namespace DB
       "Bucketed histogram of request duration",                                                                                     \
       Histogram,                                                                                                                    \
       F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                       \
       F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
       F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                         \
       F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                       \
@@ -108,6 +113,7 @@ namespace DB
       "Bucketed histogram of request memory usage",                                                                                 \
       Histogram,                                                                                                                    \
       F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                               \
+      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                 \
       F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                           \
       F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}),                                             \
       F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets{1024 * 1024, 2, 20}))                                           \
@@ -124,11 +130,13 @@ namespace DB
       "Bucketed histogram of request handle duration",                                                                              \
       Histogram,                                                                                                                    \
       F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                       \
       F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
     M(tiflash_coprocessor_response_bytes,                                                                                           \
       "Total bytes of response body",                                                                                               \
       Counter,                                                                                                                      \
       F(type_cop, {{"type", "cop"}}),                                                                                               \
+      F(type_cop_stream, {{"type", "cop_stream"}}),                                                                                 \
       F(type_batch_cop, {{"type", "batch_cop"}}),                                                                                   \
       F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}),                                                                   \
       F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                         \
@@ -470,6 +478,10 @@ namespace DB
          ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
       F(type_cop,                                                                                                                   \
         {{"type", "cop"},                                                                                                           \
+         ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
+         ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
+      F(type_cop_stream,                                                                                                            \
+        {{"type", "cop_stream"},                                                                                                    \
          ComputeLabelHolder::instance().getClusterIdLabel(),                                                                        \
          ComputeLabelHolder::instance().getProcessIdLabel()}),                                                                      \
       F(type_batch,                                                                                                                 \

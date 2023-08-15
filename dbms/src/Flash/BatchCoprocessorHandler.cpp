@@ -38,12 +38,11 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::BatchRequest * cop_request_,
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
-    : CoprocessorHandler(cop_context_, nullptr, nullptr)
+    : cop_context(cop_context_)
     , cop_request(cop_request_)
     , writer(writer_)
-{
-    log = (&Poco::Logger::get("BatchCoprocessorHandler"));
-}
+    , log(Logger::get("BatchCoprocessorHandler"))
+{}
 
 grpc::Status BatchCoprocessorHandler::execute()
 {
@@ -81,11 +80,11 @@ grpc::Status BatchCoprocessorHandler::execute()
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
-                /*is_batch_cop=*/true,
+                DAGRequestKind::BatchCop,
                 Logger::get("BatchCoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
-            DAGDriver<true> driver(
+            DAGDriver<DAGRequestKind::BatchCop> driver(
                 cop_context.db_context,
                 cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(),
                 cop_request->schema_ver(),
@@ -134,8 +133,9 @@ grpc::Status BatchCoprocessorHandler::execute()
 
 grpc::Status BatchCoprocessorHandler::recordError(grpc::StatusCode err_code, const String & err_msg)
 {
-    err_response.set_other_error(err_msg);
-    writer->Write(err_response);
+    coprocessor::BatchResponse response;
+    response.set_other_error(err_msg);
+    writer->Write(response);
 
     return grpc::Status(err_code, err_msg);
 }
