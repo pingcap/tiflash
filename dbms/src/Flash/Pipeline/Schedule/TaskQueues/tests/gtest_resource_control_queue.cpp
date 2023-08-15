@@ -187,7 +187,7 @@ public:
         return all_contexts;
     }
 
-    void testSmallRULargeCPU(bool static_token_bucket)
+    double testSmallRULargeCPU(bool static_token_bucket, bool rg1_burstable)
     {
         const uint64_t rg1_ru_per_sec = 50;
         const uint64_t rg2_ru_per_sec = 100;
@@ -198,7 +198,7 @@ public:
                     "rg1",
                     ResourceGroup::MediumPriorityValue,
                     rg1_ru_per_sec,
-                    false),
+                    rg1_burstable),
                 createResourceGroupOfStaticTokenBucket(
                     "rg2",
                     ResourceGroup::MediumPriorityValue,
@@ -211,7 +211,7 @@ public:
                     "rg1",
                     ResourceGroup::MediumPriorityValue,
                     rg1_ru_per_sec,
-                    false),
+                    rg1_burstable),
                 createResourceGroupOfDynamicTokenBucket(
                     "rg2",
                     ResourceGroup::MediumPriorityValue,
@@ -238,35 +238,14 @@ public:
         }
 
         auto rg1_cpu_time = toCPUTimeMillisecond(all_contexts[0]->getQueryProfileInfo().getCPUExecuteTimeNs());
-        uint64_t rg1_actural_exec_count = rg1_cpu_time / toCPUTimeMillisecond(YIELD_MAX_TIME_SPENT_NS);
-        // 5s * ru_per_sec: total avilable RU of 5s.
-        // rg1_total_exec_count indicates how many 100ms of unit time were executed within 5 seconds.
-        uint64_t rg1_expect_exec_count_min
-            = (((exec_dura_sec - 1) * rg1_ru_per_sec) / toRU(YIELD_MAX_TIME_SPENT_NS)) + 1;
-        uint64_t rg1_expect_exec_count_max
-            = (((exec_dura_sec + 1) * rg1_ru_per_sec) / toRU(YIELD_MAX_TIME_SPENT_NS)) + 1;
-
         auto rg2_cpu_time = toCPUTimeMillisecond(all_contexts[1]->getQueryProfileInfo().getCPUExecuteTimeNs());
-        uint64_t rg2_actural_exec_count = rg2_cpu_time / toCPUTimeMillisecond(YIELD_MAX_TIME_SPENT_NS);
-        uint64_t rg2_expect_exec_count_min
-            = (((exec_dura_sec - 1) * rg2_ru_per_sec) / toRU(YIELD_MAX_TIME_SPENT_NS)) + 1;
-        uint64_t rg2_expect_exec_count_max
-            = (((exec_dura_sec + 1) * rg2_ru_per_sec) / toRU(YIELD_MAX_TIME_SPENT_NS)) + 1;
+        double rate = static_cast<double>(rg2_cpu_time) / rg1_cpu_time;
 
         std::cout << "rg1_cpu_time " << rg1_cpu_time << std::endl;
-        std::cout << "rg1_expect_exec_count_min " << rg1_expect_exec_count_min << std::endl;
-        std::cout << "rg1_expect_exec_count_max " << rg1_expect_exec_count_max << std::endl;
-        std::cout << "rg1_actural_exec_count " << rg1_actural_exec_count << std::endl;
-
         std::cout << "rg2_cpu_time " << rg2_cpu_time << std::endl;
-        std::cout << "rg2_expect_exec_count_min " << rg2_expect_exec_count_min << std::endl;
-        std::cout << "rg2_expect_exec_count_max " << rg2_expect_exec_count_max << std::endl;
-        std::cout << "rg2_actural_exec_count " << rg2_actural_exec_count << std::endl;
+        std::cout << "rate " << rate << std::endl;
 
-        EXPECT_TRUE(
-            rg1_actural_exec_count >= rg1_expect_exec_count_min && rg1_actural_exec_count <= rg1_expect_exec_count_max);
-        EXPECT_TRUE(
-            rg2_actural_exec_count >= rg2_expect_exec_count_min && rg2_actural_exec_count <= rg2_expect_exec_count_max);
+        return rate;
     }
 
     void testSmallRUSmallCPU(bool static_token_bucket)
@@ -385,6 +364,7 @@ public:
         EXPECT_TRUE(rate1 >= 3.5 && rate1 <= 6.5);
         EXPECT_TRUE(rate2 >= 7.5 && rate2 <= 13.5);
     }
+
     MemoryTrackerPtr mem_tracker;
 };
 
@@ -505,16 +485,17 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
 }
 
 // RU is very small, which makes task execution is restricted by RU.
-// Expect task execution time is in a range decided by RU.
+// The proportion of CPU time of each resource group should be same with the proportion of RU.
 TEST_F(TestResourceControlQueue, SmallRULargeCPUStaticTokenBucket)
 {
-    testSmallRULargeCPU(true);
+    auto rate = testSmallRULargeCPU(true, false);
+    EXPECT_TRUE(rate >= 1.5 && rate <= 2.5);
 }
 TEST_F(TestResourceControlQueue, SmallRULargeCPUDynamicTokenBucket)
 {
-    testSmallRULargeCPU(false);
+    auto rate = testSmallRULargeCPU(false, false);
+    EXPECT_TRUE(rate >= 1.5 && rate <= 2.5);
 }
-
 
 // CPU resource is not enough, and RU is small.
 // It is difficult to get an accurate proportion of the execution time of two RGs,
@@ -542,12 +523,19 @@ TEST_F(TestResourceControlQueue, LargeRUSmallCPUDynamicTokenBucket)
 
 // Both RU and cpu resource is enough.
 // Expect all tasks should run ok, and RCQ should effect the execution of tasks.
+// Maybe too trivial, no need to test.
 // TEST_F(TestResourceControlQueue, LargeRULargeCPU) {}
 
-// 1. Tasks of different resource groups is restricted by RU, and there is still available cpu resource.
-// 2. Change rg-1 as burstable, the available cpu resource is used by rg1.
-// 3. Change other rg as burstable, the cpu usage should be same of all resource groups.
-TEST_F(TestResourceControlQueue, TestBurstable) {}
+TEST_F(TestResourceControlQueue, TestBurstableStaticTokenBucket)
+{
+    auto rate = testSmallRULargeCPU(true, true);
+    EXPECT_TRUE(rate < 1);
+}
+TEST_F(TestResourceControlQueue, TestBurstableDynamicTokenBucket)
+{
+    auto rate = testSmallRULargeCPU(false, true);
+    EXPECT_TRUE(rate < 1);
+}
 
 // Test priority queue of ResourceControlQueue: Less priority value means higher priority.
 TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
