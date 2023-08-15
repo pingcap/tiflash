@@ -58,7 +58,8 @@ using AsyncExchangePacketReaderPtr = std::unique_ptr<AsyncExchangePacketReader>;
 struct ExchangeRecvRequest
 {
     Int64 source_index = -1;
-    Int64 send_task_id = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
+    Int64 send_task_id
+        = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = -2;
     mpp::EstablishMPPConnectionRequest req;
     bool is_local = false;
@@ -95,10 +96,7 @@ public:
         grpc::CompletionQueue * cq,
         GRPCKickTag * tag) const;
 
-    static Status getStatusOK()
-    {
-        return grpc::Status::OK;
-    }
+    static Status getStatusOK() { return grpc::Status::OK; }
 
     void fillSchema(DAGSchema & schema) const;
 
@@ -108,7 +106,9 @@ public:
         LocalRequestHandler & local_request_handler,
         bool has_remote_conn);
 
-    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager);
+    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        const std::shared_ptr<MPPTaskManager> & task_manager);
 
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
     void sendMPPTaskToTiFlashStorageNode(

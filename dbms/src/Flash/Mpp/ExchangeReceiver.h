@@ -44,7 +44,10 @@ struct ExchangeReceiverResult
         : ExchangeReceiverResult(nullptr, 0)
     {}
 
-    static ExchangeReceiverResult newOk(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_)
+    static ExchangeReceiverResult newOk(
+        std::shared_ptr<tipb::SelectResponse> resp_,
+        size_t call_index_,
+        const String & req_info_)
     {
         return {resp_, call_index_, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false};
     }
@@ -133,7 +136,10 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
     size_t getSourceNum() const { return source_num; }
-    uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
+    uint64_t getFineGrainedShuffleStreamCount() const
+    {
+        return enable_fine_grained_shuffle_flag ? output_stream_count : 0;
+    }
     int getExternalThreadCnt() const { return thread_count; }
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
@@ -162,10 +168,7 @@ private:
         std::queue<Block> & block_queue,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    void connectionDone(
-        bool meet_error,
-        const String & local_err_msg,
-        const LoggerPtr & log);
+    void connectionDone(bool meet_error, const String & local_err_msg, const LoggerPtr & log);
 
     void waitAllConnectionDone();
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);

@@ -43,8 +43,12 @@ public:
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus executeIOImpl() override;
+
 private:
     JoinPtr join_ptr;
     size_t op_index;
+
+    bool is_finish_status = false;
 };
 } // namespace DB

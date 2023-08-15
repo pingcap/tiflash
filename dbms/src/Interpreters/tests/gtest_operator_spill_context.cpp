@@ -57,7 +57,7 @@ try
 {
     auto spill_context = std::make_shared<AggSpillContext>(1, *spill_config_ptr, 1000, logger);
     ASSERT_TRUE(spill_context->isSpilled() == false);
-    spill_context->markSpill();
+    spill_context->markSpilled();
     ASSERT_TRUE(spill_context->isSpilled() == true);
 }
 CATCH
@@ -96,7 +96,7 @@ try
 {
     auto spill_context = std::make_shared<SortSpillContext>(*spill_config_ptr, 1000, logger);
     ASSERT_TRUE(spill_context->isSpilled() == false);
-    spill_context->markSpill();
+    spill_context->markSpilled();
     ASSERT_TRUE(spill_context->isSpilled() == true);
 }
 CATCH
@@ -129,7 +129,7 @@ try
     auto spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
     spill_context->init(10);
     ASSERT_FALSE(spill_context->isSpilled());
-    spill_context->markPartitionSpill(0);
+    spill_context->markPartitionSpilled(0);
     ASSERT_TRUE(spill_context->isSpilled());
 }
 CATCH

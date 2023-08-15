@@ -21,7 +21,6 @@
 
 namespace DB
 {
-using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class CoprocessorReaderSourceOp : public SourceOp
 {
