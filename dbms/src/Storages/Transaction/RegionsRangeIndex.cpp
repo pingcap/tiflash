@@ -55,7 +55,9 @@ void RegionsRangeIndex::remove(const RegionRange & range, RegionID region_id)
     for (auto it = begin_it; it != end_it; ++it)
     {
         if (it->second.region_map.erase(region_id) == 0)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": not found region_id=" + toString(region_id), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                std::string(__PRETTY_FUNCTION__) + ": not found region_id=" + toString(region_id),
+                ErrorCodes::LOGICAL_ERROR);
     }
     tryMergeEmpty(begin_it);
 }
@@ -73,7 +75,8 @@ RegionMap RegionsRangeIndex::findByRangeOverlap(const RegionRange & range) const
     return res;
 }
 
-std::variant<RegionMap, RegionsRangeIndex::OverlapInfo> RegionsRangeIndex::findByRangeChecked(const RegionRange & range) const
+std::variant<RegionMap, RegionsRangeIndex::OverlapInfo> RegionsRangeIndex::findByRangeChecked(
+    const RegionRange & range) const
 {
     auto begin_it = root.lower_bound(range.first);
     auto end_it = root.lower_bound(range.second);

@@ -58,10 +58,7 @@ public:
         const UInt64 applied_term_,
         raft_serverpb::RegionLocalState region_state_);
 
-    RegionMeta(
-        metapb::Peer peer_,
-        metapb::Region region,
-        raft_serverpb::RaftApplyState apply_state_);
+    RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_);
 
     RegionMeta(RegionMeta && rhs);
 

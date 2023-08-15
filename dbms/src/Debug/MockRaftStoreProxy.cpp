@@ -69,8 +69,7 @@ RawRustPtr fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view)
     return RawRustPtr{task, static_cast<uint32_t>(RawObjType::MockReadIndexTask)};
 }
 
-RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr),
-                               RawCppPtr data)
+RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data)
 {
     auto * p = new MockAsyncWaker{std::make_shared<MockAsyncNotifier>()};
     p->data->data = data;
@@ -115,12 +114,21 @@ void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
     }
 }
 
-void fn_handle_batch_read_index(RaftStoreProxyPtr, CppStrVecView, RawVoidPtr, uint64_t, void (*)(RawVoidPtr, BaseBuffView, uint64_t))
+void fn_handle_batch_read_index(
+    RaftStoreProxyPtr,
+    CppStrVecView,
+    RawVoidPtr,
+    uint64_t,
+    void (*)(RawVoidPtr, BaseBuffView, uint64_t))
 {
     throw Exception("`fn_handle_batch_read_index` is deprecated");
 }
 
-KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id, RawVoidPtr data, RawCppStringPtr * error_msg)
+KVGetStatus fn_get_region_local_state(
+    RaftStoreProxyPtr ptr,
+    uint64_t region_id,
+    RawVoidPtr data,
+    RawCppStringPtr * error_msg)
 {
     if (!ptr.inner)
     {
@@ -140,7 +148,12 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
         return KVGetStatus::NotFound;
 }
 
-void fn_notify_compact_log(RaftStoreProxyPtr ptr, uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index)
+void fn_notify_compact_log(
+    RaftStoreProxyPtr ptr,
+    uint64_t region_id,
+    uint64_t compact_index,
+    uint64_t compact_term,
+    uint64_t applied_index)
 {
     UNUSED(applied_index);
     // Update flushed applied_index and truncated state.
@@ -154,9 +167,7 @@ void fn_notify_compact_log(RaftStoreProxyPtr ptr, uint64_t region_id, uint64_t c
     }
 }
 
-RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr,
-                                              uint8_t,
-                                              int64_t)
+RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint8_t, int64_t)
 {
     auto & x = as_ref(ptr);
     return x.cluster_ver;
@@ -272,13 +283,21 @@ UniversalWriteBatch MockProxyRegion::persistMeta()
     auto region_local_state = this->state.SerializeAsString();
     MemoryWriteBuffer buf(0, region_local_state.size());
     buf.write(region_local_state.data(), region_local_state.size());
-    wb.putPage(UniversalPageId(region_key.data(), region_key.size()), 0, buf.tryGetReadBuffer(), region_local_state.size());
+    wb.putPage(
+        UniversalPageId(region_key.data(), region_key.size()),
+        0,
+        buf.tryGetReadBuffer(),
+        region_local_state.size());
 
     auto apply_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(this->id);
     auto raft_apply_state = this->apply.SerializeAsString();
     MemoryWriteBuffer buf2(0, raft_apply_state.size());
     buf2.write(raft_apply_state.data(), raft_apply_state.size());
-    wb.putPage(UniversalPageId(apply_key.data(), apply_key.size()), 0, buf2.tryGetReadBuffer(), raft_apply_state.size());
+    wb.putPage(
+        UniversalPageId(apply_key.data(), apply_key.size()),
+        0,
+        buf2.tryGetReadBuffer(),
+        raft_apply_state.size());
 
     raft_serverpb::RegionLocalState restored_region_state;
     raft_serverpb::RaftApplyState restored_apply_state;
@@ -381,8 +400,8 @@ void MockRaftStoreProxy::init(size_t region_num)
 
 std::unique_ptr<TiFlashRaftProxyHelper> MockRaftStoreProxy::generateProxyHelper()
 {
-    auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-        RaftStoreProxyPtr{this}));
+    auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(
+        MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{this}));
     // Bind ffi to MockSSTReader.
     proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
     return proxy_helper;
@@ -470,10 +489,7 @@ void MockRaftStoreProxy::debugAddRegions(
     }
 }
 
-void MockRaftStoreProxy::loadRegionFromKVStore(
-    KVStore & kvs,
-    TMTContext & tmt,
-    UInt64 region_id)
+void MockRaftStoreProxy::loadRegionFromKVStore(KVStore & kvs, TMTContext & tmt, UInt64 region_id)
 {
     UNUSED(tmt);
     auto kvr = kvs.getRegion(region_id);
@@ -499,7 +515,12 @@ void MockRaftStoreProxy::loadRegionFromKVStore(
             r->apply.set_commit_term(commit_term);
         }
     }
-    LOG_INFO(log, "loadRegionFromKVStore [region_id={}] region_state {} apply_state {}", region_id, r->state.DebugString(), r->apply.DebugString());
+    LOG_INFO(
+        log,
+        "loadRegionFromKVStore [region_id={}] region_state {} apply_state {}",
+        region_id,
+        r->state.DebugString(),
+        r->apply.DebugString());
 }
 
 std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
@@ -534,14 +555,14 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
                 new_keys.emplace_back(RecordKVFormat::genKey(table_id, keys[i], 1));
             }
         }
-        region->commands[index] = {
-            term,
-            MockProxyRegion::RawWrite{
-                new_keys,
-                vals,
-                cmd_types,
-                cmd_cf,
-            }};
+        region->commands[index]
+            = {term,
+               MockProxyRegion::RawWrite{
+                   new_keys,
+                   vals,
+                   cmd_types,
+                   cmd_cf,
+               }};
     }
     return std::make_tuple(index, term);
 }
@@ -566,14 +587,14 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
         // We record them, as persisted raft log, for potential recovery.
-        region->commands[index] = {
-            term,
-            MockProxyRegion::RawWrite{
-                keys,
-                vals,
-                cmd_types,
-                cmd_cf,
-            }};
+        region->commands[index]
+            = {term,
+               MockProxyRegion::RawWrite{
+                   keys,
+                   vals,
+                   cmd_types,
+                   cmd_cf,
+               }};
     }
     return std::make_tuple(index, term);
 }
@@ -597,17 +618,19 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
         // We record them, as persisted raft log, for potential recovery.
-        region->commands[index] = {
-            term,
-            MockProxyRegion::AdminCommand{
-                request,
-                response,
-            }};
+        region->commands[index]
+            = {term,
+               MockProxyRegion::AdminCommand{
+                   request,
+                   response,
+               }};
     }
     return std::make_tuple(index, term);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCompactLog(MockProxyRegionPtr region, UInt64 compact_index)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCompactLog(
+    MockProxyRegionPtr region,
+    UInt64 compact_index)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -621,7 +644,10 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region && meta, std::vector<UInt64> peer_ids, bool is_v2)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(
+    metapb::Region && meta,
+    std::vector<UInt64> peer_ids,
+    bool is_v2)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -642,7 +668,9 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composePrepareMerge(metapb::Region && target, UInt64 min_index)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composePrepareMerge(
+    metapb::Region && target,
+    UInt64 min_index)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -653,7 +681,9 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCommitMerge(metapb::Region && source, UInt64 commit)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCommitMerge(
+    metapb::Region && source,
+    UInt64 commit)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -674,7 +704,10 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> && region_ids, std::vector<std::pair<std::string, std::string>> && ranges, metapb::RegionEpoch old_epoch)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(
+    std::vector<UInt64> && region_ids,
+    std::vector<std::pair<std::string, std::string>> && ranges,
+    metapb::RegionEpoch old_epoch)
 {
     RUNTIME_CHECK_MSG(region_ids.size() == ranges.size(), "error composeBatchSplit input");
     auto n = region_ids.size();
@@ -774,7 +807,15 @@ void MockRaftStoreProxy::doApply(
     {
         if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog)
         {
-            auto res = kvs.tryFlushRegionData(region_id, false, true, tmt, index, term, region->getApply().truncated_state().index(), region->getApply().truncated_state().term());
+            auto res = kvs.tryFlushRegionData(
+                region_id,
+                false,
+                true,
+                tmt,
+                index,
+                term,
+                region->getApply().truncated_state().index(),
+                region->getApply().truncated_state().term());
             auto compact_index = cmd.admin().request.compact_log().compact_index();
             auto compact_term = cmd.admin().request.compact_log().compact_term();
             if (!res)
@@ -787,7 +828,13 @@ void MockRaftStoreProxy::doApply(
                 LOG_DEBUG(log, "mock pre exec success, update to {},{}", compact_index, compact_term);
             }
         }
-        kvs.handleAdminRaftCmd(std::move(cmd.admin().request), std::move(cmd.admin().response), region_id, index, term, tmt);
+        kvs.handleAdminRaftCmd(
+            std::move(cmd.admin().request),
+            std::move(cmd.admin().response),
+            region_id,
+            index,
+            term,
+            tmt);
     }
 
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE)
@@ -828,11 +875,7 @@ void MockRaftStoreProxy::doApply(
     region->persistAppliedIndex();
 }
 
-void MockRaftStoreProxy::replay(
-    KVStore & kvs,
-    TMTContext & tmt,
-    uint64_t region_id,
-    uint64_t to)
+void MockRaftStoreProxy::replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to)
 {
     auto region = getRegion(region_id);
     assert(region != nullptr);
@@ -920,7 +963,8 @@ RegionPtr MockRaftStoreProxy::snapshot(
         term = region->getLatestCommitTerm();
     }
 
-    auto new_kv_region = kvs.genRegionPtr(old_kv_region->cloneMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
+    auto new_kv_region
+        = kvs.genRegionPtr(old_kv_region->cloneMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
 
@@ -934,13 +978,7 @@ RegionPtr MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
-    auto ingest_ids = kvs.preHandleSnapshotToFiles(
-        new_kv_region,
-        snaps,
-        index,
-        term,
-        deadline_index,
-        tmt);
+    auto ingest_ids = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
 
     auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)};
     if (cancel_after_prehandle)
@@ -957,11 +995,7 @@ RegionPtr MockRaftStoreProxy::snapshot(
     return kvs.getRegion(region_id);
 }
 
-TableID MockRaftStoreProxy::bootstrapTable(
-    Context & ctx,
-    KVStore & kvs,
-    TMTContext & tmt,
-    bool drop_at_first)
+TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTContext & tmt, bool drop_at_first)
 {
     UNUSED(kvs);
     ColumnsDescription columns;

@@ -93,15 +93,15 @@ enum class PersistRegionReason
     IngestSst
 };
 
-constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()] = {
-    "debug",
-    "admin cmd useless",
-    "admin raft cmd",
-    "tryFlushRegionData",
-    "ProactiveFlush",
-    "save previous region before apply",
-    "save current region after apply",
-    "ingestsst"};
+constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()]
+    = {"debug",
+       "admin cmd useless",
+       "admin raft cmd",
+       "tryFlushRegionData",
+       "ProactiveFlush",
+       "save previous region before apply",
+       "save current region after apply",
+       "ingestsst"};
 
 static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistRegionReasonMap) / sizeof(const char *));
 
@@ -122,7 +122,11 @@ public:
 
     void gcPersistedRegion(Seconds gc_persist_period = Seconds(60 * 5));
 
-    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
+    static bool tryFlushRegionCacheInStorage(
+        TMTContext & tmt,
+        const Region & region,
+        const LoggerPtr & log,
+        bool try_until_succeed = true);
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(
@@ -147,12 +151,27 @@ public:
         DM::WriteResult & write_result);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
-    bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term, uint64_t truncated_index, uint64_t truncated_term);
+    bool tryFlushRegionData(
+        UInt64 region_id,
+        bool force_persist,
+        bool try_until_succeed,
+        TMTContext & tmt,
+        UInt64 index,
+        UInt64 term,
+        uint64_t truncated_index,
+        uint64_t truncated_term);
 
     /**
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
      */
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, std::optional<uint64_t>, TMTContext & tmt);
+    void handleApplySnapshot(
+        metapb::Region && region,
+        uint64_t peer_id,
+        SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        std::optional<uint64_t>,
+        TMTContext & tmt);
 
     void handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
@@ -215,7 +234,12 @@ public:
 
     // TODO(proactive flush)
     // void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
-    void notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background, bool lock_held = true);
+    void notifyCompactLog(
+        RegionID region_id,
+        UInt64 compact_index,
+        UInt64 compact_term,
+        bool is_background,
+        bool lock_held = true);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -225,7 +249,14 @@ private:
     friend struct MockRaftCommand;
     friend class RegionMockTest;
     friend class NaturalDag;
-    friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+    friend void RegionBench::concurrentBatchInsert(
+        const TiDB::TableInfo &,
+        Int64,
+        Int64,
+        Int64,
+        UInt64,
+        UInt64,
+        Context &);
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
@@ -258,16 +289,22 @@ private:
     template <typename RegionPtrWrap>
     void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
-    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    RegionPtr handleIngestSSTByDTFile(
+        const RegionPtr & region,
+        const SSTViewVec,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),
     // set `remove_data` true to remove obsolete data from storage.
-    void removeRegion(RegionID region_id,
-                      bool remove_data,
-                      RegionTable & region_table,
-                      const KVStoreTaskLock & task_lock,
-                      const RegionTaskLock & region_lock);
+    void removeRegion(
+        RegionID region_id,
+        bool remove_data,
+        RegionTable & region_table,
+        const KVStoreTaskLock & task_lock,
+        const RegionTaskLock & region_lock);
     void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
@@ -285,10 +322,29 @@ private:
     /// Notice that if flush_if_possible is set to false, we only check if a flush is allowed by rowsize/size/interval.
     /// It will not check if a flush will eventually succeed.
     /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
-    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term, UInt64 truncated_index, UInt64 truncated_term);
-    bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term) const;
+    bool canFlushRegionDataImpl(
+        const RegionPtr & curr_region_ptr,
+        UInt8 flush_if_possible,
+        bool try_until_succeed,
+        TMTContext & tmt,
+        const RegionTaskLock & region_task_lock,
+        UInt64 index,
+        UInt64 term,
+        UInt64 truncated_index,
+        UInt64 truncated_term);
+    bool forceFlushRegionDataImpl(
+        Region & curr_region,
+        bool try_until_succeed,
+        TMTContext & tmt,
+        const RegionTaskLock & region_task_lock,
+        UInt64 index,
+        UInt64 term) const;
 
-    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg) const;
+    void persistRegion(
+        const Region & region,
+        std::optional<const RegionTaskLock *> region_task_lock,
+        PersistRegionReason reason,
+        const char * extra_msg) const;
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 

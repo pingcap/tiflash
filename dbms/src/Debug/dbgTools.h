@@ -47,7 +47,12 @@ RegionPtr createRegion(
     const HandleID & end,
     std::optional<uint64_t> index = std::nullopt);
 
-Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin);
+Regions createRegions(
+    TableID table_id,
+    size_t region_num,
+    size_t key_num_each_region,
+    HandleID handle_begin,
+    RegionID new_region_id_begin);
 
 RegionPtr createRegion(
     const TiDB::TableInfo & table_info,
@@ -57,11 +62,32 @@ RegionPtr createRegion(
 
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
-void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin, ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del = {});
+void insert(
+    const TiDB::TableInfo & table_info,
+    RegionID region_id,
+    HandleID handle_id,
+    ASTs::const_iterator begin,
+    ASTs::const_iterator end,
+    Context & context,
+    const std::optional<std::tuple<Timestamp, UInt8>> & tso_del = {});
 
-void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & key, const TiKVValue & value, UInt64 prewrite_ts, UInt64 commit_ts, bool del, const String pk = "pk");
+void addRequestsToRaftCmd(
+    raft_cmdpb::RaftCmdRequest & request,
+    const TiKVKey & key,
+    const TiKVValue & value,
+    UInt64 prewrite_ts,
+    UInt64 commit_ts,
+    bool del,
+    const String pk = "pk");
 
-void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num, UInt64 min_strlen, UInt64 max_strlen, Context & context);
+void concurrentBatchInsert(
+    const TiDB::TableInfo & table_info,
+    Int64 concurrent_num,
+    Int64 flush_num,
+    Int64 batch_num,
+    UInt64 min_strlen,
+    UInt64 max_strlen,
+    Context & context);
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context);
 
@@ -75,7 +101,11 @@ Int64 concurrentRangeOperate(
 
 Field convertField(const TiDB::ColumnInfo & column_info, const Field & field);
 
-TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id);
+TableID getTableID(
+    Context & context,
+    const std::string & database_name,
+    const std::string & table_name,
+    const std::string & partition_id);
 
 const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name);
 
@@ -94,7 +124,14 @@ namespace DB
 using QualifiedName = std::pair<String, String>;
 String mappedDatabase(Context & context, const String & database_name);
 std::optional<String> mappedDatabaseWithOptional(Context & context, const String & database_name);
-std::optional<QualifiedName> mappedTableWithOptional(Context & context, const String & database_name, const String & table_name);
-QualifiedName mappedTable(Context & context, const String & database_name, const String & table_name, bool include_tombstone = false);
+std::optional<QualifiedName> mappedTableWithOptional(
+    Context & context,
+    const String & database_name,
+    const String & table_name);
+QualifiedName mappedTable(
+    Context & context,
+    const String & database_name,
+    const String & table_name,
+    bool include_tombstone = false);
 
 } // namespace DB

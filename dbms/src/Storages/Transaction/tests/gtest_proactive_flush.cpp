@@ -38,7 +38,9 @@ try
             ASSERT_NE(kvr1, nullptr);
             applied_index = r1->getLatestAppliedIndex();
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            auto [index, term] = proxy_instance->normalWrite(region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            auto [index, term]
+                = proxy_instance
+                      ->normalWrite(region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
@@ -71,7 +73,15 @@ try
             raft_cmdpb::AdminResponse response;
             request.mutable_compact_log();
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-            ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+            ASSERT_EQ(
+                kvs.handleAdminRaftCmd(
+                    raft_cmdpb::AdminRequest{request},
+                    std::move(response),
+                    1999,
+                    22,
+                    6,
+                    ctx.getTMTContext()),
+                EngineStoreApplyRes::NotFound);
         }
     }
 }
