@@ -92,16 +92,18 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
             std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
             const bool ru_exhausted = LocalAdmissionController::isRUExhausted(priority);
+            const std::string dump_rgs = LocalAdmissionController::global_instance->dump();
 
             LOG_TRACE(
                 logger,
                 "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
-                "task_queue.empty(): {}",
+                "task_queue.empty(): {}, dump all rgs: {}",
                 name,
                 priority,
                 ru_exhausted,
                 is_finished,
-                task_queue->empty());
+                task_queue->empty(),
+                dump_rgs);
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
@@ -131,14 +133,10 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         if (task != nullptr)
             return true;
 
-        // Other TaskQueue like MultiLevelFeedbackQueue and IOPriorityQueue will wake up when new task submit or is_finished become true.
-        // But for ResourceControlQueue, when all resource groups's RU are exhausted, will go to sleep, and should wakeup when RU is updated.
-        // But LAC has no way to notify ResourceControlQueue for now, so ResourceControlQueue should wakeup to check if RU is updated or not.
-        if (cv.wait_until(lock, std::chrono::steady_clock::now() + DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU, [this]() {
-                return is_finished;
-            }))
-            return false;
-
+        // Wakeup when:
+        // 1. finish() is called.
+        // 2. refill_token_callback is called by LAC.
+        cv.wait(lock);
         updateResourceGroupInfosWithoutLock();
     }
 }

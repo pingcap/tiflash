@@ -29,8 +29,15 @@ class ResourceControlQueue
     , private boost::noncopyable
 {
 public:
-    ResourceControlQueue() = default;
-    ~ResourceControlQueue() override = default;
+    ResourceControlQueue()
+    {
+        LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() {
+            std::lock_guard lock(mu);
+            cv.notify_all();
+        });
+    }
+
+    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->stop(); }
 
     void submit(TaskPtr && task) override;
 
