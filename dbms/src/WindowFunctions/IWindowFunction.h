@@ -45,15 +45,6 @@ public:
 
 protected:
     DataTypes argument_types;
-
-private:
-    // Return true when the frame is valid
-    //
-    // Check if the frame is invalid, or we will insert null value into result column
-    // Frame is invalid when:
-    //   1. partition_end <= frame_start
-    //   2. frame_end < partition_start
-    virtual bool checkFrameValidAndHandle(WindowTransformAction &, size_t) { return true; }
 };
 
 using WindowFunctionPtr = std::shared_ptr<IWindowFunction>;

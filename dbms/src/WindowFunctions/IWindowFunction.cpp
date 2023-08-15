@@ -39,7 +39,13 @@ bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partitio
     return !((partition_end <= frame_start) || (frame_end <= partition_start));
 }
 
-bool defaultCheckFrameValidAndHandle(WindowTransformAction & action, size_t function_index)
+// Return true when the frame is valid
+//
+// Check if the frame is invalid, or we will insert null value into result column
+// Frame is invalid when:
+//   1. partition_end <= frame_start
+//   2. frame_end < partition_start
+bool checkFrameValidAndHandle(WindowTransformAction & action, size_t function_index)
 {
     if (isFrameValid(action.frame_start, action.frame_end, action.partition_start, action.partition_end))
         return true;
@@ -52,8 +58,12 @@ bool defaultCheckFrameValidAndHandle(WindowTransformAction & action, size_t func
 } // namespace
 
 // In window function, some of the functions must return nullable column.
-// Return nullable column functions: FIRST_VALUE, LAST_VALUE, LAG, LEAD, NTH_VALUE, NTILE and all aggregation functions
-// Return not nullable column functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, ROW_NUMBER, RANK
+// Return nullable column functions: FIRST_VALUE, LAST_VALUE, NTH_VALUE, NTILE and all aggregation functions,
+//                                   LEAD/LAG(when receiving less than 3 parameters or when receiving 3 parameters
+//                                            one of the first and the third parameters is related with nullable)
+// Return not nullable column functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, ROW_NUMBER, RANK,
+//                                       LEAD/LAG(When receiving 3 parameters and the first and the third parameters
+//                                                are both not related with nullable)
 
 struct WindowFunctionRank final : public IWindowFunction
 {
@@ -148,7 +158,7 @@ public:
         if (argument_types_[0]->isNullable())
             return_type = argument_types_[0];
         else
-            return_type = std::make_shared<DataTypeNullable>(argument_types_[0]);
+            return_type = makeNullable(argument_types_[0]);
     }
 
     String getName() const override { return name; }
@@ -169,11 +179,6 @@ public:
     }
 
 private:
-    bool checkFrameValidAndHandle(WindowTransformAction & action, size_t function_index) override
-    {
-        return defaultCheckFrameValidAndHandle(action, function_index);
-    }
-
     DataTypePtr return_type;
 };
 
@@ -189,7 +194,7 @@ public:
         if (argument_types_[0]->isNullable())
             return_type = argument_types_[0];
         else
-            return_type = std::make_shared<DataTypeNullable>(argument_types_[0]);
+            return_type = makeNullable(argument_types_[0]);
     }
 
     String getName() const override { return name; }
@@ -214,11 +219,6 @@ public:
     }
 
 private:
-    bool checkFrameValidAndHandle(WindowTransformAction & action, size_t function_index) override
-    {
-        return defaultCheckFrameValidAndHandle(action, function_index);
-    }
-
     DataTypePtr return_type;
 };
 

@@ -280,6 +280,10 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
+// When finding frame start with Following attribute, partition end
+// may haven't appeared and we can't find frame start in this case.
+// Returning false in the tuple's second parameter means the failuer
+// of finding frame start.
 std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameStart(
     const RowNumber & current_row,
     const WindowFrame & frame)
