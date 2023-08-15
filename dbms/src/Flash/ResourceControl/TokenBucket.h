@@ -63,9 +63,7 @@ public:
 
     bool isStatic() const { return fill_rate == 0.0; }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
 
     // Merge dynamic token into static token.
