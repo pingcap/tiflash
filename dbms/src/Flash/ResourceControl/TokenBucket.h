@@ -21,8 +21,8 @@ namespace DB
 {
 
 // There are two mode of TokenBucket:
-// 1. fill_rate == 0: Bucket is static. Bucket will not fill tokens itself.
-//                    When the number of tokens is insufficient, it will retrieve them from the GAC.
+// 1. fill_rate == 0: Bucket is static, will not fill tokens itself.
+//                    When the number of tokens is insufficient, will retrieve from the GAC.
 // 2. fill_rate > 0: Bucket is dynamic. Will serve as a local token bucket.
 // NOTE: not thread safe!
 class TokenBucket final
@@ -38,7 +38,7 @@ public:
         , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
         , last_get_avg_speed_tokens(init_tokens_)
         , avg_speed_per_sec(0.0)
-        , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * init_tokens_)
+        , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
     {}
 
     ~TokenBucket() = default;
@@ -46,7 +46,6 @@ public:
     // Put n tokens into bucket.
     void put(double n);
 
-    // Consume n tokens from bucket, return false if tokens is less than zero.
     bool consume(double n);
 
     // Return current tokens count.

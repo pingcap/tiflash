@@ -79,6 +79,8 @@ private:
     static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
 
     friend class LocalAdmissionController;
+    friend class MockLocalAdmissionController;
+
     std::string getName() const { return name; }
 
     void consumeResource(double ru, uint64_t cpu_time_in_ns_)

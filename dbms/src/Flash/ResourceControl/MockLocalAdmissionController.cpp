@@ -33,10 +33,11 @@ void MockLocalAdmissionController::refillTokenBucket()
                 if (rg->bucket->isStatic())
                 {
                     std::cout << "refill token bucket of rg " << rg->name << std::endl;
+                    const auto bucket_config = rg->bucket->getCurrentConfig();
+                    const double new_fill_rate = std::get<1>(bucket_config);
+                    const double new_capacity = std::get<2>(bucket_config);
                     // Use capacity as new token, because for static token bucket, its fill rate is zero.
-                    const double new_token = rg->bucket->tokens + rg->bucket->capacity;
-                    const double new_fill_rate = rg->bucket->fill_rate;
-                    const double new_capacity = rg->bucket->capacity;
+                    const double new_token = rg->bucket->peek() + std::get<2>(bucket_config);
                     rg->bucket->reConfig(new_token, new_fill_rate, new_capacity);
                 }
             }

@@ -60,6 +60,7 @@ void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_c
 double TokenBucket::getAvgSpeedPerSec()
 {
     auto now = std::chrono::steady_clock::now();
+    RUNTIME_CHECK(now >= last_get_avg_speed_timepoint);
     auto dura = std::chrono::duration_cast<std::chrono::seconds>(now - last_get_avg_speed_timepoint);
 
     compact(now);
