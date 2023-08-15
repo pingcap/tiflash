@@ -98,6 +98,7 @@ private:
     // <resource_group_name, acculumated_cpu_time>
     // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.
     // This is to prevent the resource group from being updated too frequently.
+    // todo: Should register callback to LAC, so we can delete when RG is deleted.
     std::unordered_map<std::string, UInt64> resource_group_statistic;
 
     FIFOQueryIdCache cancel_query_id_cache;
