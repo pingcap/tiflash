@@ -36,6 +36,7 @@ extern const int QUERY_WAS_CANCELLED;
 class QuotaForIntervals;
 class ProcessListElement;
 class IProfilingBlockInputStream;
+class AutoSpillTrigger;
 
 using ProfilingBlockInputStreamPtr = std::shared_ptr<IProfilingBlockInputStream>;
 
@@ -85,6 +86,12 @@ public:
       * Note that the callback can be called from different threads.
       */
     void setProgressCallback(const ProgressCallback & callback);
+
+    /** Set auto spill trigger, the auto spill trigger will trigger auto spill based on
+     * query memory threshold or global memory threshold
+     * @param callback
+     */
+    void setAutoSpillTrigger(AutoSpillTrigger * auto_spill_trigger_);
 
 
     /** In this method:
@@ -158,23 +165,14 @@ public:
     };
 
     /** Set limitations that checked on each block. */
-    void setLimits(const LocalLimits & limits_)
-    {
-        limits = limits_;
-    }
+    void setLimits(const LocalLimits & limits_) { limits = limits_; }
 
-    const LocalLimits & getLimits() const
-    {
-        return limits;
-    }
+    const LocalLimits & getLimits() const { return limits; }
 
     /** Set the quota. If you set a quota on the amount of raw data,
       * then you should also set mode = LIMITS_TOTAL to LocalLimits with setLimits.
       */
-    void setQuota(QuotaForIntervals & quota_)
-    {
-        quota = &quota_;
-    }
+    void setQuota(QuotaForIntervals & quota_) { quota = &quota_; }
 
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
@@ -185,6 +183,7 @@ protected:
     std::atomic<bool> is_killed{false};
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
+    AutoSpillTrigger * auto_spill_trigger = nullptr;
 
     /// Additional information that can be generated during the work process.
 
@@ -247,6 +246,7 @@ private:
                 if (f(*p_child))
                     return;
     }
+    void setProgressCallbackImpl(const ProgressCallback & callback, std::unordered_set<void *> & visited_nodes);
 };
 
 } // namespace DB

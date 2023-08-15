@@ -40,40 +40,22 @@ struct LocalRequestHandler
         return msg_queue->pushPacket<is_force>(source_index, req_info, tracked_packet, ReceiverMode::Local);
     }
 
-    bool isWritable() const
-    {
-        return msg_queue->isWritable();
-    }
+    bool isWritable() const { return msg_queue->isWritable(); }
 
     void writeDone(bool meet_error, const String & local_err_msg) const
     {
         notify_write_done(meet_error, local_err_msg);
     }
 
-    void closeConnection() const
-    {
-        notify_close();
-    }
+    void closeConnection() const { notify_close(); }
 
-    void setAlive() const
-    {
-        add_local_conn_num();
-    }
+    void setAlive() const { add_local_conn_num(); }
 
-    void recordWaitingTaskTime()
-    {
-        waiting_task_time = watch.elapsedMilliseconds();
-    }
+    void recordWaitingTaskTime() { waiting_task_time = watch.elapsedMilliseconds(); }
 
-    UInt64 getTotalElapsedTime() const
-    {
-        return watch.elapsedMilliseconds();
-    }
+    UInt64 getTotalElapsedTime() const { return watch.elapsedMilliseconds(); }
 
-    UInt64 getWaitingTaskTime() const
-    {
-        return waiting_task_time;
-    }
+    UInt64 getWaitingTaskTime() const { return waiting_task_time; }
 
     std::function<void(bool, const String &)> notify_write_done;
     std::function<void()> notify_close;

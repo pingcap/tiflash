@@ -23,6 +23,12 @@ namespace tests
 {
 class ScanConcurrencyHintTest : public DB::tests::ExecutorTest
 {
+public:
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        enablePipeline(false);
+    }
 };
 
 TEST_F(ScanConcurrencyHintTest, InvalidHint)

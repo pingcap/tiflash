@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
@@ -71,15 +72,13 @@ private:
         const RegionException & e,
         int num_allow_retry);
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-    buildLocalStreamsForPhysicalTable(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-    buildLocalExecForPhysicalTable(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr buildLocalExecForPhysicalTable(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
@@ -108,6 +107,9 @@ private:
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
+
+    CoprocessorReaderPtr buildCoprocessorReader(const std::vector<RemoteRequest> & remote_requests);
+
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void buildRemoteExec(
@@ -115,9 +117,7 @@ private:
         PipelineExecGroupBuilder & group_builder,
         const std::vector<RemoteRequest> & remote_requests);
 
-    void executeCastAfterTableScan(
-        DAGPipeline & pipeline,
-        DAGExpressionAnalyzer & analyzer);
+    void executeCastAfterTableScan(DAGPipeline & pipeline, DAGExpressionAnalyzer & analyzer);
 
     void executeCastAfterTableScan(
         PipelineExecutorContext & exec_context,
