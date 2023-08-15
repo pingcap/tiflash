@@ -446,7 +446,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     if (!result)
     {
         throw TiFlashException(
-            fmt::format("Failed to make MPP Task {} public, reason: {}", id.toString(), reason),
+            fmt::format("Failed to make MPP Task {} public: {}", id.toString(), reason),
             Errors::Coprocessor::BadRequest);
     }
 
