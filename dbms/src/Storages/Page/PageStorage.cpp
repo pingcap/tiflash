@@ -80,8 +80,8 @@ public:
 
     virtual FileUsageStatistics getFileUsageStatistics() const = 0;
 
-    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
-        = 0;
+    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3)
+        const = 0;
 };
 
 

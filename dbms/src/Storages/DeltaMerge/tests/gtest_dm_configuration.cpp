@@ -36,11 +36,8 @@ void runSerializationTest()
     ASSERT_EQ(original.getEmbeddedChecksum(), deserialized.getEmbeddedChecksum());
 };
 
-#define TEST_SERIALIZATION(ALGO)                        \
-    TEST(DMConfiguration, ALGO##Serialization)          \
-    {                                                   \
-        runSerializationTest<DB::ChecksumAlgo::ALGO>(); \
-    }
+#define TEST_SERIALIZATION(ALGO) \
+    TEST(DMConfiguration, ALGO##Serialization) { runSerializationTest<DB::ChecksumAlgo::ALGO>(); }
 
 TEST_SERIALIZATION(None)
 TEST_SERIALIZATION(CRC32)
