@@ -92,7 +92,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
             std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
             const bool ru_exhausted = LocalAdmissionController::isRUExhausted(priority);
-            const std::string dump_rgs = LocalAdmissionController::global_instance->dump();
+            const std::string dump_resource_groups = LocalAdmissionController::global_instance->dump();
 
             LOG_TRACE(
                 logger,
@@ -103,7 +103,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 ru_exhausted,
                 is_finished,
                 task_queue->empty(),
-                dump_rgs);
+                dump_resource_groups);
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
@@ -136,6 +136,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
+        // 3. resource group priority changed because of task consuming RU.(maybe useless?)
         cv.wait(lock);
         updateResourceGroupInfosWithoutLock();
     }
@@ -176,7 +177,7 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutL
     UInt64 consumed_cpu_time)
 {
     auto ru = toRU(consumed_cpu_time);
-    LOG_DEBUG(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
+    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
     LocalAdmissionController::global_instance->consumeResource(name, ru, consumed_cpu_time);
     updateResourceGroupInfosWithoutLock();
 

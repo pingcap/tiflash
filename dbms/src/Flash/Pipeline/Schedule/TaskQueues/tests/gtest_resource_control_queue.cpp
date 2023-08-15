@@ -323,25 +323,16 @@ public:
 
         setupMockLAC(resource_groups);
         auto all_contexts = setupExecContextForEachResourceGroup(resource_groups);
+        const size_t task_exec_ms = 5;
+        const size_t task_exec_count = 100;
+        const int tasks_per_resource_group = 1000;
+        std::vector<TaskPtr> tasks = setupTasks(all_contexts, tasks_per_resource_group, task_exec_ms, task_exec_count);
 
         {
             const int thread_num = 3;
-            const int tasks_per_resource_group = 1000;
 
             TaskSchedulerConfig config{thread_num, thread_num};
             TaskScheduler task_scheduler(config);
-
-            std::vector<TaskPtr> tasks;
-            for (size_t i = 0; i < resource_groups.size(); ++i)
-            {
-                for (size_t j = 0; j < tasks_per_resource_group; ++j)
-                {
-                    auto task = std::make_unique<SimpleTask>(*(all_contexts[i]));
-                    task->each_exec_time = std::chrono::milliseconds(5);
-                    task->total_exec_times = 100;
-                    tasks.push_back(std::move(task));
-                }
-            }
 
             task_scheduler.submit(tasks);
             std::this_thread::sleep_for(std::chrono::seconds(10));
@@ -484,7 +475,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     ASSERT_NO_THROW(exec_context.waitFor(std::chrono::seconds(10)));
 }
 
-// RU is very small, which makes task execution is restricted by RU.
+// RU is very small, so task execution is restricted by RU.
 // The proportion of CPU time of each resource group should be same with the proportion of RU.
 TEST_F(TestResourceControlQueue, SmallRULargeCPUStaticTokenBucket)
 {
