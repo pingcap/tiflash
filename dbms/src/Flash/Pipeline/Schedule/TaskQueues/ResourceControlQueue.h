@@ -65,7 +65,8 @@ private:
         ResourceGroupInfo(const String & name_, UInt64 priority_, const NestedTaskQueuePtr & task_queue_)
             : name(name_)
             , priority(priority_)
-            , task_queue(task_queue_) {}
+            , task_queue(task_queue_)
+        {}
 
         String name;
         UInt64 priority;

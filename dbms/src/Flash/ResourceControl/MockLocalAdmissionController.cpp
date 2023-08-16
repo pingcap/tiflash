@@ -20,13 +20,11 @@ void MockLocalAdmissionController::refillTokenBucket()
 {
     while (true)
     {
-        bool resource_group_empty = true;
         {
             std::unique_lock lock(mu);
             if (cv.wait_for(lock, std::chrono::seconds(1), [&]() { return stopped; }))
                 return;
 
-            resource_group_empty = resource_groups.empty();
             for (auto & ele : resource_groups)
             {
                 auto & rg = ele.second;
@@ -43,8 +41,7 @@ void MockLocalAdmissionController::refillTokenBucket()
             }
         }
 
-        if (!resource_group_empty)
-            refill_token_callback();
+        refill_token_callback();
     }
 }
 

@@ -24,18 +24,24 @@ namespace DB
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
-    std::lock_guard lock(mu);
-    submitWithoutLock(std::move(task));
+    {
+        std::lock_guard lock(mu);
+        submitWithoutLock(std::move(task));
+    }
+    cv.notify_one();
 }
 
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
-    std::lock_guard lock(mu);
-    for (auto & task : tasks)
     {
-        submitWithoutLock(std::move(task));
+        std::lock_guard lock(mu);
+        for (auto & task : tasks)
+        {
+            submitWithoutLock(std::move(task));
+        }
     }
+    cv.notify_one();
 }
 
 template <typename NestedTaskQueueType>
@@ -68,7 +74,6 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     {
         iter->second->submit(std::move(task));
     }
-    cv.notify_one();
 }
 
 template <typename NestedTaskQueueType>
@@ -111,7 +116,8 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 RUNTIME_CHECK_MSG(
                     erase_num == 1,
                     "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
-                    group_info.name, erase_num);
+                    group_info.name,
+                    erase_num);
                 resource_group_infos.pop();
             }
             else
@@ -184,10 +190,12 @@ bool ResourceControlQueue<NestedTaskQueueType>::empty() const
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::finish()
 {
-    std::lock_guard lock(mu);
-    is_finished = true;
-    for (auto & ele : resource_group_task_queues)
-        ele.second->finish();
+    {
+        std::lock_guard lock(mu);
+        is_finished = true;
+        for (auto & ele : resource_group_task_queues)
+            ele.second->finish();
+    }
 
     cv.notify_all();
 }
