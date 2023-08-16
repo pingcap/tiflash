@@ -78,7 +78,9 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
     case TiDB::CodecFlagDuration:
         return Field(static_cast<Int64>(0));
     default:
-        throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 } // namespace DB
@@ -248,7 +250,9 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
         collator = ITiDBCollator::getCollator("binary");
     for (const auto & elem : elems)
     {
-        if (collator->compareFastPath(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
+        if (collator
+                ->compareFastPath(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size())
+            == 0)
         {
             return elem.second;
         }
@@ -272,7 +276,8 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     UInt64 value = 0;
     for (size_t i = 0; i < elems.size(); i++)
     {
-        String key = collator->sortKeyFastPath(elems.at(i).first.data(), elems.at(i).first.length(), sort_key_container).toString();
+        String key = collator->sortKeyFastPath(elems.at(i).first.data(), elems.at(i).first.length(), sort_key_container)
+                         .toString();
         auto it = marked.find(key);
         if (it != marked.end())
         {
@@ -289,7 +294,8 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
 
 Int64 ColumnInfo::getTimeValue(const String & time_str)
 {
-    const static int64_t fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
+    const static int64_t fractional_seconds_multiplier[]
+        = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
     bool negative = time_str[0] == '-';
     Poco::StringTokenizer second_and_fsp(time_str, ".");
     Poco::StringTokenizer string_tokens(second_and_fsp[0], ":");
@@ -596,7 +602,8 @@ try
 catch (const Poco::Exception & e)
 {
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(),
+        std::string(__PRETTY_FUNCTION__)
+            + ": Serialize TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(),
         DB::Exception(e));
 }
 
@@ -668,7 +675,8 @@ try
 catch (const Poco::Exception & e)
 {
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (DBInfo): " + e.displayText() + ", json: " + json_str,
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (DBInfo): " + e.displayText()
+            + ", json: " + json_str,
         DB::Exception(e));
 }
 
@@ -990,13 +998,15 @@ try
     {
         throw DB::Exception(
             std::string(__PRETTY_FUNCTION__)
-            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + JSONToString(obj));
+            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: "
+            + JSONToString(obj));
     }
 }
 catch (const Poco::Exception & e)
 {
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + JSONToString(obj),
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText()
+            + ", json: " + JSONToString(obj),
         DB::Exception(e));
 }
 
@@ -1018,7 +1028,8 @@ try
 catch (const Poco::Exception & e)
 {
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + json_str,
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText()
+            + ", json: " + json_str,
         DB::Exception(e));
 }
 
@@ -1138,7 +1149,8 @@ std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleCo
         DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id, const SchemaNameMapper & name_mapper) const
+TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id, const SchemaNameMapper & name_mapper)
+    const
 {
     // Some sanity checks for partition table.
     if (unlikely(!(is_partition_table && partition.enable)))
@@ -1147,12 +1159,15 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
                 + " but it's not a partition table",
             DB::ErrorCodes::LOGICAL_ERROR);
 
-    if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) {
-                     return d.id == table_or_partition_id;
-                 })
-                 == partition.definitions.end()))
+    if (unlikely(
+            std::find_if(
+                partition.definitions.begin(),
+                partition.definitions.end(),
+                [table_or_partition_id](const auto & d) { return d.id == table_or_partition_id; })
+            == partition.definitions.end()))
         throw Exception(
-            "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id),
+            "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID "
+                + std::to_string(id),
             DB::ErrorCodes::LOGICAL_ERROR);
 
     // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
@@ -1171,7 +1186,8 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
 String genJsonNull()
 {
     // null
-    const static String null({static_cast<char>(DB::JsonBinary::TYPE_CODE_LITERAL), static_cast<char>(DB::JsonBinary::LITERAL_NIL)});
+    const static String null(
+        {static_cast<char>(DB::JsonBinary::TYPE_CODE_LITERAL), static_cast<char>(DB::JsonBinary::LITERAL_NIL)});
     return null;
 }
 
@@ -1216,7 +1232,8 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     return tidb_column_info;
 }
 
-std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos)
+std::vector<ColumnInfo> toTiDBColumnInfos(
+    const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos)
 {
     std::vector<ColumnInfo> tidb_column_infos;
     tidb_column_infos.reserve(tipb_column_infos.size());

@@ -37,9 +37,7 @@ protected:
     String getName() const noexcept override { return "FetchPages"; }
 
 private:
-    void doFetchPages(
-        const RNReadSegmentTaskPtr & seg_task,
-        const disaggregated::FetchDisaggPagesRequest & request);
+    void doFetchPages(const RNReadSegmentTaskPtr & seg_task, const disaggregated::FetchDisaggPagesRequest & request);
 
 private:
     const pingcap::kv::Cluster * cluster;

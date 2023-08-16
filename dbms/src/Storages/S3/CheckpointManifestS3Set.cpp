@@ -20,8 +20,7 @@
 
 namespace DB::S3
 {
-CheckpointManifestS3Set
-CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID store_id)
+CheckpointManifestS3Set CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID store_id)
 {
     const auto manifest_prefix = S3::S3Filename::fromStoreId(store_id).toManifestPrefix();
 
@@ -37,8 +36,7 @@ CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID s
     return CheckpointManifestS3Set::create(manifests);
 }
 
-CheckpointManifestS3Set
-CheckpointManifestS3Set::create(const std::vector<CheckpointManifestS3Object> & manifest_keys)
+CheckpointManifestS3Set CheckpointManifestS3Set::create(const std::vector<CheckpointManifestS3Object> & manifest_keys)
 {
     CheckpointManifestS3Set set;
     for (const auto & mf_obj : manifest_keys)
@@ -47,12 +45,19 @@ CheckpointManifestS3Set::create(const std::vector<CheckpointManifestS3Object> & 
         RUNTIME_CHECK(filename_view.type == S3::S3FilenameType::CheckpointManifest, mf_obj.key);
         auto upload_seq = filename_view.getUploadSequence();
         auto [iter, ok] = set.manifests.emplace(upload_seq, mf_obj);
-        RUNTIME_CHECK_MSG(ok, "duplicated upload seq, prev_mf_key={} duplicated_mf_key={}", iter->second.key, mf_obj.key);
+        RUNTIME_CHECK_MSG(
+            ok,
+            "duplicated upload seq, prev_mf_key={} duplicated_mf_key={}",
+            iter->second.key,
+            mf_obj.key);
     }
     return set;
 }
 
-Strings CheckpointManifestS3Set::preservedManifests(size_t max_preserved, Int64 expired_hour, const Aws::Utils::DateTime & timepoint) const
+Strings CheckpointManifestS3Set::preservedManifests(
+    size_t max_preserved,
+    Int64 expired_hour,
+    const Aws::Utils::DateTime & timepoint) const
 {
     assert(!manifests.empty());
 
@@ -79,8 +84,7 @@ Strings CheckpointManifestS3Set::preservedManifests(size_t max_preserved, Int64 
     return preserved_mf;
 }
 
-std::vector<CheckpointManifestS3Object>
-CheckpointManifestS3Set::outdatedObjects(
+std::vector<CheckpointManifestS3Object> CheckpointManifestS3Set::outdatedObjects(
     size_t max_preserved,
     Int64 expired_hour,
     const Aws::Utils::DateTime & timepoint) const

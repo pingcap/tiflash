@@ -38,7 +38,9 @@ struct DatumOp
 
 /// Specialized for integer types less than 64 bit, checks overflow.
 template <TP tp>
-struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
+struct DatumOp<
+    tp,
+    typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
 {
     static void unflatten(const Field &, std::optional<Field> &) {}
     static void flatten(const Field &, std::optional<Field> &) {}
@@ -61,7 +63,8 @@ private:
     {
         if (column_info.hasUnsignedFlag())
             // Unsigned checking by bitwise compare.
-            return field.get<UInt64>() != ext::bit_cast<UInt64>(static_cast<std::make_unsigned_t<T>>(field.get<UInt64>()));
+            return field.get<UInt64>()
+                != ext::bit_cast<UInt64>(static_cast<std::make_unsigned_t<T>>(field.get<UInt64>()));
         else
             // Signed checking by arithmetical cast.
             return field.get<Int64>() != static_cast<Int64>(static_cast<std::make_signed_t<T>>(field.get<Int64>()));
@@ -72,9 +75,15 @@ private:
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeEnum>::type>
 {
-    static void unflatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<Int64>(orig.get<UInt64>()); }
+    static void unflatten(const Field & orig, std::optional<Field> & copy)
+    {
+        copy = static_cast<Int64>(orig.get<UInt64>());
+    }
 
-    static void flatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<UInt64>(orig.get<Int64>()); }
+    static void flatten(const Field & orig, std::optional<Field> & copy)
+    {
+        copy = static_cast<UInt64>(orig.get<Int64>());
+    }
 
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };

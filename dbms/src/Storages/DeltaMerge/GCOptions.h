@@ -58,7 +58,11 @@ struct GCOptions
 
     std::string toString() const
     {
-        return fmt::format("<merge={} merge_delta={} update_safe_point={}>", do_merge, do_merge_delta, update_safe_point);
+        return fmt::format(
+            "<merge={} merge_delta={} update_safe_point={}>",
+            do_merge,
+            do_merge_delta,
+            update_safe_point);
     }
 };
 

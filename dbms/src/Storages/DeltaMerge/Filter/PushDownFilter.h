@@ -27,13 +27,14 @@ inline static const PushDownFilterPtr EMPTY_FILTER{};
 class PushDownFilter : public std::enable_shared_from_this<PushDownFilter>
 {
 public:
-    PushDownFilter(const RSOperatorPtr & rs_operator_,
-                   const ExpressionActionsPtr & beofre_where_,
-                   const ExpressionActionsPtr & project_after_where_,
-                   const ColumnDefinesPtr & filter_columns_,
-                   const String filter_column_name_,
-                   const ExpressionActionsPtr & extra_cast_,
-                   const ColumnDefinesPtr & columns_after_cast_)
+    PushDownFilter(
+        const RSOperatorPtr & rs_operator_,
+        const ExpressionActionsPtr & beofre_where_,
+        const ExpressionActionsPtr & project_after_where_,
+        const ColumnDefinesPtr & filter_columns_,
+        const String filter_column_name_,
+        const ExpressionActionsPtr & extra_cast_,
+        const ColumnDefinesPtr & columns_after_cast_)
         : rs_operator(rs_operator_)
         , before_where(beofre_where_)
         , project_after_where(project_after_where_)

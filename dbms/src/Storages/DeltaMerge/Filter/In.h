@@ -28,8 +28,7 @@ public:
     In(const Attr & attr_, const Fields & values_)
         : attr(attr_)
         , values(values_)
-    {
-    }
+    {}
 
     String name() override { return "in"; }
 

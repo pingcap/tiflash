@@ -80,7 +80,9 @@ ImutRegionRangePtr RegionState::getRange() const
 
 void RegionState::updateRegionRange()
 {
-    region_range = std::make_shared<RegionRangeKeys>(TiKVKey::copyFrom(getRegion().start_key()), TiKVKey::copyFrom(getRegion().end_key()));
+    region_range = std::make_shared<RegionRangeKeys>(
+        TiKVKey::copyFrom(getRegion().start_key()),
+        TiKVKey::copyFrom(getRegion().end_key()));
 }
 
 metapb::Region & RegionState::getMutRegion()
@@ -136,16 +138,19 @@ bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id)
 
 RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     : ori(RegionRangeKeys::makeComparableKeys(std::move(start_key), std::move(end_key)))
-    , raw(std::make_shared<DecodedTiKVKey>(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key)),
-          std::make_shared<DecodedTiKVKey>(ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)))
+    , raw(std::make_shared<DecodedTiKVKey>(
+              ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key)),
+          std::make_shared<DecodedTiKVKey>(
+              ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)))
 {
     keyspace_id = raw.first->getKeyspaceID();
     if (!computeMappedTableID(*raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
     {
-        throw Exception(ErrorCodes::LOGICAL_ERROR,
-                        "Illegal region range, should not happen, start_key={} end_key={}",
-                        ori.first.key.toDebugString(),
-                        ori.second.key.toDebugString());
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Illegal region range, should not happen, start_key={} end_key={}",
+            ori.first.key.toDebugString(),
+            ori.second.key.toDebugString());
     }
 }
 
@@ -164,7 +169,9 @@ const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & RegionRangeKeys::rawKeys
     return raw;
 }
 
-HandleRange<HandleID> getHandleRangeByTable(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys, TableID table_id)
+HandleRange<HandleID> getHandleRangeByTable(
+    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys,
+    TableID table_id)
 {
     return TiKVRange::getHandleRangeByTable(*rawKeys.first, *rawKeys.second, table_id);
 }

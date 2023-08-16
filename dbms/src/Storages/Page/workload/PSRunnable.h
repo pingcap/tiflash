@@ -50,8 +50,7 @@ struct RandomPageId
     RandomPageId(DB::PageIdU64 new_page_id, DB::PageIdU64Set page_id_to_remove_)
         : page_id(new_page_id)
         , page_id_to_remove(page_id_to_remove_)
-    {
-    }
+    {}
 };
 
 // The shared status inside workload
@@ -81,15 +80,9 @@ public:
         gen.seed(time(nullptr));
     }
 
-    ~PSWriter() override
-    {
-        memory.reset();
-    }
+    ~PSWriter() override { memory.reset(); }
 
-    String description() override
-    {
-        return fmt::format("(Stress Test Writer {})", index);
-    }
+    String description() override { return fmt::format("(Stress Test Writer {})", index); }
 
     void setBufferSizeRange(size_t min, size_t max);
 

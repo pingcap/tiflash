@@ -56,11 +56,7 @@ public:
         DM::ColumnDefinesPtr column_defines,
         std::shared_ptr<std::vector<tipb::FieldType>> output_field_types)
     {
-        return SegmentPagesFetchTask{
-            std::move(seg_task),
-            std::move(column_defines),
-            std::move(output_field_types),
-            ""};
+        return SegmentPagesFetchTask{std::move(seg_task), std::move(column_defines), std::move(output_field_types), ""};
     }
 };
 

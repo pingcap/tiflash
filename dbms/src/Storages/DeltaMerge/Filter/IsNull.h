@@ -26,17 +26,13 @@ class IsNull : public RSOperator
 public:
     explicit IsNull(const Attr & attr_)
         : attr(attr_)
-    {
-    }
+    {}
 
     String name() override { return "isnull"; }
 
     Attrs getAttrs() override { return {attr}; }
 
-    String toDebugString() override
-    {
-        return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name);
-    }
+    String toDebugString() override { return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name); }
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {

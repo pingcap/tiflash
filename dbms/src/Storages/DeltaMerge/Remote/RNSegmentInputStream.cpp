@@ -39,7 +39,8 @@ RNSegmentInputStream::~RNSegmentInputStream()
         duration_read_sec);
 
     // This metric is per-stream.
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_stream_wait_next_task).Observe(duration_wait_ready_task_sec);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_stream_wait_next_task)
+        .Observe(duration_wait_ready_task_sec);
     // This metric is per-stream.
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_stream_read).Observe(duration_read_sec);
 }

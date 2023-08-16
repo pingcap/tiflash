@@ -98,7 +98,8 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
         // This metric is per-segment.
-        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_worker_fetch_page).Observe(watch_work.elapsedSeconds());
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_worker_fetch_page)
+            .Observe(watch_work.elapsedSeconds());
     });
 
     auto occupy_result = blockingOccupySpaceForTask(seg_task);
@@ -178,7 +179,9 @@ void RNWorkerFetchPages::doFetchPages(
     bool rpc_is_observed = false;
     double total_write_page_cache_sec = 0.0;
 
-    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(cluster->rpc_client, seg_task->meta.store_address);
+    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(
+        cluster->rpc_client,
+        seg_task->meta.store_address);
 
     grpc::ClientContext client_context;
     auto stream_resp = rpc.call(&client_context, request);
@@ -202,10 +205,9 @@ void RNWorkerFetchPages::doFetchPages(
 
     auto schedule_task = [&task_count, &schedule_write_page_ns](WritePageTaskPtr && write_page_task) {
         task_count += 1;
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [write_page_task = std::move(write_page_task)]() {
-                write_page_task->page_cache->write(std::move(write_page_task->wb));
-            });
+        auto task = std::make_shared<std::packaged_task<void()>>([write_page_task = std::move(write_page_task)]() {
+            write_page_task->page_cache->write(std::move(write_page_task->wb));
+        });
         Stopwatch sw;
         RNWritePageCachePool::get().scheduleOrThrowOnError([task]() { (*task)(); });
         schedule_write_page_ns += sw.elapsed();
@@ -232,7 +234,8 @@ void RNWorkerFetchPages::doFetchPages(
             // Count RPC time as sending request + receive first response packet.
             rpc_is_observed = true;
             // This metric is per-segment, because we only count once for each task.
-            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_fetch_page).Observe(watch_rpc.elapsedSeconds());
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_fetch_page)
+                .Observe(watch_rpc.elapsedSeconds());
         }
 
         if (packet->has_error())
@@ -241,21 +244,22 @@ void RNWorkerFetchPages::doFetchPages(
         }
 
         Stopwatch watch_write_page_cache{CLOCK_MONOTONIC_COARSE};
-        SCOPE_EXIT({
-            total_write_page_cache_sec += watch_write_page_cache.elapsedSeconds();
-        });
+        SCOPE_EXIT({ total_write_page_cache_sec += watch_write_page_cache.elapsedSeconds(); });
 
         std::vector<UInt64> received_page_ids;
         for (const String & page : packet->pages())
         {
             if (write_page_task == nullptr)
             {
-                write_page_task = std::make_unique<WritePageTask>(seg_task->meta.dm_context->db_context.getSharedContextDisagg()->rn_page_cache.get());
+                write_page_task = std::make_unique<WritePageTask>(
+                    seg_task->meta.dm_context->db_context.getSharedContextDisagg()->rn_page_cache.get());
             }
             auto & remote_page = write_page_task->remote_pages.emplace_back(); // NOLINT(bugprone-use-after-move)
             bool parsed = remote_page.ParseFromString(page);
             RUNTIME_CHECK_MSG(parsed, "Failed to parse page data (from {})", seg_task->info());
-            write_page_task->remote_page_mem_tracker_wrappers.emplace_back(remote_page.SpaceUsedLong(), fetch_pages_mem_tracker.get());
+            write_page_task->remote_page_mem_tracker_wrappers.emplace_back(
+                remote_page.SpaceUsedLong(),
+                fetch_pages_mem_tracker.get());
 
             RUNTIME_CHECK(
                 remaining_pages_to_fetch.contains(remote_page.page_id()),
@@ -271,7 +275,8 @@ void RNWorkerFetchPages::doFetchPages(
                 .ks_table_id = {seg_task->meta.keyspace_id, seg_task->meta.physical_table_id},
                 .page_id = remote_page.page_id(),
             };
-            auto read_buffer = std::make_shared<ReadBufferFromMemory>(remote_page.data().data(), remote_page.data().size());
+            auto read_buffer
+                = std::make_shared<ReadBufferFromMemory>(remote_page.data().data(), remote_page.data().size());
             PageFieldSizes field_sizes;
             field_sizes.reserve(remote_page.field_sizes_size());
             for (const auto & field_sz : remote_page.field_sizes())
@@ -281,11 +286,14 @@ void RNWorkerFetchPages::doFetchPages(
             deserialize_page_ns += sw_packet.elapsedFromLastTime();
 
             auto page_id = RNLocalPageCache::buildCacheId(oid);
-            write_page_task->wb.putPage(page_id, 0, std::move(read_buffer), remote_page.data().size(), std::move(field_sizes));
-            auto write_batch_limit_size = seg_task->meta.dm_context->db_context.getSettingsRef().dt_write_page_cache_limit_size;
+            write_page_task->wb
+                .putPage(page_id, 0, std::move(read_buffer), remote_page.data().size(), std::move(field_sizes));
+            auto write_batch_limit_size
+                = seg_task->meta.dm_context->db_context.getSettingsRef().dt_write_page_cache_limit_size;
             if (write_page_task->wb.getTotalDataSize() >= write_batch_limit_size)
             {
-                write_page_results.push_back(schedule_task(std::move(write_page_task))); // write_page_task is moved and reset.
+                write_page_results.push_back(
+                    schedule_task(std::move(write_page_task))); // write_page_task is moved and reset.
             }
         }
     }
@@ -303,7 +311,8 @@ void RNWorkerFetchPages::doFetchPages(
     auto wait_write_page_finished_ns = sw_wait_write_page_finished.elapsed();
 
     // This metric is per-segment.
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_write_page_cache).Observe(total_write_page_cache_sec);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_write_page_cache)
+        .Observe(total_write_page_cache_sec);
 
     // Verify all pending pages are now received.
     RUNTIME_CHECK_MSG(
@@ -312,18 +321,20 @@ void RNWorkerFetchPages::doFetchPages(
         seg_task->info(),
         remaining_pages_to_fetch);
 
-    LOG_DEBUG(log,
-              "Finished fetch pages, seg_task={}, page_count={}, packet_count={}, task_count={}, "
-              "total_ms={}, read_stream_ms={}, deserialize_page_ms={}, schedule_write_page_ms={}, wait_write_page_finished_ms={}",
-              seg_task->info(),
-              page_count,
-              packet_count,
-              task_count,
-              sw_total.elapsed() / 1000000,
-              read_stream_ns / 1000000,
-              deserialize_page_ns / 1000000,
-              schedule_write_page_ns / 1000000,
-              wait_write_page_finished_ns / 1000000);
+    LOG_DEBUG(
+        log,
+        "Finished fetch pages, seg_task={}, page_count={}, packet_count={}, task_count={}, "
+        "total_ms={}, read_stream_ms={}, deserialize_page_ms={}, schedule_write_page_ms={}, "
+        "wait_write_page_finished_ms={}",
+        seg_task->info(),
+        page_count,
+        packet_count,
+        task_count,
+        sw_total.elapsed() / 1000000,
+        read_stream_ns / 1000000,
+        deserialize_page_ns / 1000000,
+        schedule_write_page_ns / 1000000,
+        wait_write_page_finished_ns / 1000000);
 }
 
 } // namespace DB::DM::Remote

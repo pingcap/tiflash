@@ -35,15 +35,9 @@ struct Comparator
         return *p1 < *p2;
     }
 
-    bool operator()(const std::shared_ptr<const String> & p, const String & value) const
-    {
-        return *p < value;
-    }
+    bool operator()(const std::shared_ptr<const String> & p, const String & value) const { return *p < value; }
 
-    bool operator()(const String & value, const std::shared_ptr<const String> & p) const
-    {
-        return value < *p;
-    }
+    bool operator()(const String & value, const std::shared_ptr<const String> & p) const { return value < *p; }
 };
 
 using DataFileIdSet = std::set<std::shared_ptr<const String>, Comparator>;

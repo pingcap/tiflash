@@ -32,7 +32,8 @@ TEST(PKSquashTest, WithExtraSort)
     size_t num_rows_write = 0;
     {
         // pk asc, ts desc
-        blocks.push_back(DMTestEnv::prepareBlockWithTso(4, 10000 + rows_per_block * 2, 10000 + rows_per_block * 3, true));
+        blocks.push_back(
+            DMTestEnv::prepareBlockWithTso(4, 10000 + rows_per_block * 2, 10000 + rows_per_block * 3, true));
         num_rows_write += blocks.back().rows();
         blocks.push_back(DMTestEnv::prepareBlockWithTso(4, 10000 + rows_per_block, 10000 + rows_per_block * 2, true));
         num_rows_write += blocks.back().rows();

@@ -16,7 +16,8 @@
 
 namespace DB::PS::tests
 {
-class ThousandsOfOffset : public StressWorkload
+class ThousandsOfOffset
+    : public StressWorkload
     , public StressWorkloadFunc<ThousandsOfOffset>
 {
 public:
@@ -24,30 +25,25 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "ThousandsOfOffset";
-    }
+    static String name() { return "ThousandsOfOffset"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 5;
-    }
+    static UInt64 mask() { return 1 << 5; }
 
 private:
     String desc() override
     {
-        return fmt::format("Some of options will be ignored."
-                           "`paths` will only used first one. which is {}. Data will store in {}"
-                           "Please cleanup folder after this test."
-                           "The current workload will run 4 cases"
-                           "(case 1: single 1M buffer with field."
-                           "case 2: 20*1MB buffers with field."
-                           "case 3: single 100kb buffer with field."
-                           "case 4: 20*100kb buffer with field.)"
-                           "and elapse near 120 seconds",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored."
+            "`paths` will only used first one. which is {}. Data will store in {}"
+            "Please cleanup folder after this test."
+            "The current workload will run 4 cases"
+            "(case 1: single 1M buffer with field."
+            "case 2: 20*1MB buffers with field."
+            "case 3: single 100kb buffer with field."
+            "case 4: 20*100kb buffer with field.)"
+            "and elapse near 120 seconds",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     static DB::PageFieldSizes divideFields(size_t amount, size_t nums)
@@ -85,12 +81,14 @@ private:
             auto buffer_size = 1 * DB::MB;
             auto field_size = divideFields(buffer_size, 1000);
 
-            startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
-                writer->setFieldSize(field_size);
-                writer->setBatchBufferNums(1);
-                writer->setBufferSizeRange(buffer_size, buffer_size);
-                writer->setNormalDistributionSigma(13);
-            });
+            startWriter<PSWindowWriter>(
+                options.num_writers,
+                [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
+                    writer->setFieldSize(field_size);
+                    writer->setBatchBufferNums(1);
+                    writer->setBufferSizeRange(buffer_size, buffer_size);
+                    writer->setNormalDistributionSigma(13);
+                });
 
             pool.joinAll();
             stop_watch.stop();
@@ -106,12 +104,14 @@ private:
             auto buffer_size = 1 * DB::MB;
             auto field_size = divideFields(buffer_size, 1000);
 
-            startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
-                writer->setFieldSize(field_size);
-                writer->setBatchBufferNums(20);
-                writer->setBufferSizeRange(buffer_size, buffer_size);
-                writer->setNormalDistributionSigma(13);
-            });
+            startWriter<PSWindowWriter>(
+                options.num_writers,
+                [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
+                    writer->setFieldSize(field_size);
+                    writer->setBatchBufferNums(20);
+                    writer->setBufferSizeRange(buffer_size, buffer_size);
+                    writer->setNormalDistributionSigma(13);
+                });
 
             pool.joinAll();
             stop_watch.stop();
@@ -127,12 +127,14 @@ private:
             auto buffer_size = 100 * 1024;
             auto field_size = divideFields(buffer_size, 1000);
 
-            startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
-                writer->setFieldSize(field_size);
-                writer->setBatchBufferNums(1);
-                writer->setBufferSizeRange(buffer_size, buffer_size);
-                writer->setNormalDistributionSigma(13);
-            });
+            startWriter<PSWindowWriter>(
+                options.num_writers,
+                [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
+                    writer->setFieldSize(field_size);
+                    writer->setBatchBufferNums(1);
+                    writer->setBufferSizeRange(buffer_size, buffer_size);
+                    writer->setNormalDistributionSigma(13);
+                });
 
             pool.joinAll();
             stop_watch.stop();
@@ -148,21 +150,20 @@ private:
             auto buffer_size = 100 * 1024;
             auto field_size = divideFields(buffer_size, 1000);
 
-            startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
-                writer->setFieldSize(field_size);
-                writer->setBatchBufferNums(20);
-                writer->setBufferSizeRange(buffer_size, buffer_size);
-                writer->setNormalDistributionSigma(13);
-            });
+            startWriter<PSWindowWriter>(
+                options.num_writers,
+                [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
+                    writer->setFieldSize(field_size);
+                    writer->setBatchBufferNums(20);
+                    writer->setBufferSizeRange(buffer_size, buffer_size);
+                    writer->setNormalDistributionSigma(13);
+                });
 
             pool.joinAll();
             stop_watch.stop();
         }
     }
 
-    bool verify() override
-    {
-        return true;
-    }
+    bool verify() override { return true; }
 };
 } // namespace DB::PS::tests

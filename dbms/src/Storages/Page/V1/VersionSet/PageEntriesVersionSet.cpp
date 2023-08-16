@@ -33,8 +33,8 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet:
     return listAllLiveFiles(lock);
 }
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
-PageEntriesVersionSet::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet::listAllLiveFiles(
+    const std::unique_lock<std::shared_mutex> & lock) const
 {
     (void)lock;
     std::set<PageFileIdAndLevel> live_files;

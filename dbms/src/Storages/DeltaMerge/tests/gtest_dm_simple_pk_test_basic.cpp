@@ -30,11 +30,12 @@ extern const char skip_check_segment_update[];
 namespace DM
 {
 
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path);
+extern DMFilePtr writeIntoNewDMFile(
+    DMContext & dm_context,
+    const ColumnDefinesPtr & schema_snap,
+    const BlockInputStreamPtr & input_stream,
+    UInt64 file_id,
+    const String & parent_path);
 
 namespace tests
 {
@@ -44,20 +45,25 @@ void SimplePKTestBasic::reload()
 
     version = 0;
 
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-    store = std::make_shared<DeltaMergeStore>(*db_context,
-                                              false,
-                                              "test",
-                                              DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
-                                              NullspaceID,
-                                              101,
-                                              true,
-                                              *cols,
-                                              (*cols)[0],
-                                              is_common_handle,
-                                              1,
-                                              DeltaMergeStore::Settings());
-    dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+    auto cols = DMTestEnv::getDefaultColumns(
+        is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+    store = std::make_shared<DeltaMergeStore>(
+        *db_context,
+        false,
+        "test",
+        DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+        NullspaceID,
+        101,
+        true,
+        *cols,
+        (*cols)[0],
+        is_common_handle,
+        1,
+        DeltaMergeStore::Settings());
+    dm_context = store->newDMContext(
+        *db_context,
+        db_context->getSettingsRef(),
+        DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
     db_context->dropMinMaxIndexCache();
 }
 
@@ -88,8 +94,14 @@ void SimplePKTestBasic::ensureSegmentBreakpoints(const std::vector<Int64> & brea
             // The segment is already break at the boundary
             if (compare(segment->getRowKeyRange().getStart(), bp_key.toRowKeyValueRef()) == 0)
                 break;
-            auto split_mode = use_logical_split ? DeltaMergeStore::SegmentSplitMode::Logical : DeltaMergeStore::SegmentSplitMode::Physical;
-            auto [left, right] = store->segmentSplit(*dm_context, segment, DeltaMergeStore::SegmentSplitReason::ForegroundWrite, bp_key, split_mode);
+            auto split_mode = use_logical_split ? DeltaMergeStore::SegmentSplitMode::Logical
+                                                : DeltaMergeStore::SegmentSplitMode::Physical;
+            auto [left, right] = store->segmentSplit(
+                *dm_context,
+                segment,
+                DeltaMergeStore::SegmentSplitReason::ForegroundWrite,
+                bp_key,
+                split_mode);
             if (left)
                 break;
         }
@@ -188,11 +200,7 @@ Block SimplePKTestBasic::fillBlock(const FillBlockOptions & options)
 
 void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
 {
-    LOG_INFO(
-        logger_op,
-        "fill [{}, {})",
-        start_key,
-        end_key);
+    LOG_INFO(logger_op, "fill [{}, {})", start_key, end_key);
 
     auto block = fillBlock({.range = {start_key, end_key}});
     store->write(*db_context, db_context->getSettingsRef(), block);
@@ -200,11 +208,7 @@ void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::fillDelete(Int64 start_key, Int64 end_key)
 {
-    LOG_INFO(
-        logger_op,
-        "fillDelete [{}, {})",
-        start_key,
-        end_key);
+    LOG_INFO(logger_op, "fillDelete [{}, {})", start_key, end_key);
 
     auto block = fillBlock({.range = {start_key, end_key}, .is_deleted = true});
     store->write(*db_context, db_context->getSettingsRef(), block);
@@ -212,11 +216,7 @@ void SimplePKTestBasic::fillDelete(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::flush(Int64 start_key, Int64 end_key)
 {
-    LOG_INFO(
-        logger_op,
-        "flush [{}, {})",
-        start_key,
-        end_key);
+    LOG_INFO(logger_op, "flush [{}, {})", start_key, end_key);
 
     auto range = buildRowRange(start_key, end_key);
     store->flushCache(*db_context, range, true);
@@ -224,9 +224,7 @@ void SimplePKTestBasic::flush(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::flush()
 {
-    LOG_INFO(
-        logger_op,
-        "flushAll");
+    LOG_INFO(logger_op, "flushAll");
 
     auto range = RowKeyRange::newAll(is_common_handle, 1);
     store->flushCache(*db_context, range, true);
@@ -234,11 +232,7 @@ void SimplePKTestBasic::flush()
 
 void SimplePKTestBasic::mergeDelta(Int64 start_key, Int64 end_key)
 {
-    LOG_INFO(
-        logger_op,
-        "mergeDelta [{}, {})",
-        start_key,
-        end_key);
+    LOG_INFO(logger_op, "mergeDelta [{}, {})", start_key, end_key);
 
     auto range = buildRowRange(start_key, end_key);
     while (!range.none())
@@ -251,9 +245,7 @@ void SimplePKTestBasic::mergeDelta(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::mergeDelta()
 {
-    LOG_INFO(
-        logger_op,
-        "mergeDeltaAll");
+    LOG_INFO(logger_op, "mergeDeltaAll");
 
     flush(); // as mergeDeltaBySegment always flush, so we also flush here.
     store->mergeDeltaAll(*db_context);
@@ -261,11 +253,7 @@ void SimplePKTestBasic::mergeDelta()
 
 bool SimplePKTestBasic::merge(Int64 start_key, Int64 end_key)
 {
-    LOG_INFO(
-        logger_op,
-        "merge [{}, {})",
-        start_key,
-        end_key);
+    LOG_INFO(logger_op, "merge [{}, {})", start_key, end_key);
 
     std::vector<SegmentPtr> to_merge;
     auto range = buildRowRange(start_key, end_key);
@@ -288,11 +276,7 @@ bool SimplePKTestBasic::merge(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
 {
-    LOG_INFO(
-        logger_op,
-        "deleteRange [{}, {})",
-        start_key,
-        end_key);
+    LOG_INFO(logger_op, "deleteRange [{}, {})", start_key, end_key);
 
     auto range = buildRowRange(start_key, end_key);
     store->deleteRange(*db_context, db_context->getSettingsRef(), range);

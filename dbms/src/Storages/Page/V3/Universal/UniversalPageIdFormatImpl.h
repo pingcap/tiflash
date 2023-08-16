@@ -190,7 +190,8 @@ public:
     static inline bool isType(const UniversalPageId & page_id, StorageType type)
     {
         const auto & page_id_str = page_id.asStr();
-        auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
+        auto page_id_without_keyspace
+            = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
         return page_id_without_keyspace.starts_with(getSubPrefix(type));
     }
 
@@ -210,7 +211,8 @@ public:
         }
         else
         {
-            auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
+            auto page_id_without_keyspace
+                = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
             if (page_id_without_keyspace.starts_with(getSubPrefix(StorageType::Log)))
             {
                 return StorageType::Log;
@@ -257,7 +259,9 @@ private:
         case StorageType::KVStore:
             return "kvs";
         default:
-            throw Exception(fmt::format("Unknown storage type {}", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Unknown storage type {}", static_cast<UInt8>(type)),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 };

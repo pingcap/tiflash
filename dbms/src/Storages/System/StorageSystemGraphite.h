@@ -21,7 +21,8 @@
 namespace DB
 {
 /// Provides information about Graphite configuration.
-class StorageSystemGraphite : public ext::SharedPtrHelper<StorageSystemGraphite>
+class StorageSystemGraphite
+    : public ext::SharedPtrHelper<StorageSystemGraphite>
     , public IStorage
 {
 public:

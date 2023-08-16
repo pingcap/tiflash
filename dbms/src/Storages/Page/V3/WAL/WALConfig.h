@@ -33,19 +33,17 @@ private:
 public:
     void setRecoverMode(UInt64 recover_mode)
     {
-        RUNTIME_CHECK_MSG(recover_mode == static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
-                              || recover_mode == static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
-                              || recover_mode == static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
-                              || recover_mode == static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords),
-                          "Unknow recover mode [num={}]",
-                          recover_mode);
+        RUNTIME_CHECK_MSG(
+            recover_mode == static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
+                || recover_mode == static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
+                || recover_mode == static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
+                || recover_mode == static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords),
+            "Unknow recover mode [num={}]",
+            recover_mode);
         wal_recover_mode = recover_mode;
     }
 
-    WALRecoveryMode getRecoverMode() const
-    {
-        return static_cast<WALRecoveryMode>(wal_recover_mode.get());
-    }
+    WALRecoveryMode getRecoverMode() const { return static_cast<WALRecoveryMode>(wal_recover_mode.get()); }
 
     static WALConfig from(const PageStorageConfig & config)
     {

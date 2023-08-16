@@ -31,7 +31,11 @@ using DBInfo = TiDB::DBInfo;
 namespace DB
 {
 
-String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, const LoggerPtr & log);
+String createTableStmt(
+    const DBInfo & db_info,
+    const TableInfo & table_info,
+    const SchemaNameMapper & name_mapper,
+    const LoggerPtr & log);
 
 namespace tests
 {
@@ -45,53 +49,58 @@ struct ParseCase
 TEST(TiDBTableInfoTest, ParseFromJSON)
 try
 {
-    auto cases = {
-        // Test for backward compatibility
-        ParseCase{
-            R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"t","O":"t"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}}],"comment":"","id":45,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":23,"state":5,"update_timestamp":418700409204899851})json",
-            [](const TableInfo & table_info) {
-                ASSERT_EQ(table_info.name, "t");
-                ASSERT_EQ(table_info.id, 45L);
-            }},
-        // Test with tiflash_replica information
-        ParseCase{
-            R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":null,"origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":3,"Flag":0,"Flen":11,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
-            [](const TableInfo & table_info) {
-                ASSERT_EQ(table_info.name, "t");
-                ASSERT_EQ(table_info.id, 45L);
-            }},
-        // Test binary default value not trimmed by leading zero bytes and padded with trailing zero bytes.
-        ParseCase{
-            R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":4,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
-            [](const TableInfo & table_info) {
-                ASSERT_EQ(table_info.columns[0].defaultValueToField().get<String>(),
-                          Field(String("\0\x12"
-                                       "4\0",
-                                       4))
-                              .get<String>());
-            }},
-        // Test binary default value with exact length having the full content.
-        ParseCase{
-            R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":3,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
-            [](const TableInfo & table_info) {
-                ASSERT_EQ(table_info.columns[0].defaultValueToField().get<String>(),
-                          Field(String("\0\x12"
-                                       "4",
-                                       3))
-                              .get<String>());
-            }},
-        ParseCase{
-            R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"column_1","O":"column_1"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"column_2","O":"column_2"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"column_3","O":"column_3"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"column_4","O":"column_4"},"offset":3,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"column_5","O":"column_5"},"offset":4,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":6,"name":{"L":"column_6","O":"column_6"},"offset":5,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":7,"name":{"L":"column_7","O":"column_7"},"offset":6,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":8,"name":{"L":"column_8","O":"column_8"},"offset":7,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}}],"comment":"","id":86,"index_info":[],"is_common_handle":false,"keyspace_id":6367,"name":{"L":"test_local1_table","O":"test_local1_table"},"partition":null,"pk_is_handle":false,"schema_version":83,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":442666801340350471})json",
-            [](const TableInfo & table_info) {
-                ASSERT_EQ(table_info.getColumnID("column_1"), 1);
-                ASSERT_EQ(table_info.getColumnID("column_2"), 2);
-                ASSERT_EQ(table_info.getColumnID("column_3"), 3);
-                ASSERT_EQ(table_info.getColumnID("column_4"), 4);
-                ASSERT_EQ(table_info.getColumnID("column_5"), 5);
-                ASSERT_EQ(table_info.getColumnID("column_6"), 6);
-                ASSERT_EQ(table_info.getColumnID("column_7"), 7);
-                ASSERT_EQ(table_info.getColumnID("column_8"), 8);
-            }},
+    auto cases
+        = {
+            // Test for backward compatibility
+            ParseCase{
+                R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"t","O":"t"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}}],"comment":"","id":45,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":23,"state":5,"update_timestamp":418700409204899851})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.name, "t");
+                    ASSERT_EQ(table_info.id, 45L);
+                }},
+            // Test with tiflash_replica information
+            ParseCase{
+                R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":null,"origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":3,"Flag":0,"Flen":11,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.name, "t");
+                    ASSERT_EQ(table_info.id, 45L);
+                }},
+            // Test binary default value not trimmed by leading zero bytes and padded with trailing zero bytes.
+            ParseCase{
+                R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":4,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(
+                        table_info.columns[0].defaultValueToField().get<String>(),
+                        Field(String(
+                                  "\0\x12"
+                                  "4\0",
+                                  4))
+                            .get<String>());
+                }},
+            // Test binary default value with exact length having the full content.
+            ParseCase{
+                R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":3,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(
+                        table_info.columns[0].defaultValueToField().get<String>(),
+                        Field(String(
+                                  "\0\x12"
+                                  "4",
+                                  3))
+                            .get<String>());
+                }},
+            ParseCase{
+                R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"column_1","O":"column_1"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"column_2","O":"column_2"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"column_3","O":"column_3"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"column_4","O":"column_4"},"offset":3,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"column_5","O":"column_5"},"offset":4,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":6,"name":{"L":"column_6","O":"column_6"},"offset":5,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":7,"name":{"L":"column_7","O":"column_7"},"offset":6,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":8,"name":{"L":"column_8","O":"column_8"},"offset":7,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":512,"Tp":15}}],"comment":"","id":86,"index_info":[],"is_common_handle":false,"keyspace_id":6367,"name":{"L":"test_local1_table","O":"test_local1_table"},"partition":null,"pk_is_handle":false,"schema_version":83,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":442666801340350471})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.getColumnID("column_1"), 1);
+                    ASSERT_EQ(table_info.getColumnID("column_2"), 2);
+                    ASSERT_EQ(table_info.getColumnID("column_3"), 3);
+                    ASSERT_EQ(table_info.getColumnID("column_4"), 4);
+                    ASSERT_EQ(table_info.getColumnID("column_5"), 5);
+                    ASSERT_EQ(table_info.getColumnID("column_6"), 6);
+                    ASSERT_EQ(table_info.getColumnID("column_7"), 7);
+                    ASSERT_EQ(table_info.getColumnID("column_8"), 8);
+                }},
     };
 
     for (const auto & c : cases)
@@ -141,7 +150,8 @@ private:
         ParserCreateQuery parser;
         ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from verifyTableInfo " + tbl_name, 0);
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-        ASTExpressionList & ast_arguments = typeid_cast<ASTExpressionList &>(*(ast_create_query.storage->engine->arguments));
+        ASTExpressionList & ast_arguments
+            = typeid_cast<ASTExpressionList &>(*(ast_create_query.storage->engine->arguments));
         ASTLiteral & ast_literal = typeid_cast<ASTLiteral &>(*(ast_arguments.children.back()));
         return safeGet<String>(ast_literal.value);
     }

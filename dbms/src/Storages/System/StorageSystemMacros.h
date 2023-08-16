@@ -26,7 +26,8 @@ class Context;
 
 /** Information about macros for introspection.
   */
-class StorageSystemMacros : public ext::SharedPtrHelper<StorageSystemMacros>
+class StorageSystemMacros
+    : public ext::SharedPtrHelper<StorageSystemMacros>
     , public IStorage
 {
 public:

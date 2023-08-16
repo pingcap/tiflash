@@ -44,10 +44,7 @@ public:
         setHeader(action.getHeader());
     }
 
-    static SourceOpPtr create(const Options & options)
-    {
-        return std::make_unique<RNSegmentSourceOp>(options);
-    }
+    static SourceOpPtr create(const Options & options) { return std::make_unique<RNSegmentSourceOp>(options); }
 
     String getName() const override { return NAME; }
 

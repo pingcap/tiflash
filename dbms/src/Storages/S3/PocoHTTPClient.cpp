@@ -87,10 +87,11 @@ PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
     , enable_s3_requests_logging(enable_s3_requests_logging_)
     , enable_session_pool(enable_session_pool_)
     , error_report(nullptr)
-{
-}
+{}
 
-PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration, const PocoHTTPClientConfiguration & poco_configuration)
+PocoHTTPClient::PocoHTTPClient(
+    const Aws::Client::ClientConfiguration & client_configuration,
+    const PocoHTTPClientConfiguration & poco_configuration)
     : per_request_configuration(poco_configuration.per_request_configuration)
     , error_report(poco_configuration.error_report)
     , timeouts(ConnectionTimeouts(
@@ -103,8 +104,7 @@ PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_c
     , s3_max_redirects(poco_configuration.s3_max_redirects)
     , enable_s3_requests_logging(poco_configuration.enable_s3_requests_logging)
     , enable_session_pool(poco_configuration.enable_session_pool)
-{
-}
+{}
 
 std::shared_ptr<Aws::Http::HttpResponse> PocoHTTPClient::MakeRequest(
     const std::shared_ptr<Aws::Http::HttpRequest> & request,
@@ -175,13 +175,15 @@ PocoHTTPClient::S3MetricKind PocoHTTPClient::getMetricKind(const Aws::Http::Http
 
 void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount)
 {
-    const ProfileEvents::Event events_map[static_cast<size_t>(S3MetricType::EnumSize)][static_cast<size_t>(S3MetricKind::EnumSize)] = {
-        {ProfileEvents::S3ReadMicroseconds, ProfileEvents::S3WriteMicroseconds},
-        {ProfileEvents::S3ReadRequestsCount, ProfileEvents::S3WriteRequestsCount},
-        {ProfileEvents::S3ReadRequestsErrors, ProfileEvents::S3WriteRequestsErrors},
-        {ProfileEvents::S3ReadRequestsThrottling, ProfileEvents::S3WriteRequestsThrottling},
-        {ProfileEvents::S3ReadRequestsRedirects, ProfileEvents::S3WriteRequestsRedirects},
-    };
+    const ProfileEvents::Event events_map[static_cast<size_t>(S3MetricType::EnumSize)]
+                                         [static_cast<size_t>(S3MetricKind::EnumSize)]
+        = {
+            {ProfileEvents::S3ReadMicroseconds, ProfileEvents::S3WriteMicroseconds},
+            {ProfileEvents::S3ReadRequestsCount, ProfileEvents::S3WriteRequestsCount},
+            {ProfileEvents::S3ReadRequestsErrors, ProfileEvents::S3WriteRequestsErrors},
+            {ProfileEvents::S3ReadRequestsThrottling, ProfileEvents::S3WriteRequestsThrottling},
+            {ProfileEvents::S3ReadRequestsRedirects, ProfileEvents::S3WriteRequestsRedirects},
+        };
 
     S3MetricKind kind = getMetricKind(request);
 
@@ -210,18 +212,32 @@ void PocoHTTPClient::makeRequestInternal(
         {
             Poco::URI target_uri(uri);
             auto request_configuration = per_request_configuration(request);
-            RUNTIME_CHECK_MSG(request_configuration.proxy_host.empty(), "http proxy is not supported, proxy_host={}", request_configuration.proxy_host);
+            RUNTIME_CHECK_MSG(
+                request_configuration.proxy_host.empty(),
+                "http proxy is not supported, proxy_host={}",
+                request_configuration.proxy_host);
 
             std::optional<String> redirect_uri;
             if (enable_session_pool)
             {
-                PooledHTTPSessionPtr pooled_session = makePooledHTTPSession(target_uri, timeouts, /* per_endpoint_pool_size = */ 1024, /* resolve_host = */ true);
-                redirect_uri = makeRequestOnce(target_uri, request, request_configuration, pooled_session, response, tracing_logger);
+                PooledHTTPSessionPtr pooled_session = makePooledHTTPSession(
+                    target_uri,
+                    timeouts,
+                    /* per_endpoint_pool_size = */ 1024,
+                    /* resolve_host = */ true);
+                redirect_uri = makeRequestOnce(
+                    target_uri,
+                    request,
+                    request_configuration,
+                    pooled_session,
+                    response,
+                    tracing_logger);
             }
             else
             {
                 HTTPSessionPtr session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
-                redirect_uri = makeRequestOnce(target_uri, request, request_configuration, session, response, tracing_logger);
+                redirect_uri
+                    = makeRequestOnce(target_uri, request, request_configuration, session, response, tracing_logger);
             }
 
             if (redirect_uri)
@@ -237,7 +253,10 @@ void PocoHTTPClient::makeRequestInternal(
             }
         }
         // too may redirects
-        throw Exception(ErrorCodes::TOO_MANY_REDIRECTS, "Too many redirects while trying to access {}", request.GetUri().GetURIString());
+        throw Exception(
+            ErrorCodes::TOO_MANY_REDIRECTS,
+            "Too many redirects while trying to access {}",
+            request.GetUri().GetURIString());
     }
     catch (...)
     {
@@ -348,12 +367,14 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     }
 
     const auto elapsed_ms_connect_and_send = watch.elapsedMilliseconds();
-    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_request).Observe((elapsed_ms_connect_and_send - metrics.connect_ms) / 1000.0);
+    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_request)
+        .Observe((elapsed_ms_connect_and_send - metrics.connect_ms) / 1000.0);
 
     if (enable_s3_requests_logging)
         LOG_DEBUG(tracing_logger, "Receiving response...");
     auto & response_body_stream = session->receiveResponse(poco_response);
-    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_response).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
+    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_response)
+        .Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     int status_code = static_cast<int>(poco_response.getStatus());
     if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX)
@@ -366,7 +387,8 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
         /// Error statuses are more important so we show them even if `enable_s3_requests_logging == false`.
         LOG_INFO(tracing_logger, "Response status: {}, {}", status_code, poco_response.getReason());
     }
-    if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_FOUND)
+    if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT
+        || poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_FOUND)
     {
         auto location = poco_response.get("location");
         remote_host_filter->checkURL(Poco::URI(location));
@@ -399,17 +421,29 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     }
 
     /// Request is successful but for some special requests we can have actual error message in body
-    if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX && checkRequestCanReturn2xxAndErrorInBody(request))
+    if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX
+        && checkRequestCanReturn2xxAndErrorInBody(request))
     {
-        std::string response_string((std::istreambuf_iterator<char>(response_body_stream)),
-                                    std::istreambuf_iterator<char>());
+        std::string response_string(
+            (std::istreambuf_iterator<char>(response_body_stream)),
+            std::istreambuf_iterator<char>());
 
         /// Just trim string so it will not be so long
-        LOG_TRACE(tracing_logger, "Got dangerous response with successful code {}, checking its body: '{}'", status_code, response_string.substr(0, 300));
+        LOG_TRACE(
+            tracing_logger,
+            "Got dangerous response with successful code {}, checking its body: '{}'",
+            status_code,
+            response_string.substr(0, 300));
         const static std::string_view needle = "<Error>";
-        if (auto it = std::search(response_string.begin(), response_string.end(), std::default_searcher(needle.begin(), needle.end())); it != response_string.end())
+        if (auto it = std::search(
+                response_string.begin(),
+                response_string.end(),
+                std::default_searcher(needle.begin(), needle.end()));
+            it != response_string.end())
         {
-            LOG_WARNING(tracing_logger, "Response for request contain <Error> tag in body, settings internal server error (500 code)");
+            LOG_WARNING(
+                tracing_logger,
+                "Response for request contain <Error> tag in body, settings internal server error (500 code)");
             response->SetResponseCode(Aws::Http::HttpResponseCode::INTERNAL_SERVER_ERROR);
 
             addMetric(request, S3MetricType::Errors);

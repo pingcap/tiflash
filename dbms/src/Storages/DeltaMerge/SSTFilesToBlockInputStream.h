@@ -120,9 +120,10 @@ private:
 class BoundedSSTFilesToBlockInputStream final
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
-                                      ColId pk_column_id_,
-                                      const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
+    BoundedSSTFilesToBlockInputStream(
+        SSTFilesToBlockInputStreamPtr child,
+        ColId pk_column_id_,
+        const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
 
     static String getName() { return "BoundedSSTFilesToBlockInputStream"; }
 

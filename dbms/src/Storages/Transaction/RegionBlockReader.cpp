@@ -64,7 +64,11 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             fmt_buf.append(" [column define : ");
             for (auto const & column_define : *column_defines)
             {
-                fmt_buf.fmtAppend("(id={}, name={}, type={}) ", column_define.id, column_define.name, column_define.type->getName());
+                fmt_buf.fmtAppend(
+                    "(id={}, name={}, type={}) ",
+                    column_define.id,
+                    column_define.name,
+                    column_define.type->getName());
             }
             fmt_buf.append(" ];");
             return fmt_buf.toString();
@@ -81,15 +85,16 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             return fmt_buf.toString();
         };
 
-        exc.addMessage(fmt::format("pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, "
-                                   "schema_snapshot->column_defines is {}, "
-                                   "decoding_snapshot_epoch is {}, "
-                                   "block schema is {} ",
-                                   schema_snapshot->pk_type,
-                                   print_map(schema_snapshot->sorted_column_id_with_pos),
-                                   print_column_defines(schema_snapshot->column_defines),
-                                   schema_snapshot->decoding_schema_epoch,
-                                   block.dumpJsonStructure()));
+        exc.addMessage(fmt::format(
+            "pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, "
+            "schema_snapshot->column_defines is {}, "
+            "decoding_snapshot_epoch is {}, "
+            "block schema is {} ",
+            schema_snapshot->pk_type,
+            print_map(schema_snapshot->sorted_column_id_with_pos),
+            print_column_defines(schema_snapshot->column_defines),
+            schema_snapshot->decoding_schema_epoch,
+            block.dumpJsonStructure()));
         exc.addMessage("TiKV value contains: ");
         for (const auto & data : data_list)
         {
@@ -129,11 +134,13 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     {
         if (column_ids_iter->first == DelMarkColumnID)
         {
-            raw_delmark_col = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
+            raw_delmark_col
+                = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
         }
         else if (column_ids_iter->first == VersionColumnID)
         {
-            raw_version_col = static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
+            raw_version_col
+                = static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
         }
         else if (column_ids_iter->first == TiDBPkColumnID)
         {
@@ -181,7 +188,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                     // when pk is handle, we can decode the pk from the key
                     if (!(schema_snapshot->pk_is_handle && ci.hasPriKeyFlag()))
                     {
-                        auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
+                        auto * raw_column
+                            = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
                         raw_column->insertDefault();
                     }
                     column_ids_iter_copy++;
@@ -191,7 +199,14 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             else
             {
                 // Parse column value from encoded value
-                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot, force_decode))
+                if (!appendRowToBlock(
+                        *value_ptr,
+                        column_ids_iter,
+                        read_column_ids.end(),
+                        block,
+                        next_column_pos,
+                        schema_snapshot,
+                        force_decode))
                     return false;
             }
         }
@@ -202,13 +217,15 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             // For non-common handle, extra handle column's type is always Int64.
             // We need to copy the handle value from encoded key.
             const auto handle_value = static_cast<Int64>(pk);
-            auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
+            auto * raw_extra_column
+                = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
             static_cast<ColumnInt64 *>(raw_extra_column)->getData().push_back(handle_value);
             // For pk_is_handle == true, we need to decode the handle value from encoded key, and insert
             // to the specify column
             if (!pk_column_ids.empty())
             {
-                auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
+                auto * raw_pk_column
+                    = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
                 if constexpr (pk_type == TMTPKType::INT64)
                     static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(handle_value);
                 else if constexpr (pk_type == TMTPKType::UINT64)
@@ -226,8 +243,12 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                         }
                         else
                         {
-                            throw Exception(fmt::format("Detected overflow value when decoding pk column, type={} handle={}", raw_pk_column->getName(), handle_value),
-                                            ErrorCodes::LOGICAL_ERROR);
+                            throw Exception(
+                                fmt::format(
+                                    "Detected overflow value when decoding pk column, type={} handle={}",
+                                    raw_pk_column->getName(),
+                                    handle_value),
+                                ErrorCodes::LOGICAL_ERROR);
                         }
                     }
                 }
@@ -236,7 +257,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         else
         {
             // For common handle, sometimes we need to decode the value from encoded key instead of encoded value
-            auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
+            auto * raw_extra_column
+                = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
             raw_extra_column->insertData(pk->data(), pk->size());
             /// decode key and insert pk columns if needed
             size_t cursor = 0, pos = 0;
@@ -247,7 +269,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                 /// some examples that we must decode column value from value part
                 ///   1) if collation is enabled, the extra key may be a transformation of the original value of pk cols
                 ///   2) the primary key may just be a prefix of a column
-                auto * raw_pk_column = const_cast<IColumn *>(block.getByPosition(pk_pos_map.at(pk_column_ids[pos])).column.get());
+                auto * raw_pk_column
+                    = const_cast<IColumn *>(block.getByPosition(pk_pos_map.at(pk_column_ids[pos])).column.get());
                 if (raw_pk_column->size() == index)
                 {
                     raw_pk_column->insert(value);

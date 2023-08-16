@@ -44,10 +44,7 @@ public:
         : rmtxs(lock_count)
     {}
 
-    std::unique_lock<std::recursive_mutex> getLock(const uint64_t & handle)
-    {
-        return getLockByIndex(index(handle));
-    }
+    std::unique_lock<std::recursive_mutex> getLock(const uint64_t & handle) { return getLockByIndex(index(handle)); }
 
     std::vector<std::unique_lock<std::recursive_mutex>> getLocks(const std::vector<uint64_t> & handles)
     {
@@ -69,15 +66,9 @@ public:
     }
 
 private:
-    uint64_t index(const uint64_t & handle)
-    {
-        return hash_func(handle) % rmtxs.size();
-    }
+    uint64_t index(const uint64_t & handle) { return hash_func(handle) % rmtxs.size(); }
 
-    std::unique_lock<std::recursive_mutex> getLockByIndex(uint64_t idx)
-    {
-        return std::unique_lock(rmtxs[idx]);
-    }
+    std::unique_lock<std::recursive_mutex> getLockByIndex(uint64_t idx) { return std::unique_lock(rmtxs[idx]); }
 
     // Use std::recursive_mutex instead of std::mutex, because different handles may hash to the same lock in getLocks.
     std::vector<std::recursive_mutex> rmtxs;
@@ -193,7 +184,10 @@ class SharedHandleTable
 public:
     static constexpr uint64_t default_shared_count = 4096;
 
-    explicit SharedHandleTable(uint64_t max_key_count, const std::string & waldir = "", uint64_t shared_cnt = default_shared_count)
+    explicit SharedHandleTable(
+        uint64_t max_key_count,
+        const std::string & waldir = "",
+        uint64_t shared_cnt = default_shared_count)
         : tables(shared_cnt)
     {
         uint64_t max_key_count_per_shared = max_key_count / default_shared_count + 1;
@@ -203,14 +197,8 @@ public:
             tables[i] = std::make_unique<HandleTable>(fname, max_key_count_per_shared);
         }
     }
-    void write(const uint64_t & handle, uint64_t ts)
-    {
-        tables[hash_func(handle) % tables.size()]->write(handle, ts);
-    }
-    uint64_t read(const uint64_t & handle)
-    {
-        return tables[hash_func(handle) % tables.size()]->read(handle);
-    }
+    void write(const uint64_t & handle, uint64_t ts) { tables[hash_func(handle) % tables.size()]->write(handle, ts); }
+    uint64_t read(const uint64_t & handle) { return tables[hash_func(handle) % tables.size()]->read(handle); }
     uint64_t count()
     {
         uint64_t c = 0;

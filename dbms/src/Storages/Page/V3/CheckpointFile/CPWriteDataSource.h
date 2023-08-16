@@ -70,8 +70,7 @@ class CPWriteDataSourceFixture : public CPWriteDataSource
 public:
     explicit CPWriteDataSourceFixture(const std::unordered_map<size_t /* offset */, std::string> & data_)
         : data(data_)
-    {
-    }
+    {}
 
     static CPWriteDataSourcePtr create(const std::unordered_map<size_t /* offset */, std::string> & data_)
     {

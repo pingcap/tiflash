@@ -40,10 +40,7 @@ public:
         const std::string & file_id;
     };
 
-    static CPDataFileWriterPtr create(Options options)
-    {
-        return std::make_unique<CPDataFileWriter>(options);
-    }
+    static CPDataFileWriterPtr create(Options options) { return std::make_unique<CPDataFileWriter>(options); }
 
     explicit CPDataFileWriter(Options options)
         : file_writer(std::make_unique<WriteBufferFromFile>(options.file_path))
@@ -55,10 +52,7 @@ public:
         // TODO: Support compressed data file.
     }
 
-    ~CPDataFileWriter()
-    {
-        flush();
-    }
+    ~CPDataFileWriter() { flush(); }
 
     void writePrefix(const CheckpointProto::DataFilePrefix & prefix);
 
@@ -72,10 +66,7 @@ public:
         file_writer->sync();
     }
 
-    size_t writtenRecords() const
-    {
-        return file_suffix.records_size();
-    }
+    size_t writtenRecords() const { return file_suffix.records_size(); }
 
 private:
     enum class WriteStage
