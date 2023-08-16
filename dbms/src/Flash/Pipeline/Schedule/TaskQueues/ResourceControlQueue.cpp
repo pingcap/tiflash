@@ -21,15 +21,15 @@
 
 namespace DB
 {
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
     std::lock_guard lock(mu);
     submitWithoutLock(std::move(task));
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
     std::lock_guard lock(mu);
     for (auto & task : tasks)
@@ -38,8 +38,8 @@ void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && task)
 {
     if unlikely (is_finished)
     {
@@ -54,12 +54,12 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     }
 
     // name can be empty, it means resource control is disabled.
-    const std::string & name = task->getResourceGroupName();
+    const String & name = task->getResourceGroupName();
 
     auto iter = resource_group_task_queues.find(name);
     if (iter == resource_group_task_queues.end())
     {
-        auto task_queue = std::make_shared<NestedQueueType>();
+        auto task_queue = std::make_shared<NestedTaskQueueType>();
         task_queue->submit(std::move(task));
         resource_group_infos.push({name, LocalAdmissionController::global_instance->getPriority(name), task_queue});
         resource_group_task_queues.insert({name, task_queue});
@@ -71,8 +71,8 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     cv.notify_one();
 }
 
-template <typename NestedQueueType>
-bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
+template <typename NestedTaskQueueType>
+bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 {
     assert(task == nullptr);
     std::unique_lock lock(mu);
@@ -135,11 +135,11 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     }
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
 {
     assert(task);
-    const std::string & name = task->getResourceGroupName();
+    const String & name = task->getResourceGroupName();
 
     std::lock_guard lock(mu);
     auto ru = toRU(inc_value);
@@ -148,8 +148,8 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     updateResourceGroupInfosWithoutLock();
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock()
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
     std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
     while (!resource_group_infos.empty())
@@ -162,8 +162,8 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock(
     resource_group_infos = new_resource_group_infos;
 }
 
-template <typename NestedQueueType>
-bool ResourceControlQueue<NestedQueueType>::empty() const
+template <typename NestedTaskQueueType>
+bool ResourceControlQueue<NestedTaskQueueType>::empty() const
 {
     std::lock_guard lock(mu);
 
@@ -181,8 +181,8 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
     return true;
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::finish()
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::finish()
 {
     std::lock_guard lock(mu);
     is_finished = true;
@@ -192,8 +192,8 @@ void ResourceControlQueue<NestedQueueType>::finish()
     cv.notify_all();
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, const String & resource_group_name)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::cancel(const String & query_id, const String & resource_group_name)
 {
     if unlikely (query_id.empty())
         return;

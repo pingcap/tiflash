@@ -23,7 +23,7 @@
 
 namespace DB
 {
-template <typename NestedQueueType>
+template <typename NestedTaskQueueType>
 class ResourceControlQueue
     : public TaskQueue
     , private boost::noncopyable
@@ -56,19 +56,20 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
     // <resource_group_name, resource_group_task_queues>
-    using ResourceGroupTaskQueue = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
+    using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
 
     struct ResourceGroupInfo
     {
-        ResourceGroupInfo(const std::string & name_, UInt64 priority_, const std::shared_ptr<NestedQueueType> & task_queue_)
+        ResourceGroupInfo(const String & name_, UInt64 priority_, const NestedTaskQueuePtr & task_queue_)
             : name(name_)
             , priority(priority_)
             , task_queue(task_queue_) {}
 
-        std::string name;
+        String name;
         UInt64 priority;
-        std::shared_ptr<NestedQueueType> task_queue;
+        NestedTaskQueuePtr task_queue;
 
         bool operator<(const ResourceGroupInfo & rhs) const
         {
