@@ -91,7 +91,9 @@ struct Serializer
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileInMemory & cf_in_mem);
     static ColumnFileInMemoryPtr deserializeCFInMemory(const RemotePb::ColumnFileInMemory & proto);
 
-    static RemotePb::ColumnFileRemote serializeTo(const ColumnFileTiny & cf_tiny, IColumnFileDataProviderPtr data_provider);
+    static RemotePb::ColumnFileRemote serializeTo(
+        const ColumnFileTiny & cf_tiny,
+        IColumnFileDataProviderPtr data_provider);
     static ColumnFileTinyPtr deserializeCFTiny(const RemotePb::ColumnFileTiny & proto);
 
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileDeleteRange & cf_delete_range);

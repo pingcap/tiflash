@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/StorageFactory.h>
+#include <Common/Exception.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Common/Exception.h>
+#include <Storages/StorageFactory.h>
 
 
 namespace DB
@@ -25,14 +25,14 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_STORAGE;
-    extern const int LOGICAL_ERROR;
-    extern const int INCORRECT_QUERY;
-    extern const int ENGINE_REQUIRED;
-    extern const int FUNCTION_CANNOT_HAVE_PARAMETERS;
-    extern const int BAD_ARGUMENTS;
-    extern const int DATA_TYPE_CANNOT_BE_USED_IN_TABLES;
-}
+extern const int UNKNOWN_STORAGE;
+extern const int LOGICAL_ERROR;
+extern const int INCORRECT_QUERY;
+extern const int ENGINE_REQUIRED;
+extern const int FUNCTION_CANNOT_HAVE_PARAMETERS;
+extern const int BAD_ARGUMENTS;
+extern const int DATA_TYPE_CANNOT_BE_USED_IN_TABLES;
+} // namespace ErrorCodes
 
 
 /// Some types are only for intermediate values of expressions and cannot be used in tables.
@@ -40,14 +40,17 @@ static void checkAllTypesAreAllowedInTable(const NamesAndTypesList & names_and_t
 {
     for (const auto & elem : names_and_types)
         if (elem.type->cannotBeStoredInTables())
-            throw Exception("Data type " + elem.type->getName() + " cannot be used in tables", ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_TABLES);
+            throw Exception(
+                "Data type " + elem.type->getName() + " cannot be used in tables",
+                ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_TABLES);
 }
 
 
 void StorageFactory::registerStorage(const std::string & name, Creator creator)
 {
     if (!storages.emplace(name, std::move(creator)).second)
-        throw Exception("TableFunctionFactory: the table function name '" + name + "' is not unique",
+        throw Exception(
+            "TableFunctionFactory: the table function name '" + name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -94,7 +97,8 @@ StoragePtr StorageFactory::get(
 
             if (engine_def.parameters)
                 throw Exception(
-                    "Engine definition cannot take the form of a parametric function", ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS);
+                    "Engine definition cannot take the form of a parametric function",
+                    ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS);
 
             if (engine_def.arguments)
                 args = engine_def.arguments->children;
@@ -105,8 +109,10 @@ StoragePtr StorageFactory::get(
                 && !endsWith(name, "MergeTree"))
             {
                 throw Exception(
-                    "Engine " + name + " doesn't support PARTITION BY, ORDER BY, SAMPLE BY or SETTINGS clauses. "
-                    "Currently only the MergeTree family of engines supports them", ErrorCodes::BAD_ARGUMENTS);
+                    "Engine " + name
+                        + " doesn't support PARTITION BY, ORDER BY, SAMPLE BY or SETTINGS clauses. "
+                          "Currently only the MergeTree family of engines supports them",
+                    ErrorCodes::BAD_ARGUMENTS);
             }
 
             if (name == "View")
@@ -118,7 +124,8 @@ StoragePtr StorageFactory::get(
             else if (name == "MaterializedView")
             {
                 throw Exception(
-                    "Direct creation of tables with ENGINE MaterializedView is not supported, use CREATE MATERIALIZED VIEW statement",
+                    "Direct creation of tables with ENGINE MaterializedView is not supported, use CREATE MATERIALIZED "
+                    "VIEW statement",
                     ErrorCodes::INCORRECT_QUERY);
             }
         }
@@ -128,8 +135,7 @@ StoragePtr StorageFactory::get(
     if (it == storages.end())
         throw Exception("Unknown table engine " + name, ErrorCodes::UNKNOWN_STORAGE);
 
-    Arguments arguments
-    {
+    Arguments arguments{
         .engine_name = name,
         .engine_args = args,
         .storage_def = storage_def,
@@ -142,10 +148,9 @@ StoragePtr StorageFactory::get(
         .context = context,
         .columns = columns,
         .attach = attach,
-        .has_force_restore_data_flag = has_force_restore_data_flag
-    };
+        .has_force_restore_data_flag = has_force_restore_data_flag};
 
     return it->second(arguments);
 }
 
-}
+} // namespace DB

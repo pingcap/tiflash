@@ -119,10 +119,7 @@ public:
         return false;
     }
 
-    ALWAYS_INLINE inline bool isPaddingBinary() const
-    {
-        return isPaddingBinary(getCollatorType());
-    }
+    ALWAYS_INLINE inline bool isPaddingBinary() const { return isPaddingBinary(getCollatorType()); }
 
     ALWAYS_INLINE inline StringRef sortKeyFastPath(const char * s, size_t length, std::string & container) const
     {

@@ -38,11 +38,12 @@ extern const Metric DT_SnapshotOfBitmapFilter;
 
 namespace DB::DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path);
+extern DMFilePtr writeIntoNewDMFile(
+    DMContext & dm_context,
+    const ColumnDefinesPtr & schema_snap,
+    const BlockInputStreamPtr & input_stream,
+    UInt64 file_id,
+    const String & parent_path);
 }
 
 namespace DB::DM::tests
@@ -93,7 +94,10 @@ bool SegmentTestBasic::isSegmentDefinitelyEmpty(PageIdU64 segment_id)
     return segment->isDefinitelyEmpty(*dm_context, snapshot);
 }
 
-std::optional<PageIdU64> SegmentTestBasic::splitSegment(PageIdU64 segment_id, Segment::SplitMode split_mode, bool check_rows)
+std::optional<PageIdU64> SegmentTestBasic::splitSegment(
+    PageIdU64 segment_id,
+    Segment::SplitMode split_mode,
+    bool check_rows)
 {
     LOG_INFO(logger_op, "splitSegment, segment_id={} split_mode={}", segment_id, magic_enum::enum_name(split_mode));
 
@@ -101,12 +105,26 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegment(PageIdU64 segment_id, Se
     auto origin_segment = segments[segment_id];
     size_t origin_segment_row_num = getSegmentRowNum(segment_id);
 
-    LOG_DEBUG(logger, "begin split, segment_id={} split_mode={} rows={}", segment_id, magic_enum::enum_name(split_mode), origin_segment_row_num);
+    LOG_DEBUG(
+        logger,
+        "begin split, segment_id={} split_mode={} rows={}",
+        segment_id,
+        magic_enum::enum_name(split_mode),
+        origin_segment_row_num);
 
-    auto [left, right] = origin_segment->split(*dm_context, tableColumns(), /* use a calculated split point */ std::nullopt, split_mode);
+    auto [left, right] = origin_segment->split(
+        *dm_context,
+        tableColumns(),
+        /* use a calculated split point */ std::nullopt,
+        split_mode);
     if (!left && !right)
     {
-        LOG_DEBUG(logger, "split not succeeded, segment_id={} split_mode={} rows={}", segment_id, magic_enum::enum_name(split_mode), origin_segment_row_num);
+        LOG_DEBUG(
+            logger,
+            "split not succeeded, segment_id={} split_mode={} rows={}",
+            segment_id,
+            magic_enum::enum_name(split_mode),
+            origin_segment_row_num);
         return std::nullopt;
     }
 
@@ -121,15 +139,30 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegment(PageIdU64 segment_id, Se
     if (check_rows)
         EXPECT_EQ(origin_segment_row_num, left_rows + right_rows);
 
-    LOG_DEBUG(logger, "split finish, left_id={} left_rows={} right_id={} right_rows={}", left->segmentId(), left_rows, right->segmentId(), right_rows);
+    LOG_DEBUG(
+        logger,
+        "split finish, left_id={} left_rows={} right_id={} right_rows={}",
+        left->segmentId(),
+        left_rows,
+        right->segmentId(),
+        right_rows);
     operation_statistics[fmt::format("split{}", magic_enum::enum_name(split_mode))]++;
 
     return right->segmentId();
 }
 
-std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(PageIdU64 segment_id, Int64 split_at, Segment::SplitMode split_mode, bool check_rows)
+std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(
+    PageIdU64 segment_id,
+    Int64 split_at,
+    Segment::SplitMode split_mode,
+    bool check_rows)
 {
-    LOG_INFO(logger_op, "splitSegmentAt, segment_id={} split_at={} split_mode={}", segment_id, split_at, magic_enum::enum_name(split_mode));
+    LOG_INFO(
+        logger_op,
+        "splitSegmentAt, segment_id={} split_at={} split_mode={}",
+        segment_id,
+        split_at,
+        magic_enum::enum_name(split_mode));
 
     RowKeyValue split_at_key;
     if (options.is_common_handle)
@@ -148,12 +181,25 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(PageIdU64 segment_id, 
     auto origin_segment = segments[segment_id];
     size_t origin_segment_row_num = getSegmentRowNum(segment_id);
 
-    LOG_DEBUG(logger, "begin splitAt, segment_id={} split_at={} split_at_key={} split_mode={} rows={}", segment_id, split_at, split_at_key.toDebugString(), magic_enum::enum_name(split_mode), origin_segment_row_num);
+    LOG_DEBUG(
+        logger,
+        "begin splitAt, segment_id={} split_at={} split_at_key={} split_mode={} rows={}",
+        segment_id,
+        split_at,
+        split_at_key.toDebugString(),
+        magic_enum::enum_name(split_mode),
+        origin_segment_row_num);
 
     auto [left, right] = origin_segment->split(*dm_context, tableColumns(), split_at_key, split_mode);
     if (!left && !right)
     {
-        LOG_DEBUG(logger, "splitAt not succeeded, segment_id={} split_at={} split_mode={} rows={}", segment_id, split_at, magic_enum::enum_name(split_mode), origin_segment_row_num);
+        LOG_DEBUG(
+            logger,
+            "splitAt not succeeded, segment_id={} split_at={} split_mode={} rows={}",
+            segment_id,
+            split_at,
+            magic_enum::enum_name(split_mode),
+            origin_segment_row_num);
         return std::nullopt;
     }
 
@@ -168,7 +214,13 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(PageIdU64 segment_id, 
     if (check_rows)
         EXPECT_EQ(origin_segment_row_num, left_rows + right_rows);
 
-    LOG_DEBUG(logger, "splitAt finish, left_id={} left_rows={} right_id={} right_rows={}", left->segmentId(), left_rows, right->segmentId(), right_rows);
+    LOG_DEBUG(
+        logger,
+        "splitAt finish, left_id={} left_rows={} right_id={} right_rows={}",
+        left->segmentId(),
+        left_rows,
+        right->segmentId(),
+        right_rows);
     operation_statistics[fmt::format("splitAt{}", magic_enum::enum_name(split_mode))]++;
 
     return right->segmentId();
@@ -196,12 +248,20 @@ void SegmentTestBasic::mergeSegment(const PageIdU64s & segments_id, bool check_r
         merged_rows += rows;
     }
 
-    LOG_DEBUG(logger, "begin merge, segments=[{}] each_rows=[{}]", fmt::join(segments_id, ","), fmt::join(segments_rows, ","));
+    LOG_DEBUG(
+        logger,
+        "begin merge, segments=[{}] each_rows=[{}]",
+        fmt::join(segments_id, ","),
+        fmt::join(segments_rows, ","));
 
     SegmentPtr merged_segment = Segment::merge(*dm_context, tableColumns(), segments_to_merge);
     if (!merged_segment)
     {
-        LOG_DEBUG(logger, "merge not succeeded, segments=[{}] each_rows=[{}]", fmt::join(segments_id, ","), fmt::join(segments_rows, ","));
+        LOG_DEBUG(
+            logger,
+            "merge not succeeded, segments=[{}] each_rows=[{}]",
+            fmt::join(segments_id, ","),
+            fmt::join(segments_rows, ","));
         return;
     }
 
@@ -212,7 +272,12 @@ void SegmentTestBasic::mergeSegment(const PageIdU64s & segments_id, bool check_r
     if (check_rows)
         EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), merged_rows);
 
-    LOG_DEBUG(logger, "merge finish, merged_segment_id={} merge_from_segments=[{}] merged_rows={}", merged_segment->segmentId(), fmt::join(segments_id, ","), merged_rows);
+    LOG_DEBUG(
+        logger,
+        "merge finish, merged_segment_id={} merge_from_segments=[{}] merged_rows={}",
+        merged_segment->segmentId(),
+        fmt::join(segments_id, ","),
+        merged_rows);
     if (segments_id.size() > 2)
         operation_statistics["mergeMultiple"]++;
     else
@@ -316,7 +381,11 @@ Block sortvstackBlocks(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
+    PageIdU64 segment_id,
+    UInt64 total_write_rows,
+    std::optional<Int64> write_start_key,
+    bool is_deleted)
 {
     RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
 
@@ -341,7 +410,9 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UI
         // B. If the segment is small, we write from the beginning.
         if (segment_max_rows > total_write_rows)
         {
-            write_start_key = std::uniform_int_distribution<Int64>{segment_start_key, segment_end_key - static_cast<Int64>(total_write_rows)}(random);
+            write_start_key = std::uniform_int_distribution<Int64>{
+                segment_start_key,
+                segment_end_key - static_cast<Int64>(total_write_rows)}(random);
         }
         else
         {
@@ -371,12 +442,14 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UI
         blocks.emplace_back(block);
         remaining_rows -= write_rows_this_round;
 
-        LOG_DEBUG(logger, "Prepared block for write, block_range=[{}, {}) (rows={}), total_rows_to_write={} remain_rows={}", //
-                  *write_start_key,
-                  write_end_key_this_round,
-                  write_rows_this_round,
-                  total_write_rows,
-                  remaining_rows);
+        LOG_DEBUG(
+            logger,
+            "Prepared block for write, block_range=[{}, {}) (rows={}), total_rows_to_write={} remain_rows={}", //
+            *write_start_key,
+            write_end_key_this_round,
+            write_rows_this_round,
+            total_write_rows,
+            remaining_rows);
     }
 
     return sortvstackBlocks(std::move(blocks));
@@ -393,7 +466,13 @@ void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+    LOG_DEBUG(
+        logger,
+        "write to segment, segment={} segment_rows={} start_key={} end_key={}",
+        segment->info(),
+        segment_row_num,
+        start_key,
+        end_key);
 
     auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
     segment->write(*dm_context, block, false);
@@ -402,7 +481,11 @@ void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
+void SegmentTestBasic::ingestDTFileIntoDelta(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    std::optional<Int64> start_at,
+    bool clear)
 {
     LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -414,7 +497,13 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+    LOG_DEBUG(
+        logger,
+        "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}",
+        segment->info(),
+        segment_row_num,
+        start_key,
+        end_key);
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
@@ -432,9 +521,18 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
         WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
-        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        auto ref_file = DMFile::restore(
+            dm_context->db_context.getFileProvider(),
+            file_id,
+            ref_id,
+            parent_path,
+            DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
-        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ clear));
+        ASSERT_TRUE(segment->ingestDataToDelta(
+            *dm_context,
+            segment->getRowKeyRange(),
+            {ref_file},
+            /* clear_data_in_range */ clear));
 
         ingest_wbs.rollbackWrittenLogAndData();
     }
@@ -443,7 +541,11 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
     operation_statistics["ingest"]++;
 }
 
-void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
+void SegmentTestBasic::ingestDTFileByReplace(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    std::optional<Int64> start_at,
+    bool clear)
 {
     LOG_INFO(logger_op, "ingestDTFileByReplace, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -455,7 +557,13 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+    LOG_DEBUG(
+        logger,
+        "ingest to segment delta, segment={} segment_rows={} start_key={} end_key={}",
+        segment->info(),
+        segment_row_num,
+        start_key,
+        end_key);
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
@@ -472,7 +580,12 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
         WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
-        auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        auto ref_file = DMFile::restore(
+            dm_context->db_context.getFileProvider(),
+            file_id,
+            ref_id,
+            parent_path,
+            DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
 
         auto apply_result = segment->ingestDataForTest(*dm_context, ref_file, clear);
@@ -501,7 +614,10 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
         EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
 }
 
-void SegmentTestBasic::writeSegmentWithDeletedPack(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::writeSegmentWithDeletedPack(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    std::optional<Int64> start_at)
 {
     LOG_INFO(logger_op, "writeSegmentWithDeletedPack, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -512,7 +628,13 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageIdU64 segment_id, UInt64 
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-    LOG_DEBUG(logger, "write deleted pack to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
+    LOG_DEBUG(
+        logger,
+        "write deleted pack to segment, segment={} segment_rows={} start_key={} end_key={}",
+        segment->info(),
+        segment_row_num,
+        start_key,
+        end_key);
 
     auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
     segment->write(*dm_context, block, false);
@@ -559,7 +681,12 @@ void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const Block & bl
 
 void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot)
 {
-    LOG_INFO(logger_op, "replaceSegmentData, segment_id={} file_rows={} file=dmf_{}", segment_id, file->getRows(), file->fileId());
+    LOG_INFO(
+        logger_op,
+        "replaceSegmentData, segment_id={} file_rows={} file=dmf_{}",
+        segment_id,
+        file->getRows(),
+        file->fileId());
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
@@ -650,7 +777,8 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(Namespace
 {
     if (storage_pool->uni_ps)
     {
-        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(
+            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
     }
     else
     {
@@ -671,7 +799,8 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
-        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(
+            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
     }
     else
     {
@@ -689,29 +818,41 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID
     }
 }
 
-SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
+SegmentPtr SegmentTestBasic::reload(
+    bool is_common_handle,
+    const ColumnDefinesPtr & pre_define_columns,
+    DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
     storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
     storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
-    ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
+    ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
+                                is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
+                                                  : pre_define_columns;
     setColumns(cols);
 
-    return Segment::newSegment(Logger::get(), *dm_context, table_columns, RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
+    return Segment::newSegment(
+        Logger::get(),
+        *dm_context,
+        table_columns,
+        RowKeyRange::newAll(is_common_handle, 1),
+        storage_pool->newMetaPageId(),
+        0);
 }
 
 void SegmentTestBasic::reloadDMContext()
 {
-    dm_context = std::make_unique<DMContext>(*db_context,
-                                             storage_path_pool,
-                                             storage_pool,
-                                             /*min_version_*/ 0,
-                                             NullspaceID,
-                                             /*physical_table_id*/ 100,
-                                             options.is_common_handle,
-                                             1,
-                                             db_context->getSettingsRef());
+    dm_context = std::make_unique<DMContext>(
+        *db_context,
+        storage_path_pool,
+        storage_pool,
+        /*min_version_*/ 0,
+        NullspaceID,
+        /*physical_table_id*/ 100,
+        options.is_common_handle,
+        1,
+        db_context->getSettingsRef());
 }
 
 void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)
@@ -770,8 +911,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
 std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);
-    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
-                                     getVersionColumnDefine()};
+    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle), getVersionColumnDefine()};
     auto stream = segment->getInputStreamModeNormal(
         *dm_context,
         columns_to_read,
@@ -859,9 +999,7 @@ try
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
             createColumn<Int64>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}));
-        ASSERT_COLUMN_EQ(
-            block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
     }
     {
         // write_rows > segment_rows, start_key not specified
@@ -878,32 +1016,20 @@ try
         // start_key specified, end_key - start_key < write_rows
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 2, /* at */ 16);
-        ASSERT_COLUMN_EQ(
-            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 17}));
-        ASSERT_COLUMN_EQ(
-            block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(EXTRA_HANDLE_COLUMN_NAME), createColumn<Int64>({16, 17}));
+        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 4, /* at */ 16);
-        ASSERT_COLUMN_EQ(
-            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 17, 18, 19}));
-        ASSERT_COLUMN_EQ(
-            block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 1, 1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(EXTRA_HANDLE_COLUMN_NAME), createColumn<Int64>({16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 1, 1, 1}));
     }
     {
         version = 0;
         auto block = prepareWriteBlockInSegmentRange(*s1_id, 5, /* at */ 16);
-        ASSERT_COLUMN_EQ(
-            block.getByName(EXTRA_HANDLE_COLUMN_NAME),
-            createColumn<Int64>({16, 16, 17, 18, 19}));
-        ASSERT_COLUMN_EQ(
-            block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 2, 1, 1, 1}));
+        ASSERT_COLUMN_EQ(block.getByName(EXTRA_HANDLE_COLUMN_NAME), createColumn<Int64>({16, 16, 17, 18, 19}));
+        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 2, 1, 1, 1}));
     }
     {
         version = 0;
@@ -911,9 +1037,7 @@ try
         ASSERT_COLUMN_EQ(
             block.getByName(EXTRA_HANDLE_COLUMN_NAME),
             createColumn<Int64>({16, 16, 16, 17, 17, 17, 18, 18, 19, 19}));
-        ASSERT_COLUMN_EQ(
-            block.getByName(VERSION_COLUMN_NAME),
-            createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
+        ASSERT_COLUMN_EQ(block.getByName(VERSION_COLUMN_NAME), createColumn<UInt64>({1, 2, 3, 1, 2, 3, 1, 2, 1, 2}));
     }
     {
         // write rows < segment rows, start key not specified, should choose a random start.

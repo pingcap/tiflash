@@ -36,8 +36,7 @@ struct KeyspaceScanner : public pingcap::kv::Scanner
     KeyspaceScanner(Base scanner_, bool need_cut_)
         : Base(scanner_)
         , need_cut(need_cut_)
-    {
-    }
+    {}
 
     std::string key();
 

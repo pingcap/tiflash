@@ -74,7 +74,10 @@ void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const
         throw Exception("Forgot to support type: " + to_type->getName());
 }
 
-void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, const DataTypePtr & type, const ColumnPtr & data)
+void appendIntoHandleColumn(
+    ColumnVector<Handle>::Container & handle_column,
+    const DataTypePtr & type,
+    const ColumnPtr & data)
 {
     const auto * type_ptr = &(*type);
     size_t size = handle_column.size();
@@ -130,7 +133,8 @@ void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, con
     }
     else if (checkDataType<DataTypeDateTime>(type_ptr))
     {
-        const auto & data_vector = typeid_cast<const ColumnVector<typename DataTypeDateTime::FieldType> &>(*data).getData();
+        const auto & data_vector
+            = typeid_cast<const ColumnVector<typename DataTypeDateTime::FieldType> &>(*data).getData();
         for (size_t i = 0; i < size; ++i)
             handle_column[i] |= data_vector[i];
     }

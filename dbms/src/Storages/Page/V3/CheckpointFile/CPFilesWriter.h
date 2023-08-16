@@ -52,10 +52,7 @@ public:
         UInt64 max_edit_records_per_part = 100000;
     };
 
-    static CPFilesWriterPtr create(Options options)
-    {
-        return std::make_unique<CPFilesWriter>(std::move(options));
-    }
+    static CPFilesWriterPtr create(Options options) { return std::make_unique<CPFilesWriter>(std::move(options)); }
 
     explicit CPFilesWriter(Options options);
 

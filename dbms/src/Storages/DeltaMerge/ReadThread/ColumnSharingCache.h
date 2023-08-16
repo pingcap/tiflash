@@ -58,7 +58,12 @@ public:
         }
     }
 
-    ColumnCacheStatus get(size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col_data, DataTypePtr data_type)
+    ColumnCacheStatus get(
+        size_t start_pack_id,
+        size_t pack_count,
+        size_t read_rows,
+        ColumnPtr & col_data,
+        DataTypePtr data_type)
     {
         ColumnCacheStatus status;
         std::lock_guard lock(mtx);
@@ -132,10 +137,7 @@ public:
         }
     }
 
-    ~ColumnSharingCacheMap()
-    {
-        LOG_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
-    }
+    ~ColumnSharingCacheMap() { LOG_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString()); }
 
     // `addStale` just do some statistics.
     void addStale()
@@ -155,7 +157,13 @@ public:
         itr->second.add(start_pack_id, pack_count, col_data);
     }
 
-    bool get(int64_t col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col_data, DataTypePtr data_type)
+    bool get(
+        int64_t col_id,
+        size_t start_pack_id,
+        size_t pack_count,
+        size_t read_rows,
+        ColumnPtr & col_data,
+        DataTypePtr data_type)
     {
         auto status = ColumnCacheStatus::GET_MISS;
         auto itr = cols.find(col_id);
@@ -179,10 +187,7 @@ public:
     }
 
 private:
-    void addColumn(int64_t col_id)
-    {
-        cols[col_id];
-    }
+    void addColumn(int64_t col_id) { cols[col_id]; }
     std::string statString() const
     {
         auto add_count = stats[static_cast<int>(ColumnCacheStatus::ADD_COUNT)].load(std::memory_order_relaxed);
@@ -194,15 +199,16 @@ private:
         auto add_total = add_count + add_stale;
         auto get_cached = get_hit + get_copy;
         auto get_total = get_miss + get_part + get_hit + get_copy;
-        return fmt::format("add_count={} add_stale={} add_ratio={} get_miss={} get_part={} get_hit={} get_copy={} cached_ratio={}",
-                           add_count,
-                           add_stale,
-                           add_total > 0 ? add_count * 1.0 / add_total : 0,
-                           get_miss,
-                           get_part,
-                           get_hit,
-                           get_copy,
-                           get_total > 0 ? get_cached * 1.0 / get_total : 0);
+        return fmt::format(
+            "add_count={} add_stale={} add_ratio={} get_miss={} get_part={} get_hit={} get_copy={} cached_ratio={}",
+            add_count,
+            add_stale,
+            add_total > 0 ? add_count * 1.0 / add_total : 0,
+            get_miss,
+            get_part,
+            get_hit,
+            get_copy,
+            get_total > 0 ? get_cached * 1.0 / get_total : 0);
     }
     std::string dmfile_name;
     std::unordered_map<int64_t, ColumnSharingCache> cols;

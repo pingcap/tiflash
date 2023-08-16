@@ -75,7 +75,9 @@ class RegionTable : private boost::noncopyable
 public:
     struct InternalRegion
     {
-        InternalRegion(const RegionID region_id_, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_)
+        InternalRegion(
+            const RegionID region_id_,
+            const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_)
             : region_id(region_id_)
             , range_in_table(range_in_table_)
         {}
@@ -119,30 +121,35 @@ public:
     // The original name for this function is tryFlushRegion.
     RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region);
 
-    void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
+    void handleInternalRegionsByTable(
+        KeyspaceID keyspace_id,
+        TableID table_id,
+        std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(Context & context,
-                                   const RegionPtrWithBlock & region,
-                                   RegionDataReadInfoList & data_list_to_remove,
-                                   const LoggerPtr & log,
-                                   bool lock_region = true);
+    static void writeBlockByRegion(
+        Context & context,
+        const RegionPtrWithBlock & region,
+        RegionDataReadInfoList & data_list_to_remove,
+        const LoggerPtr & log,
+        bool lock_region = true);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
     using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
-    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TMTContext & tmt,
-                                                                    const TiDB::TableID table_id,
-                                                                    const RegionPtr & region,
-                                                                    const Timestamp start_ts,
-                                                                    const std::unordered_set<UInt64> * bypass_lock_ts,
-                                                                    RegionVersion region_version,
-                                                                    RegionVersion conf_version,
-                                                                    const LoggerPtr & log);
+    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(
+        TMTContext & tmt,
+        const TiDB::TableID table_id,
+        const RegionPtr & region,
+        const Timestamp start_ts,
+        const std::unordered_set<UInt64> * bypass_lock_ts,
+        RegionVersion region_version,
+        RegionVersion conf_version,
+        const LoggerPtr & log);
 
 public:
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
@@ -246,9 +253,7 @@ struct RegionPtrWithSnapshotFiles
     using Base = RegionPtr;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(
-        const Base & base_,
-        std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
+    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }

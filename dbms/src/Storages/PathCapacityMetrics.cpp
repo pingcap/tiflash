@@ -136,7 +136,12 @@ void PathCapacityMetrics::freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used
     auto iter = keyspace_id_to_used_bytes.find(keyspace_id);
     RUNTIME_CHECK(iter != keyspace_id_to_used_bytes.end(), keyspace_id);
     iter->second -= used_bytes;
-    RUNTIME_CHECK_MSG(iter->second >= 0, "Remote size {} is invalid after remove {} bytes for keyspace {}", iter->second, used_bytes, keyspace_id);
+    RUNTIME_CHECK_MSG(
+        iter->second >= 0,
+        "Remote size {} is invalid after remove {} bytes for keyspace {}",
+        iter->second,
+        used_bytes,
+        keyspace_id);
     if (iter->second == 0)
         keyspace_id_to_used_bytes.erase(iter);
 }
@@ -162,7 +167,9 @@ std::unordered_map<KeyspaceID, UInt64> PathCapacityMetrics::getKeyspaceUsedSizes
     for (auto & [keyspace_id, size] : keyspace_id_to_used_bytes)
     {
         // cannot get accurate local used size for each keyspace, so we use a simple way to estimate it.
-        keyspace_id_to_total_size.emplace(keyspace_id, size + static_cast<size_t>(size * 1.0 / remote_total_size * local_toal_size));
+        keyspace_id_to_total_size.emplace(
+            keyspace_id,
+            size + static_cast<size_t>(size * 1.0 / remote_total_size * local_toal_size));
     }
     return keyspace_id_to_total_size;
 }

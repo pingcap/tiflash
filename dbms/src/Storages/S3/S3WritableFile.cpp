@@ -75,7 +75,13 @@ ssize_t S3WritableFile::write(char * buf, size_t size)
     temporary_buffer->write(buf, size);
     if (!temporary_buffer->good())
     {
-        LOG_ERROR(log, "write size={} failed: bucket={} root={} key={}", size, client_ptr->bucket(), client_ptr->root(), remote_fname);
+        LOG_ERROR(
+            log,
+            "write size={} failed: bucket={} root={} key={}",
+            size,
+            client_ptr->bucket(),
+            client_ptr->root(),
+            remote_fname);
         return -1;
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, size);
@@ -151,7 +157,12 @@ void S3WritableFile::writePart()
     auto size = temporary_buffer->tellp();
     if (size < 0)
     {
-        throw Exception(ErrorCodes::CORRUPTED_DATA, "Buffer is in bad state. bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
+        throw Exception(
+            ErrorCodes::CORRUPTED_DATA,
+            "Buffer is in bad state. bucket={} root={} key={}",
+            client_ptr->bucket(),
+            client_ptr->root(),
+            remote_fname);
     }
     if (size == 0)
     {
@@ -181,9 +192,7 @@ void S3WritableFile::fillUploadRequest(Aws::S3::Model::UploadPartRequest & req)
 void S3WritableFile::processUploadRequest(UploadPartTask & task)
 {
     Stopwatch sw;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_s3_request_seconds, type_upload_part).Observe(sw.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_request_seconds, type_upload_part).Observe(sw.elapsedSeconds()); });
     ProfileEvents::increment(ProfileEvents::S3UploadPart);
     auto outcome = client_ptr->UploadPart(task.req);
     checkS3Outcome(outcome);
@@ -192,7 +201,12 @@ void S3WritableFile::processUploadRequest(UploadPartTask & task)
 
 void S3WritableFile::completeMultipartUpload()
 {
-    RUNTIME_CHECK_MSG(!part_tags.empty(), "Failed to complete multipart upload. No parts have uploaded. bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
+    RUNTIME_CHECK_MSG(
+        !part_tags.empty(),
+        "Failed to complete multipart upload. No parts have uploaded. bucket={} root={} key={}",
+        client_ptr->bucket(),
+        client_ptr->root(),
+        remote_fname);
 
     Aws::S3::Model::CompleteMultipartUploadRequest req;
     client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
@@ -210,13 +224,21 @@ void S3WritableFile::completeMultipartUpload()
     {
         Stopwatch sw;
         SCOPE_EXIT({
-            GET_METRIC(tiflash_storage_s3_request_seconds, type_complete_multi_part_upload).Observe(sw.elapsedSeconds());
+            GET_METRIC(tiflash_storage_s3_request_seconds, type_complete_multi_part_upload)
+                .Observe(sw.elapsedSeconds());
         });
         ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload);
         auto outcome = client_ptr->CompleteMultipartUpload(req);
         if (outcome.IsSuccess())
         {
-            LOG_DEBUG(log, "Multipart upload has completed. bucket={} root={} key={} upload_id={} parts={}", client_ptr->bucket(), client_ptr->root(), remote_fname, multipart_upload_id, part_tags.size());
+            LOG_DEBUG(
+                log,
+                "Multipart upload has completed. bucket={} root={} key={} upload_id={} parts={}",
+                client_ptr->bucket(),
+                client_ptr->root(),
+                remote_fname,
+                multipart_upload_id,
+                part_tags.size());
             break;
         }
         if (i + 1 < max_retry)
@@ -224,7 +246,8 @@ void S3WritableFile::completeMultipartUpload()
             const auto & e = outcome.GetError();
             LOG_INFO(
                 log,
-                "Multipart upload failed and need retry: bucket={} root={} key={} upload_id={} parts={} error={} message={} request_id={}",
+                "Multipart upload failed and need retry: bucket={} root={} key={} upload_id={} parts={} error={} "
+                "message={} request_id={}",
                 client_ptr->bucket(),
                 client_ptr->root(),
                 remote_fname,
@@ -253,7 +276,12 @@ void S3WritableFile::makeSinglepartUpload()
     auto size = temporary_buffer->tellp();
     if (size < 0)
     {
-        throw Exception(ErrorCodes::CORRUPTED_DATA, "Buffer is in bad state. bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
+        throw Exception(
+            ErrorCodes::CORRUPTED_DATA,
+            "Buffer is in bad state. bucket={} root={} key={}",
+            client_ptr->bucket(),
+            client_ptr->root(),
+            remote_fname);
     }
     PutObjectTask task;
     fillPutRequest(task.req);
@@ -274,14 +302,18 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
     for (size_t i = 0; i < max_retry; ++i)
     {
         Stopwatch sw;
-        SCOPE_EXIT({
-            GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(sw.elapsedSeconds());
-        });
+        SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(sw.elapsedSeconds()); });
         ProfileEvents::increment(ProfileEvents::S3PutObject);
         auto outcome = client_ptr->PutObject(task.req);
         if (outcome.IsSuccess())
         {
-            LOG_DEBUG(log, "Single part upload has completed. bucket={} root={} key={}, size={}", client_ptr->bucket(), client_ptr->root(), remote_fname, task.req.GetContentLength());
+            LOG_DEBUG(
+                log,
+                "Single part upload has completed. bucket={} root={} key={}, size={}",
+                client_ptr->bucket(),
+                client_ptr->root(),
+                remote_fname,
+                task.req.GetContentLength());
             break;
         }
         if (i + 1 < max_retry)
@@ -299,7 +331,12 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
         }
         else
         {
-            throw fromS3Error(outcome.GetError(), "S3 PutObject failed, bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
+            throw fromS3Error(
+                outcome.GetError(),
+                "S3 PutObject failed, bucket={} root={} key={}",
+                client_ptr->bucket(),
+                client_ptr->root(),
+                remote_fname);
         }
     }
 }

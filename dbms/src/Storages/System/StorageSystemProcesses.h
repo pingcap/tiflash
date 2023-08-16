@@ -26,7 +26,8 @@ class Context;
 
 /** Implements `processes` system table, which allows you to get information about the queries that are currently executing.
   */
-class StorageSystemProcesses : public ext::SharedPtrHelper<StorageSystemProcesses>
+class StorageSystemProcesses
+    : public ext::SharedPtrHelper<StorageSystemProcesses>
     , public IStorage
 {
 public:

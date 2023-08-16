@@ -51,7 +51,11 @@ struct CheckpointLocation
 
     std::string toDebugString() const
     {
-        return fmt::format("{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}", *data_file_id, offset_in_file, size_in_file);
+        return fmt::format(
+            "{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}",
+            *data_file_id,
+            offset_in_file,
+            size_in_file);
     }
 };
 
@@ -77,7 +81,10 @@ struct OptionalCheckpointInfo
     {
         if (is_valid)
         {
-            return fmt::format("{{local_data_reclaimed: {}, data_location: {}}}", is_local_data_reclaimed, data_location.toDebugString());
+            return fmt::format(
+                "{{local_data_reclaimed: {}, data_location: {}}}",
+                is_local_data_reclaimed,
+                data_location.toDebugString());
         }
         else
         {

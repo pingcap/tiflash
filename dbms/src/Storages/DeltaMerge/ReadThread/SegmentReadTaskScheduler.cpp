@@ -45,14 +45,16 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         merging_segments[pool->physical_table_id][seg_id].push_back(pool->pool_id);
     }
     auto block_slots = pool->getFreeBlockSlots();
-    LOG_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
-              pool->pool_id,
-              pool->physical_table_id,
-              block_slots,
-              tasks.size(),
-              read_pools.size(),
-              sw_add.elapsed(),
-              sw_do_add.elapsed());
+    LOG_DEBUG(
+        log,
+        "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
+        pool->pool_id,
+        pool->physical_table_id,
+        block_slots,
+        tasks.size(),
+        read_pools.size(),
+        sw_add.elapsed(),
+        sw_do_add.elapsed());
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
@@ -128,7 +130,8 @@ bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr &
 
 SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlock()
 {
-    int64_t pool_count = read_pools.size(); // All read task pool need to be scheduled, including invalid read task pool.
+    int64_t pool_count
+        = read_pools.size(); // All read task pool need to be scheduled, including invalid read task pool.
     for (int64_t i = 0; i < pool_count; i++)
     {
         auto pool = read_pools.next();
@@ -149,7 +152,8 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
     return nullptr;
 }
 
-std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
+std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(
+    const SegmentReadTaskPoolPtr & pool)
 {
     auto expected_merge_seg_count = std::min(read_pools.size(), 2); // Not accurate.
     auto itr = merging_segments.find(pool->physical_table_id);
@@ -177,7 +181,8 @@ std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskSchedul
             result = std::pair{target->first, std::vector<uint64_t>(1, pool->pool_id)};
             auto mutable_target = segments.find(target->first);
             auto itr = std::find(mutable_target->second.begin(), mutable_target->second.end(), pool->pool_id);
-            *itr = mutable_target->second.back(); // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
+            *itr = mutable_target->second
+                       .back(); // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
             mutable_target->second.resize(mutable_target->second.size() - 1);
         }
     }
@@ -215,7 +220,13 @@ bool SegmentReadTaskScheduler::schedule()
             auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
             if (elapsed_ms >= 5)
             {
-                LOG_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
+                LOG_DEBUG(
+                    log,
+                    "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}",
+                    merged_task->getSegmentId(),
+                    merged_task->getPoolIds(),
+                    elapsed_ms,
+                    pool_count);
             }
             SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
         }
@@ -227,7 +238,13 @@ bool SegmentReadTaskScheduler::schedule()
     auto sche_all_elapsed_ms = sw_sche_all.elapsedMilliseconds();
     if (sche_all_elapsed_ms >= 100)
     {
-        LOG_DEBUG(log, "schedule pool_count={} count={} cost={}ms do_sche_cost={}ms", pool_count, count, sche_all_elapsed_ms, sw_do_sche_all.elapsedMilliseconds());
+        LOG_DEBUG(
+            log,
+            "schedule pool_count={} count={} cost={}ms do_sche_cost={}ms",
+            pool_count,
+            count,
+            sche_all_elapsed_ms,
+            sw_do_sche_all.elapsedMilliseconds());
     }
     return run_sche;
 }

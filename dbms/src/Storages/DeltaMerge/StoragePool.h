@@ -88,7 +88,12 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, NamespaceID ns_id_, StoragePathPool & storage_path_pool_, const String & name = "");
+    StoragePool(
+        Context & global_ctx,
+        KeyspaceID keyspace_id_,
+        NamespaceID ns_id_,
+        StoragePathPool & storage_path_pool_,
+        const String & name = "");
 
     PageStorageRunMode restore();
 
@@ -98,10 +103,7 @@ public:
 
     NamespaceID getNamespaceID() const { return ns_id; }
 
-    PageStorageRunMode getPageStorageRunMode() const
-    {
-        return run_mode;
-    }
+    PageStorageRunMode getPageStorageRunMode() const { return run_mode; }
 
     PageReaderPtr & logReader()
     {

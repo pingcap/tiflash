@@ -70,8 +70,9 @@ void printTree(const FakeDeltaTree & tree)
     print(tree.getHeight());
     for (auto it = tree.begin(), end = tree.end(); it != end; ++it)
     {
-        std::cout << "(" << it.getRid() << "|" << it.getSid() << "|" << DTType::DTTypeString(it.getMutation().isInsert()) << "|"
-                  << DB::toString(it.getMutation().count()) << "|" << DB::toString(it.getMutation().value) << "),";
+        std::cout << "(" << it.getRid() << "|" << it.getSid() << "|"
+                  << DTType::DTTypeString(it.getMutation().isInsert()) << "|" << DB::toString(it.getMutation().count())
+                  << "|" << DB::toString(it.getMutation().value) << "),";
     }
     std::cout << std::endl;
 }

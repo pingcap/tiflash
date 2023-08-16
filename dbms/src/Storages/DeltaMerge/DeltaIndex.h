@@ -131,8 +131,7 @@ public:
         , delta_tree(delta_tree_)
         , placed_rows(placed_rows_)
         , placed_deletes(placed_deletes_)
-    {
-    }
+    {}
 
     /// Note that we don't swap the id.
     void swap(DeltaIndex & other)
@@ -146,12 +145,13 @@ public:
     String toString()
     {
         std::scoped_lock lock(mutex);
-        return fmt::format("<placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={}>",
-                           placed_rows,
-                           placed_deletes,
-                           delta_tree->numEntries(),
-                           delta_tree->numInserts(),
-                           delta_tree->numDeletes());
+        return fmt::format(
+            "<placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={}>",
+            placed_rows,
+            placed_deletes,
+            delta_tree->numEntries(),
+            delta_tree->numInserts(),
+            delta_tree->numDeletes());
     }
 
     UInt64 getId() const { return id; }

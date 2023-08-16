@@ -25,8 +25,7 @@
 namespace DB::DM::Remote
 {
 
-class RNWorkers
-    : private boost::noncopyable
+class RNWorkers : private boost::noncopyable
 {
 public:
     using Channel = MPMCQueue<RNReadSegmentTaskPtr>;
@@ -40,10 +39,7 @@ public:
 
     void wait();
 
-    ~RNWorkers()
-    {
-        wait();
-    }
+    ~RNWorkers() { wait(); }
 
 public:
     struct Options

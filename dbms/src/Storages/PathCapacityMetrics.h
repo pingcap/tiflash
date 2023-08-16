@@ -38,13 +38,14 @@ struct DiskCapacity
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
-    PathCapacityMetrics(size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
-                        const Strings & main_paths_,
-                        const std::vector<size_t> & main_capacity_quota_, //
-                        const Strings & latest_paths_,
-                        const std::vector<size_t> & latest_capacity_quota_,
-                        const Strings & remote_cache_paths = {},
-                        const std::vector<size_t> & remote_cache_capacity_quota_ = {});
+    PathCapacityMetrics(
+        size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
+        const Strings & main_paths_,
+        const std::vector<size_t> & main_capacity_quota_, //
+        const Strings & latest_paths_,
+        const std::vector<size_t> & latest_capacity_quota_,
+        const Strings & remote_cache_paths = {},
+        const std::vector<size_t> & remote_cache_capacity_quota_ = {});
 
     virtual ~PathCapacityMetrics() = default;
 

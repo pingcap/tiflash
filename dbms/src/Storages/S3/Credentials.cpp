@@ -140,9 +140,14 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
     retryable_errors.push_back("IDPCommunicationError");
     retryable_errors.push_back("InvalidIdentityToken");
 
-    aws_client_configuration.retryStrategy = Aws::MakeShared<Aws::Client::SpecifiedRetryableErrorsRetryStrategy>(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, retryable_errors, 3 /*maxRetries*/);
+    aws_client_configuration.retryStrategy = Aws::MakeShared<Aws::Client::SpecifiedRetryableErrorsRetryStrategy>(
+        STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
+        retryable_errors,
+        3 /*maxRetries*/);
 
-    m_client = Aws::MakeUnique<Aws::Internal::STSCredentialsClient>(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, aws_client_configuration);
+    m_client = Aws::MakeUnique<Aws::Internal::STSCredentialsClient>(
+        STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
+        aws_client_configuration);
     m_initialized = true;
     LOG_INFO(log, "Creating STS AssumeRole with web identity creds provider.");
 }
@@ -162,7 +167,11 @@ Aws::Auth::AWSCredentials STSAssumeRoleWebIdentityCredentialsProvider::GetAWSCre
 
 void STSAssumeRoleWebIdentityCredentialsProvider::Reload()
 {
-    LOG_INFO(log, "Credentials have expired, attempting to renew from STS, role_arn={} role_session_name={}.", m_role_arn, m_session_name);
+    LOG_INFO(
+        log,
+        "Credentials have expired, attempting to renew from STS, role_arn={} role_session_name={}.",
+        m_role_arn,
+        m_session_name);
 
     std::ifstream token_file(m_token_file.c_str());
     if (token_file)
@@ -175,7 +184,10 @@ void STSAssumeRoleWebIdentityCredentialsProvider::Reload()
         LOG_ERROR(log, "Can't open token file: {}", m_token_file);
         return;
     }
-    Aws::Internal::STSCredentialsClient::STSAssumeRoleWithWebIdentityRequest request{m_session_name, m_role_arn, m_token};
+    Aws::Internal::STSCredentialsClient::STSAssumeRoleWithWebIdentityRequest request{
+        m_session_name,
+        m_role_arn,
+        m_token};
 
     const auto result = m_client->GetAssumeRoleWithWebIdentityCredentials(request);
     LOG_TRACE(log, "Successfully retrieved credentials with AWS_ACCESS_KEY: {}", result.creds.GetAWSAccessKeyId());
@@ -184,7 +196,9 @@ void STSAssumeRoleWebIdentityCredentialsProvider::Reload()
 
 bool STSAssumeRoleWebIdentityCredentialsProvider::expiresSoon() const
 {
-    return ((m_credentials.GetExpiration() - Aws::Utils::DateTime::Now()).count() < STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
+    return (
+        (m_credentials.GetExpiration() - Aws::Utils::DateTime::Now()).count()
+        < STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
 }
 
 void STSAssumeRoleWebIdentityCredentialsProvider::refreshIfExpired()
@@ -235,8 +249,13 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
 
     if (!relative_uri.empty())
     {
-        AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(S3CredentialsProviderChainTag, relative_uri.c_str()));
-        LOG_INFO(log, "Added ECS metadata service credentials provider with relative path: [{}] to the provider chain.", relative_uri);
+        AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(
+            S3CredentialsProviderChainTag,
+            relative_uri.c_str()));
+        LOG_INFO(
+            log,
+            "Added ECS metadata service credentials provider with relative path: [{}] to the provider chain.",
+            relative_uri);
     }
     else if (!absolute_uri.empty())
     {
@@ -247,7 +266,11 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
             token.c_str()));
 
         //DO NOT log the value of the authorization token for security purposes.
-        LOG_INFO(log, "Added ECS credentials provider with URI: [{}] to the provider chain with {} authorization token.", absolute_uri, (token.empty() ? "an empty" : "a non-empty"));
+        LOG_INFO(
+            log,
+            "Added ECS credentials provider with URI: [{}] to the provider chain with {} authorization token.",
+            absolute_uri,
+            (token.empty() ? "an empty" : "a non-empty"));
     }
     else if (Aws::Utils::StringUtils::ToLower(ec2_metadata_disabled.c_str()) != "true")
     {

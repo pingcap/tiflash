@@ -30,7 +30,8 @@ using ColId = DB::ColumnID;
 using PackId = size_t;
 using PackRange = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
-class ColumnCache : public std::enable_shared_from_this<ColumnCache>
+class ColumnCache
+    : public std::enable_shared_from_this<ColumnCache>
     , private boost::noncopyable
 {
 public:

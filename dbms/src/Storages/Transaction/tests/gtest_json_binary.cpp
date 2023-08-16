@@ -50,10 +50,7 @@ try
         0x1, /// true
         0x2 /// false
     };
-    std::vector<String> expected = {
-        "null",
-        "true",
-        "false"};
+    std::vector<String> expected = {"null", "true", "false"};
     for (size_t i = 0; i < 3; ++i)
     {
         JsonBinary json_binary(JsonBinary::TYPE_CODE_LITERAL, StringRef(json_literals + i, 1));
@@ -71,10 +68,7 @@ try
         {0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
         {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
     };
-    std::vector<String> expected = {
-        "-3",
-        "3",
-        "18446744073709551615"};
+    std::vector<String> expected = {"-3", "3", "18446744073709551615"};
     {
         JsonBinary json_binary(JsonBinary::TYPE_CODE_INT64, StringRef(json_integers[0], 8));
         auto str = JsonBinary::unquoteString(json_binary.toString());
@@ -152,22 +146,31 @@ try
     }
 
     {
-        UInt8 json_object[] = {0x1, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0, 0x0, 0x13, 0x0, 0x0, 0x0, 0x1, 0x0, 0xc, 0x14, 0x0, 0x0, 0x0, 0x61, 0x1, 0x62};
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_OBJECT, StringRef(json_object, sizeof(json_object) / sizeof(UInt8)));
+        UInt8 json_object[] = {0x1, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0, 0x0, 0x13, 0x0, 0x0,
+                               0x0, 0x1, 0x0, 0xc, 0x14, 0x0, 0x0, 0x0, 0x61, 0x1, 0x62};
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_OBJECT,
+            StringRef(json_object, sizeof(json_object) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == "{\"a\": \"b\"}");
     }
 
     {
-        UInt8 json_object[] = {0x1, 0x0, 0x0, 0x0, 0x1c, 0x0, 0x0, 0x0, 0x13, 0x0, 0x0, 0x0, 0x1, 0x0, 0x9, 0x14, 0x0, 0x0, 0x0, 0x61, 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_OBJECT, StringRef(json_object, sizeof(json_object) / sizeof(UInt8)));
+        UInt8 json_object[] = {0x1, 0x0,  0x0, 0x0, 0x1c, 0x0,  0x0, 0x0, 0x13, 0x0, 0x0, 0x0, 0x1, 0x0,
+                               0x9, 0x14, 0x0, 0x0, 0x0,  0x61, 0x3, 0x0, 0x0,  0x0, 0x0, 0x0, 0x0, 0x0};
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_OBJECT,
+            StringRef(json_object, sizeof(json_object) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == "{\"a\": 3}");
     }
 
     {
-        UInt8 json_object[] = {0x1, 0x0, 0x0, 0x0, 0x14, 0x0, 0x0, 0x0, 0x13, 0x0, 0x0, 0x0, 0x1, 0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x61};
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_OBJECT, StringRef(json_object, sizeof(json_object) / sizeof(UInt8)));
+        UInt8 json_object[]
+            = {0x1, 0x0, 0x0, 0x0, 0x14, 0x0, 0x0, 0x0, 0x13, 0x0, 0x0, 0x0, 0x1, 0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x61};
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_OBJECT,
+            StringRef(json_object, sizeof(json_object) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == "{\"a\": null}");
     }
@@ -185,7 +188,8 @@ try
     }
 
     {
-        UInt8 json_array[] = {0x2, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0, 0x0, 0xc, 0x12, 0x0, 0x0, 0x0, 0xc, 0x14, 0x0, 0x0, 0x0, 0x1, 0x61, 0x1, 0x62};
+        UInt8 json_array[] = {0x2, 0x0, 0x0, 0x0,  0x16, 0x0, 0x0, 0x0, 0xc,  0x12, 0x0,
+                              0x0, 0x0, 0xc, 0x14, 0x0,  0x0, 0x0, 0x1, 0x61, 0x1,  0x62};
         JsonBinary json_binary(JsonBinary::TYPE_CODE_ARRAY, StringRef(json_array, sizeof(json_array) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == "[\"a\", \"b\"]");
@@ -199,7 +203,8 @@ try
     }
 
     {
-        UInt8 json_array[] = {0x1, 0x0, 0x0, 0x0, 0x15, 0x0, 0x0, 0x0, 0x9, 0xd, 0x0, 0x0, 0x0, 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+        UInt8 json_array[] = {0x1, 0x0, 0x0, 0x0, 0x15, 0x0, 0x0, 0x0, 0x9, 0xd, 0x0,
+                              0x0, 0x0, 0x3, 0x0, 0x0,  0x0, 0x0, 0x0, 0x0, 0x0};
         JsonBinary json_binary(JsonBinary::TYPE_CODE_ARRAY, StringRef(json_array, sizeof(json_array) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == "[3]");
@@ -305,7 +310,9 @@ try
     {
         UInt8 json_date[] = {0x20, 0x4d, 0x0, 0x14, 0x35, 0xfe, 0x98, 0x1f};
         String expected = "2022-03-31 03:20:20.001234";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_TIMESTAMP, StringRef(json_date, sizeof(json_date) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_TIMESTAMP,
+            StringRef(json_date, sizeof(json_date) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -318,7 +325,9 @@ try
     {
         UInt8 json_duration[] = {0x50, 0x58, 0xe1, 0x78, 0xf7, 0xa, 0x0, 0x0, 0x6, 0x0, 0x0, 0x0};
         String expected = "03:20:58.001234";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_DURATION, StringRef(json_duration, sizeof(json_duration) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_DURATION,
+            StringRef(json_duration, sizeof(json_duration) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -326,7 +335,9 @@ try
     {
         UInt8 json_duration[] = {0xb0, 0xa7, 0x1e, 0x87, 0x8, 0xf5, 0xff, 0xff, 0x6, 0x0, 0x0, 0x0};
         String expected = "-03:20:58.001234";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_DURATION, StringRef(json_duration, sizeof(json_duration) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_DURATION,
+            StringRef(json_duration, sizeof(json_duration) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -339,7 +350,9 @@ try
     {
         UInt8 json_opaque[] = {0xe9, 0x1, 0x39};
         String expected = "base64:type233:OQ==";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_OPAQUE, StringRef(json_opaque, sizeof(json_opaque) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_OPAQUE,
+            StringRef(json_opaque, sizeof(json_opaque) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -356,8 +369,12 @@ try
             0x39, 0x39, 0x39, 0x39, 0x39
         };
         // clang-format on
-        String expected = "base64:type233:OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk=";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_OPAQUE, StringRef(json_opaque, sizeof(json_opaque) / sizeof(UInt8)));
+        String expected = "base64:type233:"
+                          "OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5"
+                          "OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk=";
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_OPAQUE,
+            StringRef(json_opaque, sizeof(json_opaque) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -370,7 +387,9 @@ try
     {
         UInt8 json_string[] = {0x0};
         String expected;
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -378,7 +397,9 @@ try
     {
         UInt8 json_string[] = {0xa, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x57, 0x6f, 0x72, 0x6c, 0x64};
         String expected = "HelloWorld";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -386,7 +407,9 @@ try
     {
         UInt8 json_string[] = {0x6, 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd};
         String expected = "你好";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -399,7 +422,9 @@ try
         };
         // clang-format on
         String expected = "hello, \"escaped quotes\" world";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -412,7 +437,9 @@ try
         };
         // clang-format on
         String expected = "hello, \"escaped 你好 quotes\" world";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -420,7 +447,9 @@ try
     {
         UInt8 json_string[] = {0x1, 0x27};
         String expected = "'";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -428,7 +457,9 @@ try
     {
         UInt8 json_string[] = {0x2, 0x27, 0x27};
         String expected = "''";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -436,7 +467,9 @@ try
     {
         UInt8 json_string[] = {0x4, 0x61, 0xa, 0x62, 0x5c};
         String expected = "a\nb\\";
-        JsonBinary json_binary(JsonBinary::TYPE_CODE_STRING, StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
+        JsonBinary json_binary(
+            JsonBinary::TYPE_CODE_STRING,
+            StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
     }
@@ -573,7 +606,10 @@ try
         {json_binary_3, {"$"}, true, R"({"properties": {"$type": "TiDB"}})"},
         {json_binary_1, {"$.a"}, true, R"([1, "2", {"aa": "bb"}, 4, {"aa": "cc"}])"},
         {json_binary_2, {"$.a"}, false, ""},
-        {json_binary_1, {"$[0]"}, true, R"({"\"hello\"": "world", "a": [1, "2", {"aa": "bb"}, 4, {"aa": "cc"}], "b": true, "c": ["d"]})"},
+        {json_binary_1,
+         {"$[0]"},
+         true,
+         R"({"\"hello\"": "world", "a": [1, "2", {"aa": "bb"}, 4, {"aa": "cc"}], "b": true, "c": ["d"]})"},
         {json_binary_2, {"$[0]"}, true, R"({"a": 1, "b": true})"},
         {json_binary_1, {"$.a[2].aa"}, true, "bb"},
         {json_binary_1, {"$.a[*].aa"}, true, R"(["bb", "cc"])"},
@@ -667,7 +703,9 @@ try
         checkJsonPathKeyUncached(path_expr);
 
         bool found = json_binary_1.extract(path_expr_container_vec, write_buffer);
-        ASSERT_TRUE(found && path_expr->getLegs()[0]->dot_key.status == JsonPathObjectKeyCached && path_expr->getLegs()[0]->dot_key.cached_index == 1);
+        ASSERT_TRUE(
+            found && path_expr->getLegs()[0]->dot_key.status == JsonPathObjectKeyCached
+            && path_expr->getLegs()[0]->dot_key.cached_index == 1);
     }
 
     {
@@ -680,14 +718,22 @@ try
 
         bool found = json_binary_1.extract(path_expr_container_vec, write_buffer);
         ASSERT_TRUE(found);
-        ASSERT_TRUE(path_expr->getLegs()[0]->dot_key.status == JsonPathObjectKeyCached && path_expr->getLegs()[0]->dot_key.cached_index == 1);
-        ASSERT_TRUE(path_expr->getLegs()[2]->dot_key.status == JsonPathObjectKeyCached && path_expr->getLegs()[2]->dot_key.cached_index == 0);
+        ASSERT_TRUE(
+            path_expr->getLegs()[0]->dot_key.status == JsonPathObjectKeyCached
+            && path_expr->getLegs()[0]->dot_key.cached_index == 1);
+        ASSERT_TRUE(
+            path_expr->getLegs()[2]->dot_key.status == JsonPathObjectKeyCached
+            && path_expr->getLegs()[2]->dot_key.cached_index == 0);
 
         /// Extract once more
         found = json_binary_1.extract(path_expr_container_vec, write_buffer);
         ASSERT_TRUE(found);
-        ASSERT_TRUE(path_expr->getLegs()[0]->dot_key.status == JsonPathObjectKeyCached && path_expr->getLegs()[0]->dot_key.cached_index == 1);
-        ASSERT_TRUE(path_expr->getLegs()[2]->dot_key.status == JsonPathObjectKeyCached && path_expr->getLegs()[2]->dot_key.cached_index == 0);
+        ASSERT_TRUE(
+            path_expr->getLegs()[0]->dot_key.status == JsonPathObjectKeyCached
+            && path_expr->getLegs()[0]->dot_key.cached_index == 1);
+        ASSERT_TRUE(
+            path_expr->getLegs()[2]->dot_key.status == JsonPathObjectKeyCached
+            && path_expr->getLegs()[2]->dot_key.cached_index == 0);
     }
 
     {

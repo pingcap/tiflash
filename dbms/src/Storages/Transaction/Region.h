@@ -162,7 +162,10 @@ public:
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, UInt64 timeout_ms, std::function<bool(void)> && check_running);
+    std::tuple<WaitIndexResult, double> waitIndex(
+        UInt64 index,
+        UInt64 timeout_ms,
+        std::function<bool(void)> && check_running);
 
     // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
@@ -225,7 +228,10 @@ private:
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
-    std::optional<RegionDataReadInfo> readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error);
+    std::optional<RegionDataReadInfo> readDataByWriteIt(
+        const RegionData::ConstWriteCFIter & write_it,
+        bool need_value,
+        bool hard_error);
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
@@ -254,12 +260,20 @@ private:
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };
 
-class RegionRaftCommandDelegate : public Region
+class RegionRaftCommandDelegate
+    : public Region
     , private boost::noncopyable
 {
 public:
     /// Only after the task mutex of KVStore is locked, region can apply raft command.
-    void handleAdminRaftCmd(const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse &, UInt64, UInt64, const KVStore &, RegionTable &, RaftCommandResult &);
+    void handleAdminRaftCmd(
+        const raft_cmdpb::AdminRequest &,
+        const raft_cmdpb::AdminResponse &,
+        UInt64,
+        UInt64,
+        const KVStore &,
+        RegionTable &,
+        RaftCommandResult &);
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 

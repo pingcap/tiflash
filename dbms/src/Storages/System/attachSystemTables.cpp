@@ -61,7 +61,9 @@ void attachSystemTablesServer(IDatabase & system_database)
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
 {
-    system_database.attachTable("asynchronous_metrics", StorageSystemAsynchronousMetrics::create("asynchronous_metrics", async_metrics));
+    system_database.attachTable(
+        "asynchronous_metrics",
+        StorageSystemAsynchronousMetrics::create("asynchronous_metrics", async_metrics));
 }
 
 } // namespace DB
