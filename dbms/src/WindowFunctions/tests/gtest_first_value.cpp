@@ -303,7 +303,6 @@ public:
         mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, static_cast<Int64>(0));
 
         {
-            // Int type const column
             std::vector<Int64> frame_start_range{0, 1, 3, 10};
             std::vector<std::vector<std::optional<Int64>>> res{
                 {1, 2, 3, 4, 5, 6, 7, 8, 9},
@@ -325,6 +324,14 @@ public:
                     mock_frame,
                     false);
             }
+        }
+
+        {
+            // <preceding, preceding>
+        }
+
+        {
+            // <following, following>
         }
     }
 };
@@ -421,6 +428,8 @@ try
 }
 CATCH
 
+// This is the test just for testing range type frame.
+// Not every window function needs this test.
 TEST_F(FirstValue, firstValueWithRangeFrameType)
 try
 {
@@ -432,6 +441,8 @@ try
     // in MockStorage.cpp::mockColumnInfosToTiDBColumnInfos().
     // However, we will test this data type in fullstack tests.
     // testDecimalOrderByColForRangeFrame();
+
+    // TODO <preceding, preceding> <following, following> with nullable order by
 }
 CATCH
 

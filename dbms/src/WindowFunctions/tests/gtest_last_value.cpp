@@ -350,12 +350,16 @@ try
 }
 CATCH
 
+// This is the test just for testing range type frame.
+// Not every window function needs this test.
 TEST_F(LastValue, lastValueWithRangeFrameType)
 try
 {
     testIntOrderByColForRangeFrame();
     testFloatOrderByColForRangeFrame();
     // TODO Implement testDecimalOrderByColForRangeFrame()
+
+    // TODO <preceding, preceding> <following, following> with nullable order by
 }
 CATCH
 
