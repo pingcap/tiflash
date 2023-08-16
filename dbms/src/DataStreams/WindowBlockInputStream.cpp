@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
+#include <WindowFunctions/WindowUtils.h>
 
 #include <magic_enum.hpp>
 
@@ -25,7 +26,10 @@ extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-WindowTransformAction::WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id)
+WindowTransformAction::WindowTransformAction(
+    const Block & input_header,
+    const WindowDescription & window_description_,
+    const String & req_id)
     : log(Logger::get(req_id))
     , window_description(window_description_)
 {
@@ -47,7 +51,10 @@ void WindowTransformAction::cleanUp()
     input_is_finished = true;
 }
 
-WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id)
+WindowBlockInputStream::WindowBlockInputStream(
+    const BlockInputStreamPtr & input,
+    const WindowDescription & window_description_,
+    const String & req_id)
     : action(input->getHeader(), window_description_, req_id)
 {
     children.push_back(input);
@@ -58,15 +65,13 @@ void WindowTransformAction::initialPartitionAndOrderColumnIndices()
     partition_column_indices.reserve(window_description.partition_by.size());
     for (const auto & column : window_description.partition_by)
     {
-        partition_column_indices.push_back(
-            output_header.getPositionByName(column.column_name));
+        partition_column_indices.push_back(output_header.getPositionByName(column.column_name));
     }
 
     order_column_indices.reserve(window_description.order_by.size());
     for (const auto & column : window_description.order_by)
     {
-        order_column_indices.push_back(
-            output_header.getPositionByName(column.column_name));
+        order_column_indices.push_back(output_header.getPositionByName(column.column_name));
     }
 }
 
@@ -134,11 +139,12 @@ bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partitio
 
         if (window_description.partition_by[i].collator)
         {
-            if (compared_column->compareAt(current_partition_row,
-                                           prev_frame_start.row,
-                                           *reference_column,
-                                           1 /* nan_direction_hint */,
-                                           *window_description.partition_by[i].collator)
+            if (compared_column->compareAt(
+                    current_partition_row,
+                    prev_frame_start.row,
+                    *reference_column,
+                    1 /* nan_direction_hint */,
+                    *window_description.partition_by[i].collator)
                 != 0)
             {
                 return true;
@@ -146,10 +152,11 @@ bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partitio
         }
         else
         {
-            if (compared_column->compareAt(current_partition_row,
-                                           prev_frame_start.row,
-                                           *reference_column,
-                                           1 /* nan_direction_hint */)
+            if (compared_column->compareAt(
+                    current_partition_row,
+                    prev_frame_start.row,
+                    *reference_column,
+                    1 /* nan_direction_hint */)
                 != 0)
             {
                 return true;
@@ -267,6 +274,153 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
+<<<<<<< HEAD
+=======
+// When finding frame start with Following attribute, partition end
+// may haven't appeared and we can't find frame start in this case.
+// Returning false in the tuple's second parameter means the failure
+// of finding frame start.
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameStart(
+    const RowNumber & current_row,
+    const WindowFrame & frame)
+{
+    auto step_num = frame.begin_offset;
+    if (window_description.frame.begin_preceding)
+        return std::make_tuple(stepInPreceding(current_row, step_num), true);
+    else
+        return stepInFollowing(current_row, step_num);
+}
+
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(
+    const RowNumber & current_row,
+    const WindowFrame & frame)
+{
+    if (window_description.frame.end_preceding)
+    {
+        if (frame.end_offset == 0)
+        {
+            RowNumber frame_end_tmp = current_row;
+            advanceRowNumber(frame_end_tmp);
+            return std::make_tuple(frame_end_tmp, true);
+        }
+
+        // Range of rows is [frame_start, frame_end),
+        // and frame_end position is behind the position of the last frame row.
+        // So we need to -1
+        return std::make_tuple(stepInPreceding(current_row, frame.end_offset - 1), true);
+    }
+    else
+    {
+        // Range of rows is [frame_start, frame_end),
+        // and frame_end position is behind the position of the last frame row.
+        // So we need to +1
+        return stepInFollowing(current_row, frame.end_offset + 1);
+    }
+}
+
+RowNumber WindowTransformAction::stepInPreceding(const RowNumber & moved_row, size_t step_num)
+{
+    RowNumber result_row = moved_row;
+    while (step_num > 0 && (prev_frame_start < result_row))
+    {
+        // The step happens only in a block
+        if (result_row.row >= step_num)
+        {
+            result_row.row -= step_num;
+            break;
+        }
+
+        // The step happens between blocks
+        step_num -= result_row.row + 1;
+        if (result_row.block == 0)
+        {
+            result_row.row = 0;
+            break;
+        }
+        --result_row.block;
+
+        // We need to break the while loop when prev_frame_start.block > result_row.block
+        // as the result_row.block may have been released and the calling for blockAt(result_row)
+        // will trigger the assert.
+        if (prev_frame_start.block > result_row.block)
+            break;
+        result_row.row = blockAt(result_row).rows - 1;
+    }
+
+    // prev_frame_start is the farthest position we can reach to.
+    return result_row < prev_frame_start ? prev_frame_start : result_row;
+}
+
+std::tuple<RowNumber, bool> WindowTransformAction::stepInFollowing(const RowNumber & moved_row, size_t step_num)
+{
+    if (!partition_ended)
+        return std::make_tuple(RowNumber(), false);
+
+    auto dist = distance(partition_end, moved_row);
+    RUNTIME_CHECK(dist >= 1);
+
+    // Offset is too large and the partition_end is the longest position we can reach to
+    if (dist <= step_num)
+        return std::make_tuple(partition_end, true);
+
+    // Now, result_row is impossible to reach to partition_end.
+    RowNumber result_row = moved_row;
+    auto & block = blockAt(result_row);
+
+    // The step happens only in a block
+    if ((block.rows - result_row.row - 1) >= step_num)
+    {
+        result_row.row += step_num;
+        return std::make_tuple(result_row, true);
+    }
+
+    // The step happens between blocks
+    step_num -= block.rows - result_row.row;
+    ++result_row.block;
+    result_row.row = 0;
+    while (step_num > 0)
+    {
+        auto block_rows = blockAt(result_row).rows;
+        if (step_num >= block_rows)
+        {
+            result_row.row = 0;
+            ++result_row.block;
+            step_num -= block_rows;
+            continue;
+        }
+
+        result_row.row += step_num;
+        step_num = 0;
+    }
+
+    return std::make_tuple(result_row, true);
+}
+
+UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
+{
+    if (left.block == right.block)
+    {
+        RUNTIME_CHECK_MSG(left.row >= right.row, "left should always be bigger than right");
+        return left.row - right.row;
+    }
+
+    RUNTIME_CHECK_MSG(left.block > right.block, "left should always be bigger than right");
+
+    Int64 dist = left.row;
+    RowNumber tmp = left;
+    --tmp.block;
+    while (tmp.block > right.block)
+    {
+        dist += blockAt(tmp).rows;
+        --tmp.block;
+    }
+
+    dist += blockAt(right).rows - right.row;
+
+    return dist;
+}
+
+>>>>>>> 9b0011ef67 (Make window function return null when frame is valid (#7939))
 void WindowTransformAction::advanceFrameStart()
 {
     if (frame_started)
@@ -291,6 +445,23 @@ void WindowTransformAction::advanceFrameStart()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
+<<<<<<< HEAD
+=======
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
+        {
+            RowNumber frame_start_tmp;
+            std::tie(frame_start_tmp, frame_started) = stepToFrameStart(current_row, window_description.frame);
+            if (frame_started)
+                frame_start = frame_start_tmp;
+        }
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                fmt::format(
+                    "Frame type {}'s Offset BoundaryType is not implemented",
+                    magic_enum::enum_name(window_description.frame.type)));
+        break;
+>>>>>>> 9b0011ef67 (Make window function return null when frame is valid (#7939))
     default:
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
@@ -328,14 +499,33 @@ bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) c
             const auto * column_y = inputAt(y)[order_column_indices[i]].get();
             if (window_description.order_by[i].collator)
             {
+<<<<<<< HEAD
                 if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
+=======
+                if (column_peer_last->compareAt(
+                        peer_group_last_row.row,
+                        current_row.row,
+                        *column_current,
+                        1 /* nan_direction_hint */,
+                        *window_description.order_by[i].collator)
+                    != 0)
+>>>>>>> 9b0011ef67 (Make window function return null when frame is valid (#7939))
                 {
                     return false;
                 }
             }
             else
             {
+<<<<<<< HEAD
                 if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */) != 0)
+=======
+                if (column_peer_last->compareAt(
+                        peer_group_last_row.row,
+                        current_row.row,
+                        *column_current,
+                        1 /* nan_direction_hint */)
+                    != 0)
+>>>>>>> 9b0011ef67 (Make window function return null when frame is valid (#7939))
                 {
                     return false;
                 }
@@ -345,15 +535,13 @@ bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) c
     }
     case WindowFrame::FrameType::Groups:
     default:
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "window function only support frame type row and range.");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "window function only support frame type row and range.");
     }
 }
 
 void WindowTransformAction::advanceFrameEndCurrentRow()
 {
-    assert(frame_end.block == partition_end.block
-           || frame_end.block + 1 == partition_end.block);
+    assert(frame_end.block == partition_end.block || frame_end.block + 1 == partition_end.block);
 
     // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
     RUNTIME_CHECK_MSG(
@@ -391,10 +579,25 @@ void WindowTransformAction::advanceFrameEnd()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
+<<<<<<< HEAD
+=======
+    {
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
+            std::tie(frame_end, frame_ended) = stepToFrameEnd(current_row, window_description.frame);
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                fmt::format(
+                    "Frame type {}'s Offset BoundaryType is not implemented",
+                    magic_enum::enum_name(window_description.frame.type)));
+        break;
+    }
+>>>>>>> 9b0011ef67 (Make window function return null when frame is valid (#7939))
     default:
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "The frame end type '{}' is not implemented",
-                        magic_enum::enum_name(window_description.frame.end_type));
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "The frame end type '{}' is not implemented",
+            magic_enum::enum_name(window_description.frame.end_type));
     }
 }
 
@@ -468,14 +671,14 @@ void WindowTransformAction::releaseAlreadyOutputWindowBlock()
     // that the frame start can be further than current row for some frame specs
     // (e.g. EXCLUDE CURRENT ROW), so we have to check both.
     assert(prev_frame_start <= frame_start);
-    const auto first_used_block = std::min(std::min(next_output_block_number, peer_group_last.block),
-                                           std::min(prev_frame_start.block, current_row.block));
+    const auto first_used_block = std::min(
+        std::min(next_output_block_number, peer_group_last.block),
+        std::min(prev_frame_start.block, current_row.block));
 
 
     if (first_block_number < first_used_block)
     {
-        window_blocks.erase(window_blocks.begin(),
-                            window_blocks.begin() + (first_used_block - first_block_number));
+        window_blocks.erase(window_blocks.begin(), window_blocks.begin() + (first_used_block - first_block_number));
         first_block_number = first_used_block;
 
         assert(next_output_block_number >= first_block_number);
@@ -567,7 +770,6 @@ void WindowTransformAction::tryCalculate()
             // not after end.
             assert(frame_started);
             assert(frame_ended);
-            assert(frame_start <= frame_end);
 
             // Write out the results.
             // TODO execute the window function by block instead of row.
@@ -626,9 +828,7 @@ void WindowTransformAction::appendInfo(FmtBuffer & buffer) const
     buffer.joinStr(
         window_description.window_functions_descriptions.begin(),
         window_description.window_functions_descriptions.end(),
-        [&](const auto & func, FmtBuffer & b) {
-            b.append(func.window_function->getName());
-        },
+        [&](const auto & func, FmtBuffer & b) { b.append(func.window_function->getName()); },
         ", ");
     buffer.fmtAppend(
         "}}, frame: {{type: {}, boundary_begin: {}, boundary_end: {}}}",
@@ -664,7 +864,6 @@ bool WindowTransformAction::lead(RowNumber & x, size_t offset) const
 {
     assert(frame_started);
     assert(frame_ended);
-    assert(frame_start <= frame_end);
 
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
@@ -690,7 +889,6 @@ bool WindowTransformAction::lag(RowNumber & x, size_t offset) const
 {
     assert(frame_started);
     assert(frame_ended);
-    assert(frame_start <= frame_end);
 
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
