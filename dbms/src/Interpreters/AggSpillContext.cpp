@@ -24,11 +24,14 @@ AggSpillContext::AggSpillContext(
     const LoggerPtr & log)
     : OperatorSpillContext(operator_spill_threshold_, "aggregator", log)
     , per_thread_revocable_memories(concurrency)
+    , per_thread_auto_spill_status(concurrency)
     , spill_config(spill_config_)
 {
     per_thread_spill_threshold = getAverageThreshold(operator_spill_threshold, concurrency);
     for (auto & memory : per_thread_revocable_memories)
         memory = 0;
+    for (auto & status : per_thread_auto_spill_status)
+        status = AutoSpillStatus::NO_NEED_AUTO_SPILL;
 }
 
 void AggSpillContext::buildSpiller(const Block & input_schema)
@@ -40,10 +43,11 @@ void AggSpillContext::buildSpiller(const Block & input_schema)
 
 bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num)
 {
-    if (!in_spillable_stage)
+    if (!in_spillable_stage || !enable_spill)
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
-    if (enable_spill && per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold))
+    if (per_thread_auto_spill_status[thread_num] == AutoSpillStatus::NEED_AUTO_SPILL
+        || (per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold)))
     {
         per_thread_revocable_memories[thread_num] = 0;
         return true;
@@ -59,8 +63,28 @@ Int64 AggSpillContext::getTotalRevocableMemoryImpl()
     return ret;
 }
 
-Int64 AggSpillContext::triggerSpill(Int64)
+Int64 AggSpillContext::triggerSpill(Int64 expected_released_memories)
 {
-    throw Exception("Not supported yet");
+    if (!in_spillable_stage || !enable_spill)
+        return expected_released_memories;
+    auto total_revocable_memory = getTotalRevocableMemory();
+    if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
+    {
+        for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; i++)
+        {
+            AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+            if (per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL))
+            {
+                expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[i], 0);
+                per_thread_revocable_memories[i] = 0;
+            }
+        }
+    }
+    return expected_released_memories;
+}
+
+void AggSpillContext::finishOneSpill(size_t thread_num)
+{
+    per_thread_auto_spill_status[thread_num] = AutoSpillStatus::NO_NEED_AUTO_SPILL;
 }
 } // namespace DB

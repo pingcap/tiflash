@@ -162,6 +162,11 @@ public:
             register_operator_spill_context(operator_spill_context);
     }
 
+    const RegisterOperatorSpillContext & getRegisterOperatorSpillContext() const
+    {
+        return register_operator_spill_context;
+    }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 

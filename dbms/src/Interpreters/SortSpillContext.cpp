@@ -31,12 +31,11 @@ void SortSpillContext::buildSpiller(const Block & input_schema)
 
 bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 {
-    if (!in_spillable_stage)
+    if (!in_spillable_stage || !enable_spill)
         return false;
     revocable_memory = new_value;
     if (auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL
-        || (enable_spill && operator_spill_threshold > 0
-            && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
+        || (operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold)))
     {
         revocable_memory = 0;
         return true;
@@ -46,7 +45,7 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 
 Int64 SortSpillContext::triggerSpill(Int64 expected_released_memories)
 {
-    if (!in_spillable_stage || !isSpillEnabled())
+    if (!in_spillable_stage || !enable_spill)
         return expected_released_memories;
     auto total_revocable_memory = getTotalRevocableMemory();
     if (total_revocable_memory >= MIN_SPILL_THRESHOLD)

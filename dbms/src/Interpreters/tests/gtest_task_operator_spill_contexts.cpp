@@ -66,17 +66,17 @@ try
     TaskOperatorSpillContexts task_operator_spill_contexts;
     ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 0);
     task_operator_spill_contexts.registerOperatorSpillContext(agg_spill_context);
-    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 0);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 1);
     task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
     /// register will first add spill context to additional_operator_spill_contexts
     ASSERT_TRUE(task_operator_spill_contexts.additionalOperatorSpillContextCount() == 1);
-    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 1);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 2);
     /// additional_operator_spill_contexts has been merged to operator_spill_contexts
     ASSERT_TRUE(task_operator_spill_contexts.additionalOperatorSpillContextCount() == 0);
     task_operator_spill_contexts.registerOperatorSpillContext(join_spill_context);
-    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 1);
-    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
     ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 2);
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 3);
 }
 CATCH
 
