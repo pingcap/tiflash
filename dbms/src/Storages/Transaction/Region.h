@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -149,6 +151,10 @@ public:
 
     void markCompactLog();
     Timepoint lastCompactLogTime() const;
+    UInt64 lastCompactLogApplied() const;
+    void setLastCompactLogApplied(UInt64 new_value) const;
+    // Must hold region lock.
+    void updateLastCompactLogApplied() const;
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -194,7 +200,11 @@ public:
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    std::pair<EngineStoreApplyRes, DM::WriteResult> handleWriteRaftCmd(
+        const WriteCmdsView & cmds,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
 
     /// get approx rows, bytes info about mem cache.
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
@@ -256,6 +266,7 @@ private:
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
+    mutable std::atomic<uint64_t> last_compact_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };

@@ -14,6 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
@@ -31,6 +32,9 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <common/likely.h>
 
+#include <tuple>
+#include <variant>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -42,6 +46,7 @@ extern const int TABLE_IS_DROPPED;
 namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
+extern const char pause_passive_flush_before_persist_region[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -54,8 +59,10 @@ KVStore::KVStore(Context & context)
     , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
+    , region_compact_log_gap(200)
 {
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
+    LOG_INFO(log, "KVStore inited");
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -105,6 +112,7 @@ RegionPtr KVStore::getRegion(RegionID region_id) const
         return it->second;
     return nullptr;
 }
+// TODO: may get regions not in segment?
 RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
     auto manage_lock = genRegionMgrReadLock();
@@ -251,27 +259,50 @@ RegionManager::RegionWriteLock KVStore::genRegionMgrWriteLock(const KVStoreTaskL
     return region_manager.genWriteLock();
 }
 
+EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
+    const WriteCmdsView & cmds,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt,
+    DM::WriteResult & write_result)
+{
+    EngineStoreApplyRes res;
+    {
+        auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
+
+        const RegionPtr region = getRegion(region_id);
+        if (region == nullptr)
+        {
+            return EngineStoreApplyRes::NotFound;
+        }
+
+        auto && [r, w] = region->handleWriteRaftCmd(cmds, index, term, tmt);
+
+        if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+        {
+            region->orphanKeysInfo().advanceAppliedIndex(index);
+        }
+        write_result = std::move(w);
+        res = r;
+    }
+    /// Safety:
+    /// This call is from Proxy's applying thread of this region, so:
+    /// 1. No other thread can write from raft to this region even if we unlocked here.
+    /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
+    // TODO(proactive flush)
+    return res;
+}
+
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     const WriteCmdsView & cmds,
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt) const
+    TMTContext & tmt)
 {
-    auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
-
-    const RegionPtr region = getRegion(region_id);
-    if (region == nullptr)
-    {
-        return EngineStoreApplyRes::NotFound;
-    }
-
-    auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
-    if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
-    {
-        region->orphanKeysInfo().advanceAppliedIndex(index);
-    }
-    return res;
+    DM::WriteResult write_result;
+    return handleWriteRaftCmdInner(cmds, region_id, index, term, tmt, write_result);
 }
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
@@ -297,19 +328,21 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
+void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap)
 {
     region_compact_log_period = sec;
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
+    region_compact_log_gap = gap;
 
-    LOG_INFO(log, "threshold config: period {}, rows {}, bytes {}", sec, rows, bytes);
+    LOG_INFO(log, "threshold config: period {}, rows {}, bytes {}, gap {}", sec, rows, bytes, gap);
 }
 
 void KVStore::persistRegion(
     const Region & region,
     std::optional<const RegionTaskLock *> region_task_lock,
-    const char * caller) const
+    PersistRegionReason reason,
+    const char * extra_msg) const
 {
     RUNTIME_CHECK_MSG(
         region_persister,
@@ -317,6 +350,8 @@ void KVStore::persistRegion(
         StackTrace().toString());
     if (region_task_lock.has_value())
     {
+        auto reason_id = magic_enum::enum_underlying(reason);
+        std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
         LOG_INFO(
             log,
             "Start to persist {}, cache size: {} bytes for `{}`",
@@ -332,6 +367,31 @@ void KVStore::persistRegion(
         region_persister->persist(region);
         LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
     }
+
+    switch (reason)
+    {
+    case PersistRegionReason::UselessAdminCommand:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_useless_admin).Increment(1);
+        break;
+    case PersistRegionReason::AdminCommand:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_useful_admin).Increment(1);
+        break;
+    case PersistRegionReason::Flush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
+        break;
+    case PersistRegionReason::ProactiveFlush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_proactive).Increment(1);
+        break;
+    case PersistRegionReason::ApplySnapshotPrevRegion:
+    case PersistRegionReason::ApplySnapshotCurRegion:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_apply_snapshot).Increment(1);
+        break;
+    case PersistRegionReason::IngestSst:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_ingest_sst).Increment(1);
+        break;
+    default:
+        break;
+    }
 }
 
 bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
@@ -339,7 +399,7 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
     // TODO Should handle when curr_region_ptr is null.
-    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
+    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0, 0, 0);
 }
 
 bool KVStore::tryFlushRegionData(
@@ -348,10 +408,13 @@ bool KVStore::tryFlushRegionData(
     bool try_until_succeed,
     TMTContext & tmt,
     UInt64 index,
-    UInt64 term)
+    UInt64 term,
+    uint64_t truncated_index,
+    uint64_t truncated_term)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
+
     if (curr_region_ptr == nullptr)
     {
         /// If we can't find region here, we return true so proxy can trigger a CompactLog.
@@ -370,7 +433,16 @@ bool KVStore::tryFlushRegionData(
     if (!force_persist)
     {
         // try to flush RegionData according to the mem cache rows/bytes/interval
-        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+        return canFlushRegionDataImpl(
+            curr_region_ptr,
+            true,
+            try_until_succeed,
+            tmt,
+            region_task_lock,
+            index,
+            term,
+            truncated_index,
+            truncated_term);
     }
 
     // force persist
@@ -395,7 +467,9 @@ bool KVStore::canFlushRegionDataImpl(
     TMTContext & tmt,
     const RegionTaskLock & region_task_lock,
     UInt64 index,
-    UInt64 term)
+    UInt64 term,
+    UInt64 truncated_index,
+    UInt64 truncated_term)
 {
     if (curr_region_ptr == nullptr)
     {
@@ -403,34 +477,70 @@ bool KVStore::canFlushRegionDataImpl(
     }
     auto & curr_region = *curr_region_ptr;
 
+    bool can_flush = false;
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
-    LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
-
-    bool can_flush = false;
-    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed)
-        || size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
     {
-        // if rows or bytes more than threshold, flush cache and persist mem data.
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
         can_flush = true;
+    }
+    if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+    {
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
+        can_flush = true;
+    }
+    auto gap_threshold = region_compact_log_gap.load();
+
+    auto last_compact_log_applied = curr_region.lastCompactLogApplied();
+    auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
+
+    // TODO We will use truncated_index once Proxy/TiKV supports.
+    // After restart, last_compact_log_applied is 0, we don't trigger immediately.
+    if (last_compact_log_applied && index > last_compact_log_applied + gap_threshold)
+    {
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
+        can_flush = true;
+    }
+    if (!last_compact_log_applied)
+    {
+        // We will set `last_compact_log_applied` to current applied_index if it is zero.
+        curr_region.setLastCompactLogApplied(index);
+    }
+
+    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
+    // GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
+    LOG_DEBUG(
+        log,
+        "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
+        curr_region.toString(false),
+        rows,
+        size_bytes,
+        current_applied_gap,
+        gap_threshold);
+
+    if (can_flush && flush_if_possible)
+    {
+        GET_METRIC(tiflash_raft_raft_events_count, type_exec_compact).Increment(1);
+        // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
+        LOG_INFO(
+            log,
+            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} gap "
+            "{}/{}",
+            curr_region.toString(false),
+            index,
+            term,
+            truncated_index,
+            truncated_term,
+            current_applied_gap,
+            gap_threshold);
+        GET_METRIC(tiflash_raft_region_flush_size, type_flushed).Observe(size_bytes);
+        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     else
     {
-        // If there is little data in mem, wait until time interval reached threshold.
-        // Use random period so that lots of regions will not be persisted at same time.
-        auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
-        can_flush = !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
-    }
-    // one of rows/bytes/interval satisfy
-    if (can_flush && flush_if_possible)
-    {
-        LOG_DEBUG(
-            log,
-            "flush region due to tryFlushRegionData, region_id={} term={} index={}",
-            curr_region.id(),
-            term,
-            index);
-        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
+        GET_METRIC(tiflash_raft_region_flush_size, type_unflushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_raft_log_lag_count, type_unflushed_applied_index).Observe(current_applied_gap);
     }
     return can_flush;
 }
@@ -456,7 +566,7 @@ bool KVStore::forceFlushRegionDataImpl(
     }
 
     // flush cache in storage level is done, persist the region info
-    persistRegion(curr_region, &region_task_lock, "tryFlushRegionData");
+    persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
     curr_region.markCompactLog();
     curr_region.cleanApproxMemCacheInfo();
     GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
@@ -507,7 +617,11 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, &region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
+        persistRegion(
+            curr_region,
+            &region_task_lock,
+            PersistRegionReason::UselessAdminCommand,
+            fmt::format("{}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -585,7 +699,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, &region_task_lock, "admin raft cmd");
+            persistRegion(region, &region_task_lock, PersistRegionReason::AdminCommand, "");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
@@ -951,5 +1065,4 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 
     return region_persister->getFileUsageStatistics();
 }
-
 } // namespace DB

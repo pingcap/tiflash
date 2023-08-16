@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <magic_enum.hpp>
@@ -43,7 +44,6 @@ extern const char pause_until_dt_background_delta_merge[];
 
 namespace DM
 {
-
 // A callback class for scanning the DMFiles on local filesystem
 class LocalDMFileGcScanner final
 {
@@ -294,7 +294,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         for (auto & [end, segment] : segments)
         {
             (void)end;
-            checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+            checkSegmentUpdate(dm_context, segment, ThreadType::Init, InputType::NotRaft);
         }
     }
 
@@ -412,6 +412,11 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
+        case TaskType::FlushDTAndKVStore:
+        {
+            // TODO(proactive flush)
+            break;
+        }
         case TaskType::PlaceIndex:
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
@@ -437,9 +442,9 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
     // continue to check whether we need to apply more tasks after this task is ended.
     if (left)
-        checkSegmentUpdate(task.dm_context, left, type);
+        checkSegmentUpdate(task.dm_context, left, type, InputType::NotRaft);
     if (right)
-        checkSegmentUpdate(task.dm_context, right, type);
+        checkSegmentUpdate(task.dm_context, right, type, InputType::NotRaft);
 
     return true;
 }
@@ -711,7 +716,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
-        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
+        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC, InputType::NotRaft);
     }
 
     return new_segment;
@@ -840,7 +845,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(
     }
 
     segment_snap = {};
-    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
+    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC, InputType::NotRaft);
 
     return new_segment;
 }
@@ -943,6 +948,5 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
 
     return gc_segments_num;
 }
-
 } // namespace DM
 } // namespace DB

@@ -16,6 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Interpreters/Context.h>
@@ -54,6 +55,8 @@ namespace FailPoints
 {
 extern const char skip_check_segment_update[];
 extern const char force_fail_in_flush_region_data[];
+extern const char proactive_flush_force_set_type[];
+extern const char pause_passive_flush_before_persist_region[];
 } // namespace FailPoints
 
 namespace RegionBench
@@ -93,6 +96,8 @@ public:
             kvstore->setStore(store);
             ASSERT_EQ(kvstore->getStoreID(), store.id());
         }
+
+        LOG_INFO(Logger::get("Test"), "Finished setup");
     }
 
     void TearDown() override { proxy_instance->clear(); }
@@ -105,7 +110,7 @@ protected:
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
-        kvstore = std::make_unique<KVStore>(global_ctx);
+        kvstore = std::make_shared<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
         return *kvstore;
@@ -158,11 +163,12 @@ protected:
     {
         if (auto region = kvs.getRegion(region_id); region)
         {
-            kvs.persistRegion(*region, std::nullopt, "");
+            kvs.persistRegion(*region, std::nullopt, PersistRegionReason::Debug, "");
         }
     }
 
 protected:
+    std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 

@@ -78,7 +78,7 @@ public:
 
     UInt64 confVer() const;
 
-    raft_serverpb::RaftApplyState getApplyState() const;
+    raft_serverpb::RaftApplyState clonedApplyState() const;
 
     void setApplied(UInt64 index, UInt64 term);
     void notifyAll() const;
@@ -110,6 +110,7 @@ public:
     metapb::Region cloneMetaRegion() const;
     const raft_serverpb::MergeState & getMergeState() const;
     raft_serverpb::MergeState cloneMergeState() const;
+    const RegionState & getRegionState() const;
 
     RegionMeta() = delete;
 

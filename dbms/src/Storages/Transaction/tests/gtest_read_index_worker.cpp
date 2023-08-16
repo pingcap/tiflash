@@ -290,6 +290,7 @@ void ReadIndexTest::testNormal()
     {
         std::vector<kvrpcpb::ReadIndexRequest> reqs;
         {
+            // One request of start_ts = 10 for every region.
             reqs.reserve(proxy_instance.size());
             for (size_t i = 0; i < proxy_instance.size(); ++i)
             {

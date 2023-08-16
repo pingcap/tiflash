@@ -183,7 +183,7 @@ void persistAfterWrite(
     page_storage->write(std::move(wb));
     // There shall be data to flush.
     ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
-    ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
+    ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0, 0, 0), true);
 }
 
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
@@ -203,6 +203,7 @@ try
     // Write some data, and persist meta.
     auto [index, term]
         = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();

@@ -443,7 +443,8 @@ public:
         if (db_settings.dt_insert_max_rows == 0)
         {
             Block to_write = decorator(block);
-            return store->write(db_context, db_settings, to_write);
+            store->write(db_context, db_settings, to_write);
+            return;
         }
 
         Block new_block = decorator(block);
@@ -488,7 +489,7 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
     return std::make_shared<DMBlockOutputStream>(getAndMaybeInitStore(), decorator, global_context, settings);
 }
 
-void StorageDeltaMerge::write(Block & block, const Settings & settings)
+WriteResult StorageDeltaMerge::write(Block & block, const Settings & settings)
 {
     auto & store = getAndMaybeInitStore();
 #ifndef NDEBUG
@@ -550,7 +551,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_write_to_storage);
 
-    store->write(global_context, settings, block);
+    return store->write(global_context, settings, block);
 }
 
 std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
@@ -1759,7 +1760,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & name_col = columns[0];
     auto & value_col = columns[1];
 
-    StoreStats stat;
+    DM::StoreStats stat;
     if (storeInited())
     {
         stat = _store->getStoreStats();

@@ -150,12 +150,22 @@ uint8_t TryFlushData(
     uint64_t region_id,
     uint8_t flush_pattern,
     uint64_t index,
-    uint64_t term)
+    uint64_t term,
+    uint64_t truncated_index,
+    uint64_t truncated_term)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term);
+        return kvstore->tryFlushRegionData(
+            region_id,
+            false,
+            flush_pattern,
+            *server->tmt,
+            index,
+            term,
+            truncated_index,
+            truncated_term);
     }
     catch (...)
     {
@@ -919,6 +929,15 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
+void TiFlashRaftProxyHelper::notifyCompactLog(
+    uint64_t region_id,
+    uint64_t compact_index,
+    uint64_t compact_term,
+    uint64_t applied_index) const
+{
+    this->fn_notify_compact_log(this->proxy_ptr, region_id, compact_index, compact_term, applied_index);
+}
+
 void HandleSafeTSUpdate(
     EngineStoreServerWrap * server,
     uint64_t region_id,
@@ -936,7 +955,6 @@ void HandleSafeTSUpdate(
         exit(-1);
     }
 }
-
 
 std::string_view buffToStrView(const BaseBuffView & buf)
 {

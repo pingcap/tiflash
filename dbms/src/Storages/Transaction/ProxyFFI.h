@@ -116,6 +116,8 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     TimerTask makeTimerTask(uint64_t time_ms) const;
     bool pollTimerTask(TimerTask & task, RawVoidPtr waker = nullptr) const;
     raft_serverpb::RegionLocalState getRegionLocalState(uint64_t region_id) const;
+    void notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index)
+        const;
 };
 
 extern "C" {
@@ -135,7 +137,9 @@ uint8_t TryFlushData(
     uint64_t region_id,
     uint8_t flush_pattern,
     uint64_t index,
-    uint64_t term);
+    uint64_t term,
+    uint64_t truncated_index,
+    uint64_t truncated_term);
 RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy);
 void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value);
 void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id);

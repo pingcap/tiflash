@@ -115,6 +115,8 @@ void RegionPersister::doPersist(
     DB::WriteBatchWrapper wb{run_mode, getWriteBatchPrefix()};
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
+
+    region.updateLastCompactLogApplied();
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)

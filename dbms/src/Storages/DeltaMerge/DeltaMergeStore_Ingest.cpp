@@ -797,7 +797,7 @@ UInt64 DeltaMergeStore::ingestFiles(
 
     // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::RaftSSTAndSnap);
 
     return bytes;
 }
@@ -1163,7 +1163,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     }
 
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 }
 
 } // namespace DM

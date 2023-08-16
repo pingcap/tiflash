@@ -327,6 +327,11 @@ inline bool operator<(const RowKeyValueRef & a, const RowKeyValueRef & b)
     return compare(a, b) < 0;
 }
 
+inline bool operator<=(const RowKeyValueRef & a, const RowKeyValueRef & b)
+{
+    return compare(a, b) <= 0;
+}
+
 inline bool operator<(const StringRef & a, const RowKeyValueRef & b)
 {
     return compare(a, b) < 0;

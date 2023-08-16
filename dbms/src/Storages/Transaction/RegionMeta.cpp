@@ -79,7 +79,7 @@ void RegionMeta::setPeer(metapb::Peer && p)
     peer = p;
 }
 
-raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
+raft_serverpb::RaftApplyState RegionMeta::clonedApplyState() const
 {
     std::lock_guard lock(mutex);
     return apply_state;
@@ -496,5 +496,11 @@ const raft_serverpb::MergeState & RegionMeta::getMergeState() const
 {
     std::lock_guard lock(mutex);
     return region_state.getMergeState();
+}
+
+const RegionState & RegionMeta::getRegionState() const
+{
+    std::lock_guard lock(mutex);
+    return region_state;
 }
 } // namespace DB

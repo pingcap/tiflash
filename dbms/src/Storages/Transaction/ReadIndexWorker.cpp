@@ -524,6 +524,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
     auto _ = genLockGuard();
 
     {
+        // Find the task with the maximum ts in all `waiting_tasks`.
         Timestamp max_ts = 0;
         ReadIndexFuturePtr max_ts_task = nullptr;
         {

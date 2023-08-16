@@ -53,7 +53,7 @@ extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 
-static void writeRegionDataToStorage(
+static DM::WriteResult writeRegionDataToStorage(
     Context & context,
     const RegionPtrWithBlock & region,
     RegionDataReadInfoList & data_list_read,
@@ -64,6 +64,7 @@ static void writeRegionDataToStorage(
     const auto table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
+    DM::WriteResult write_result = std::nullopt;
     /// Declare lambda of atomic read then write to call multiple times.
     auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
@@ -148,9 +149,13 @@ static void writeRegionDataToStorage(
         {
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
             if (need_decode)
-                dm_storage->write(*block_ptr, context.getSettingsRef());
+            {
+                write_result = dm_storage->write(*block_ptr, context.getSettingsRef());
+            }
             else
-                dm_storage->write(block, context.getSettingsRef());
+            {
+                write_result = dm_storage->write(block, context.getSettingsRef());
+            }
             break;
         }
         default:
@@ -193,7 +198,7 @@ static void writeRegionDataToStorage(
     {
         if (atomic_read_write(false))
         {
-            return;
+            return write_result;
         }
     }
 
@@ -215,6 +220,7 @@ static void writeRegionDataToStorage(
                 keyspace_id,
                 table_id);
         }
+        return write_result;
     }
 }
 
@@ -359,7 +365,7 @@ static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_lis
     }
 }
 
-void RegionTable::writeBlockByRegion(
+DM::WriteResult RegionTable::writeBlockByRegion(
     Context & context,
     const RegionPtrWithBlock & region,
     RegionDataReadInfoList & data_list_to_remove,
@@ -378,15 +384,16 @@ void RegionTable::writeBlockByRegion(
     }
 
     if (!data_list_read)
-        return;
+        return std::nullopt;
 
     reportUpstreamLatency(*data_list_read);
-    writeRegionDataToStorage(context, region, *data_list_read, log);
+    auto write_result = writeRegionDataToStorage(context, region, *data_list_read, log);
 
     RemoveRegionCommitCache(region, *data_list_read, lock_region);
 
     /// Save removed data to outer.
     data_list_to_remove = std::move(*data_list_read);
+    return write_result;
 }
 
 RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(
@@ -415,6 +422,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
                 if (data_list_read.empty())
                     return RegionException::RegionReadStatus::OK;
                 auto & context = tmt.getContext();
+                // There is no raft input here, so we can just ignore the fg flush request.
                 writeRegionDataToStorage(context, region, data_list_read, log);
                 RemoveRegionCommitCache(region, data_list_read);
                 return RegionException::RegionReadStatus::OK;

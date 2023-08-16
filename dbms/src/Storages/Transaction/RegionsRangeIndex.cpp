@@ -75,6 +75,32 @@ RegionMap RegionsRangeIndex::findByRangeOverlap(const RegionRange & range) const
     return res;
 }
 
+std::variant<RegionMap, RegionsRangeIndex::OverlapInfo> RegionsRangeIndex::findByRangeChecked(
+    const RegionRange & range) const
+{
+    auto begin_it = root.lower_bound(range.first);
+    auto end_it = root.lower_bound(range.second);
+    if (begin_it->first.compare(range.first) != 0)
+        --begin_it;
+
+    RegionMap res;
+    for (auto it = begin_it; it != end_it; ++it)
+    {
+        if (it->second.region_map.size() < 2)
+            res.insert(it->second.region_map.begin(), it->second.region_map.end());
+        else
+        {
+            std::vector<RegionID> v;
+            for (const auto & iter : it->second.region_map)
+            {
+                v.push_back(iter.first);
+            }
+            return std::make_tuple(it->first.copy(), std::move(v));
+        }
+    }
+    return res;
+}
+
 RegionsRangeIndex::RegionsRangeIndex()
 {
     clear();
