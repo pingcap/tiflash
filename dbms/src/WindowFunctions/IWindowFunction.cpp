@@ -36,7 +36,7 @@ namespace
 {
 bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partition_start, RowNumber partition_end)
 {
-    return !((partition_end <= frame_start) || (frame_end <= partition_start) || (frame_end < frame_start));
+    return !((partition_end <= frame_start) || (frame_end <= partition_start) || (frame_end <= frame_start));
 }
 
 // Return true when the frame is valid
@@ -45,6 +45,7 @@ bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partitio
 // Frame is invalid when:
 //   1. partition_end <= frame_start
 //   2. frame_end < partition_start
+//   3. frame_end <= frame_start
 bool checkFrameValidAndHandle(WindowTransformAction & action, size_t function_index)
 {
     if (isFrameValid(action.frame_start, action.frame_end, action.partition_start, action.partition_end))
