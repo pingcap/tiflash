@@ -43,10 +43,7 @@ struct Options
         tryInitS3();
     }
 
-    ~Options()
-    {
-        tryShutdownS3();
-    }
+    ~Options() { tryShutdownS3(); }
 
     void parse(int argc, char * argv[])
     {
