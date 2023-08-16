@@ -36,7 +36,7 @@ namespace
 {
 bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partition_start, RowNumber partition_end)
 {
-    return !((partition_end <= frame_start) || (frame_end <= partition_start));
+    return !((partition_end <= frame_start) || (frame_end <= partition_start) || (frame_end < frame_start));
 }
 
 // Return true when the frame is valid

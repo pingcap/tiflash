@@ -740,9 +740,6 @@ void WindowTransformAction::tryCalculate()
             // not after end.
             assert(frame_started);
             assert(frame_ended);
-            RUNTIME_CHECK_MSG(
-                (frame_start <= frame_end),
-                "With between, frame_start must not occur later than frame_end in window function");
 
             // Write out the results.
             // TODO execute the window function by block instead of row.
