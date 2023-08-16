@@ -52,7 +52,7 @@ void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_c
     capacity = new_capacity;
 
     compact(now);
-    // Update because token number may increase, which may cause token_changed be negative.
+    // Update because token number may increase, which may cause token_changed be nigative.
     last_get_avg_speed_tokens = tokens;
     last_get_avg_speed_timepoint = std::chrono::steady_clock::now();
 }
