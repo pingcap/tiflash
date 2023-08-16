@@ -41,10 +41,7 @@ public:
 
     const MPPTaskId & getMPPTaskId() const;
 
-    const String & getResourceGroupName() const
-    {
-        return resource_group_name;
-    }
+    const String & getResourceGroupName() const { return resource_group_name; }
 
     ~MPPTaskScheduleEntry();
 

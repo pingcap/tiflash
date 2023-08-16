@@ -18,7 +18,9 @@
 namespace DB::tests
 {
 
-class TestTokenBucket : public ::testing::Test {};
+class TestTokenBucket : public ::testing::Test
+{
+};
 
 TEST_F(TestTokenBucket, TestTrickleMode)
 {

@@ -184,7 +184,12 @@ private:
     // New tokens fetched from GAC, update remaining tokens.
     void reConfigTokenBucketInNormalMode(double add_tokens, double new_capacity)
     {
-        LOG_INFO(log, "token bucket of rg {} reconfig. add_token: {}, new_capacity: {}", name, add_tokens, new_capacity);
+        LOG_INFO(
+            log,
+            "token bucket of rg {} reconfig. add_token: {}, new_capacity: {}",
+            name,
+            add_tokens,
+            new_capacity);
         std::lock_guard lock(mu);
         bucket_mode = TokenBucketMode::normal_mode;
         if (new_capacity <= 0.0)
@@ -200,7 +205,13 @@ private:
     // Tokens of GAC is not enough, enter trickling mode.
     void reConfigTokenBucketInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
     {
-        LOG_INFO(log, "token bucket of rg {} reconfig to trickle mode. add_token: {}, new_capacity: {}, trickle_ms: {}", name, add_tokens, new_capacity, trickle_ms);
+        LOG_INFO(
+            log,
+            "token bucket of rg {} reconfig to trickle mode. add_token: {}, new_capacity: {}, trickle_ms: {}",
+            name,
+            add_tokens,
+            new_capacity,
+            trickle_ms);
         std::lock_guard lock(mu);
         if (new_capacity <= 0.0)
         {
@@ -307,7 +318,7 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 // RPC between GAC and LAC
 // 1. rpc ListResourceGroups(ListResourceGroupsRequest) returns (ListResourceGroupsResponse)
 //    return ResourceGroup pb{name, mode, r_u_settings{TokenBucket{tokens, TokenLimitSettings{fill_rate, burst_limit, max_tokens}}}, priority, runaway_settings}
-// 2. 
+// 2.
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:

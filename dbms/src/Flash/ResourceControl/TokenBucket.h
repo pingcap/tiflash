@@ -63,9 +63,9 @@ public:
 
     bool isStatic() const { return fill_rate == 0.0; }
 
-    // gjt todo 
+    // gjt todo
     // dump()
-    
+
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
 

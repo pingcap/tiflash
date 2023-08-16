@@ -485,11 +485,12 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
                 non_throttled_rg_active_set_size += ele.second->getActiveSetSize();
             }
             if (non_throttled_rg_active_set_size >= resource_control_mpp_task_hard_limit)
-                throw Exception(fmt::format("too many running mpp tasks(mpptask hard limit: {}, "
-                                            "current total mpptask: {}, non throttled resource group mpptasks: {})",
-                                            resource_control_mpp_task_hard_limit,
-                                            mintso_active_set_size,
-                                            non_throttled_rg_active_set_size));
+                throw Exception(fmt::format(
+                    "too many running mpp tasks(mpptask hard limit: {}, "
+                    "current total mpptask: {}, non throttled resource group mpptasks: {})",
+                    resource_control_mpp_task_hard_limit,
+                    mintso_active_set_size,
+                    non_throttled_rg_active_set_size));
         }
 
         // Start MinTSO scheduling.
@@ -499,7 +500,8 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
         {
             // For now, resource group MinTSO use same config as the global MinTSO.
             auto [thread_soft_limit, thread_hard_limit, active_set_soft_limit] = scheduler->getLimitConfig();
-            resource_group_scheduler = std::make_shared<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
+            resource_group_scheduler
+                = std::make_shared<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
             resource_group_schedulers.insert({resource_group_name, resource_group_scheduler});
         }
         else
@@ -508,7 +510,8 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
         }
         scheduled = resource_group_scheduler->tryToSchedule(schedule_entry, *this);
         // Should always insert succees, query_id will not be duplicate.
-        auto insert_res = resource_group_query_ids.insert({schedule_entry.getMPPTaskId().gather_id.query_id, resource_group_name});
+        auto insert_res
+            = resource_group_query_ids.insert({schedule_entry.getMPPTaskId().gather_id.query_id, resource_group_name});
         assert(insert_res.second);
     }
     else
@@ -550,7 +553,8 @@ void MPPTaskManager::tagResourceGroupSchedulerReadyToDelete(const String & name)
 void MPPTaskManager::cleanResourceGroupScheduler()
 {
     std::lock_guard lock(mu);
-    for (auto iter = resource_group_schedulers_ready_to_delete.begin(); iter != resource_group_schedulers_ready_to_delete.end();)
+    for (auto iter = resource_group_schedulers_ready_to_delete.begin();
+         iter != resource_group_schedulers_ready_to_delete.end();)
     {
         if ((*iter)->getActiveSetSize() + (*iter)->getWaitingSetSize() == 0)
             iter = resource_group_schedulers_ready_to_delete.erase(iter);

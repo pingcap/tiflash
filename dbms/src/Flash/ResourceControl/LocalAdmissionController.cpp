@@ -26,7 +26,11 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
     auto resp = cluster->pd_client->getResourceGroup(req);
-    RUNTIME_CHECK_MSG(!resp.has_error(), "fetch resource group({}) info from GAC failed: {}", name, resp.error().message());
+    RUNTIME_CHECK_MSG(
+        !resp.has_error(),
+        "fetch resource group({}) info from GAC failed: {}",
+        name,
+        resp.error().message());
 
     std::string err_msg = isGACRespValid(resp.group());
     RUNTIME_CHECK_MSG(err_msg.empty(), "fetch resource group({}) info from GAC failed: {}", name, err_msg);
@@ -43,7 +47,9 @@ void LocalAdmissionController::startBackgroudJob()
         {
             auto now = std::chrono::steady_clock::now();
             std::unique_lock<std::mutex> lock(mu);
-            if (cv.wait_until(lock, now + std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() { return stopped.load(); }))
+            if (cv.wait_until(lock, now + std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
+                    return stopped.load();
+                }))
                 return;
         }
 
@@ -65,10 +71,14 @@ void LocalAdmissionController::fetchTokensFromGAC()
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
         {
-            double token_need_from_gac = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
+            double token_need_from_gac
+                = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
             if (token_need_from_gac <= 0.0)
                 continue;
-            need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getAndCleanConsumptionDelta()));
+            need_tokens.emplace_back(std::make_tuple(
+                resource_group.first,
+                token_need_from_gac,
+                resource_group.second->getAndCleanConsumptionDelta()));
         }
         // gjt todo here ok?
         // last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();

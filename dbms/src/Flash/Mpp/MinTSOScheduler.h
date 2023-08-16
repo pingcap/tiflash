@@ -57,15 +57,9 @@ public:
         return {thread_soft_limit, thread_hard_limit, active_set_soft_limit};
     }
 
-    size_t getActiveSetSize() const
-    {
-        return active_set.size();
-    }
+    size_t getActiveSetSize() const { return active_set.size(); }
 
-    size_t getWaitingSetSize() const
-    {
-        return waiting_set.size();
-    }
+    size_t getWaitingSetSize() const { return waiting_set.size(); }
 
 private:
     bool scheduleImp(
