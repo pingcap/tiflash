@@ -27,8 +27,8 @@ function prepare_basic() {
          libtool-ltdl-devel \
          python3-devel \
          bzip2 \
-         chrpath \
+         chrpath
     yum install -y curl git perl wget cmake3 glibc-static zlib-devel diffutils ninja-build devtoolset-10
-    yum -y install 'perl(Data::Dumper)' 
+    yum install -y 'perl(Data::Dumper)' 
     yum clean all -y
 }
