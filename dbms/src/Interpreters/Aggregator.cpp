@@ -240,7 +240,11 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_, const String & req_id, size_t concurrency)
+Aggregator::Aggregator(
+    const Params & params_,
+    const String & req_id,
+    size_t concurrency,
+    const RegisterOperatorSpillContext & register_operator_spill_context)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
@@ -311,6 +315,8 @@ Aggregator::Aggregator(const Params & params_, const String & req_id, size_t con
                 "Aggregation does not support spill because aggregator hash table does not support two level");
         }
     }
+    if (register_operator_spill_context != nullptr && agg_spill_context->isSpillEnabled())
+        register_operator_spill_context(agg_spill_context);
 }
 
 
@@ -913,15 +919,15 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
         = getAverageThreshold(params.getGroupByTwoLevelThresholdBytes(), aggregated_data_variants_size);
 }
 
-void Aggregator::spill(AggregatedDataVariants & data_variants)
+void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num)
 {
     assert(data_variants.need_spill);
     /// Flush only two-level data and possibly overflow data.
-#define M(NAME)                                                                                         \
-    case AggregationMethodType(NAME):                                                                   \
-    {                                                                                                   \
-        spillImpl(data_variants, *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl)); \
-        break;                                                                                          \
+#define M(NAME)                                                                                                     \
+    case AggregationMethodType(NAME):                                                                               \
+    {                                                                                                               \
+        spillImpl(data_variants, *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl), thread_num); \
+        break;                                                                                                      \
     }
 
     switch (data_variants.type)
@@ -1009,7 +1015,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
 
 
 template <typename Method>
-void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & method)
+void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & method, size_t thread_num)
 {
     RUNTIME_ASSERT(
         agg_spill_context->getSpiller() != nullptr,
@@ -1037,6 +1043,7 @@ void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & meth
         update_max_sizes(blocks.back());
     }
     agg_spill_context->getSpiller()->spillBlocks(std::move(blocks), 0);
+    agg_spill_context->finishOneSpill(thread_num);
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
@@ -1077,7 +1084,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         if (!executeOnBlock(block, result, key_columns, aggregate_columns, thread_num))
             break;
         if (result.need_spill)
-            spill(result);
+            spill(result, thread_num);
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
@@ -1086,7 +1093,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     {
         executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, thread_num);
         if (result.need_spill)
-            spill(result);
+            spill(result, thread_num);
     }
 
     double elapsed_seconds = watch.elapsedSeconds();

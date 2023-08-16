@@ -14,16 +14,18 @@
 
 #pragma once
 
+#include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
+
+#include <thread>
 
 namespace DB
 {
-
 class ResourceGroup;
 inline void nopConsumeResource(const std::string &, double, uint64_t) {}
-inline double nopGetPriority(const std::string &)
+inline uint64_t nopGetPriority(const std::string &)
 {
-    return 10;
+    return 1.0;
 }
 inline bool nopIsResourceGroupThrottled(const std::string &)
 {
@@ -39,12 +41,14 @@ public:
         : consume_resource_func(nopConsumeResource)
         , get_priority_func(nopGetPriority)
         , is_resource_group_throttled_func(nopIsResourceGroupThrottled)
-    {}
+    {
+        refill_token_thread = std::thread([&]() { refillTokenBucket(); });
+    }
 
-    ~MockLocalAdmissionController() = default;
+    ~MockLocalAdmissionController() { stop(); }
 
     using ConsumeResourceFuncType = void (*)(const std::string &, double, uint64_t);
-    using GetPriorityFuncType = double (*)(const std::string &);
+    using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns)
@@ -52,9 +56,25 @@ public:
         consume_resource_func(name, ru, cpu_time_ns);
     }
 
-    double getPriority(const std::string & name) { return get_priority_func(name); }
+    uint64_t getPriority(const std::string & name) { return get_priority_func(name); }
 
     bool isResourceGroupThrottled(const std::string & name) { return is_resource_group_throttled_func(name); }
+
+    void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
+
+    void stop()
+    {
+        {
+            std::lock_guard lock(mu);
+            if (stopped)
+                return;
+            stopped = true;
+            cv.notify_all();
+        }
+        refill_token_thread.join();
+    }
+
+    void refillTokenBucket();
 
     void resetAll()
     {
@@ -65,7 +85,10 @@ public:
         max_ru_per_sec = 0;
     }
 
-    std::mutex mu;
+    std::string dump() const;
+
+    mutable std::mutex mu;
+    std::condition_variable cv;
     std::unordered_map<std::string, std::shared_ptr<ResourceGroup>> resource_groups;
 
     ConsumeResourceFuncType consume_resource_func;
@@ -73,6 +96,9 @@ public:
     IsResourceGroupThrottledFuncType is_resource_group_throttled_func;
 
     uint64_t max_ru_per_sec = 0;
+    bool stopped = false;
+    std::function<void()> refill_token_callback;
+    std::thread refill_token_thread;
 };
 
 } // namespace DB

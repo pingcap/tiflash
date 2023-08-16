@@ -52,7 +52,7 @@ void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_c
     capacity = new_capacity;
 
     compact(now);
-    // Update because token number may increase, which may cause token_changed be nigative.
+    // Update because token number may increase, which may cause token_changed be negative.
     last_get_avg_speed_tokens = tokens;
     last_get_avg_speed_timepoint = std::chrono::steady_clock::now();
 }
@@ -60,6 +60,7 @@ void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_c
 double TokenBucket::getAvgSpeedPerSec()
 {
     auto now = std::chrono::steady_clock::now();
+    RUNTIME_CHECK(now >= last_get_avg_speed_timepoint);
     auto dura = std::chrono::duration_cast<std::chrono::seconds>(now - last_get_avg_speed_timepoint);
 
     compact(now);
@@ -89,12 +90,6 @@ double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) c
     auto elspased = timepoint - last_compact_timepoint;
     auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
     return elapsed_second * fill_rate;
-}
-
-std::string TokenBucket::toString() const
-{
-    // gjt todo
-    return "";
 }
 
 } // namespace DB

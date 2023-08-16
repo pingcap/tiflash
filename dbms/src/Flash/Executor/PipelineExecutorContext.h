@@ -166,6 +166,11 @@ public:
             register_operator_spill_context(operator_spill_context);
     }
 
+    const RegisterOperatorSpillContext & getRegisterOperatorSpillContext() const
+    {
+        return register_operator_spill_context;
+    }
+
     const String & getResourceGroupName() const { return resource_group_name; }
 
 private:
@@ -178,7 +183,6 @@ private:
 
 private:
     const String query_id;
-
 
     LoggerPtr log;
 

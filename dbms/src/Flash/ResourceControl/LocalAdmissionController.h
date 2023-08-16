@@ -40,17 +40,10 @@ public:
         , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
         , cpu_time_in_ns(0)
-        , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
         , log(Logger::get("rg:" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
-        const double init_fill_rate = 0.0;
-        const double init_tokens = setting.fill_rate();
-        const double init_cap = setting.burst_limit();
-        bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, init_cap);
-        assert(
-            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
-            || user_priority == HighPriorityValue);
+        initStaticTokenBucket(setting.burst_limit());
     }
 
 #ifdef DBMS_PUBLIC_GTEST
@@ -61,10 +54,7 @@ public:
         , burstable(burstable_)
         , log(Logger::get("rg:" + group_name_))
     {
-        bucket = std::make_unique<TokenBucket>(user_ru_per_sec, user_ru_per_sec_);
-        assert(
-            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
-            || user_priority == HighPriorityValue);
+        initStaticTokenBucket(user_ru_per_sec_);
     }
 #endif
 
@@ -80,6 +70,18 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    void initStaticTokenBucket(uint64_t capacity = std::numeric_limits<uint64_t>::max())
+    {
+        // If token bucket is normal mode, it's static, so fill_rate is zero.
+        const double init_fill_rate = 0.0;
+        const double init_tokens = user_ru_per_sec;
+        const double init_cap = capacity;
+        bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, init_cap);
+        assert(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
+    }
+
     // Priority of resource group set by user.
     // This is specified by tidb: parser/model/model.go
     static constexpr int32_t LowPriorityValue = 1;
@@ -90,6 +92,8 @@ private:
     static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
 
     friend class LocalAdmissionController;
+    friend class MockLocalAdmissionController;
+
     std::string getName() const { return name; }
 
     void consumeResource(double ru, uint64_t cpu_time_in_ns_)
@@ -106,10 +110,16 @@ private:
     {
         std::lock_guard lock(mu);
 
-        if (!burstable && bucket->peek() <= 0.0)
+        const auto remaining_token = bucket->peek();
+        if (!burstable && remaining_token <= 0.0)
             return std::numeric_limits<uint64_t>::max();
 
+        // This should not happens because tidb will check except for unittest(test static token bucket).
+        if unlikely (user_ru_per_sec == 0)
+            return std::numeric_limits<uint64_t>::max() - 1;
+
         double weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
+
         uint64_t virtual_time = cpu_time_in_ns * weight;
         if unlikely (virtual_time > MAX_VIRTUAL_TIME)
             virtual_time = MAX_VIRTUAL_TIME;
@@ -119,12 +129,13 @@ private:
         LOG_TRACE(
             log,
             "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, "
-            "priority: {}",
+            "priority: {}, remaining_token: {}",
             name,
             weight,
             virtual_time,
             user_priority,
-            priority);
+            priority,
+            remaining_token);
         return priority;
     }
 
@@ -353,14 +364,8 @@ public:
         return group->getRU() <= 0.0;
     }
 
-    static bool isRUExhausted(uint64_t priority)
-    {
-        return priority == std::numeric_limits<uint64_t>::max();
-    }
+    static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
-#ifndef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#else
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
 #endif
 

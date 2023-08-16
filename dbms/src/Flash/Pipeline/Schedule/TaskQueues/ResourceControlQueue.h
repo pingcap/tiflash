@@ -23,14 +23,21 @@
 
 namespace DB
 {
-template <typename NestedQueueType>
+template <typename NestedTaskQueueType>
 class ResourceControlQueue
     : public TaskQueue
     , private boost::noncopyable
 {
 public:
-    ResourceControlQueue() = default;
-    ~ResourceControlQueue() override = default;
+    ResourceControlQueue()
+    {
+        LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() {
+            std::lock_guard lock(mu);
+            cv.notify_all();
+        });
+    }
+
+    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->stop(); }
 
     void submit(TaskPtr && task) override;
 
@@ -49,31 +56,28 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
     // <resource_group_name, resource_group_task_queues>
-    using ResourceGroupTaskQueue = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
+    using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
 
-    // <priority, corresponding_task_queue, resource_group_name>
-    using ResourceGroupInfo = std::tuple<UInt64, std::shared_ptr<NestedQueueType>, std::string>;
-    using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
-    using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
-
-    // Index of ResourceGroupInfo.
-    static constexpr auto InfoIndexPriority = 0;
-    static constexpr auto InfoIndexPipelineTaskQueue = 1;
-    static constexpr auto InfoIndexResourceGroupName = 2;
-    static constexpr auto DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU = std::chrono::seconds(1);
-
-    // ResourceGroupInfoQueue compator.
-    // Larger value means lower priority.
-    static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)
+    struct ResourceGroupInfo
     {
-        // info1 outputs first if return false.
-        return std::get<InfoIndexPriority>(info1) > std::get<InfoIndexPriority>(info2);
-    }
+        ResourceGroupInfo(const String & name_, UInt64 priority_, const NestedTaskQueuePtr & task_queue_)
+            : name(name_)
+            , priority(priority_)
+            , task_queue(task_queue_)
+        {}
 
-    // 1. Update cpu time/RU of resource group.
-    // 2. Update resource_group_infos and reorder resource_group_infos by priority.
-    void updateResourceGroupStatisticWithoutLock(const std::string & name, UInt64 consumed_cpu_time);
+        String name;
+        UInt64 priority;
+        NestedTaskQueuePtr task_queue;
+
+        bool operator<(const ResourceGroupInfo & rhs) const
+        {
+            // Larger value means lower priority.
+            return priority > rhs.priority;
+        }
+    };
 
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();
@@ -86,14 +90,8 @@ private:
 
     bool is_finished = false;
 
-    CompatorType compator = compareResourceInfo;
-    ResourceGroupInfoQueue resource_group_infos{compator};
+    std::priority_queue<ResourceGroupInfo> resource_group_infos;
     ResourceGroupTaskQueue resource_group_task_queues;
-
-    // <resource_group_name, acculumated_cpu_time>
-    // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.
-    // This is to prevent the resource group from being updated too frequently.
-    std::unordered_map<std::string, UInt64> resource_group_statistic;
 
     FIFOQueryIdCache cancel_query_id_cache;
     std::deque<TaskPtr> cancel_task_queue;

@@ -21,25 +21,31 @@
 
 namespace DB
 {
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
-    std::lock_guard lock(mu);
-    submitWithoutLock(std::move(task));
+    {
+        std::lock_guard lock(mu);
+        submitWithoutLock(std::move(task));
+    }
+    cv.notify_one();
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
-    std::lock_guard lock(mu);
-    for (auto & task : tasks)
     {
-        submitWithoutLock(std::move(task));
+        std::lock_guard lock(mu);
+        for (auto & task : tasks)
+        {
+            submitWithoutLock(std::move(task));
+            cv.notify_one();
+        }
     }
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && task)
 {
     if unlikely (is_finished)
     {
@@ -55,16 +61,14 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     }
 
     // name can be empty, it means resource control is disabled.
-    const std::string & name = task->getResourceGroupName();
+    const String & name = task->getResourceGroupName();
 
     auto iter = resource_group_task_queues.find(name);
     if (iter == resource_group_task_queues.end())
     {
-        LOG_TRACE(logger, "gjt debug add new rg info when submit {}", name);
-        auto task_queue = std::make_shared<NestedQueueType>();
-
+        auto task_queue = std::make_shared<NestedTaskQueueType>();
         task_queue->submit(std::move(task));
-        resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name), task_queue, name});
+        resource_group_infos.push({name, LocalAdmissionController::global_instance->getPriority(name), task_queue});
         resource_group_task_queues.insert({name, task_queue});
     }
     else
@@ -72,152 +76,100 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
         LOG_TRACE(logger, "gjt debug add task to nested queue {}", name);
         iter->second->submit(std::move(task));
     }
-    cv.notify_one();
 }
 
-template <typename NestedQueueType>
-bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
+template <typename NestedTaskQueueType>
+bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 {
     assert(task == nullptr);
     std::unique_lock lock(mu);
     while (true)
     {
-        LOG_TRACE(logger, "gjt debug take iter begin: {}, {}", resource_group_infos.empty(), cancel_task_queue.size());
-        if (popTask(cancel_task_queue, task))
-            return true;
-
-        while (!resource_group_infos.empty())
-        {
-            if unlikely (is_finished)
-            {
-                // resource_group_infos and resource_group_task_queues will be cleaned in destructor,
-                // and all Tasks in nested task queue will be drained in destructor of TaskQueue.
-                return false;
-            }
-
-            ResourceGroupInfo group_info = resource_group_infos.top();
-            const std::string & name = std::get<InfoIndexResourceGroupName>(group_info);
-            const auto & priority = LocalAdmissionController::global_instance->getPriority(name);
-            std::shared_ptr<NestedQueueType> & task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
-
-            LOG_TRACE(
-                logger,
-                "trying to schedule task of resource group {}, priority: {}, is_finished: {}, task_queue.empty(): {}",
-                name,
-                priority,
-                is_finished,
-                task_queue->empty());
-
-            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
-            // Should not take any task from nested task queue for this situation.
-            if (LocalAdmissionController::isRUExhausted(priority))
-                break;
-
-            if (task_queue->empty() || !task_queue->take(task))
-            {
-                LOG_TRACE(
-                    logger,
-                    "take task from nested task_queue of resource group {} failed. task_queue.empty(): {}",
-                    name,
-                    task_queue->empty());
-                // Got here only when task_queue is empty or finished, we try next resource group.
-                // If new task of this resource gorup is submited, the resource_group info will be added again.
-                resource_group_infos.pop();
-                size_t erase_num = resource_group_task_queues.erase(name);
-                RUNTIME_CHECK_MSG(
-                    erase_num == 1,
-                    "cannot erase corresponding TaskQueue for task of resource group {}",
-                    name);
-            }
-            else
-            {
-                LOG_TRACE(
-                    logger,
-                    "schedule task of resource group {} succeed, cur cpu time of MPPTask: {}",
-                    name,
-                    task->getQueryExecContext().getQueryProfileInfo().getCPUExecuteTimeNs());
-                assert(task != nullptr);
-                break;
-            }
-        }
-
-        if (task != nullptr)
-            return true;
-
-        // Check is_finished again for situation when resource_group_infos never insert any resource group.
         if unlikely (is_finished)
             return false;
 
-        // Other TaskQueue like MultiLevelFeedbackQueue and IOPriorityQueue will wake up when new task submit or is_finished become true.
-        // But for ResourceControlQueue, when all resource groups's RU are exhausted, will go to sleep, and should wakeup when RU is updated.
-        // But LAC has no way to notify ResourceControlQueue for now, so ResourceControlQueue should wakeup to check if RU is updated or not.
-        cv.wait_for(lock, DEFAULT_WAIT_INTERVAL_WHEN_RUN_OUT_OF_RU);
+        if (popTask(cancel_task_queue, task))
+            return true;
+
         updateResourceGroupInfosWithoutLock();
+
+        while (!resource_group_infos.empty())
+        {
+            const ResourceGroupInfo & group_info = resource_group_infos.top();
+            const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
+
+            LOG_TRACE(
+                logger,
+                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
+                "task_queue.empty(): {}",
+                group_info.name,
+                group_info.priority,
+                ru_exhausted,
+                is_finished,
+                group_info.task_queue->empty());
+
+            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
+            // Should not take any task from nested task queue for this situation.
+            if (ru_exhausted)
+                break;
+
+            if (group_info.task_queue->empty())
+            {
+                // Nested task queue is empty, continue and try next resource group.
+                size_t erase_num = resource_group_task_queues.erase(group_info.name);
+                RUNTIME_CHECK_MSG(
+                    erase_num == 1,
+                    "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
+                    group_info.name,
+                    erase_num);
+                resource_group_infos.pop();
+            }
+            else
+            {
+                // Take task from nested task queue, and should always take succeed.
+                // Because this task queue should not be finished inside lock_guard.
+                RUNTIME_CHECK(group_info.task_queue->take(task));
+                assert(task != nullptr);
+                return true;
+            }
+        }
+
+        assert(!task);
+        // Wakeup when:
+        // 1. finish() is called.
+        // 2. refill_token_callback is called by LAC.
+        cv.wait(lock);
     }
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
 {
     assert(task);
-    const std::string & name = task->getResourceGroupName();
+    const String & name = task->getResourceGroupName();
 
     std::lock_guard lock(mu);
-    auto iter = resource_group_statistic.find(name);
-    if (iter == resource_group_statistic.end())
-    {
-        UInt64 accumulated_cpu_time = inc_value;
-        if (accumulated_cpu_time >= YIELD_MAX_TIME_SPENT_NS)
-        {
-            updateResourceGroupStatisticWithoutLock(name, accumulated_cpu_time);
-            accumulated_cpu_time = 0;
-        }
-        resource_group_statistic.insert({name, accumulated_cpu_time});
-    }
-    else
-    {
-        iter->second += inc_value;
-        if (iter->second >= YIELD_MAX_TIME_SPENT_NS)
-        {
-            updateResourceGroupStatisticWithoutLock(name, iter->second);
-            iter->second = 0;
-        }
-    }
+    auto ru = toRU(inc_value);
+    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
+    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(
-    const std::string & name,
-    UInt64 consumed_cpu_time)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
-    auto ru = toRU(consumed_cpu_time);
-    LOG_DEBUG(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
-    LocalAdmissionController::global_instance->consumeResource(name, ru, consumed_cpu_time);
-    updateResourceGroupInfosWithoutLock();
-
-    // Notify priority info is updated.
-    cv.notify_one();
-}
-
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock()
-{
-    ResourceGroupInfoQueue new_resource_group_infos{compator};
+    std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
     while (!resource_group_infos.empty())
     {
-        ResourceGroupInfo group_info = resource_group_infos.top();
+        const ResourceGroupInfo & group_info = resource_group_infos.top();
+        auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+        new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
         resource_group_infos.pop();
-
-        const auto & name = std::get<InfoIndexResourceGroupName>(group_info);
-        auto new_priority = LocalAdmissionController::global_instance->getPriority(name);
-        new_resource_group_infos.push(
-            std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name));
     }
     resource_group_infos = new_resource_group_infos;
 }
 
-template <typename NestedQueueType>
-bool ResourceControlQueue<NestedQueueType>::empty() const
+template <typename NestedTaskQueueType>
+bool ResourceControlQueue<NestedTaskQueueType>::empty() const
 {
     std::lock_guard lock(mu);
 
@@ -235,19 +187,21 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
     return true;
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::finish()
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::finish()
 {
-    std::lock_guard lock(mu);
-    is_finished = true;
-    for (auto & ele : resource_group_task_queues)
-        ele.second->finish();
+    {
+        std::lock_guard lock(mu);
+        is_finished = true;
+        for (auto & ele : resource_group_task_queues)
+            ele.second->finish();
+    }
 
     cv.notify_all();
 }
 
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::cancel(const String & query_id, const String & resource_group_name)
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::cancel(const String & query_id, const String & resource_group_name)
 {
     if unlikely (query_id.empty())
         return;
