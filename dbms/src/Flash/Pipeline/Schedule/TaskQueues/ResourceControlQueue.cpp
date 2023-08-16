@@ -126,7 +126,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 // Because this task queue should not be finished inside lock_guard.
                 RUNTIME_CHECK(group_info.task_queue->take(task));
                 assert(task != nullptr);
-                break;
+                return true;
             }
         }
 

@@ -47,17 +47,17 @@ void MockLocalAdmissionController::refillTokenBucket()
 
 std::string MockLocalAdmissionController::dump() const
 {
-    std::string info_str;
+    FmtBuffer fmt_buf;
     std::lock_guard lock(mu);
     for (const auto & ele : resource_groups)
     {
         const auto & rg = ele.second;
-        info_str += fmt::format(
+        fmt_buf.fmtAppend(
             "rg: {}, remaining ru: {}, cpu usage: {};",
             rg->name,
             rg->bucket->peek(),
             rg->cpu_time_in_ns);
     }
-    return info_str;
+    return fmt_buf.toString();
 }
 } // namespace DB
