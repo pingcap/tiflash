@@ -66,6 +66,8 @@ public:
     // gjt todo
     // dump()
 
+    std::string toString() const { return ""; }
+
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
 

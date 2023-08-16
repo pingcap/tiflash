@@ -43,22 +43,31 @@ void LocalAdmissionController::startBackgroudJob()
     setupUniqueClientID();
     while (!stopped.load())
     {
-        LOG_DEBUG(log, "LocalAdmissionController::startBackgroudJob");
         {
-            auto now = std::chrono::steady_clock::now();
             std::unique_lock<std::mutex> lock(mu);
-            if (cv.wait_until(lock, now + std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
+            if (cv.wait_for(lock, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
                     return stopped.load();
                 }))
                 return;
+
+            if (refill_token_callback)
+                refill_token_callback();
         }
 
-        fetchTokensFromGAC();
-        checkDegradeMode();
+        try
+        {
+            fetchTokensFromGAC();
+            checkDegradeMode();
 
-        auto now = std::chrono::steady_clock::now();
-        if (now - last_cleanup_resource_group_timepoint >= CLEANUP_RESOURCE_GROUP_INTERVAL)
-            cleanupResourceGroups();
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_cleanup_resource_group_timepoint >= CLEANUP_RESOURCE_GROUP_INTERVAL)
+                cleanupResourceGroups();
+        }
+        catch (...)
+        {
+            auto err_msg = getCurrentExceptionMessage(true);
+            handleBackgroundError(err_msg);
+        }
     }
 }
 
@@ -81,7 +90,7 @@ void LocalAdmissionController::fetchTokensFromGAC()
                 resource_group.second->getAndCleanConsumptionDelta()));
         }
         // gjt todo here ok?
-        // last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+        last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
     }
 
     if (need_tokens.empty())
@@ -107,18 +116,21 @@ void LocalAdmissionController::fetchTokensFromGAC()
     }
     LOG_DEBUG(log, "trying to fetch token from GAC: {}", gac_req.DebugString());
 
-    auto resps = cluster->pd_client->acquireTokenBuckets(gac_req);
-    for (const auto & resp : resps)
-        handleTokenBucketsResp(resp);
+    auto resp = cluster->pd_client->acquireTokenBuckets(gac_req);
+    handleTokenBucketsResp(resp);
 }
 
 void LocalAdmissionController::checkDegradeMode()
 {
     std::lock_guard lock(mu);
-    for (const auto & ele : resource_groups)
+    auto now = std::chrono::steady_clock::now();
+    if (DEGRADE_MODE_DURATION != 0 && (now - last_fetch_tokens_from_gac_timepoint) >= std::chrono::seconds(DEGRADE_MODE_DURATION))
     {
-        auto group = ele.second;
-        group->stepIntoDegradeModeIfNecessary(DEGRADE_MODE_DURATION);
+        for (const auto & ele : resource_groups)
+        {
+            auto group = ele.second;
+            group->toDegrademode();
+        }
     }
 }
 
@@ -169,12 +181,12 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
                 if (trickle_ms == 0)
                 {
                     // GAC has enough tokens for LAC.
-                    resource_group->reConfigTokenBucketInNormalMode(added_tokens, capacity);
+                    resource_group->toNormalMode(added_tokens, capacity);
                 }
                 else
                 {
                     // GAC doesn't have enough tokens for LAC, start to trickle.
-                    resource_group->reConfigTokenBucketInTrickleMode(added_tokens, capacity, trickle_ms);
+                    resource_group->toTrickleMode(added_tokens, capacity, trickle_ms);
                 }
             }
         }
@@ -243,6 +255,10 @@ std::string LocalAdmissionController::isGACRespValid(const resource_manager::Res
     return err_msg;
 }
 
+#ifdef DBMS_PUBLIC_GTEST
 auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+#else
+std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
+#endif
 
 } // namespace DB

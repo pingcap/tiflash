@@ -1544,6 +1544,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     });
 
+        auto & tmt_context = global_context->getTMTContext();
+        // Resource Control.
+#ifdef DBMS_PUBLIC_GTEST
+        static_assert(0, "gjt test");
+#else
+        LocalAdmissionController::global_instance
+            = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
+#endif
+
     // For test mode, TaskScheduler is controlled by test case.
     bool is_prod = !global_context->isTest();
     if (is_prod)
@@ -1647,7 +1656,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         SessionCleaner session_cleaner(*global_context);
 
-        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
             // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
@@ -1754,14 +1762,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "All services in tiflash proxy are stopped");
             }
         });
-
-        // Resource Control.
-#ifndef DBMS_PUBLIC_GTEST
-        LocalAdmissionController::global_instance
-            = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
-#else
-        static_assert(0, "gjt test");
-#endif
 
         {
             // Report the unix timestamp, git hash, release version

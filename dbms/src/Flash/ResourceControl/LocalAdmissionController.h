@@ -39,8 +39,7 @@ public:
         , user_priority(group_pb_.priority())
         , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
-        , cpu_time_in_ns(0)
-        , log(Logger::get("rg:" + group_pb_.name()))
+        , log(Logger::get("resource group:" + group_pb_.name()))
     {
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         initStaticTokenBucket(setting.burst_limit());
@@ -60,6 +59,9 @@ public:
 
     ~ResourceGroup() = default;
 
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
     enum TokenBucketMode
     {
         normal_mode,
@@ -67,9 +69,6 @@ public:
         trickle_mode,
     };
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
     void initStaticTokenBucket(uint64_t capacity = std::numeric_limits<uint64_t>::max())
     {
         // If token bucket is normal mode, it's static, so fill_rate is zero.
@@ -142,17 +141,17 @@ private:
     bool lowToken() const
     {
         std::lock_guard lock(mu);
-        return bucket_mode == TokenBucketMode::normal_mode && bucket->lowToken();
+        return bucket->lowToken();
     }
 
-    // Get remaining RU of this resource group.
     double getRU() const
     {
         std::lock_guard lock(mu);
         return bucket->peek();
     }
 
-    double getAcquireRUNum(uint32_t avg_token_speed_duration, double amplification) const
+    // Return how many tokens should acquire from GAC for the next n seconds.
+    double getAcquireRUNum(uint32_t n, double amplification) const
     {
         assert(amplification >= 1.0);
 
@@ -168,28 +167,23 @@ private:
 
         // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
         // while user query speed is limited due to LAC requests too few RU.
-        double num = avg_speed * avg_token_speed_duration * amplification;
+        double next_n_sec_need_num = avg_speed * n * amplification;
 
         // Prevent avg_speed from being 0 due to RU exhaustion.
-        if (num == 0.0)
-            num = base;
+        if (next_n_sec_need_num == 0.0)
+            next_n_sec_need_num = base;
 
-        // Prevent a specific LAC from taking too many RUs,
-        // with each LAC only obtaining the required RU for the next second.
-        if (num > remaining_ru)
-            num -= remaining_ru;
-        return num;
+        auto acquire_num = next_n_sec_need_num - remaining_ru;
+        LOG_TRACE(log, "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, next n sec need: {}, acquire num: {}",
+                name, avg_speed, remaining_ru, base, amplification, next_n_sec_need_num, acquire_num);
+        return acquire_num;
     }
 
     // New tokens fetched from GAC, update remaining tokens.
-    void reConfigTokenBucketInNormalMode(double add_tokens, double new_capacity)
+    void toNormalMode(double add_tokens, double new_capacity)
     {
-        LOG_INFO(
-            log,
-            "token bucket of rg {} reconfig. add_token: {}, new_capacity: {}",
-            name,
-            add_tokens,
-            new_capacity);
+        assert(add_tokens >= 0);
+
         std::lock_guard lock(mu);
         bucket_mode = TokenBucketMode::normal_mode;
         if (new_capacity <= 0.0)
@@ -198,20 +192,16 @@ private:
             return;
         }
         auto [ori_tokens, ori_fill_rate, ori_capacity] = bucket->getCurrentConfig();
+        std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(ori_tokens + add_tokens, ori_fill_rate, ori_capacity);
-        LOG_INFO(log, "token bucket of rg {} reconfig in normal mode done: {}", name, bucket->toString());
+        LOG_INFO(log, "token bucket of rg {} reconfig to normal mode. from: {}, to: {}", name, ori_bucket_info, bucket->toString());
     }
 
-    // Tokens of GAC is not enough, enter trickling mode.
-    void reConfigTokenBucketInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
+    void toTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
     {
-        LOG_INFO(
-            log,
-            "token bucket of rg {} reconfig to trickle mode. add_token: {}, new_capacity: {}, trickle_ms: {}",
-            name,
-            add_tokens,
-            new_capacity,
-            trickle_ms);
+        assert(add_tokens > 0.0);
+        assert(trickle_ms > 0);
+
         std::lock_guard lock(mu);
         if (new_capacity <= 0.0)
         {
@@ -220,46 +210,29 @@ private:
         }
 
         bucket_mode = TokenBucketMode::trickle_mode;
-        const double ori_tokens = bucket->peek();
-        const double new_tokens = ori_tokens + add_tokens;
+
         const double trickle_sec = static_cast<double>(trickle_ms) / 1000;
-        double new_fill_rate = 0.0;
-        if (ori_tokens > 0.0)
-            new_fill_rate = new_tokens / trickle_sec;
-        else
-            new_fill_rate = add_tokens / trickle_sec;
-        bucket->reConfig(new_tokens, new_fill_rate, new_capacity);
-        LOG_INFO(log, "token bucket of rg {} reconfig to trickle mode done: {}", name, bucket->toString());
+        const double new_fill_rate = add_tokens / trickle_sec;
+        RUNTIME_CHECK_MSG(new_fill_rate > 0.0, "token bucket of {} transform to trickle mode failed. trickle_ms: {}, trickle_sec: {}", name, trickle_ms, trickle_sec);
+
+        std::string ori_bucket_info = bucket->toString();
+        bucket->reConfig(bucket->peek(), new_fill_rate, new_capacity);
+        LOG_INFO(log, "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}", name, ori_bucket_info, bucket->toString());
     }
 
     // If we have network problem with GAC, enter degrade mode.
-    void reConfigTokenBucketInDegradeMode()
+    void toDegrademode()
     {
         std::lock_guard lock(mu);
+        if (burstable || bucket_mode == degrade_mode)
+            return;
+
         bucket_mode = TokenBucketMode::degrade_mode;
         double avg_speed = bucket->getAvgSpeedPerSec();
         auto [ori_tokens, _, ori_capacity] = bucket->getCurrentConfig();
+        std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(ori_tokens, avg_speed, ori_capacity);
-        LOG_INFO(log, "token bucket of rg {} reconfig in normal mode done: {}", name, bucket->toString());
-    }
-
-    void stepIntoDegradeModeIfNecessary(uint64_t dura_seconds)
-    {
-        if (dura_seconds == 0)
-            return;
-
-        auto now = std::chrono::steady_clock::now();
-        std::lock_guard lock(mu);
-        if (burstable)
-            return;
-
-        if (now - last_fetch_tokens_from_gac_timepoint >= std::chrono::seconds(dura_seconds))
-        {
-            if (bucket_mode == TokenBucketMode::degrade_mode)
-                return;
-
-            reConfigTokenBucketInDegradeMode();
-        }
+        LOG_INFO(log, "token bucket of rg {} reconfig to normal mode done: {}", name, ori_bucket_info, bucket->toString());
     }
 
     double getAndCleanConsumptionDelta()
@@ -277,7 +250,6 @@ private:
 
     bool burstable = false;
 
-    // Definition of the RG, e.g. RG settings, priority etc.
     resource_manager::ResourceGroup group_pb;
 
     mutable std::mutex mu;
@@ -288,12 +260,7 @@ private:
     // Total used cpu_time_in_ns of this ResourceGroup.
     uint64_t cpu_time_in_ns = 0;
 
-    // gjt todo update this
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
-
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
-
-    std::chrono::steady_clock::time_point last_gac_update_timepoint;
 
     double ru_consumption_delta = 0.0;
 
@@ -314,11 +281,6 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 // 4. Degrade Mode:
 //   1. If cannot get resp from GAC for a while, will enter degrade mode.
 //   2. LAC runs as an independent token bucket whose refill rate is RU_PER_SEC in degrade mode.
-
-// RPC between GAC and LAC
-// 1. rpc ListResourceGroups(ListResourceGroupsRequest) returns (ListResourceGroupsResponse)
-//    return ResourceGroup pb{name, mode, r_u_settings{TokenBucket{tokens, TokenLimitSettings{fill_rate, burst_limit, max_tokens}}}, priority, runaway_settings}
-// 2.
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
@@ -328,27 +290,23 @@ public:
         , mpp_task_manager(mpp_task_manager_)
         , thread_manager(newThreadManager())
     {
-        LOG_DEBUG(log, "gjt debug");
         thread_manager->scheduleThenDetach(true, "LocalAdmissionController", [this] { this->startBackgroudJob(); });
     }
 
     ~LocalAdmissionController()
     {
-        {
-            std::lock_guard lock(mu);
-            stopped.store(true);
-            cv.notify_all();
-        }
-        thread_manager->wait();
+        stop();
     }
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
+        // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return;
 
         ResourceGroupPtr group = getOrCreateResourceGroup(name);
         group->consumeResource(ru, cpu_time_in_ns);
+        // gjt todo: notify may miss
         if (group->lowToken())
             cv.notify_one();
     }
@@ -377,9 +335,13 @@ public:
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
+#ifdef DBMS_PUBLIC_GTEST
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
+#else
+    static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
 
+    // gjt todo private?
     // Interval of fetch from GAC periodically.
     static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
     // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
@@ -392,6 +354,19 @@ public:
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t EMPTY_RESOURCE_GROUP_DEF_PRIORITY = 1;
+
+    void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
+
+    // gjt todo: maybe reorder func
+    // gjt todo: split ResourceGroup to another file
+    void stop()
+    {
+        if (stopped)
+            return;
+        stopped.store(true);
+        cv.notify_all();
+        thread_manager->wait();
+    }
 
 private:
     // Get ResourceGroup by name, if not exist, fetch from PD.
@@ -469,5 +444,10 @@ private:
     int64_t unique_client_id = -1;
 
     std::atomic<uint64_t> max_ru_per_sec = 0;
+
+    std::function<void()> refill_token_callback;
+
+    // gjt todo update this
+    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
 };
 } // namespace DB
