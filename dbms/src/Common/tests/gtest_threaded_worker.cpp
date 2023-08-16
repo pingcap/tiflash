@@ -39,8 +39,7 @@ public:
         : ThreadedWorker(source_queue_, result_queue_, Logger::get(), concurrency)
         , multiply_factor(multiply_factor_)
         , sleep_duration(sleep_duration_)
-    {
-    }
+    {}
 
     ~WorkerMultiply() override { wait(); }
 
@@ -72,8 +71,7 @@ public:
         : ThreadedWorker(source_queue_, result_queue_, Logger::get(), concurrency)
         , error_at(error_at_)
         , sleep_duration(sleep_duration_)
-    {
-    }
+    {}
 
     ~WorkerErrorAtN() override { wait(); }
 

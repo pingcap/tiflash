@@ -50,11 +50,7 @@ std::string MockLocalAdmissionController::dump() const
     for (const auto & ele : resource_groups)
     {
         const auto & rg = ele.second;
-        fmt_buf.fmtAppend(
-            "rg: {}, remaining ru: {}, cpu usage: {};",
-            rg->name,
-            rg->bucket->peek(),
-            rg->cpu_time_in_ns);
+        fmt_buf.fmtAppend("rg: {}, remaining ru: {}, cpu usage: {};", rg->name, rg->bucket->peek(), rg->cpu_time_in_ns);
     }
     return fmt_buf.toString();
 }
