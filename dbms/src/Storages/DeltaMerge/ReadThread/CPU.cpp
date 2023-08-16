@@ -27,13 +27,15 @@ namespace DB::DM
 // In Linux a numa node is represented by a device directory, such as '/sys/devices/system/node/node0', '/sys/devices/system/node/node01'.
 static inline bool isNodeDir(const std::string & name)
 {
-    return name.size() > 4 && name.substr(0, 4) == "node" && std::all_of(name.begin() + 4, name.end(), [](unsigned char c) { return std::isdigit(c); });
+    return name.size() > 4 && name.substr(0, 4) == "node"
+        && std::all_of(name.begin() + 4, name.end(), [](unsigned char c) { return std::isdigit(c); });
 }
 
 // Under a numa node directory is CPU cores and memory, such as  '/sys/devices/system/node/node0/cpu0' and '/sys/devices/system/node/node0/memory0'.
 static inline bool isCPU(const std::string & name)
 {
-    return name.size() > 3 && name.substr(0, 3) == "cpu" && std::all_of(name.begin() + 3, name.end(), [](unsigned char c) { return std::isdigit(c); });
+    return name.size() > 3 && name.substr(0, 3) == "cpu"
+        && std::all_of(name.begin() + 3, name.end(), [](unsigned char c) { return std::isdigit(c); });
 }
 
 static inline int parseCPUNumber(const std::string & name)

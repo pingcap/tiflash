@@ -31,8 +31,7 @@ extern const int TABLE_IS_DROPPED;
 GCManager::GCManager(Context & context)
     : global_context{context.getGlobalContext()}
     , log(Logger::get())
-{
-}
+{}
 
 bool GCManager::work()
 {
@@ -66,7 +65,11 @@ bool GCManager::work()
         // else we can continue the background segments GC
     }
 
-    LOG_DEBUG(log, "Start GC with keyspace={}, table_id={}", next_keyspace_table_id.first, next_keyspace_table_id.second);
+    LOG_DEBUG(
+        log,
+        "Start GC with keyspace={}, table_id={}",
+        next_keyspace_table_id.first,
+        next_keyspace_table_id.second);
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
     std::map<KeyspaceTableID, std::weak_ptr<IManageableStorage>> storages;
@@ -125,7 +128,11 @@ bool GCManager::work()
 
     if (iter != storages.end())
         next_keyspace_table_id = iter->first;
-    LOG_DEBUG(log, "End GC and next gc will start with keyspace={}, table_id={}", next_keyspace_table_id.first, next_keyspace_table_id.second);
+    LOG_DEBUG(
+        log,
+        "End GC and next gc will start with keyspace={}, table_id={}",
+        next_keyspace_table_id.first,
+        next_keyspace_table_id.second);
     gc_check_stop_watch.restart();
     // Always return false
     return false;

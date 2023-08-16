@@ -241,7 +241,7 @@ protected:
         assert(v != current);
         if (current != nullptr)
         {
-            current->release(lock);
+            current->release(lock); // NOLINT
         }
         current = v;
         current->increase(lock);
@@ -253,7 +253,10 @@ protected:
         current->next->prev = current;
     }
 
-    std::unique_lock<std::shared_mutex> acquireForLock() const { return std::unique_lock<std::shared_mutex>(read_write_mutex); }
+    std::unique_lock<std::shared_mutex> acquireForLock() const
+    {
+        return std::unique_lock<std::shared_mutex>(read_write_mutex);
+    }
 
 public:
     // No copying allowed

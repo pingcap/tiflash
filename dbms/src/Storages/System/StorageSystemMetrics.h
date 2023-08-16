@@ -26,7 +26,8 @@ class Context;
 
 /** Implements `metrics` system table, which provides information about the operation of the server.
   */
-class StorageSystemMetrics : public ext::SharedPtrHelper<StorageSystemMetrics>
+class StorageSystemMetrics
+    : public ext::SharedPtrHelper<StorageSystemMetrics>
     , public IStorage
 {
 public:

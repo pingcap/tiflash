@@ -37,13 +37,14 @@ namespace DB::PS::V3
 S3LockLocalManager::S3LockLocalManager()
     : store_id(InvalidStoreID)
     , log(Logger::get())
-{
-}
+{}
 
 // `store_id` is inited later because they may not
 // accessable when S3LockLocalManager is created.
-std::optional<CheckpointProto::ManifestFilePrefix>
-S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_, const universal::PageDirectoryPtr & directory)
+std::optional<CheckpointProto::ManifestFilePrefix> S3LockLocalManager::initStoreInfo(
+    StoreID actual_store_id,
+    DB::S3::S3LockClientPtr s3lock_client_,
+    const universal::PageDirectoryPtr & directory)
 {
     if (inited_from_s3)
         return std::nullopt;
@@ -81,7 +82,12 @@ S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientP
                 size_t cur_copied_entries = directory->copyCheckpointInfoFromEdit(*edit);
                 num_s3_entries += cur_s3_entries;
                 num_copied_entries += cur_copied_entries;
-                LOG_INFO(log, "restore from S3, key={} cur_entries={} cur_copied_entries={}", manifests.latestManifestKey(), cur_s3_entries, cur_copied_entries);
+                LOG_INFO(
+                    log,
+                    "restore from S3, key={} cur_entries={} cur_copied_entries={}",
+                    manifests.latestManifestKey(),
+                    cur_s3_entries,
+                    cur_copied_entries);
             }
         }
         else
@@ -94,7 +100,8 @@ S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientP
 
         LOG_INFO(
             log,
-            "restore from S3 finish, elapsed={:.3f}s last_upload_sequence={} num_s3_entries={} num_copied_entries={} last_prefix={}",
+            "restore from S3 finish, elapsed={:.3f}s last_upload_sequence={} num_s3_entries={} num_copied_entries={} "
+            "last_prefix={}",
             watch.elapsedSeconds(),
             last_upload_sequence,
             num_s3_entries,
@@ -113,8 +120,7 @@ void S3LockLocalManager::waitUntilInited()
     cv_init.wait(lock_init, [this]() { return inited_from_s3.load(); });
 }
 
-S3LockLocalManager::ExtraLockInfo
-S3LockLocalManager::allocateNewUploadLocksInfo()
+S3LockLocalManager::ExtraLockInfo S3LockLocalManager::allocateNewUploadLocksInfo()
 {
     std::unique_lock wlatch_seq(mtx_sequence);
     std::unique_lock latch_keys(mtx_lock_keys);
@@ -154,10 +160,11 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
     for (auto & [input_key, lock_key] : s3_datafiles_to_lock)
     {
         auto view = S3::S3FilenameView::fromKey(input_key);
-        RUNTIME_CHECK_MSG(view.isDataFile() || view.isLockFile(),
-                          "invalid data_file_id, input_key={} type={}",
-                          input_key,
-                          magic_enum::enum_name(view.type));
+        RUNTIME_CHECK_MSG(
+            view.isDataFile() || view.isLockFile(),
+            "invalid data_file_id, input_key={} type={}",
+            input_key,
+            magic_enum::enum_name(view.type));
         if (view.isLockFile())
         {
             lock_key = std::make_shared<String>(input_key);
@@ -190,7 +197,10 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
     }
 }
 
-String S3LockLocalManager::createS3Lock(const String & datafile_key, const S3::S3FilenameView & s3_file, UInt64 lock_store_id)
+String S3LockLocalManager::createS3Lock(
+    const String & datafile_key,
+    const S3::S3FilenameView & s3_file,
+    UInt64 lock_store_id)
 {
     RUNTIME_CHECK(s3_file.isDataFile());
 

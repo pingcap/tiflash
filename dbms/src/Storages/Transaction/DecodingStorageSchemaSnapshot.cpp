@@ -19,9 +19,9 @@ namespace DB
 {
 TMTPKType getTMTPKType(const IDataType & rhs)
 {
-    static const DataTypeInt64 & dataTypeInt64 = {};
-    static const DataTypeUInt64 & dataTypeUInt64 = {};
-    static const DataTypeString & dataTypeString = {};
+    static const DataTypeInt64 & dataTypeInt64 = {}; // NOLINT
+    static const DataTypeUInt64 & dataTypeUInt64 = {}; // NOLINT
+    static const DataTypeString & dataTypeString = {}; // NOLINT
 
     if (rhs.equals(dataTypeInt64))
         return TMTPKType::INT64;
@@ -35,7 +35,9 @@ TMTPKType getTMTPKType(const IDataType & rhs)
 Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot)
 {
     Block block;
-    for (auto iter = schema_snapshot->sorted_column_id_with_pos.begin(); iter != schema_snapshot->sorted_column_id_with_pos.end(); iter++)
+    for (auto iter = schema_snapshot->sorted_column_id_with_pos.begin();
+         iter != schema_snapshot->sorted_column_id_with_pos.end();
+         iter++)
     {
         auto col_id = iter->first;
         auto & cd = (*(schema_snapshot->column_defines))[iter->second];

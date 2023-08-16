@@ -58,10 +58,7 @@ public:
 
     void start();
 
-    void stop()
-    {
-        timer_status.stop();
-    }
+    void stop() { timer_status.stop(); }
 
     UInt32 getMemoryPeak() const
     {
@@ -118,15 +115,9 @@ public:
 
     void start();
 
-    void stop()
-    {
-        gc_timer.stop();
-    }
+    void stop() { gc_timer.stop(); }
 
-    UInt64 getElapsedMilliseconds()
-    {
-        return gc_stop_watch.elapsedMilliseconds();
-    }
+    UInt64 getElapsedMilliseconds() { return gc_stop_watch.elapsedMilliseconds(); }
 
 private:
     Poco::Timer gc_timer;
@@ -152,10 +143,7 @@ public:
 
     void start();
 
-    void stop()
-    {
-        scanner_timer.stop();
-    }
+    void stop() { scanner_timer.stop(); }
 
 private:
     Poco::Timer scanner_timer;
@@ -174,10 +162,7 @@ public:
 
     void onTime(Poco::Timer & timer);
     void start();
-    void stop()
-    {
-        timeout_timer.stop();
-    }
+    void stop() { timeout_timer.stop(); }
 
 private:
     Poco::Timer timeout_timer;

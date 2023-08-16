@@ -43,10 +43,7 @@ public:
         log = Logger::get("UniPageStorageTest");
     }
 
-    void reload()
-    {
-        page_storage = reopenWithConfig(config);
-    }
+    void reload() { page_storage = reopenWithConfig(config); }
 
     std::shared_ptr<UniversalPageStorage> reopenWithConfig(const PageStorageConfig & config_)
     {
@@ -81,9 +78,21 @@ try
 
     {
         UniversalWriteBatch wb;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 0), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 21), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 200), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 0),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 21),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 200),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         page_storage->write(std::move(wb));
     }
 
@@ -121,7 +130,11 @@ TEST_F(UniPageStorageTest, Traverse)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix1, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -132,7 +145,11 @@ TEST_F(UniPageStorageTest, Traverse)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix2, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -182,7 +199,11 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix1, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -195,7 +216,11 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix1, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -250,11 +275,31 @@ TEST_F(UniPageStorageTest, GetMaxIdWithPrefix)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix3, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix4, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix5, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix1, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix2, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix3, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix4, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
+            wb.putPage(
+                UniversalPageIdFormat::toFullPageId(prefix5, i),
+                tag,
+                std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+                buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -273,19 +318,39 @@ TEST_F(UniPageStorageTest, GetLowerBound)
         UniversalWriteBatch wb;
         c_buff[0] = 10;
         c_buff[1] = 1;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 5), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 5),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 4;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 7), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 7),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 5;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 6), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 6),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 6;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 10),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 7;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 9), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 9),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
 
         page_storage->write(std::move(wb));
     }
@@ -338,19 +403,39 @@ TEST_F(UniPageStorageTest, Scan)
         UniversalWriteBatch wb;
         c_buff[0] = 10;
         c_buff[1] = 1;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(region_prefix, 10),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 4;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(region_prefix, 15),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 5;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(region_prefix, 18),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 6;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(region_prefix, 20),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 7;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(region_prefix, 25),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
 
         page_storage->write(std::move(wb));
     }
@@ -361,19 +446,39 @@ TEST_F(UniPageStorageTest, Scan)
         UniversalWriteBatch wb;
         c_buff[0] = 10;
         c_buff[1] = 1;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 10),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 4;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 15),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 5;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 18),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 6;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 20),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
         c_buff[0] = 10;
         c_buff[1] = 7;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(
+            UniversalPageIdFormat::toFullPageId(prefix, 25),
+            tag,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz);
 
         page_storage->write(std::move(wb));
     }
@@ -430,11 +535,12 @@ TEST_F(UniPageStorageTest, OnlyScanRaftLog)
     RaftDataReader reader(*page_storage);
     {
         size_t count = 0;
-        auto checker = [&](const UniversalPageId & page_id, PageSize page_size, const PS::V3::CheckpointLocation & location) {
-            UNUSED(page_size, location);
-            ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
-            count++;
-        };
+        auto checker
+            = [&](const UniversalPageId & page_id, PageSize page_size, const PS::V3::CheckpointLocation & location) {
+                  UNUSED(page_size, location);
+                  ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
+                  count++;
+              };
         reader.traverseRemoteRaftLogForRegion(region_id, checker);
         ASSERT_EQ(count, 3);
     }

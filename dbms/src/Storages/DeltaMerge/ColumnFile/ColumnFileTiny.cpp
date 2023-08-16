@@ -117,7 +117,11 @@ Columns ColumnFileTiny::readFromDisk(
     return columns;
 }
 
-void ColumnFileTiny::fillColumns(const IColumnFileDataProviderPtr & data_provider, const ColumnDefines & col_defs, size_t col_count, Columns & result) const
+void ColumnFileTiny::fillColumns(
+    const IColumnFileDataProviderPtr & data_provider,
+    const ColumnDefines & col_defs,
+    size_t col_count,
+    Columns & result) const
 {
     if (result.size() >= col_count)
         return;
@@ -149,7 +153,10 @@ void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema)
+ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
+    const DMContext & context,
+    ReadBuffer & buf,
+    ColumnFileSchemaPtr & last_schema)
 {
     auto schema_block = deserializeSchema(buf);
     std::shared_ptr<ColumnFileSchema> schema;
@@ -175,7 +182,12 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & con
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id);
 }
 
-std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, WriteBatches & wbs)
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
+    const DMContext & context,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    const BlockPtr & last_schema,
+    WriteBatches & wbs)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
@@ -189,7 +201,9 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
     auto new_cf_id = context.storage_pool->newLogPageId();
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id), data_page_id);
+    auto remote_page_id = UniversalPageIdFormat::toFullPageId(
+        UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id),
+        data_page_id);
     // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
     auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
     RUNTIME_CHECK(remote_data_location.has_value());
@@ -201,7 +215,12 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
         .offset_in_file = remote_data_location->offset_in_file,
         .size_in_file = remote_data_location->size_in_file};
     auto entry = temp_ps->getEntry(remote_page_id);
-    LOG_DEBUG(Logger::get(), "Write remote page[page_id={} remote_location={}] using local page id {}", remote_page_id, new_remote_data_location.toDebugString(), new_cf_id);
+    LOG_DEBUG(
+        Logger::get(),
+        "Write remote page[page_id={} remote_location={}] using local page id {}",
+        remote_page_id,
+        new_remote_data_location.toDebugString(),
+        new_cf_id);
     wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
 
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
@@ -241,7 +260,13 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
     }
 }
 
-ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache)
+ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
+    const DMContext & context,
+    const Block & block,
+    size_t offset,
+    size_t limit,
+    WriteBatches & wbs,
+    const CachePtr & cache)
 {
     auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
 
@@ -251,7 +276,12 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(const DMContext & context, con
     return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, cache);
 }
 
-PageIdU64 ColumnFileTiny::writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
+PageIdU64 ColumnFileTiny::writeColumnFileData(
+    const DMContext & context,
+    const Block & block,
+    size_t offset,
+    size_t limit,
+    WriteBatches & wbs)
 {
     auto page_id = context.storage_pool->newLogPageId();
 
@@ -260,9 +290,21 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(const DMContext & context, const B
     for (const auto & col : block)
     {
         auto last_buf_size = write_buf.count();
-        serializeColumn(write_buf, *col.column, col.type, offset, limit, context.db_context.getSettingsRef().dt_compression_method, context.db_context.getSettingsRef().dt_compression_level);
+        serializeColumn(
+            write_buf,
+            *col.column,
+            col.type,
+            offset,
+            limit,
+            context.db_context.getSettingsRef().dt_compression_method,
+            context.db_context.getSettingsRef().dt_compression_level);
         size_t serialized_size = write_buf.count() - last_buf_size;
-        RUNTIME_CHECK_MSG(serialized_size != 0, "try to persist a block with empty column, colname={} colid={} block={}", col.name, col.column_id, block.dumpJsonStructure());
+        RUNTIME_CHECK_MSG(
+            serialized_size != 0,
+            "try to persist a block with empty column, colname={} colid={} block={}",
+            col.name,
+            col.column_id,
+            block.dumpJsonStructure());
         col_data_sizes.push_back(serialized_size);
     }
 
@@ -290,7 +332,11 @@ ColumnPtr ColumnFileTinyReader::getVersionColumn()
     return cols_data_cache[1];
 }
 
-std::pair<size_t, size_t> ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileTinyReader::readRows(
+    MutableColumns & output_cols,
+    size_t rows_offset,
+    size_t rows_limit,
+    const RowKeyRange * range)
 {
     tiny_file.fillColumns(data_provider, *col_defs, output_cols.size(), cols_data_cache);
 

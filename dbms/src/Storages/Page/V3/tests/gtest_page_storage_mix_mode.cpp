@@ -46,7 +46,12 @@ public:
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
 
-        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider());
+        storage_path_pool_v3 = std::make_unique<PathPool>(
+            Strings{path},
+            Strings{path},
+            Strings{},
+            std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps),
+            global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
     }
@@ -64,17 +69,30 @@ public:
         Strings paths = {path};
 
         PathCapacityMetricsPtr cap_metrics = std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps);
-        storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, global_context.getFileProvider());
+        storage_path_pool_v2 = std::make_unique<StoragePathPool>(
+            Strings{path},
+            Strings{path},
+            "test",
+            "t1",
+            true,
+            cap_metrics,
+            global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
-        storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, NullspaceID, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
+        storage_pool_v2 = std::make_unique<DM::StoragePool>(
+            global_context,
+            NullspaceID,
+            TEST_NAMESPACE_ID,
+            *storage_path_pool_v2,
+            "test.t1");
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
-        storage_pool_mix = std::make_unique<DM::StoragePool>(*db_context,
-                                                             NullspaceID,
-                                                             TEST_NAMESPACE_ID,
-                                                             *storage_path_pool_v2,
-                                                             "test.t1");
+        storage_pool_mix = std::make_unique<DM::StoragePool>(
+            *db_context,
+            NullspaceID,
+            TEST_NAMESPACE_ID,
+            *storage_path_pool_v2,
+            "test.t1");
 
         reloadV2StoragePool();
     }
@@ -93,10 +111,7 @@ public:
         return storage_pool_mix->newLogReader(nullptr, snapshot);
     }
 
-    PageReaderPtr newMixedPageReader()
-    {
-        return storage_pool_mix->newLogReader(nullptr, true, "PageStorageMixedTest");
-    }
+    PageReaderPtr newMixedPageReader() { return storage_pool_mix->newLogReader(nullptr, true, "PageStorageMixedTest"); }
 
     void reloadV2StoragePool()
     {
@@ -154,8 +169,7 @@ inline ::testing::AssertionResult getPageCompare(
     if (strncmp(page_cmp.data.begin(), buff_cmp, buf_size) != 0)
     {
         return ::testing::AssertionFailure( //
-            ::testing::Message(
-                "Page data not match the buffer"));
+            ::testing::Message("Page data not match the buffer"));
     }
 
     return ::testing::AssertionSuccess();

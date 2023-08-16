@@ -33,12 +33,12 @@ public:
     DebugBlockInputStream(BlocksList & blocks, bool is_common_handle_)
         : BlocksListBlockInputStream(std::move(blocks))
         , is_common_handle(is_common_handle_)
-    {
-    }
+    {}
     String getName() const override { return "Debug"; }
     Block getHeader() const override
     {
-        auto cds = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+        auto cds = DMTestEnv::getDefaultColumns(
+            is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         cds->push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
         return toEmptyBlock(*cds);
     }
@@ -59,7 +59,10 @@ BlockInputStreamPtr genColumnProjInputStream(BlocksList & blocks, const ColumnDe
         columns);
 }
 
-BlockInputStreamPtr genDeleteFilterInputStream(BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
+BlockInputStreamPtr genDeleteFilterInputStream(
+    BlocksList & blocks,
+    const ColumnDefines & columns,
+    bool is_common_handle)
 {
     ColumnDefine handle_define(
         TiDBPkColumnID,

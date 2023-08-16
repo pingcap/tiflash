@@ -26,7 +26,8 @@ class Context;
 
 /** System table "build_options" with many params used for clickhouse building
   */
-class StorageSystemBuildOptions : public ext::SharedPtrHelper<StorageSystemBuildOptions>
+class StorageSystemBuildOptions
+    : public ext::SharedPtrHelper<StorageSystemBuildOptions>
     , public IStorage
 {
 public:

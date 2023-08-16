@@ -27,14 +27,8 @@ public:
         , v(true)
     {}
 
-    bool valid() const
-    {
-        return v;
-    }
-    void setInvalid()
-    {
-        v = false;
-    }
+    bool valid() const { return v; }
+    void setInvalid() { v = false; }
 
 public:
     uint64_t pool_id;

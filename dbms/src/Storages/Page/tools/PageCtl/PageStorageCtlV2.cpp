@@ -34,8 +34,9 @@ DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
 
 void Usage()
 {
-    fprintf(stderr,
-            R"HELP(
+    fprintf(
+        stderr,
+        R"HELP(
 Usage: <path> <mode>
     mode == 1 -> dump all page entries
             2 -> dump valid page entries
@@ -50,15 +51,16 @@ Usage: <path> <mode>
 
 void printPageEntry(const DB::PageIdU64 pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9llu\t\t"
-           "%9llu\t%9u\t%9llu\t%9llu\t%9llu\t%016llu\n",
-           pid, //
-           entry.file_id,
-           entry.level,
-           entry.size,
-           entry.offset,
-           entry.tag,
-           entry.checksum);
+    printf(
+        "\tpid:%9llu\t\t"
+        "%9llu\t%9u\t%9llu\t%9llu\t%9llu\t%016llu\n",
+        pid, //
+        entry.file_id,
+        entry.level,
+        entry.size,
+        entry.offset,
+        entry.tag,
+        entry.checksum);
 }
 
 enum DebugMode
@@ -222,11 +224,9 @@ catch (const DB::Exception & e)
     std::string text = e.displayText();
 
     auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl
-              << std::endl;
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
     if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl
-                  << e.getStackTrace().toString() << std::endl;
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
 
     return -1;
 }
@@ -262,20 +262,25 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
                 case DB::WriteBatchWriteType::DEL:
-                    printf("DEL\t%llu\t%llu\t%u\n", //
-                           record.page_id,
-                           page_file.getFileId(),
-                           page_file.getLevel());
+                    printf(
+                        "DEL\t%llu\t%llu\t%u\n", //
+                        record.page_id,
+                        page_file.getFileId(),
+                        page_file.getLevel());
                     break;
                 case DB::WriteBatchWriteType::REF:
-                    printf("REF\t%llu\t%llu\t\t%llu\t%u\n", //
-                           record.page_id,
-                           record.ori_page_id,
-                           page_file.getFileId(),
-                           page_file.getLevel());
+                    printf(
+                        "REF\t%llu\t%llu\t\t%llu\t%u\n", //
+                        record.page_id,
+                        record.ori_page_id,
+                        page_file.getFileId(),
+                        page_file.getLevel());
                     break;
                 default:
-                    throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "illegal type: {}", magic_enum::enum_name(record.type));
+                    throw DB::Exception(
+                        DB::ErrorCodes::LOGICAL_ERROR,
+                        "illegal type: {}",
+                        magic_enum::enum_name(record.type));
                     break;
                 }
             }
@@ -334,15 +339,16 @@ void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, co
         global_total_size += total_size;
         global_total_valid_size += valid_size;
         // PageFileId, level, size, valid size, valid percentage
-        printf("%s\t"
-               "%9.2f\t%9.2f\t%9.2f%%\t"
-               "%6zu"
-               "\n",
-               page_file.toString().c_str(),
-               total_size / MB,
-               valid_size / MB,
-               total_size == 0 ? 0 : (100.0 * valid_size / total_size),
-               valid_pages.size());
+        printf(
+            "%s\t"
+            "%9.2f\t%9.2f\t%9.2f%%\t"
+            "%6zu"
+            "\n",
+            page_file.toString().c_str(),
+            total_size / MB,
+            valid_size / MB,
+            total_size == 0 ? 0 : (100.0 * valid_size / total_size),
+            valid_pages.size());
     }
     printf("Total size: %.2f MB over %.2f MB\n", global_total_valid_size / MB, global_total_size / MB);
 }

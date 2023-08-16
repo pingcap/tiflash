@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <set>
-
 #include <Core/Block.h>
 #include <Parsers/IAST.h>
+
+#include <set>
 
 
 namespace DB
@@ -58,6 +58,6 @@ std::multiset<T1> extractSingleValueFromBlock(const Block & block, const String 
     return res;
 }
 
-}
+} // namespace VirtualColumnUtils
 
-}
+} // namespace DB

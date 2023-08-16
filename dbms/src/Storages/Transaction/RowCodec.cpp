@@ -153,9 +153,10 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
     else if (table_info.is_common_handle)
         column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
     if (table_info.columns.size() < fields.size() + column_in_key)
-        throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
-                            + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
+                + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
+            ErrorCodes::LOGICAL_ERROR);
 
     size_t encoded_fields_idx = 0;
     for (const auto & column_info : table_info.columns)
@@ -184,9 +185,10 @@ struct RowEncoderV2
         else if (table_info.is_common_handle)
             column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
         if (table_info.columns.size() < fields.size() + column_in_key)
-            throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
-                                + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
+                    + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
+                ErrorCodes::LOGICAL_ERROR);
 
         bool is_big = false;
         size_t value_length = 0;
@@ -233,10 +235,12 @@ struct RowEncoderV2
         /// Encode column numbers and IDs.
         encodeUInt(static_cast<UInt16>(num_not_null_columns), ss);
         encodeUInt(static_cast<UInt16>(num_null_columns), ss);
-        is_big ? encodeColumnIDs<RowV2::Types<true>::ColumnIDType>(ss) : encodeColumnIDs<RowV2::Types<false>::ColumnIDType>(ss);
+        is_big ? encodeColumnIDs<RowV2::Types<true>::ColumnIDType>(ss)
+               : encodeColumnIDs<RowV2::Types<false>::ColumnIDType>(ss);
 
         /// Encode value offsets.
-        is_big ? encodeValueOffsets<RowV2::Types<true>::ValueOffsetType>(ss) : encodeValueOffsets<RowV2::Types<false>::ValueOffsetType>(ss);
+        is_big ? encodeValueOffsets<RowV2::Types<true>::ValueOffsetType>(ss)
+               : encodeValueOffsets<RowV2::Types<false>::ValueOffsetType>(ss);
 
         /// Encode values.
         encodeValues(ss);
@@ -345,15 +349,47 @@ bool appendRowToBlock(
     {
         auto row_flag = readLittleEndian<UInt8>(&raw_value[1]);
         bool is_big = row_flag & RowV2::BigRowMask;
-        return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, ignore_pk_if_absent, force_decode)
-                      : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, ignore_pk_if_absent, force_decode);
+        return is_big ? appendRowV2ToBlockImpl<true>(
+                   raw_value,
+                   column_ids_iter,
+                   column_ids_iter_end,
+                   block,
+                   block_column_pos,
+                   column_infos,
+                   pk_handle_id,
+                   ignore_pk_if_absent,
+                   force_decode)
+                      : appendRowV2ToBlockImpl<false>(
+                          raw_value,
+                          column_ids_iter,
+                          column_ids_iter_end,
+                          block,
+                          block_column_pos,
+                          column_infos,
+                          pk_handle_id,
+                          ignore_pk_if_absent,
+                          force_decode);
     }
     default:
-        return appendRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, ignore_pk_if_absent, force_decode);
+        return appendRowV1ToBlock(
+            raw_value,
+            column_ids_iter,
+            column_ids_iter_end,
+            block,
+            block_column_pos,
+            column_infos,
+            pk_handle_id,
+            ignore_pk_if_absent,
+            force_decode);
     }
 }
 
-inline bool addDefaultValueToColumnIfPossible(const ColumnInfo & column_info, Block & block, size_t block_column_pos, bool ignore_pk_if_absent, bool force_decode)
+inline bool addDefaultValueToColumnIfPossible(
+    const ColumnInfo & column_info,
+    Block & block,
+    size_t block_column_pos,
+    bool ignore_pk_if_absent,
+    bool force_decode)
 {
     // We consider a missing column could be safely filled with NULL, unless it has not default value and is NOT NULL.
     // This could saves lots of unnecessary schema syncs for old data with a newer schema that has newly added columns.
@@ -404,9 +440,21 @@ bool appendRowV2ToBlockImpl(
     std::vector<ColumnID> not_null_column_ids;
     std::vector<ColumnID> null_column_ids;
     std::vector<size_t> value_offsets;
-    decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(cursor, raw_value, num_not_null_columns, not_null_column_ids);
-    decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(cursor, raw_value, num_null_columns, null_column_ids);
-    decodeUInts<size_t, typename RowV2::Types<is_big>::ValueOffsetType>(cursor, raw_value, num_not_null_columns, value_offsets);
+    decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(
+        cursor,
+        raw_value,
+        num_not_null_columns,
+        not_null_column_ids);
+    decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(
+        cursor,
+        raw_value,
+        num_null_columns,
+        null_column_ids);
+    decodeUInts<size_t, typename RowV2::Types<is_big>::ValueOffsetType>(
+        cursor,
+        raw_value,
+        num_not_null_columns,
+        value_offsets);
     size_t values_start_pos = cursor;
     size_t idx_not_null = 0;
     size_t idx_null = 0;
@@ -447,7 +495,12 @@ bool appendRowV2ToBlockImpl(
             // a column.
             // Fill with default value and continue to read data for next column id.
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
+            if (!addDefaultValueToColumnIfPossible(
+                    column_info,
+                    block,
+                    block_column_pos,
+                    ignore_pk_if_absent,
+                    force_decode))
                 return false;
             column_ids_iter++;
             block_column_pos++;
@@ -484,8 +537,10 @@ bool appendRowV2ToBlockImpl(
                     }
                     else
                     {
-                        throw Exception("Detected invalid null when decoding data of column " + column_info.name + " with column type " + raw_column->getName(),
-                                        ErrorCodes::LOGICAL_ERROR);
+                        throw Exception(
+                            "Detected invalid null when decoding data of column " + column_info.name
+                                + " with column type " + raw_column->getName(),
+                            ErrorCodes::LOGICAL_ERROR);
                     }
                 }
                 // ColumnNullable::insertDefault just insert a null value
@@ -509,7 +564,12 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
+            if (!addDefaultValueToColumnIfPossible(
+                    column_info,
+                    block,
+                    block_column_pos,
+                    ignore_pk_if_absent,
+                    force_decode))
                 return false;
         }
         column_ids_iter++;
@@ -541,8 +601,9 @@ bool appendRowV1ToBlock(
         decoded_fields.emplace(col_id, DecodeDatum(cursor, raw_value));
     }
     if (cursor != raw_value.size())
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": cursor is not end, remaining: " + raw_value.substr(cursor),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            std::string(__PRETTY_FUNCTION__) + ": cursor is not end, remaining: " + raw_value.substr(cursor),
+            ErrorCodes::LOGICAL_ERROR);
 
     auto decoded_field_iter = decoded_fields.begin();
     while (decoded_field_iter != decoded_fields.end())
@@ -564,7 +625,12 @@ bool appendRowV1ToBlock(
         else if (column_ids_iter->first < next_field_column_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
+            if (!addDefaultValueToColumnIfPossible(
+                    column_info,
+                    block,
+                    block_column_pos,
+                    ignore_pk_if_absent,
+                    force_decode))
                 return false;
             column_ids_iter++;
             block_column_pos++;
@@ -592,9 +658,10 @@ bool appendRowV1ToBlock(
                 // Otherwise return false to outer, outer should sync schema and try again.
                 if (force_decode)
                 {
-                    throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
-                                        + column_info.name + " with column " + raw_column->getName(),
-                                    ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>())
+                            + " of column " + column_info.name + " with column " + raw_column->getName(),
+                        ErrorCodes::LOGICAL_ERROR);
                 }
 
                 return false;
@@ -606,9 +673,10 @@ bool appendRowV1ToBlock(
                 // Otherwise return false to outer, outer should sync schema and try again.
                 if (force_decode)
                 {
-                    throw Exception("Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
-                                        + " of column " + column_info.name + " with type " + raw_column->getName(),
-                                    ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
+                            + " of column " + column_info.name + " with type " + raw_column->getName(),
+                        ErrorCodes::LOGICAL_ERROR);
                 }
 
                 return false;
@@ -624,7 +692,12 @@ bool appendRowV1ToBlock(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
+            if (!addDefaultValueToColumnIfPossible(
+                    column_info,
+                    block,
+                    block_column_pos,
+                    ignore_pk_if_absent,
+                    force_decode))
                 return false;
         }
         column_ids_iter++;

@@ -116,10 +116,11 @@ protected:
 
     struct TestCase
     {
-        TestCase(std::string_view seg_data_,
-                 size_t expected_size_,
-                 std::string_view expected_row_id_,
-                 std::string_view expected_handle_)
+        TestCase(
+            std::string_view seg_data_,
+            size_t expected_size_,
+            std::string_view expected_row_id_,
+            std::string_view expected_handle_)
             : seg_data(seg_data_)
             , expected_size(expected_size_)
             , expected_row_id(expected_row_id_)
@@ -155,88 +156,56 @@ protected:
 TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
-    runTestCase(TestCase(
-        "d_mem:[0, 1000)",
-        1000,
-        "[0, 1000)",
-        "[0, 1000)"));
+    runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory2)
 try
 {
-    runTestCase(TestCase{
-        "d_mem:[0, 1000)|d_mem:[0, 1000)",
-        1000,
-        "[1000, 2000)",
-        "[0, 1000)"});
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem:[0, 1000)", 1000, "[1000, 2000)", "[0, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory3)
 try
 {
-    runTestCase(TestCase{
-        "d_mem:[0, 1000)|d_mem:[100, 200)",
-        1000,
-        "[0, 100)|[1000, 1100)|[200, 1000)",
-        "[0, 1000)"});
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem:[100, 200)", 1000, "[0, 100)|[1000, 1100)|[200, 1000)", "[0, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory4)
 try
 {
-    runTestCase(TestCase{
-        "d_mem:[0, 1000)|d_mem:[-100, 100)",
-        1100,
-        "[1000, 1200)|[100, 1000)",
-        "[-100, 1000)"});
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem:[-100, 100)", 1100, "[1000, 1200)|[100, 1000)", "[-100, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory5)
 try
 {
-    runTestCase(TestCase{
-        "d_mem:[0, 1000)|d_mem_del:[0, 1000)",
-        0,
-        "",
-        ""});
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[0, 1000)", 0, "", ""});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory6)
 try
 {
-    runTestCase(TestCase{
-        "d_mem:[0, 1000)|d_mem_del:[100, 200)",
-        900,
-        "[0, 100)|[200, 1000)",
-        "[0, 100)|[200, 1000)"});
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[100, 200)", 900, "[0, 100)|[200, 1000)", "[0, 100)|[200, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory7)
 try
 {
-    runTestCase(TestCase{
-        "d_mem:[0, 1000)|d_mem_del:[-100, 100)",
-        900,
-        "[100, 1000)",
-        "[100, 1000)"});
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[-100, 100)", 900, "[100, 1000)", "[100, 1000)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Tiny1)
 try
 {
-    runTestCase(TestCase{
-        "d_tiny:[100, 500)|d_mem:[200, 1000)",
-        900,
-        "[0, 100)|[400, 1200)",
-        "[100, 1000)"});
+    runTestCase(TestCase{"d_tiny:[100, 500)|d_mem:[200, 1000)", 900, "[0, 100)|[400, 1200)", "[100, 1000)"});
 }
 CATCH
 
@@ -276,22 +245,14 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, Stable1)
 try
 {
-    runTestCase(TestCase{
-        "s:[0, 1024)",
-        1024,
-        "[0, 1024)",
-        "[0, 1024)"});
+    runTestCase(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"});
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Stable2)
 try
 {
-    runTestCase(TestCase{
-        "s:[0, 1024)|d_dr:[0, 1023)",
-        1,
-        "[1023, 1024)",
-        "[1023, 1024)"});
+    runTestCase(TestCase{"s:[0, 1024)|d_dr:[0, 1023)", 1, "[1023, 1024)", "[1023, 1024)"});
 }
 CATCH
 

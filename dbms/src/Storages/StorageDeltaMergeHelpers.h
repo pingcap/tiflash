@@ -46,14 +46,22 @@ inline DM::RowKeyRanges getQueryRanges(
         if (!region_info.required_handle_ranges.empty())
         {
             for (const auto & handle_range : region_info.required_handle_ranges)
-                ranges.push_back(
-                    DM::RowKeyRange::fromRegionRange(handle_range, table_id, table_id, is_common_handle, rowkey_column_size));
+                ranges.push_back(DM::RowKeyRange::fromRegionRange(
+                    handle_range,
+                    table_id,
+                    table_id,
+                    is_common_handle,
+                    rowkey_column_size));
         }
         else
         {
             /// only used for test cases
-            ranges.push_back(
-                DM::RowKeyRange::fromRegionRange(region_info.range_in_table, table_id, table_id, is_common_handle, rowkey_column_size));
+            ranges.push_back(DM::RowKeyRange::fromRegionRange(
+                region_info.range_in_table,
+                table_id,
+                table_id,
+                is_common_handle,
+                rowkey_column_size));
         }
     }
     if (ranges.empty())

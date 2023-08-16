@@ -34,7 +34,9 @@ void ManagedStorages::put(ManageableStoragePtr storage)
     {
         // If table already exists, and is not created through ch-client (which table_id could be unspecified)
         // throw Exception
-        throw Exception("TiDB table with id " + DB::toString(table_id) + " already exists.", ErrorCodes::TIDB_TABLE_ALREADY_EXISTS);
+        throw Exception(
+            "TiDB table with id " + DB::toString(table_id) + " already exists.",
+            ErrorCodes::TIDB_TABLE_ALREADY_EXISTS);
     }
     storages.emplace(keyspace_table_id, storage);
     auto [it, _] = keyspaces.try_emplace(keyspace_id, 0);
@@ -62,14 +64,21 @@ KeyspaceSet ManagedStorages::getAllKeyspaces() const
     return keyspaces;
 }
 
-ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table, bool include_tombstone) const
+ManageableStoragePtr ManagedStorages::getByName(
+    const std::string & db,
+    const std::string & table,
+    bool include_tombstone) const
 {
     std::lock_guard lock(mutex);
 
-    auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<KeyspaceTableID, ManageableStoragePtr> & pair) {
-        const auto & storage = pair.second;
-        return (include_tombstone || !storage->isTombstone()) && storage->getDatabaseName() == db && storage->getTableInfo().name == table;
-    });
+    auto it = std::find_if(
+        storages.begin(),
+        storages.end(),
+        [&](const std::pair<KeyspaceTableID, ManageableStoragePtr> & pair) {
+            const auto & storage = pair.second;
+            return (include_tombstone || !storage->isTombstone()) && storage->getDatabaseName() == db
+                && storage->getTableInfo().name == table;
+        });
     if (it == storages.end())
         return nullptr;
     return it->second;

@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <sstream>
-
+#include <Common/Exception.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
-#include <Common/Exception.h>
+
+#include <sstream>
 
 namespace DB
 {
@@ -47,10 +47,10 @@ inline static const char * handleIDTypeToString(HandleIDType type)
 {
     switch (type)
     {
-        case NORMAL:
-            return "NORMAL";
-        case MAX:
-            return "MAX";
+    case NORMAL:
+        return "NORMAL";
+    case MAX:
+        return "MAX";
     }
     throw Exception("handleIDTypeToString fail", ErrorCodes::LOGICAL_ERROR);
 }
@@ -78,7 +78,10 @@ struct Handle
 
     bool operator<=(const Handle & handle) const { return !(*this > handle); }
 
-    HandleType operator-(const Handle & handle) const { return subtract(handle, DummyIdentity<std::is_same_v<HandleType, Int64>>()); }
+    HandleType operator-(const Handle & handle) const
+    {
+        return subtract(handle, DummyIdentity<std::is_same_v<HandleType, Int64>>());
+    }
 
     bool operator==(const Handle & handle) const { return type == handle.type && handle_id == handle.handle_id; }
 
@@ -110,9 +113,15 @@ struct Handle
     operator const HandleType &() = delete;
 
     Handle() = default;
-    Handle(const HandleIDType type_, const HandleType handle_id_) : type(type_), handle_id(handle_id_) {}
+    Handle(const HandleIDType type_, const HandleType handle_id_)
+        : type(type_)
+        , handle_id(handle_id_)
+    {}
     // not explicit, can be transferred from HandleType
-    Handle(const HandleType handle_id_) : type(HandleIDType::NORMAL), handle_id(handle_id_) {}
+    Handle(const HandleType handle_id_)
+        : type(HandleIDType::NORMAL)
+        , handle_id(handle_id_)
+    {}
 
 private:
     HandleType subtract(const Handle & handle, DummyIdentity<true>) const
@@ -127,7 +136,8 @@ private:
 };
 
 template <typename HandleType>
-const Handle<HandleType> Handle<HandleType>::normal_min = Handle<HandleType>(HandleIDType::NORMAL, std::numeric_limits<HandleType>::min());
+const Handle<HandleType> Handle<HandleType>::normal_min
+    = Handle<HandleType>(HandleIDType::NORMAL, std::numeric_limits<HandleType>::min());
 
 template <typename HandleType>
 const Handle<HandleType> Handle<HandleType>::max = Handle<HandleType>(HandleIDType::MAX, 0);

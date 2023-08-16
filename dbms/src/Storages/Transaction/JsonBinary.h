@@ -140,7 +140,9 @@ public:
 
     /// Extract receives several path expressions as arguments, matches them in bj, and returns true if any match:
     ///	Serialize final results in 'write_buffer'
-    bool extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer);
+    bool extract(
+        std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+        JsonBinaryWriteBuffer & write_buffer);
 
     static String unquoteString(const StringRef & ref);
     static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
@@ -160,7 +162,8 @@ private:
     StringRef getSubRef(size_t offset, size_t length) const;
 
     JsonBinary getArrayElement(size_t index) const;
-    String getObjectKey(size_t index) const; /// Expect object key not be too long, use String instead of StringRef as return type
+    String getObjectKey(
+        size_t index) const; /// Expect object key not be too long, use String instead of StringRef as return type
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;
 
@@ -169,15 +172,23 @@ private:
     void marshalArrayTo(JsonBinaryWriteBuffer & write_buffer) const;
 
     /// 'one' parameter is not used now, copied from TiDB's implementation, for future usage
-    void extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonPathExprRawPtr path_expr_ptr, DupCheckSet & dup_check_set, bool one) const;
+    void extractTo(
+        std::vector<JsonBinary> & json_binary_vec,
+        ConstJsonPathExprRawPtr path_expr_ptr,
+        DupCheckSet & dup_check_set,
+        bool one) const;
     /// Use binary search, since keys are guaranteed to be ascending ordered
     UInt32 binarySearchKey(const JsonPathObjectKey & key, UInt32 element_count) const;
     std::optional<JsonBinary> searchObjectKey(JsonPathObjectKey & key) const;
 
     template <class WriteBuffer>
     static void unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & write_buffer);
-    static void buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
-    static void buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer);
+    static void buildBinaryJsonElementsInBuffer(
+        const std::vector<JsonBinary> & json_binary_vec,
+        JsonBinaryWriteBuffer & write_buffer);
+    static void buildBinaryJsonArrayInBuffer(
+        const std::vector<JsonBinary> & json_binary_vec,
+        JsonBinaryWriteBuffer & write_buffer);
     static void marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f);
     static void marshalLiteralTo(JsonBinaryWriteBuffer & write_buffer, UInt8 lit_type);
     static void marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const StringRef & ref);

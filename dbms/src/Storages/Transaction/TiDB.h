@@ -201,19 +201,10 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                      \
-    inline bool has##f##Flag() const \
-    {                                \
-        return (flag & (v)) != 0;    \
-    }                                \
-    inline void set##f##Flag()       \
-    {                                \
-        flag |= (v);                 \
-    }                                \
-    inline void clear##f##Flag()     \
-    {                                \
-        flag &= (~(v));              \
-    }
+#define M(f, v)                                                    \
+    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
+    inline void set##f##Flag() { flag |= (v); }                    \
+    inline void clear##f##Flag() { flag &= (~(v)); }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -390,7 +381,8 @@ struct TableInfo
     bool is_view = false;
     // If the table is sequence, we should ignore it.
     bool is_sequence = false;
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO(hyy):can be removed after removing RegionPtrWithBlock
+    Int64 schema_version
+        = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO(hyy):can be removed after removing RegionPtrWithBlock
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
@@ -405,9 +397,13 @@ struct TableInfo
 
     std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 
-    TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper) const;
+    TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper)
+        const;
 
-    bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
+    bool isLogicalPartitionTable() const
+    {
+        return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable;
+    }
 
     /// should not be called if is_common_handle = false.
     const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
@@ -422,6 +418,7 @@ String genJsonNull();
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
-std::vector<ColumnInfo> toTiDBColumnInfos(const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
+std::vector<ColumnInfo> toTiDBColumnInfos(
+    const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & tipb_column_infos);
 
 } // namespace TiDB

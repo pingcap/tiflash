@@ -148,9 +148,10 @@ StorageSystemTables::StorageSystemTables(const std::string & name_)
         {"metadata_path", std::make_shared<DataTypeString>()},
     }));
 
-    virtual_columns = {{std::make_shared<DataTypeDateTime>(), "metadata_modification_time"},
-                       {std::make_shared<DataTypeString>(), "create_table_query"},
-                       {std::make_shared<DataTypeString>(), "engine_full"}};
+    virtual_columns
+        = {{std::make_shared<DataTypeDateTime>(), "metadata_modification_time"},
+           {std::make_shared<DataTypeString>(), "create_table_query"},
+           {std::make_shared<DataTypeString>(), "engine_full"}};
 }
 
 
@@ -166,12 +167,13 @@ static ColumnPtr getFilteredDatabases(const ASTPtr & query, const Context & cont
 }
 
 
-BlockInputStreams StorageSystemTables::read(const Names & column_names,
-                                            const SelectQueryInfo & query_info,
-                                            const Context & context,
-                                            QueryProcessingStage::Enum & processed_stage,
-                                            const size_t /*max_block_size*/,
-                                            const unsigned /*num_streams*/)
+BlockInputStreams StorageSystemTables::read(
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    QueryProcessingStage::Enum & processed_stage,
+    const size_t /*max_block_size*/,
+    const unsigned /*num_streams*/)
 {
     processed_stage = QueryProcessingStage::FetchColumns;
 
@@ -181,8 +183,9 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
     bool has_engine_full = false;
 
     VirtualColumnsProcessor virtual_columns_processor(virtual_columns);
-    real_column_names
-        = virtual_columns_processor.process(column_names, {&has_metadata_modification_time, &has_create_table_query, &has_engine_full});
+    real_column_names = virtual_columns_processor.process(
+        column_names,
+        {&has_metadata_modification_time, &has_create_table_query, &has_engine_full});
     check(real_column_names);
 
     Block res_block = getSampleBlock();
@@ -222,7 +225,8 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
             String tidb_table_name;
             TableID table_id = -1;
             Timestamp tombstone = 0;
-            if (engine_name == MutableSupport::txn_storage_name || engine_name == MutableSupport::delta_tree_storage_name)
+            if (engine_name == MutableSupport::txn_storage_name
+                || engine_name == MutableSupport::delta_tree_storage_name)
             {
                 auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(iterator->table());
                 if (managed_storage)
@@ -246,7 +250,8 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
             res_columns[j++]->insert(database->getTableMetadataPath(table_name));
 
             if (has_metadata_modification_time)
-                res_columns[j++]->insert(static_cast<UInt64>(database->getTableMetadataModificationTime(context, table_name)));
+                res_columns[j++]->insert(
+                    static_cast<UInt64>(database->getTableMetadataModificationTime(context, table_name)));
 
             if (has_create_table_query || has_engine_full)
             {

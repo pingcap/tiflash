@@ -29,7 +29,10 @@ Page RaftDataReader::read(const UniversalPageId & page_id)
     return uni_ps.read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
 }
 
-void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
+void RaftDataReader::traverse(
+    const UniversalPageId & start,
+    const UniversalPageId & end,
+    const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
 {
     auto transformed_end = end.empty() ? UniversalPageId(raft_data_end_key, 1) : end;
     auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, transformed_end));
@@ -49,7 +52,10 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
     }
 }
 
-void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
+void RaftDataReader::traverseRemoteRaftLogForRegion(
+    UInt64 region_id,
+    const std::function<
+        void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
 {
     auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
     auto end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);

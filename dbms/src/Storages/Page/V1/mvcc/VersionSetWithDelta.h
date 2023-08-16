@@ -86,8 +86,7 @@ public:
         , //
         config(config_)
         , log(log_)
-    {
-    }
+    {}
 
     virtual ~VersionSetWithDelta()
     {
@@ -239,7 +238,10 @@ protected:
         return RebaseResult::SUCCESS;
     }
 
-    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_write_mutex); }
+    std::unique_lock<std::shared_mutex> acquireForLock()
+    {
+        return std::unique_lock<std::shared_mutex>(read_write_mutex);
+    }
 
     // Return true if `tail` is in current version-list
     bool isValidVersion(const VersionPtr tail) const

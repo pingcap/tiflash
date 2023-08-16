@@ -93,17 +93,18 @@ struct DMContext : private boost::noncopyable
     const ScanContextPtr scan_context;
 
 public:
-    DMContext(const Context & db_context_,
-              const StoragePathPoolPtr & path_pool_,
-              const StoragePoolPtr & storage_pool_,
-              const DB::Timestamp min_version_,
-              KeyspaceID keyspace_id_,
-              TableID physical_table_id_,
-              bool is_common_handle_,
-              size_t rowkey_column_size_,
-              const DB::Settings & settings,
-              const ScanContextPtr scan_context_ = nullptr,
-              const String & tracing_id_ = "")
+    DMContext(
+        const Context & db_context_,
+        const StoragePathPoolPtr & path_pool_,
+        const StoragePoolPtr & storage_pool_,
+        const DB::Timestamp min_version_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const DB::Settings & settings,
+        const ScanContextPtr scan_context_ = nullptr,
+        const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
@@ -129,16 +130,12 @@ public:
         , enable_skippable_place(settings.dt_enable_skippable_place)
         , tracing_id(tracing_id_)
         , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
-    {
-    }
+    {}
 
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
 
-    DM::DMConfigurationOpt createChecksumConfig() const
-    {
-        return DMChecksumConfig::fromDBContext(db_context);
-    }
+    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(db_context); }
 };
 
 } // namespace DM

@@ -48,7 +48,9 @@ struct RefTuple
     RefTuple(const ColumnAndValues & values_)
         : values(values_)
     {
-        std::sort(values.begin(), values.end(), [](const ColumnAndValue & a, const ColumnAndValue & b) { return a.column < b.column; });
+        std::sort(values.begin(), values.end(), [](const ColumnAndValue & a, const ColumnAndValue & b) {
+            return a.column < b.column;
+        });
     }
 };
 

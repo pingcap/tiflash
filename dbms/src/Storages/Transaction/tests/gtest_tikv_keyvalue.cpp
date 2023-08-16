@@ -176,37 +176,35 @@ TEST(TiKVKeyValueTest, PortedTests)
             RegionLockCFData d;
             auto k1 = RecordKVFormat::genKey(1, 123);
             auto k2 = RecordKVFormat::genKey(1, 124);
-            d.insert(TiKVKey::copyFrom(k1),
-                     RecordKVFormat::encodeLockCfValue(
-                         Region::PutFlag,
-                         "primary key",
-                         8765,
-                         std::numeric_limits<UInt64>::max(),
-                         nullptr,
-                         66666));
-            d.insert(TiKVKey::copyFrom(k2),
-                     RecordKVFormat::encodeLockCfValue(
-                         RecordKVFormat::LockType::Lock,
-                         "",
-                         8,
-                         20));
-            d.insert(TiKVKey::copyFrom(k2),
-                     RecordKVFormat::encodeLockCfValue(
-                         RecordKVFormat::LockType::Pessimistic,
-                         "",
-                         8,
-                         20));
-            d.insert(TiKVKey::copyFrom(k2),
-                     RecordKVFormat::encodeLockCfValue(
-                         Region::DelFlag,
-                         "primary key",
-                         5678,
-                         std::numeric_limits<UInt64>::max(),
-                         nullptr,
-                         66666));
+            d.insert(
+                TiKVKey::copyFrom(k1),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::PutFlag,
+                    "primary key",
+                    8765,
+                    std::numeric_limits<UInt64>::max(),
+                    nullptr,
+                    66666));
+            d.insert(
+                TiKVKey::copyFrom(k2),
+                RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Lock, "", 8, 20));
+            d.insert(
+                TiKVKey::copyFrom(k2),
+                RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Pessimistic, "", 8, 20));
+            d.insert(
+                TiKVKey::copyFrom(k2),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::DelFlag,
+                    "primary key",
+                    5678,
+                    std::numeric_limits<UInt64>::max(),
+                    nullptr,
+                    66666));
             ASSERT_TRUE(d.getSize() == 2);
             ASSERT_TRUE(
-                std::get<2>(d.getData().find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})->second)
+                std::get<2>(d.getData()
+                                .find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})
+                                ->second)
                     ->lock_version
                 == 5678);
             d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k1.data(), k1.dataSize())}, true);
@@ -217,7 +215,8 @@ TEST(TiKVKeyValueTest, PortedTests)
     }
 
     {
-        auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max(), "value");
+        auto write_value
+            = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max(), "value");
         auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
         ASSERT_TRUE(write_record);
         ASSERT_TRUE(Region::DelFlag == write_record->write_type);
@@ -227,12 +226,18 @@ TEST(TiKVKeyValueTest, PortedTests)
         d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value"));
         ASSERT_TRUE(d.getSize() == 1);
 
-        ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true)) == 0);
+        ASSERT_TRUE(
+            d.insert(
+                RecordKVFormat::genKey(1, 2, 3),
+                RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true))
+            == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
-        ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3),
-                             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
-                    == 0);
+        ASSERT_TRUE(
+            d.insert(
+                RecordKVFormat::genKey(1, 2, 3),
+                RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+            == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
         auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
@@ -250,7 +255,8 @@ TEST(TiKVKeyValueTest, PortedTests)
     }
 
     {
-        auto write_value = RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::RollbackFlag, 8888, "test");
+        auto write_value
+            = RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::RollbackFlag, 8888, "test");
         auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
         ASSERT_TRUE(!write_record);
     }
@@ -347,14 +353,18 @@ TEST(TiKVKeyValueTest, PortedTests)
     {
         TiKVKey start_key = RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min());
         TiKVKey end_key = RecordKVFormat::genKey(123, std::numeric_limits<Int64>::max());
-        ASSERT_TRUE(TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min()));
-        ASSERT_TRUE(TiKVRange::getRangeHandle<false>(end_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::max()));
+        ASSERT_TRUE(
+            TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min()));
+        ASSERT_TRUE(
+            TiKVRange::getRangeHandle<false>(end_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::max()));
 
         ASSERT_TRUE(TiKVRange::getRangeHandle<true>(start_key, 123) >= TiKVRange::Handle::normal_min);
         ASSERT_TRUE(TiKVRange::getRangeHandle<false>(end_key, 123) < TiKVRange::Handle::max);
 
         start_key = RecordKVFormat::encodeAsTiKVKey(RecordKVFormat::decodeTiKVKey(start_key) + "123");
-        ASSERT_TRUE(TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min() + 1));
+        ASSERT_TRUE(
+            TiKVRange::getRangeHandle<true>(start_key, 123)
+            == TiKVRange::Handle(std::numeric_limits<Int64>::min() + 1));
         ASSERT_TRUE(RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min() + 2) >= start_key);
         ASSERT_TRUE(RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min()) < start_key);
 
@@ -375,20 +385,23 @@ TEST(TiKVKeyValueTest, PortedTests)
     }
 
     {
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::normal_min});
+        auto [n, new_range]
+            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::normal_min});
         ASSERT_TRUE(n == 1);
         ASSERT_TRUE(new_range[0].first == new_range[0].second);
     }
 
     {
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::max, TiKVRange::Handle::max});
+        auto [n, new_range]
+            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::max, TiKVRange::Handle::max});
         ASSERT_TRUE(n == 1);
         ASSERT_TRUE(new_range[0].first == new_range[0].second);
     }
 
     {
         // 100000... , -1 (111111...), 0, 011111... ==> 0 ~ 111111...
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::max});
+        auto [n, new_range]
+            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::max});
         ASSERT_TRUE(n == 1);
         ASSERT_TRUE(CHTableHandle::UInt64TableHandle::normal_min == new_range[0].first);
         ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[0].second);
@@ -398,9 +411,13 @@ TEST(TiKVKeyValueTest, PortedTests)
         // 100000... , 111111...
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, -1});
         ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(TiKVRange::Handle::normal_min.handle_id)} == new_range[0].first);
+        ASSERT_TRUE(
+            CHTableHandle::UInt64TableHandle{static_cast<UInt64>(TiKVRange::Handle::normal_min.handle_id)}
+            == new_range[0].first);
         ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[0].second);
-        ASSERT_TRUE((new_range[0].second.handle_id - new_range[0].first.handle_id) == UInt64(-1 - TiKVRange::Handle::normal_min.handle_id));
+        ASSERT_TRUE(
+            (new_range[0].second.handle_id - new_range[0].first.handle_id)
+            == UInt64(-1 - TiKVRange::Handle::normal_min.handle_id));
     }
 
     {
@@ -496,7 +513,8 @@ try
 
     TiKVKey start, end;
     {
-        start = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
+        start
+            = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
         end = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
     }
     RegionRangeKeys range(std::move(start), std::move(end));

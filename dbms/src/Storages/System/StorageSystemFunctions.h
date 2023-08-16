@@ -27,7 +27,8 @@ class Context;
 /** Implements `functions`system table, which allows you to get a list
   * all normal and aggregate functions.
   */
-class StorageSystemFunctions : public ext::SharedPtrHelper<StorageSystemFunctions>
+class StorageSystemFunctions
+    : public ext::SharedPtrHelper<StorageSystemFunctions>
     , public IStorage
 {
 public:

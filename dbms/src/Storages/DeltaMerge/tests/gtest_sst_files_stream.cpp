@@ -35,8 +35,7 @@ namespace DM
 namespace tests
 {
 
-class SSTFilesToDTFilesOutputStreamTest
-    : public DB::base::TiFlashStorageTestBasic
+class SSTFilesToDTFilesOutputStreamTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     void SetUp() override
@@ -59,14 +58,15 @@ public:
         auto table_info = DM::tests::DMTestEnv::getMinimalTableInfo(/* table id */ 100, pk_type);
         auto astptr = DM::tests::DMTestEnv::getPrimaryKeyExpr("test_table", pk_type);
 
-        storage = StorageDeltaMerge::create("TiFlash",
-                                            "default" /* db_name */,
-                                            "test_table" /* table_name */,
-                                            table_info,
-                                            ColumnsDescription{columns},
-                                            astptr,
-                                            0,
-                                            db_context->getGlobalContext());
+        storage = StorageDeltaMerge::create(
+            "TiFlash",
+            "default" /* db_name */,
+            "test_table" /* table_name */,
+            table_info,
+            ColumnsDescription{columns},
+            astptr,
+            0,
+            db_context->getGlobalContext());
         storage->startup();
     }
 
@@ -81,7 +81,12 @@ public:
             if (start_key >= end_key)
                 break;
             auto this_block_size = std::min(static_cast<UInt64>(end_key - start_key), block_size);
-            auto block = DMTestEnv::prepareSimpleWriteBlock(start_key, start_key + static_cast<Int64>(this_block_size), false, pk_type, 2);
+            auto block = DMTestEnv::prepareSimpleWriteBlock(
+                start_key,
+                start_key + static_cast<Int64>(this_block_size),
+                false,
+                pk_type,
+                2);
             blocks.push_back(block);
             start_key += static_cast<Int64>(this_block_size);
         }
@@ -436,12 +441,13 @@ try
         abort_flag,
         *db_context);
 
-    EXPECT_THROW({
-        stream->writePrefix();
-        stream->write();
-        stream->writeSuffix();
-    },
-                 DB::Exception);
+    EXPECT_THROW(
+        {
+            stream->writePrefix();
+            stream->write();
+            stream->writeSuffix();
+        },
+        DB::Exception);
 
     stream->cancel();
 }
@@ -514,9 +520,7 @@ try
 
     auto sp = SyncPointCtl::enableInScope("before_SSTFilesToDTFilesOutputStream::handle_one");
     stream->writePrefix();
-    auto t = std::thread([&]() {
-        stream->write();
-    });
+    auto t = std::thread([&]() { stream->write(); });
     sp.waitAndPause();
     abort_flag->store(true, std::memory_order_seq_cst);
     sp.next();

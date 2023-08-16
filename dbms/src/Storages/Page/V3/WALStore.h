@@ -51,14 +51,16 @@ class WALStore
 public:
     constexpr static const char * wal_folder_prefix = "/wal";
 
-    static std::pair<WALStorePtr, WALStoreReaderPtr>
-    create(
+    static std::pair<WALStorePtr, WALStoreReaderPtr> create(
         String storage_name_,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
         const WALConfig & config);
 
-    WALStoreReaderPtr createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter);
+    WALStoreReaderPtr createReaderForFiles(
+        const String & identifier,
+        const LogFilenameSet & log_filenames,
+        const ReadLimiterPtr & read_limiter);
 
     void apply(String && serialized_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
@@ -86,13 +88,14 @@ public:
         // Note that persisted_log_files should not be empty for needSave() == true,
         // cause we get the largest log num from persisted_log_files as the new
         // file name.
-        bool isValid() const
-        {
-            return !persisted_log_files.empty();
-        }
+        bool isValid() const { return !persisted_log_files.empty(); }
     };
 
-    FilesSnapshot tryGetFilesSnapshot(size_t max_persisted_log_files, UInt64 snap_sequence, std::function<UInt64(const String & record)> max_sequence_getter, bool force);
+    FilesSnapshot tryGetFilesSnapshot(
+        size_t max_persisted_log_files,
+        UInt64 snap_sequence,
+        std::function<UInt64(const String & record)> max_sequence_getter,
+        bool force);
 
     bool saveSnapshot(
         FilesSnapshot && files_snap,
@@ -105,14 +108,14 @@ public:
     friend class tests::WALStoreTest; // for testing
 
 private:
-    WALStore(String storage_name,
-             const PSDiskDelegatorPtr & delegator_,
-             const FileProviderPtr & provider_,
-             Format::LogNumberType last_log_num_,
-             const WALConfig & config);
+    WALStore(
+        String storage_name,
+        const PSDiskDelegatorPtr & delegator_,
+        const FileProviderPtr & provider_,
+        Format::LogNumberType last_log_num_,
+        const WALConfig & config);
 
-    std::tuple<std::unique_ptr<LogWriter>, LogFilename>
-    createLogWriter(
+    std::tuple<std::unique_ptr<LogWriter>, LogFilename> createLogWriter(
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
         UInt64 snap_sequence,
         bool temp_file);
@@ -123,7 +126,9 @@ private:
 
     void removeLogFiles(const LogFilenameSet & log_filenames);
 
-    UInt64 getLogFileMaxSequence(const LogFilename & log_filename, std::function<UInt64(const String & record)> max_sequence_getter);
+    UInt64 getLogFileMaxSequence(
+        const LogFilename & log_filename,
+        std::function<UInt64(const String & record)> max_sequence_getter);
 
 private:
     const String storage_name;
