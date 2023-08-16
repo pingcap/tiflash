@@ -149,7 +149,13 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
-    template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc, bool is_order_by_col_nullable>
+    template <
+        typename AuxColType,
+        typename OrderByColType,
+        int CmpDataType,
+        bool is_begin,
+        bool is_desc,
+        bool is_order_by_col_nullable>
     RowNumber moveCursorAndFindFrameImpl(RowNumber cursor, AuxColType current_row_aux_value);
 
     RowNumber stepInPreceding(const RowNumber & moved_row, size_t step_num);
@@ -157,6 +163,7 @@ private:
 
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
+
 public:
     LoggerPtr log;
 

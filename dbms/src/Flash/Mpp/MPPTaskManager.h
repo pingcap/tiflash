@@ -150,7 +150,10 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter != monitored_tasks.end())
         {
-            LOG_WARNING(log, "task {} is repeatedly added to be monitored which is not an expected behavior!", task_unique_id);
+            LOG_WARNING(
+                log,
+                "task {} is repeatedly added to be monitored which is not an expected behavior!",
+                task_unique_id);
             return;
         }
 

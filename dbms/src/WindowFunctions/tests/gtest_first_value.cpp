@@ -77,7 +77,12 @@ public:
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
         mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, static_cast<Int64>(0));
+        mock_frame.end = buildRangeFrameBound(
+            tipb::WindowBoundType::Following,
+            tipb::RangeCmpDataType::Int,
+            ORDER_COL_NAME,
+            true,
+            static_cast<Int64>(0));
 
         {
             // Int type const column
@@ -94,7 +99,12 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Int,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -118,7 +128,12 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Float,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -146,7 +161,12 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Decimal,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -161,7 +181,12 @@ public:
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
         mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, static_cast<Int64>(0));
+        mock_frame.end = buildRangeFrameBound(
+            tipb::WindowBoundType::Following,
+            tipb::RangeCmpDataType::Float,
+            ORDER_COL_NAME,
+            true,
+            static_cast<Int64>(0));
 
         {
             // Int type const column
@@ -173,12 +198,18 @@ public:
                 {0, 1, 1, 1, 1, 0, 0, 0, 3, 10, 1, 1, 1, 1, 5, 15, 31}};
 
             auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
-            auto order_col = toVec<Float64>(/*order*/ {0.1, 1.0, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
+            auto order_col = toVec<Float64>(
+                /*order*/ {0.1, 1.0, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
             auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Float,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -197,12 +228,18 @@ public:
                 {0, 1, 1, 1, 8, 0, 0, 10, 10, 13, 1, 1, 3, 9, 15, 20, 31}};
 
             auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
-            auto order_col = toVec<Float64>(/*order*/ {0.1, 1.0, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
+            auto order_col = toVec<Float64>(
+                /*order*/ {0.1, 1.0, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
             auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Float,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -225,12 +262,18 @@ public:
                 {0, 1, 1, 1, 8, 0, 0, 10, 10, 13, 1, 1, 3, 9, 15, 20, 31}};
 
             auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
-            auto order_col = toVec<Float64>(/*order*/ {0.1, 1.0, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
+            auto order_col = toVec<Float64>(
+                /*order*/ {0.1, 1.0, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
             auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Float,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -245,7 +288,12 @@ public:
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
         mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, true, static_cast<Int64>(0));
+        mock_frame.end = buildRangeFrameBound(
+            tipb::WindowBoundType::Following,
+            tipb::RangeCmpDataType::Decimal,
+            ORDER_COL_NAME,
+            true,
+            static_cast<Int64>(0));
 
         {
             // Int type const column
@@ -282,7 +330,12 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Decimal,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -300,7 +353,12 @@ public:
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
         mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, static_cast<Int64>(0));
+        mock_frame.end = buildRangeFrameBound(
+            tipb::WindowBoundType::Following,
+            tipb::RangeCmpDataType::Int,
+            ORDER_COL_NAME,
+            true,
+            static_cast<Int64>(0));
 
         {
             std::vector<Int64> frame_start_range{0, 1, 3, 10};
@@ -316,7 +374,12 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Int,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
                 executeFunctionAndAssert(
                     toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),

@@ -23,10 +23,10 @@
 #include <Core/Field.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
+#include <WindowFunctions/WindowUtils.h>
 #include <common/UInt128.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
-#include <WindowFunctions/WindowUtils.h>
 
 #include <magic_enum.hpp>
 #include <tuple>
@@ -51,7 +51,10 @@ consteval bool checkIfSimpleNumericType()
 template <typename T>
 consteval bool checkIfDecimalFieldType()
 {
-    return std::is_same_v<T, DecimalField<Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>> || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
+    return std::is_same_v<
+               T,
+               DecimalField<
+                   Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>> || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
 }
 
 template <typename LeftType, typename RightType>
@@ -72,12 +75,20 @@ bool lessEqual(LeftType left, RightType right)
         if constexpr (checkIfDecimalFieldType<LeftType>())
         {
             left_scale = left.getScale();
-            return DecimalComparison<typename LeftType::DecimalType, RightType, LessOrEqualsOp>::compare(left.getValue(), right, left_scale, right_scale);
+            return DecimalComparison<typename LeftType::DecimalType, RightType, LessOrEqualsOp>::compare(
+                left.getValue(),
+                right,
+                left_scale,
+                right_scale);
         }
         else if constexpr (checkIfDecimalFieldType<RightType>())
         {
             right_scale = right.getScale();
-            return DecimalComparison<LeftType, typename RightType::DecimalType, LessOrEqualsOp>::compare(left, right.getValue(), left_scale, right_scale);
+            return DecimalComparison<LeftType, typename RightType::DecimalType, LessOrEqualsOp>::compare(
+                left,
+                right.getValue(),
+                left_scale,
+                right_scale);
         }
     }
     else
@@ -104,12 +115,20 @@ bool greaterEqual(LeftType left, RightType right)
         if constexpr (checkIfDecimalFieldType<LeftType>())
         {
             left_scale = left.getScale();
-            return DecimalComparison<typename LeftType::DecimalType, RightType, GreaterOrEqualsOp>::compare(left.getValue(), right, left_scale, right_scale);
+            return DecimalComparison<typename LeftType::DecimalType, RightType, GreaterOrEqualsOp>::compare(
+                left.getValue(),
+                right,
+                left_scale,
+                right_scale);
         }
         else if constexpr (checkIfDecimalFieldType<RightType>())
         {
             right_scale = right.getScale();
-            return DecimalComparison<LeftType, typename RightType::DecimalType, GreaterOrEqualsOp>::compare(left, right.getValue(), left_scale, right_scale);
+            return DecimalComparison<LeftType, typename RightType::DecimalType, GreaterOrEqualsOp>::compare(
+                left,
+                right.getValue(),
+                left_scale,
+                right_scale);
         }
     }
     else
@@ -160,7 +179,8 @@ bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_
     Float64 cursor_value_float64;
 
     if constexpr (checkIfDecimalFieldType<AuxColType>())
-        current_row_aux_value_float64 = current_row_aux_value.getValue().template toFloat<Float64>(current_row_aux_value.getScale());
+        current_row_aux_value_float64
+            = current_row_aux_value.getValue().template toFloat<Float64>(current_row_aux_value.getScale());
     else
         current_row_aux_value_float64 = static_cast<Float64>(current_row_aux_value);
 
@@ -169,7 +189,9 @@ bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_
     else
         cursor_value_float64 = static_cast<Float64>(cursor_value);
 
-    return isInRangeCommonImpl<Float64, Float64, is_preceding, is_desc>(current_row_aux_value_float64, cursor_value_float64);
+    return isInRangeCommonImpl<Float64, Float64, is_preceding, is_desc>(
+        current_row_aux_value_float64,
+        cursor_value_float64);
 }
 
 template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_preceding, bool is_desc>
@@ -189,7 +211,9 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
     }
     else if constexpr (CmpDataType == tipb::RangeCmpDataType::Float)
     {
-        return isInRangeFloatImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
+        return isInRangeFloatImpl<AuxColType, OrderByColType, is_preceding, is_desc>(
+            current_row_aux_value,
+            cursor_value);
     }
     else
     {
@@ -198,7 +222,28 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
         else if constexpr (!checkIfDecimalFieldType<AuxColType>() && !checkIfDecimalFieldType<OrderByColType>())
             throw Exception("At least one Decimal type is required");
         else
-            return isInRangeDecimalImpl<AuxColType, OrderByColType, is_preceding, is_desc>(current_row_aux_value, cursor_value);
+            return isInRangeDecimalImpl<AuxColType, OrderByColType, is_preceding, is_desc>(
+                current_row_aux_value,
+                cursor_value);
+    }
+}
+
+template <bool is_begin>
+RowNumber getBoundary(const WindowTransformAction & action)
+{
+    if constexpr (is_begin)
+    {
+        if (action.window_description.frame.begin_preceding)
+            return action.current_row;
+        else
+            return action.partition_end;
+    }
+    else
+    {
+        if (action.window_description.frame.end_preceding)
+            return action.current_row;
+        else
+            return action.partition_end;
     }
 }
 } // namespace
@@ -599,8 +644,7 @@ void WindowTransformAction::stepToFrameStart()
     }
     case WindowFrame::FrameType::Groups:
     default:
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "window function only support frame type row and range.");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "window function only support frame type row and range.");
     }
 }
 
@@ -616,8 +660,7 @@ void WindowTransformAction::stepToFrameEnd()
         break;
     case WindowFrame::FrameType::Groups:
     default:
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "window function only support frame type row and range.");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "window function only support frame type row and range.");
     }
 }
 
@@ -779,7 +822,9 @@ RowNumber WindowTransformAction::stepForRangeImpl()
         if (order_by_column->isNullAt(current_row.row))
             return moveCursorAndFindRangeFrameIfNull(cursor, is_preceding);
     }
-    return moveCursorAndFindRangeFrame<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(cursor, current_row_aux_value);
+    return moveCursorAndFindRangeFrame<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(
+        cursor,
+        current_row_aux_value);
 }
 
 RowNumber WindowTransformAction::moveCursorAndFindRangeFrameIfNull(RowNumber cursor, bool is_preceding)
@@ -865,11 +910,29 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
         switch (cmp_data_type)
         {
         case tipb::RangeCmpDataType::Int:
-            return moveCursorAndFindFrameImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Int, is_begin, is_desc, true>(cursor, current_row_aux_value);
+            return moveCursorAndFindFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::Int,
+                is_begin,
+                is_desc,
+                true>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Float:
-            return moveCursorAndFindFrameImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Float, is_begin, is_desc, true>(cursor, current_row_aux_value);
+            return moveCursorAndFindFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::Float,
+                is_begin,
+                is_desc,
+                true>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Decimal:
-            return moveCursorAndFindFrameImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Decimal, is_begin, is_desc, true>(cursor, current_row_aux_value);
+            return moveCursorAndFindFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::Decimal,
+                is_begin,
+                is_desc,
+                true>(cursor, current_row_aux_value);
         default:
             throw Exception(fmt::format("Unexpected RangeCmpDataType: {}", magic_enum::enum_name(cmp_data_type)));
         }
@@ -879,23 +942,48 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
         switch (cmp_data_type)
         {
         case tipb::RangeCmpDataType::Int:
-            return moveCursorAndFindFrameImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Int, is_begin, is_desc, false>(cursor, current_row_aux_value);
+            return moveCursorAndFindFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::Int,
+                is_begin,
+                is_desc,
+                false>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Float:
-            return moveCursorAndFindFrameImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Float, is_begin, is_desc, false>(cursor, current_row_aux_value);
+            return moveCursorAndFindFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::Float,
+                is_begin,
+                is_desc,
+                false>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Decimal:
-            return moveCursorAndFindFrameImpl<AuxColType, OrderByColType, tipb::RangeCmpDataType::Decimal, is_begin, is_desc, false>(cursor, current_row_aux_value);
+            return moveCursorAndFindFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::Decimal,
+                is_begin,
+                is_desc,
+                false>(cursor, current_row_aux_value);
         default:
             throw Exception("Unexpected RangeCmpDataType!");
         }
     }
 }
 
-template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc, bool is_order_by_col_nullable>
+template <
+    typename AuxColType,
+    typename OrderByColType,
+    int CmpDataType,
+    bool is_begin,
+    bool is_desc,
+    bool is_order_by_col_nullable>
 RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, AuxColType current_row_aux_value)
 {
     using ActualOrderByColType = typename ActualCmpDataType<OrderByColType>::Type;
 
-    while (cursor < partition_end)
+    RowNumber boundary = getBoundary<is_begin>(*this);
+    while (cursor < boundary)
     {
         const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
         if constexpr (is_order_by_col_nullable)
@@ -926,12 +1014,16 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
         {
             if (window_description.frame.begin_preceding)
             {
-                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(current_row_aux_value, cursor_value))
+                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(
+                        current_row_aux_value,
+                        cursor_value))
                     return cursor;
             }
             else
             {
-                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(current_row_aux_value, cursor_value))
+                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(
+                        current_row_aux_value,
+                        cursor_value))
                     return cursor;
             }
         }
@@ -939,12 +1031,16 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, Au
         {
             if (window_description.frame.end_preceding)
             {
-                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(current_row_aux_value, cursor_value))
+                if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, true, is_desc>(
+                        current_row_aux_value,
+                        cursor_value))
                     return cursor;
             }
             else
             {
-                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(current_row_aux_value, cursor_value))
+                if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, false, is_desc>(
+                        current_row_aux_value,
+                        cursor_value))
                     return cursor;
             }
         }

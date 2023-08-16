@@ -92,7 +92,10 @@ protected:
     // TODO Sometimes we only need to validate the correctness of value type, it's needless to configure
     // concurrency and block size and it will cause more useless tests. We should modify this function
     // so that caller could configure it and choose block_size and concurrency.
-    void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, bool is_restrict = true)
+    void executeWithConcurrencyAndBlockSize(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & expect_columns,
+        bool is_restrict = true)
     {
         std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
@@ -130,8 +133,7 @@ protected:
              {VALUE_COL_NAME, value_tp, actual_input[2].type->isNullable()}},
             actual_input);
 
-        auto request = context
-                           .scan("test_db", "test_table_for_window")
+        auto request = context.scan("test_db", "test_table_for_window")
                            .sort({{PARTITION_COL_NAME, false}, {ORDER_COL_NAME, false}}, true)
                            .window(function, {ORDER_COL_NAME, false}, {PARTITION_COL_NAME, false}, mock_frame)
                            .build(context);

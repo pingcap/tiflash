@@ -87,7 +87,9 @@ public:
         return v;
     }
 
-    template <typename U, std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>> * = nullptr>
+    template <
+        typename U,
+        std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>> * = nullptr>
     operator U() const // NOLINT(google-explicit-constructor)
     {
         Int256 v = dec.value;
@@ -289,7 +291,11 @@ public:
     Field(Field && rhs) { create(std::move(rhs)); }
 
     template <typename T>
-    Field(T && rhs, std::integral_constant<int, Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr) // NOLINT(google-explicit-constructor)
+    Field(
+        T && rhs,
+        std::integral_constant<
+            int,
+            Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr) // NOLINT(google-explicit-constructor)
     {
         createConcrete(std::forward<T>(rhs));
     }
@@ -408,8 +414,9 @@ public:
     {
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
-            throw Exception("Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
-                            ErrorCodes::BAD_GET);
+            throw Exception(
+                "Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
+                ErrorCodes::BAD_GET);
         return get<T>();
     }
 
@@ -418,8 +425,9 @@ public:
     {
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
-            throw Exception("Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
-                            ErrorCodes::BAD_GET);
+            throw Exception(
+                "Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
+                ErrorCodes::BAD_GET);
         return get<T>();
     }
 
@@ -545,7 +553,20 @@ public:
     bool operator!=(const Field & rhs) const { return !(*this == rhs); }
 
 private:
-    std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), Null, UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>
+    std::aligned_union_t<
+        DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
+        Null,
+        UInt64,
+        UInt128,
+        Int64,
+        Float64,
+        String,
+        Array,
+        Tuple,
+        DecimalField<Decimal32>,
+        DecimalField<Decimal64>,
+        DecimalField<Decimal128>,
+        DecimalField<Decimal256>>
         storage;
 
     Types::Which which;
