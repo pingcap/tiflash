@@ -55,7 +55,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     return entry;
 }
 
-const PageEntry PageEntriesView::at(const PageId page_id) const
+const PageEntry PageEntriesView::at(const PageId page_id) const // NOLINT
 {
     auto entry = this->find(page_id);
     if (!entry)

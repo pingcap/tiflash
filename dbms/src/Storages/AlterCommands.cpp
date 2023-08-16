@@ -39,7 +39,7 @@ NamesAndTypesList::Iterator AlterCommand::findColumn(NamesAndTypesList & columns
     const auto it = std::find_if(
         columns.begin(),
         columns.end(),
-        std::bind(namesEqual, std::cref(column_name), std::placeholders::_1));
+        std::bind(namesEqual, std::cref(column_name), std::placeholders::_1)); // NOLINT
     if (it == columns.end())
         throw Exception(
             "Wrong column name. Cannot find column " + column_name + " to modify",
@@ -70,7 +70,7 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
                 const auto reverse_insert_it = std::find_if(
                     columns.rbegin(),
                     columns.rend(),
-                    std::bind(namesEqual, std::cref(after_column), std::placeholders::_1));
+                    std::bind(namesEqual, std::cref(after_column), std::placeholders::_1)); // NOLINT
 
                 if (reverse_insert_it == columns.rend())
                     throw Exception(
@@ -112,7 +112,7 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
                    != (column_it = std::find_if(
                            columns.begin(),
                            columns.end(),
-                           std::bind(namesEqual, std::cref(column_name), std::placeholders::_1))))
+                           std::bind(namesEqual, std::cref(column_name), std::placeholders::_1)))) // NOLINT
             {
                 removed = true;
                 column_it = columns.erase(column_it);
@@ -181,10 +181,9 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
     {
         auto & columns = columns_description.ordinary;
         // We only consider ordinary columns.
-        NamesAndTypesList::iterator old_column_it
-            = std::find_if(columns.begin(), columns.end(), [&](const NameAndTypePair & orig_column) {
-                  return orig_column.name == column_name;
-              });
+        auto old_column_it = std::find_if(columns.begin(), columns.end(), [&](const NameAndTypePair & orig_column) {
+            return orig_column.name == column_name;
+        });
         if (old_column_it == columns.end())
         {
             throw Exception(
@@ -192,10 +191,9 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
                 ErrorCodes::LOGICAL_ERROR);
         }
         // Make sure new column doesn't exist.
-        NamesAndTypesList::iterator new_column_it
-            = std::find_if(columns.begin(), columns.end(), [&](const NameAndTypePair & orig_column) {
-                  return orig_column.name == new_column_name;
-              });
+        auto new_column_it = std::find_if(columns.begin(), columns.end(), [&](const NameAndTypePair & orig_column) {
+            return orig_column.name == new_column_name;
+        });
         if (new_column_it != columns.end())
         {
             throw Exception(
@@ -250,7 +248,7 @@ void AlterCommands::validate(IStorage * table, const Context & context)
             const auto column_it = std::find_if(
                 std::begin(all_columns),
                 std::end(all_columns),
-                std::bind(AlterCommand::namesEqual, std::cref(command.column_name), std::placeholders::_1));
+                std::bind(AlterCommand::namesEqual, std::cref(command.column_name), std::placeholders::_1)); // NOLINT
 
             if (command.type == AlterCommand::ADD_COLUMN)
             {
@@ -281,7 +279,7 @@ void AlterCommands::validate(IStorage * table, const Context & context)
                 {
                     const auto & final_column_name = column_name;
                     const auto tmp_column_name = final_column_name + "_tmp";
-                    const auto column_type_raw_ptr = command.data_type.get();
+                    const auto * column_type_raw_ptr = command.data_type.get();
 
                     default_expr_list->children.emplace_back(setAlias(
                         makeASTFunction(

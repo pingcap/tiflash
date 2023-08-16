@@ -19,9 +19,9 @@ namespace DB
 {
 TMTPKType getTMTPKType(const IDataType & rhs)
 {
-    static const DataTypeInt64 & dataTypeInt64 = {};
-    static const DataTypeUInt64 & dataTypeUInt64 = {};
-    static const DataTypeString & dataTypeString = {};
+    static const DataTypeInt64 & dataTypeInt64 = {}; // NOLINT
+    static const DataTypeUInt64 & dataTypeUInt64 = {}; // NOLINT
+    static const DataTypeString & dataTypeString = {}; // NOLINT
 
     if (rhs.equals(dataTypeInt64))
         return TMTPKType::INT64;

@@ -16,7 +16,7 @@
 
 namespace DB
 {
-
+// NOLINTBEGIN
 size_t writeBinary2(const metapb::Peer & peer, WriteBuffer & buf)
 {
     writeIntBinary((UInt64)peer.id(), buf);
@@ -178,5 +178,5 @@ bool operator==(const raft_serverpb::RegionLocalState & state1, const raft_serve
     return state1.region() == state2.region() && state1.state() == state2.state()
         && state1.merge_state() == state2.merge_state();
 }
-
+// NOLINTEND
 } // namespace DB

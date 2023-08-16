@@ -47,7 +47,7 @@ BlockInputStreams StorageSystemBuildOptions::read(
 
     MutableColumns res_columns = getSampleBlock().cloneEmptyColumns();
 
-    for (auto it = auto_config_build; *it; it += 2)
+    for (auto * it = auto_config_build; *it; it += 2)
     {
         res_columns[0]->insert(String(it[0]));
         res_columns[1]->insert(String(it[1]));

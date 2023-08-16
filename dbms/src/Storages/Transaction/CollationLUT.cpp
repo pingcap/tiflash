@@ -260,7 +260,7 @@ namespace TiDB::GeneralCI
         0xFFEB, 0xFFEC, 0xFFED, 0xFFEE, 0xFFEF, 0xFFF0, 0xFFF1, 0xFFF2, 0xFFF3, 0xFFF4, 0xFFF5, 0xFFF6, 0xFFF7,     \
         0xFFF8, 0xFFF9, 0xFFFA, 0xFFFB, 0xFFFC, 0xFFFD, 0xFFFE, 0xFFFF
 
-#define CONCAT(MSB, LSB) (MSB << 8 | LSB)
+#define CONCAT(MSB, LSB) (MSB << 8 | LSB) // NOLINT
 
 #define PLANE_ID(MSB)                                                                                                 \
     CONCAT(MSB, 0x00), CONCAT(MSB, 0x01), CONCAT(MSB, 0x02), CONCAT(MSB, 0x03), CONCAT(MSB, 0x04), CONCAT(MSB, 0x05), \

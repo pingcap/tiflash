@@ -63,7 +63,7 @@ String chooseSuffixForSet(const NamesAndTypesList & columns, const std::vector<S
         bool done = true;
         for (const auto & it : columns)
         {
-            for (size_t i = 0; i < names.size(); ++i)
+            for (size_t i = 0; i < names.size(); ++i) // NOLINT
             {
                 if (it.name == names[i] + current_suffix)
                 {
@@ -101,11 +101,11 @@ void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & va
 /// Verifying that the function depends only on the specified columns
 static bool isValidFunction(const ASTPtr & expression, const NameSet & columns)
 {
-    for (size_t i = 0; i < expression->children.size(); ++i)
+    for (size_t i = 0; i < expression->children.size(); ++i) // NOLINT
         if (!isValidFunction(expression->children[i], columns))
             return false;
 
-    if (const ASTIdentifier * identifier = typeid_cast<const ASTIdentifier *>(&*expression))
+    if (const auto * identifier = typeid_cast<const ASTIdentifier *>(&*expression))
     {
         if (identifier->kind == ASTIdentifier::Kind::Column)
             return columns.count(identifier->name);
@@ -116,10 +116,10 @@ static bool isValidFunction(const ASTPtr & expression, const NameSet & columns)
 /// Extract all subfunctions of the main conjunction, but depending only on the specified columns
 static void extractFunctions(const ASTPtr & expression, const NameSet & columns, std::vector<ASTPtr> & result)
 {
-    const ASTFunction * function = typeid_cast<const ASTFunction *>(expression.get());
+    const auto * function = typeid_cast<const ASTFunction *>(expression.get());
     if (function && function->name == "and")
     {
-        for (size_t i = 0; i < function->arguments->children.size(); ++i)
+        for (size_t i = 0; i < function->arguments->children.size(); ++i) // NOLINT
             extractFunctions(function->arguments->children[i], columns, result);
     }
     else if (isValidFunction(expression, columns))
@@ -131,7 +131,7 @@ static void extractFunctions(const ASTPtr & expression, const NameSet & columns,
 /// Construct a conjunction from given functions
 static ASTPtr buildWhereExpression(const ASTs & functions)
 {
-    if (functions.size() == 0)
+    if (functions.empty())
         return nullptr;
     if (functions.size() == 1)
         return functions[0];

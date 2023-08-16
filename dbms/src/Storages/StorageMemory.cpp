@@ -126,8 +126,8 @@ BlockInputStreams StorageMemory::read(
 
     for (size_t stream = 0; stream < num_streams; ++stream)
     {
-        BlocksList::iterator begin = data.begin();
-        BlocksList::iterator end = data.begin();
+        auto begin = data.begin();
+        auto end = data.begin();
 
         std::advance(begin, stream * size / num_streams);
         std::advance(end, (stream + 1) * size / num_streams);

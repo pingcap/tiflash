@@ -33,7 +33,7 @@ static ASTPtr extractKeyExpressionList(IAST & node)
 {
     // For multiple primary key, this is a ASTFunction with name "tuple".
     // For single primary key, this is a ASTExpressionList.
-    const ASTFunction * expr_func = typeid_cast<const ASTFunction *>(&node);
+    const auto * expr_func = typeid_cast<const ASTFunction *>(&node);
     if (expr_func && expr_func->name == "tuple")
     {
         /// Primary key is specified in tuple.
@@ -82,7 +82,7 @@ void registerStorageDeltaMerge(StorageFactory & factory)
 
         if (args.engine_args.size() >= 2)
         {
-            auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
+            const auto * ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
             if (ast && ast->value.getType() == Field::Types::String)
             {
                 const auto table_info_json = safeGet<String>(ast->value);
@@ -99,7 +99,7 @@ void registerStorageDeltaMerge(StorageFactory & factory)
         }
         if (args.engine_args.size() == 3)
         {
-            auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[2].get());
+            const auto * ast = typeid_cast<const ASTLiteral *>(args.engine_args[2].get());
             if (ast && ast->value.getType() == Field::Types::UInt64)
                 tombstone = safeGet<UInt64>(ast->value);
             else

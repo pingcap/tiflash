@@ -216,7 +216,7 @@ Block LogBlockInputStream::readImpl()
             throw;
         }
 
-        if (column->size())
+        if (column->size()) // NOLINT
             res.insert(ColumnWithTypeAndName(std::move(column), name_type.type, name_type.name));
     }
 
@@ -453,7 +453,7 @@ void StorageLog::loadMarks()
     using FilesByIndex = std::vector<Files_t::iterator>;
 
     FilesByIndex files_by_index(file_count);
-    for (Files_t::iterator it = files.begin(); it != files.end(); ++it)
+    for (auto it = files.begin(); it != files.end(); ++it)
         files_by_index[it->second.column_index] = it;
 
     if (marks_file.exists())
@@ -470,9 +470,9 @@ void StorageLog::loadMarks()
         ReadBufferFromFile marks_rb(marks_file.path(), 32768);
         while (!marks_rb.eof())
         {
-            for (size_t i = 0; i < files_by_index.size(); ++i)
+            for (size_t i = 0; i < files_by_index.size(); ++i) // NOLINT
             {
-                Mark mark;
+                Mark mark; // NOLINT
                 readIntBinary(mark.rows, marks_rb);
                 readIntBinary(mark.offset, marks_rb);
                 files_by_index[i]->second.marks.push_back(mark);
@@ -523,7 +523,7 @@ const StorageLog::Marks & StorageLog::getMarksWithRealRowCount() const
         },
         {});
 
-    Files_t::const_iterator it = files.find(filename);
+    auto it = files.find(filename);
     if (files.end() == it)
         throw Exception("Cannot find file " + filename, ErrorCodes::LOGICAL_ERROR);
 
