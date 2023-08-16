@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,63 +19,22 @@
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
-#include <common/types.h>
+#include <WindowFunctions/WindowUtils.h>
 
 #include <deque>
 #include <memory>
+#include <tuple>
 
 namespace DB
 {
-
-// Runtime data for computing one window function.
-struct WindowFunctionWorkspace
-{
-    // TODO add aggregation function
-    WindowFunctionPtr window_function = nullptr;
-
-    ColumnNumbers arguments;
-};
-
-struct WindowBlock
-{
-    Columns input_columns;
-    MutableColumns output_columns;
-
-    size_t rows = 0;
-};
-
-struct RowNumber
-{
-    UInt64 block = 0;
-    UInt64 row = 0;
-
-    bool operator<(const RowNumber & other) const
-    {
-        return block < other.block
-            || (block == other.block && row < other.row);
-    }
-
-    bool operator==(const RowNumber & other) const
-    {
-        return block == other.block && row == other.row;
-    }
-
-    bool operator<=(const RowNumber & other) const
-    {
-        return *this < other || *this == other;
-    }
-
-    String toString() const
-    {
-        return fmt::format("[block={},row={}]", block, row);
-    }
-};
-
 /* Implementation details.*/
 struct WindowTransformAction
 {
 public:
-    WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
+    WindowTransformAction(
+        const Block & input_header,
+        const WindowDescription & window_description_,
+        const String & req_id);
 
     void cleanUp();
 
@@ -103,10 +62,7 @@ public:
         return window_blocks[x.block - first_block_number].input_columns;
     }
 
-    const Columns & inputAt(const RowNumber & x) const
-    {
-        return const_cast<WindowTransformAction *>(this)->inputAt(x);
-    }
+    const Columns & inputAt(const RowNumber & x) const { return const_cast<WindowTransformAction *>(this)->inputAt(x); }
 
     auto & blockAt(const UInt64 block_number)
     {
@@ -120,20 +76,11 @@ public:
         return const_cast<WindowTransformAction *>(this)->blockAt(block_number);
     }
 
-    auto & blockAt(const RowNumber & x)
-    {
-        return blockAt(x.block);
-    }
+    auto & blockAt(const RowNumber & x) { return blockAt(x.block); }
 
-    const auto & blockAt(const RowNumber & x) const
-    {
-        return const_cast<WindowTransformAction *>(this)->blockAt(x);
-    }
+    const auto & blockAt(const RowNumber & x) const { return const_cast<WindowTransformAction *>(this)->blockAt(x); }
 
-    size_t blockRowsNumber(const RowNumber & x) const
-    {
-        return blockAt(x).rows;
-    }
+    size_t blockRowsNumber(const RowNumber & x) const { return blockAt(x).rows; }
 
     MutableColumns & outputAt(const RowNumber & x)
     {
@@ -150,10 +97,7 @@ public:
 
     bool lag(RowNumber & x, size_t offset) const;
 
-    RowNumber blocksEnd() const
-    {
-        return RowNumber{first_block_number + window_blocks.size(), 0};
-    }
+    RowNumber blocksEnd() const { return RowNumber{first_block_number + window_blocks.size(), 0}; }
 
     void appendBlock(Block & current_block);
 
@@ -172,12 +116,12 @@ private:
     void stepToFrameEnd();
 
     // Used for calculating the frame start for rows frame type
-    RowNumber stepToStartForRowsFrame();
+    std::tuple<RowNumber, bool> stepToStartForRowsFrame(const RowNumber & current_row, const WindowFrame & frame);
     // Used for calculating the frame end for rows frame type
-    std::tuple<RowNumber, bool> stepToEndForRowsFrame();
+    std::tuple<RowNumber, bool> stepToEndForRowsFrame(const RowNumber & current_row, const WindowFrame & frame);
 
     // Used for calculating the frame start for range frame type
-    RowNumber stepToStartForRangeFrame();
+    std::tuple<RowNumber, bool> stepToStartForRangeFrame();
     // Used for calculating the frame end for range frame type
     std::tuple<RowNumber, bool> stepToEndForRangeFrame();
 
@@ -197,11 +141,7 @@ private:
     RowNumber stepForRangeImpl();
 
     // We should use this function when the current auxiliary column row is null.
-    template <bool is_begin>
-    RowNumber moveCursorAndFindRangeFrameIfNull(RowNumber cursor);
-
-    // distance is left - right.
-    UInt64 distance(RowNumber left, RowNumber right);
+    RowNumber moveCursorAndFindRangeFrameIfNull(RowNumber cursor, bool is_preceding);
 
     template <typename AuxColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
@@ -212,6 +152,11 @@ private:
     template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc, bool is_order_by_col_nullable>
     RowNumber moveCursorAndFindFrameImpl(RowNumber cursor, AuxColType current_row_aux_value);
 
+    RowNumber stepInPreceding(const RowNumber & moved_row, size_t step_num);
+    std::tuple<RowNumber, bool> stepInFollowing(const RowNumber & moved_row, size_t step_num);
+
+    // distance is left - right.
+    UInt64 distance(RowNumber left, RowNumber right);
 public:
     LoggerPtr log;
 
@@ -296,7 +241,10 @@ class WindowBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "Window";
 
 public:
-    WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id);
+    WindowBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const WindowDescription & window_description_,
+        const String & req_id);
 
     Block getHeader() const override { return action.output_header; };
 

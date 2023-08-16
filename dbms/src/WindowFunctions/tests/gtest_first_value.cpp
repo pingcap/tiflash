@@ -17,6 +17,7 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 #include <common/types.h>
@@ -33,16 +34,13 @@ class FirstValue : public DB::tests::WindowTest
 public:
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 
     template <typename IntType>
     void testInt()
     {
         executeFunctionAndAssert(
-            toVec<IntType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
+            toNullableVec<IntType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -60,7 +58,7 @@ public:
     void testFloat()
     {
         executeFunctionAndAssert(
-            toVec<FloatType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
+            toNullableVec<FloatType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -84,7 +82,7 @@ public:
         {
             // Int type const column
             std::vector<Int64> frame_start_range{0, 1, 3, 10};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 1, 8, 0, 0, 10, 10, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -98,7 +96,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -108,7 +106,7 @@ public:
         {
             // Float type const column
             std::vector<Float64> frame_start_range{0, 1.1, 2.9, 9.9};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 2, 8, 0, 3, 10, 13, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -122,7 +120,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -136,7 +134,7 @@ public:
                 DecimalField<Decimal32>(11, 1),
                 DecimalField<Decimal32>(29, 1),
                 DecimalField<Decimal32>(99, 1)};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 2, 8, 0, 3, 10, 13, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -150,7 +148,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -168,7 +166,7 @@ public:
         {
             // Int type const column
             std::vector<Int64> frame_start_range{0, 1, 3, 10};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 2, 8, 0, 3, 10, 13, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -182,7 +180,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -192,7 +190,7 @@ public:
         {
             // Float type const column
             std::vector<Float64> frame_start_range{0, 1.8, 2.3, 3.8};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 4, 8, 0, 3, 10, 13, 15, 1, 1, 5, 9, 15, 20, 31},
                 {0, 1, 1, 2, 8, 0, 3, 10, 13, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -206,7 +204,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -220,7 +218,7 @@ public:
                 DecimalField<Decimal32>(18, 1),
                 DecimalField<Decimal32>(23, 1),
                 DecimalField<Decimal32>(38, 1)};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 4, 8, 0, 3, 10, 13, 15, 1, 1, 5, 9, 15, 20, 31},
                 {0, 1, 1, 2, 8, 0, 3, 10, 13, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -234,7 +232,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -252,7 +250,7 @@ public:
         {
             // Int type const column
             std::vector<Int64> frame_start_range{0, 1, 3, 10};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
                 {0, 1, 1, 2, 8, 0, 3, 10, 13, 13, 1, 1, 3, 9, 15, 20, 31},
@@ -286,7 +284,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame);
@@ -307,7 +305,7 @@ public:
         {
             // Int type const column
             std::vector<Int64> frame_start_range{0, 1, 3, 10};
-            std::vector<std::vector<Int64>> res{
+            std::vector<std::vector<std::optional<Int64>>> res{
                 {1, 2, 3, 4, 5, 6, 7, 8, 9},
                 {1, 2, 3, 3, 5, 6, 6, 8, 8},
                 {1, 2, 3, 3, 5, 6, 6, 7, 8},
@@ -321,7 +319,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
-                    toVec<Int64>(res[i]),
+                    toNullableVec<Int64>(res[i]),
                     FirstValue(value_col),
                     {partition_col, order_col, val_col},
                     mock_frame,
@@ -337,7 +335,7 @@ try
     {
         // boundary type: unbounded
         executeFunctionAndAssert(
-            toVec<String>({"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}),
+            toNullableVec<String>({"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -355,10 +353,10 @@ try
         // boundary type: offset
         MockWindowFrame frame;
         frame.type = tipb::WindowFrameType::Rows;
-        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
 
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-        std::vector<std::vector<String>> res_not_null{
+        std::vector<std::vector<std::optional<String>>> res_not_null{
             {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"},
             {"1", "2", "2", "3", "4", "6", "6", "7", "8", "9", "11", "11", "12"},
             {"1", "2", "2", "2", "2", "6", "6", "6", "6", "7", "11", "11", "11"},
@@ -374,7 +372,7 @@ try
             frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
 
             executeFunctionAndAssert(
-                toVec<String>(res_not_null[i]),
+                toNullableVec<String>(res_not_null[i]),
                 FirstValue(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
                  toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -389,6 +387,28 @@ try
                  toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})},
                 frame);
         }
+
+        // The following are <preceding, preceding> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 2);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 1);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, {}, "2", "2", "3", {}, "6", "6", "7", "8", {}, "11", "11"}),
+            FirstValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
+
+        // The following are <following, folloing> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 1);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 2);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13", {}}),
+            FirstValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
     }
 
     testInt<Int8>();
