@@ -40,7 +40,8 @@ void MockLocalAdmissionController::refillTokenBucket()
             }
         }
 
-        refill_token_callback();
+        if (refill_token_callback)
+            refill_token_callback();
     }
 }
 
