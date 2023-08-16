@@ -346,7 +346,7 @@ private:
         std::optional<const RegionTaskLock *> region_task_lock,
         PersistRegionReason reason,
         const char * extra_msg) const;
-        
+
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
