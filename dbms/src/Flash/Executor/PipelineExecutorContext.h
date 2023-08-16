@@ -184,7 +184,6 @@ private:
 private:
     const String query_id;
 
-
     LoggerPtr log;
 
     MemoryTrackerPtr mem_tracker;
