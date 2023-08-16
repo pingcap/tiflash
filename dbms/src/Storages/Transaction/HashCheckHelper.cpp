@@ -75,8 +75,8 @@ void checkObjectHashInFile(
             "File size not match! Expected: " + DB::toString(total_size) + ", got: " + DB::toString(file_size),
             Errors::PageStorage::FileSizeNotMatch);
 
-    char * object_data_buf = (char *)malloc(max_size);
-    SCOPE_EXIT({ free(object_data_buf); });
+    std::vector<char> object_data_buf_holder(max_size);
+    auto * object_data_buf = object_data_buf_holder.data();
 
     auto fd = open(path.c_str(), O_RDONLY);
     if (-1 == fd)

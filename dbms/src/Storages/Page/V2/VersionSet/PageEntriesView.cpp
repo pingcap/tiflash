@@ -55,7 +55,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     return entry;
 }
 
-const PageEntry PageEntriesView::at(const PageId page_id) const
+PageEntry PageEntriesView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
     if (!entry)
@@ -174,7 +174,7 @@ size_t PageEntriesView::numPages() const
     for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         nodes.emplace_back(node);
 
-    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node)
+    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node) // NOLINT
     {
         for (const auto & pair : (*node)->page_ref)
         {
