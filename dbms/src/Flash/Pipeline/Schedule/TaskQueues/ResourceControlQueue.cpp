@@ -60,7 +60,6 @@ void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedQueueType>();
-
         task_queue->submit(std::move(task));
         resource_group_infos.push({name, LocalAdmissionController::global_instance->getPriority(name), task_queue});
         resource_group_task_queues.insert({name, task_queue});
@@ -108,12 +107,12 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
             if (group_info.task_queue->empty())
             {
                 // Nested task queue is empty, continue and try next resource group.
-                resource_group_infos.pop();
                 size_t erase_num = resource_group_task_queues.erase(group_info.name);
                 RUNTIME_CHECK_MSG(
                     erase_num == 1,
-                    "cannot erase corresponding TaskQueue for task of resource group {}",
-                    group_info.name);
+                    "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
+                    group_info.name, erase_num);
+                resource_group_infos.pop();
             }
             else
             {
@@ -183,7 +182,6 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock(
     while (!resource_group_infos.empty())
     {
         const ResourceGroupInfo & group_info = resource_group_infos.top();
-
         auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
         new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
         resource_group_infos.pop();
