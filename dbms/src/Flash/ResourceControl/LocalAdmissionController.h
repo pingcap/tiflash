@@ -28,7 +28,16 @@
 
 namespace DB
 {
-class LocalAdmissionController;
+class LocalAdmissionController final : private boost::noncopyable
+{
+public:
+    static constexpr uint64_t MAX_PRIORITY = std::numeric_limits<uint64_t>::max();
+    // Because high 4 bits are user_priroity, which cannot be zero. So set it as special priority.
+    static constexpr uint64_t RU_EXHAUSTED_PRIORITY = (MAX_PRIORITY >> 4);
+
+    static bool isRUExhausted(uint64_t priority) { return priority == RU_EXHAUSTED_PRIORITY; }
+    static std::unique_ptr<MockLocalAdmissionController> global_instance;
+};
 
 class ResourceGroup final : private boost::noncopyable
 {
@@ -75,9 +84,6 @@ private:
     static constexpr int32_t MediumPriorityValue = 8;
     static constexpr int32_t HighPriorityValue = 16;
 
-    // Minus 1 because uint64 max is used as special flag.
-    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
-
     friend class LocalAdmissionController;
     friend class MockLocalAdmissionController;
 
@@ -99,18 +105,14 @@ private:
 
         const auto remaining_token = bucket->peek();
         if (!burstable && remaining_token <= 0.0)
-            return std::numeric_limits<uint64_t>::max();
+            return LocalAdmissionController::RU_EXHAUSTED_PRIORITY;
 
         // This should not happens because tidb will check except for unittest(test static token bucket).
         if unlikely (user_ru_per_sec == 0)
-            return std::numeric_limits<uint64_t>::max() - 1;
+            return LocalAdmissionController::MAX_PRIORITY - 1;
 
         double weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
-
-        uint64_t virtual_time = cpu_time_in_ns * weight;
-        if unlikely (virtual_time > MAX_VIRTUAL_TIME)
-            virtual_time = MAX_VIRTUAL_TIME;
-
+        uint64_t virtual_time = (static_cast<uint64_t>(cpu_time_in_ns * weight) >> 4);
         uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
         LOG_TRACE(
@@ -162,12 +164,4 @@ private:
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
-
-class LocalAdmissionController final : private boost::noncopyable
-{
-public:
-    static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
-
-    static std::unique_ptr<MockLocalAdmissionController> global_instance;
-};
 } // namespace DB
