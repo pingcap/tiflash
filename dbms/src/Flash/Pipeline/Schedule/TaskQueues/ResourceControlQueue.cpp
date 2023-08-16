@@ -132,9 +132,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             }
         }
 
-        if (task != nullptr)
-            return true;
-
+        assert(!task);
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
