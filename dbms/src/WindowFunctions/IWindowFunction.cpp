@@ -156,10 +156,7 @@ public:
         : IWindowFunction(argument_types_)
     {
         RUNTIME_CHECK(argument_types_.size() == 1);
-        if (argument_types_[0]->isNullable())
-            return_type = argument_types_[0];
-        else
-            return_type = makeNullable(argument_types_[0]);
+        return_type = makeNullable(argument_types_[0]);
     }
 
     String getName() const override { return name; }
@@ -192,10 +189,7 @@ public:
         : IWindowFunction(argument_types_)
     {
         RUNTIME_CHECK(argument_types_.size() == 1);
-        if (argument_types_[0]->isNullable())
-            return_type = argument_types_[0];
-        else
-            return_type = makeNullable(argument_types_[0]);
+        return_type = makeNullable(argument_types_[0]);
     }
 
     String getName() const override { return name; }
