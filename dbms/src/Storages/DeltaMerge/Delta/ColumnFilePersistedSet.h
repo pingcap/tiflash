@@ -49,16 +49,11 @@ using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
 class ColumnFilePersistedSet : public std::enable_shared_from_this<ColumnFilePersistedSet>
     , private boost::noncopyable
 {
-public:
-    using ColumnFilePersistedLevel = ColumnFilePersisteds;
-    using ColumnFilePersistedLevels = std::vector<ColumnFilePersistedLevel>;
-
 private:
     PageId metadata_id;
-    ColumnFilePersistedLevels persisted_files_levels;
+    ColumnFilePersisteds persisted_files;
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count = 0;
-    std::atomic<size_t> persisted_files_level_count = 0;
 
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
@@ -66,7 +61,6 @@ private:
 
     /// below are just state resides in memory
     UInt64 flush_version = 0;
-    size_t next_compaction_level = 0;
     UInt64 minor_compaction_version = 0;
 
     LoggerPtr log;
@@ -74,7 +68,7 @@ private:
 private:
     inline void updateColumnFileStats();
 
-    void checkColumnFiles(const ColumnFilePersistedLevels & new_column_file_levels);
+    void checkColumnFiles(const ColumnFilePersisteds & new_column_files);
 
 public:
     explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
@@ -97,21 +91,17 @@ public:
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }
     String info() const
     {
-        return fmt::format("ColumnFilePersistedSet [{}]: {} levels, {} column files, {} rows, {} bytes, {} deletes.",
+        return fmt::format("ColumnFilePersistedSet [{}]: {} column files, {} rows, {} bytes, {} deletes.",
                            metadata_id,
-                           persisted_files_level_count.load(),
                            persisted_files_count.load(),
                            rows.load(),
                            bytes.load(),
                            deletes.load());
     }
     /// Thread safe part end
-    String levelsInfo() const
+    String detailInfo() const
     {
-        String levels_info;
-        for (size_t i = 0; i < persisted_files_levels.size(); i++)
-            levels_info += fmt::format("[{}]: {}", i, columnFilesToString(persisted_files_levels[i]));
-        return levels_info;
+        return columnFilesToString(persisted_files);
     }
 
     void saveMeta(WriteBatches & wbs) const;
@@ -139,7 +129,6 @@ public:
     PageId getId() const { return metadata_id; }
 
     size_t getColumnFileCount() const { return persisted_files_count.load(); }
-    size_t getColumnFileLevelCount() const { return persisted_files_level_count.load(); }
     size_t getRows() const { return rows.load(); }
     size_t getBytes() const { return bytes.load(); }
     size_t getDeletes() const { return deletes.load(); }
@@ -155,9 +144,9 @@ public:
     /// and if it is valid then increase the internal flush version.
     bool checkAndIncreaseFlushVersion(size_t task_flush_version);
 
-    bool appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
+    bool appendPersistedColumnFiles(const ColumnFilePersisteds & column_files, WriteBatches & wbs);
 
-    /// Choose a level in which exists some small column files that can be compacted to a larger column file
+    /// Choose all small column files that can be compacted to larger column files
     MinorCompactionPtr pickUpMinorCompaction(DMContext & context);
 
     /// Update the metadata to commit the compaction results

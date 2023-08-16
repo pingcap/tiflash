@@ -60,7 +60,7 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntriesV3 & del_entries);
 
@@ -87,7 +87,7 @@ public:
 private:
 #endif
 
-    PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit handleLargeWrite(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 

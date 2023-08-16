@@ -32,7 +32,7 @@
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
@@ -499,10 +499,11 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
         }
         LOG_INFO(
             log,
-            "Storage inited finish. [total_count={}] [init_count={}] [error_count={}]",
+            "Storage inited finish. [total_count={}] [init_count={}] [error_count={}] [datatype_fullname_count={}]",
             storages.size(),
             init_cnt,
-            err_cnt);
+            err_cnt,
+            DataTypeFactory::instance().getFullNameCacheSize());
     };
     if (lazily_init_store)
     {
@@ -882,10 +883,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto * helper = tiflash_instance_wrap.proxy_helper;
         helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
         server_info.parseSysInfo(response);
+        setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
+        computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
         LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else
     {
+        setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
+        computeAndSetNumberOfPhysicalCPUCores(std::thread::hardware_concurrency(), std::thread::hardware_concurrency() / 2);
         LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
@@ -1188,7 +1193,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_DEBUG(log, "Load metadata done.");
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
-    for (int i = 0; i < 60; i++) // retry for 3 mins
+    Stopwatch watch;
+    while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
     {
         try
         {

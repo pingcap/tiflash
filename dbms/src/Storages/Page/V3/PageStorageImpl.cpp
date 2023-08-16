@@ -115,9 +115,13 @@ size_t PageStorageImpl::getNumberOfPages()
     return page_directory->numPages();
 }
 
+// For debugging purpose
 std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
 {
-    return page_directory->getAliveExternalIds(ns_id);
+    // Keep backward compatibility of this functions with v2
+    if (auto ids = page_directory->getAliveExternalIds(ns_id); ids)
+        return *ids;
+    return {};
 }
 
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
@@ -129,7 +133,7 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
 
     // Persist Page data to BlobStore
-    auto edit = blob_store.write(write_batch, write_limiter);
+    auto edit = blob_store.write(std::move(write_batch), write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
 }
 
@@ -176,6 +180,7 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const Read
 
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -208,6 +213,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
 
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -369,8 +375,11 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
         auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->ns_id);
         statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
-        // remove the external pages that is not alive now.
-        ns_callbacks->remover(pending_external_pages, alive_external_ids);
+        if (alive_external_ids)
+        {
+            // remove the external pages that is not alive now.
+            ns_callbacks->remover(pending_external_pages, *alive_external_ids);
+        } // else the ns_id is invalid, just skip
         statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
 
         // move to next namespace callbacks

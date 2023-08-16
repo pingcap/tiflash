@@ -36,17 +36,19 @@ public:
         Task() = default;
 
         ColumnFilePersisteds to_compact;
+        size_t first_file_index = std::numeric_limits<size_t>::max();
         size_t total_rows = 0;
         size_t total_bytes = 0;
 
         bool is_trivial_move = false;
         ColumnFilePersistedPtr result;
 
-        void addColumnFile(const ColumnFilePersistedPtr & column_file)
+        void addColumnFile(const ColumnFilePersistedPtr & column_file, size_t index)
         {
+            to_compact.push_back(column_file);
+            first_file_index = std::min(first_file_index, index);
             total_rows += column_file->getRows();
             total_bytes += column_file->getBytes();
-            to_compact.push_back(column_file);
         }
     };
     using Tasks = std::vector<Task>;
@@ -54,7 +56,9 @@ public:
 private:
     Tasks tasks;
 
-    size_t compaction_src_level;
+    // The index of the first cftiny which can be compacted
+    size_t first_compact_index = std::numeric_limits<size_t>::max();
+
     size_t current_compaction_version;
 
     size_t total_compact_files = 0;
@@ -62,7 +66,7 @@ private:
     size_t result_compact_files = 0;
 
 public:
-    MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
+    explicit MinorCompaction(size_t current_compaction_version_);
 
     // Add new task and return whether this task is a trivial move
     inline bool packUpTask(Task && task)
@@ -83,14 +87,18 @@ public:
             }
             is_trivial_move = true;
         }
+
         task.is_trivial_move = is_trivial_move;
         tasks.push_back(std::move(task));
+        if (!is_trivial_move)
+            first_compact_index = std::min(first_compact_index, task.first_file_index);
         return is_trivial_move;
     }
 
     const Tasks & getTasks() const { return tasks; }
 
-    size_t getCompactionSourceLevel() const { return compaction_src_level; }
+    size_t getFirsCompactIndex() const { return first_compact_index; }
+
     size_t getCompactionVersion() const { return current_compaction_version; }
 
     /// Create new column file by combining several small `ColumnFileTiny`s

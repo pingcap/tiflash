@@ -58,7 +58,7 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
         readIntBinary(column_id, buf);
         readStringBinary(name, buf);
         readStringBinary(type_name, buf);
-        schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().get(type_name), name, column_id));
+        schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().getOrSet(type_name), name, column_id));
     }
     return schema;
 }

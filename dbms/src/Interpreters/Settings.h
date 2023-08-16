@@ -65,6 +65,8 @@ struct Settings
     M(SettingUInt64, min_insert_block_size_bytes, (DEFAULT_INSERT_BLOCK_SIZE * 256), "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.")                                                  \
     M(SettingMaxThreads, max_threads, 0, "The maximum number of threads to execute the request. By default, it is determined automatically.")                                                                                           \
     M(SettingUInt64, cop_pool_size, 0, "The number of threads to handle cop requests. By default, it is determined automatically.")                                                                                                     \
+    M(SettingInt64, cop_pool_handle_limit, 0, "The maximum number of requests can be handled by cop pool, include executing and queuing tasks. More cop requests will get error \"TiFlash Server is Busy\". -1 means unlimited, 0 means determined automatically (10 times of cop-pool-size).") \
+    M(SettingInt64, cop_pool_max_queued_seconds, 15, "The maximum queuing duration of coprocessor task, unit is second. When task starts to run, it checks whether queued more than this config, if so, it will directly return error \"TiFlash Server is Busy\". <=0 means unlimited, default is 15. The upper limit of this config is 20.")                                                                                                     \
     M(SettingUInt64, batch_cop_pool_size, 0, "The number of threads to handle batch cop requests. By default, it is determined automatically.")                                                                                         \
     M(SettingUInt64, max_read_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to read from the filesystem.")                                                                                                     \
     M(SettingUInt64, max_distributed_connections, DEFAULT_MAX_DISTRIBUTED_CONNECTIONS, "The maximum number of connections for distributed processing of one query (should be greater than max_threads).")                               \
@@ -364,7 +366,8 @@ struct Settings
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_planner, true, "Enable planner")
+    M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

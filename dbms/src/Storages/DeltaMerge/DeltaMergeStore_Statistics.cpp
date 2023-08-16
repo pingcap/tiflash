@@ -24,62 +24,63 @@ namespace DM
 
 StoreStats DeltaMergeStore::getStoreStats()
 {
-    std::shared_lock lock(read_write_mutex);
-
     StoreStats stat;
 
     if (shutdown_called.load(std::memory_order_relaxed))
         return stat;
 
-    stat.segment_count = segments.size();
-
     Int64 total_placed_rows = 0;
     Int64 total_delta_cache_rows = 0;
     Float64 total_delta_cache_size = 0;
     Int64 total_delta_valid_cache_rows = 0;
-    for (const auto & [handle, segment] : segments)
     {
-        UNUSED(handle);
-        const auto & delta = segment->getDelta();
-        const auto & stable = segment->getStable();
+        std::shared_lock lock(read_write_mutex);
+        stat.segment_count = segments.size();
 
-        total_placed_rows += delta->getPlacedDeltaRows();
-
-        if (delta->getColumnFileCount())
+        for (const auto & [handle, segment] : segments)
         {
-            stat.total_rows += delta->getRows();
-            stat.total_size += delta->getBytes();
+            UNUSED(handle);
+            const auto & delta = segment->getDelta();
+            const auto & stable = segment->getStable();
 
-            stat.total_delete_ranges += delta->getDeletes();
+            total_placed_rows += delta->getPlacedDeltaRows();
 
-            stat.delta_count += 1;
-            const auto num_delta_column_file = delta->getColumnFileCount();
-            stat.total_pack_count_in_delta += num_delta_column_file;
-            stat.max_pack_count_in_delta = std::max(stat.max_pack_count_in_delta, num_delta_column_file);
+            if (delta->getColumnFileCount())
+            {
+                stat.total_rows += delta->getRows();
+                stat.total_size += delta->getBytes();
 
-            stat.total_delta_rows += delta->getRows();
-            stat.total_delta_size += delta->getBytes();
+                stat.total_delete_ranges += delta->getDeletes();
 
-            stat.delta_index_size += delta->getDeltaIndexBytes();
+                stat.delta_count += 1;
+                const auto num_delta_column_file = delta->getColumnFileCount();
+                stat.total_pack_count_in_delta += num_delta_column_file;
+                stat.max_pack_count_in_delta = std::max(stat.max_pack_count_in_delta, num_delta_column_file);
 
-            total_delta_cache_rows += delta->getTotalCacheRows();
-            total_delta_cache_size += delta->getTotalCacheBytes();
-            total_delta_valid_cache_rows += delta->getValidCacheRows();
+                stat.total_delta_rows += delta->getRows();
+                stat.total_delta_size += delta->getBytes();
+
+                stat.delta_index_size += delta->getDeltaIndexBytes();
+
+                total_delta_cache_rows += delta->getTotalCacheRows();
+                total_delta_cache_size += delta->getTotalCacheBytes();
+                total_delta_valid_cache_rows += delta->getValidCacheRows();
+            }
+
+            if (stable->getDMFilesPacks())
+            {
+                stat.total_rows += stable->getRows();
+                stat.total_size += stable->getBytes();
+
+                stat.stable_count += 1;
+                stat.total_pack_count_in_stable += stable->getDMFilesPacks();
+
+                stat.total_stable_rows += stable->getRows();
+                stat.total_stable_size += stable->getBytes();
+                stat.total_stable_size_on_disk += stable->getDMFilesBytesOnDisk();
+            }
         }
-
-        if (stable->getDMFilesPacks())
-        {
-            stat.total_rows += stable->getRows();
-            stat.total_size += stable->getBytes();
-
-            stat.stable_count += 1;
-            stat.total_pack_count_in_stable += stable->getDMFilesPacks();
-
-            stat.total_stable_rows += stable->getRows();
-            stat.total_stable_size += stable->getBytes();
-            stat.total_stable_size_on_disk += stable->getDMFilesBytesOnDisk();
-        }
-    }
+    } // access to `segments` end
 
     stat.delta_rate_rows = static_cast<Float64>(stat.total_delta_rows) / stat.total_rows;
     stat.delta_rate_segments = static_cast<Float64>(stat.delta_count) / stat.segment_count;
@@ -107,26 +108,32 @@ StoreStats DeltaMergeStore::getStoreStats()
     stat.avg_pack_rows_in_stable = static_cast<Float64>(stat.total_stable_rows) / stat.total_pack_count_in_stable;
     stat.avg_pack_size_in_stable = static_cast<Float64>(stat.total_stable_size) / stat.total_pack_count_in_stable;
 
+    // Only collect the snapshot stats for each table when PageStorage V2 is enabled.
+    // Collecting snapshot stats on the global PageStorage V3 for each table will cause too many
+    // waste on CPU and lock contention. Which cause slow queries.
+    if (storage_pool->getPageStorageRunMode() == PageStorageRunMode::ONLY_V2)
     {
-        auto snaps_stat = storage_pool->dataReader()->getSnapshotsStat();
-        stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
-        stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
-        stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
-        stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-    }
-    {
-        auto snaps_stat = storage_pool->logReader()->getSnapshotsStat();
-        stat.storage_delta_num_snapshots = snaps_stat.num_snapshots;
-        stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
-        stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
-        stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-    }
-    {
-        auto snaps_stat = storage_pool->metaReader()->getSnapshotsStat();
-        stat.storage_meta_num_snapshots = snaps_stat.num_snapshots;
-        stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
-        stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
-        stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        {
+            auto snaps_stat = storage_pool->dataReader()->getSnapshotsStat();
+            stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
+            stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
+            stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
+            stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        }
+        {
+            auto snaps_stat = storage_pool->logReader()->getSnapshotsStat();
+            stat.storage_delta_num_snapshots = snaps_stat.num_snapshots;
+            stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
+            stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
+            stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        }
+        {
+            auto snaps_stat = storage_pool->metaReader()->getSnapshotsStat();
+            stat.storage_meta_num_snapshots = snaps_stat.num_snapshots;
+            stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
+            stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
+            stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
+        }
     }
 
     stat.background_tasks_length = background_tasks.length();

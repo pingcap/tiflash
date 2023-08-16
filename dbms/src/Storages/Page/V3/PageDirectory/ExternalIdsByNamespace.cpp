@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 
 #include <mutex>
+#include <optional>
 
 namespace DB::PS::V3
 {
@@ -34,17 +35,17 @@ void ExternalIdsByNamespace::addExternalId(const std::shared_ptr<PageIdV3Interna
     addExternalIdUnlock(external_id);
 }
 
-std::set<PageId> ExternalIdsByNamespace::getAliveIds(NamespaceId ns_id) const
+std::optional<std::set<PageId>> ExternalIdsByNamespace::getAliveIds(NamespaceId ns_id) const
 {
     // Now we assume a lock among all NamespaceIds is good enough.
     std::unique_lock map_guard(mu);
 
-    std::set<PageId> valid_external_ids;
     auto ns_iter = ids_by_ns.find(ns_id);
     if (ns_iter == ids_by_ns.end())
-        return valid_external_ids;
+        return std::nullopt;
 
     // Only scan the given `ns_id`
+    std::set<PageId> valid_external_ids;
     auto & external_ids = ns_iter->second;
     for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
     {
@@ -61,11 +62,8 @@ std::set<PageId> ExternalIdsByNamespace::getAliveIds(NamespaceId ns_id) const
             ++iter;
         }
     }
-    // No valid external pages in this `ns_id`
-    if (valid_external_ids.empty())
-    {
-        ids_by_ns.erase(ns_id);
-    }
+    // The `external_ids` maybe an empty list now, leave it to be
+    // cleaned by unregister
     return valid_external_ids;
 }
 

@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
@@ -403,10 +404,11 @@ void DeltaMergeStore::shutdown()
         return;
 
     LOG_TRACE(log, "Shutdown DeltaMerge start");
-    // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
-    // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
+    // Must shutdown storage path pool to make sure the DMFile remove callbacks
+    // won't remove dmfiles unexpectly.
+    path_pool->shutdown();
+    // shutdown storage pool and clean up the local DMFile remove callbacks
     storage_pool->shutdown();
-    storage_pool->dataUnregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
 
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);
@@ -560,8 +562,15 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // The [offset, rows - offset] can be exceeding the Segment's rowkey_range. Cut the range
             // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
-            if (unlikely(cur_offset != offset))
-                throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
+            RUNTIME_CHECK_MSG(cur_offset == offset && cur_limit != 0,
+                              "invalid cur_offset or cur_limit. is_common_handle={} start_key={} cur_offset={} cur_limit={} rows={} offset={} rowkey_range={}",
+                              is_common_handle,
+                              start_key.toRowKeyValue().toString(),
+                              cur_offset,
+                              cur_limit,
+                              rows,
+                              offset,
+                              rowkey_range.toDebugString());
 
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
@@ -917,7 +926,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         req_info,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1002,7 +1012,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1179,7 +1190,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
     // Don't do compact on starting up.
-    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
     bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()
@@ -1505,18 +1516,14 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     bool try_split_task)
 {
     SegmentReadTasks tasks;
+    Stopwatch watch;
 
     std::shared_lock lock(read_write_mutex);
 
     auto range_it = sorted_ranges.begin();
     auto seg_it = segments.upper_bound(range_it->getStart());
 
-    if (seg_it == segments.end())
-    {
-        throw Exception(
-            fmt::format("Failed to locate segment begin with start in range: {}", range_it->toDebugString()),
-            ErrorCodes::LOGICAL_ERROR);
-    }
+    RUNTIME_CHECK_MSG(seg_it != segments.end(), "Failed to locate segment begin with start in range: {}", range_it->toDebugString());
 
     while (range_it != sorted_ranges.end() && seg_it != segments.end())
     {
@@ -1528,8 +1535,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
             {
                 auto segment = seg_it->second;
                 auto segment_snap = segment->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
-                if (unlikely(!segment_snap))
-                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                RUNTIME_CHECK_MSG(segment_snap, "Failed to get segment snap");
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
             }
 
@@ -1557,7 +1563,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
-    auto tasks_before_split = tasks.size();
+    const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
         /// Try to make task number larger or equal to expected_tasks_count.
@@ -1575,7 +1581,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_DEBUG(
         tracing_logger,
-        "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
+        "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
+        watch.elapsedMilliseconds(),
         sorted_ranges.size(),
         tasks_before_split,
         tasks.size(),

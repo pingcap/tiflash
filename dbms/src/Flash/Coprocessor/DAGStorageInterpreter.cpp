@@ -18,6 +18,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -373,6 +374,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
+    /// handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(remote_read_streams_start_index, generated_column_infos, log, pipeline);
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
@@ -1031,7 +1034,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     }
 
     Names required_columns_tmp;
+    required_columns_tmp.reserve(table_scan.getColumnSize());
     NamesAndTypes source_columns_tmp;
+    source_columns_tmp.reserve(table_scan.getColumnSize());
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.getColumnSize());
     String handle_column_name = MutableSupport::tidb_pk_column_name;
@@ -1041,8 +1046,19 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
+        auto tidb_ci = TiDB::toTiDBColumnInfo(ci);
         ColumnID cid = ci.column_id();
 
+        if (tidb_ci.hasGeneratedColumnFlag())
+        {
+            LOG_DEBUG(log, "got column({}) with generated column flag", i);
+            const auto & data_type = getDataTypeByColumnInfoForComputingLayer(tidb_ci);
+            const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+            generated_column_infos.push_back(std::make_tuple(i, col_name, data_type));
+            source_columns_tmp.emplace_back(NameAndTypePair{col_name, data_type});
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+            continue;
+        }
         // Column ID -1 return the handle column
         String name;
         if (cid == TiDBPkColumnID)

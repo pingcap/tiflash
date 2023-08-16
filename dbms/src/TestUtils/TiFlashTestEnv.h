@@ -76,6 +76,8 @@ public:
     static int globalContextSize() { return global_contexts.size(); }
     static void shutdown();
 
+    static FileProviderPtr getMockFileProvider();
+
     TiFlashTestEnv() = delete;
 
 private:

@@ -538,11 +538,18 @@ void DeltaMergeStore::ingestFiles(
         }
 
         // Check whether all external files are contained by the range.
-        for (const auto & ext_file : external_files)
-        {
-            RUNTIME_CHECK(compare(range.getStart(), ext_file.range.getStart()) <= 0);
-            RUNTIME_CHECK(compare(range.getEnd(), ext_file.range.getEnd()) >= 0);
-        }
+        // Currently this check is disabled, see https://github.com/pingcap/tiflash/pull/6519
+        // for (const auto & ext_file : external_files)
+        // {
+        //     RUNTIME_CHECK(
+        //         compare(range.getStart(), ext_file.range.getStart()) <= 0,
+        //         range.toDebugString(),
+        //         ext_file.range.toDebugString());
+        //     RUNTIME_CHECK(
+        //         compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+        //         range.toDebugString(),
+        //         ext_file.range.toDebugString());
+        // }
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);

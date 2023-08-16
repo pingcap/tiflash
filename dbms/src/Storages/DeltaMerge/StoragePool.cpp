@@ -23,6 +23,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
+#include <common/defines.h>
 #include <fmt/format.h>
 
 
@@ -90,16 +91,19 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
                                       path_pool.getPSDiskDelegatorGlobalMulti("log"),
                                       extractConfig(settings, StorageType::Log),
                                       global_ctx.getFileProvider(),
+                                      global_ctx,
                                       true))
     , data_storage(PageStorage::create("__global__.data",
                                        path_pool.getPSDiskDelegatorGlobalMulti("data"),
                                        extractConfig(settings, StorageType::Data),
                                        global_ctx.getFileProvider(),
+                                       global_ctx,
                                        true))
     , meta_storage(PageStorage::create("__global__.meta",
                                        path_pool.getPSDiskDelegatorGlobalMulti("meta"),
                                        extractConfig(settings, StorageType::Meta),
                                        global_ctx.getFileProvider(),
+                                       global_ctx,
                                        true))
     , global_context(global_ctx)
 {
@@ -108,11 +112,7 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
 
 GlobalStoragePool::~GlobalStoragePool()
 {
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
+    shutdown();
 }
 
 void GlobalStoragePool::restore()
@@ -126,6 +126,15 @@ void GlobalStoragePool::restore()
             return this->gc(global_context.getSettingsRef());
         },
         false);
+}
+
+void GlobalStoragePool::shutdown()
+{
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = {};
+    }
 }
 
 FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
@@ -184,15 +193,18 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
-                                             global_context.getFileProvider());
+                                             global_context.getFileProvider(),
+                                             global_context);
         data_storage_v2 = PageStorage::create(name + ".data",
                                               storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         meta_storage_v2 = PageStorage::create(name + ".meta",
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
-                                              global_ctx.getFileProvider());
+                                              global_context.getFileProvider(),
+                                              global_context);
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
         meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, /*storage_v3_*/ nullptr, nullptr);
@@ -246,18 +258,21 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
                                                  storage_path_pool.getPSDiskDelegatorMulti("log"),
                                                  extractConfig(global_context.getSettingsRef(), StorageType::Log),
                                                  global_context.getFileProvider(),
+                                                 global_context,
                                                  /* use_v3 */ false,
                                                  /* no_more_write_to_v2 */ true);
             data_storage_v2 = PageStorage::create(name + ".data",
                                                   storage_path_pool.getPSDiskDelegatorMulti("data"),
                                                   extractConfig(global_context.getSettingsRef(), StorageType::Data),
-                                                  global_ctx.getFileProvider(),
+                                                  global_context.getFileProvider(),
+                                                  global_context,
                                                   /* use_v3 */ false,
                                                   /* no_more_write_to_v2 */ true);
             meta_storage_v2 = PageStorage::create(name + ".meta",
                                                   storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                                   extractConfig(global_context.getSettingsRef(), StorageType::Meta),
-                                                  global_ctx.getFileProvider(),
+                                                  global_context.getFileProvider(),
+                                                  global_context,
                                                   /* use_v3 */ false,
                                                   /* no_more_write_to_v2 */ true);
         }
@@ -525,30 +540,31 @@ StoragePool::~StoragePool()
     shutdown();
 }
 
-void StoragePool::enableGC()
-{
-    // The data in V3 will be GCed by `GlobalStoragePool::gc`, only register gc task under only v2/mix mode
-    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
-    {
-        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
-    }
-}
-
-void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
+void StoragePool::startup(ExternalPageCallbacks && callbacks)
 {
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
+        // For V2, we need a per physical table gc handle to perform the gc of its PageStorage instances.
         data_storage_v2->registerExternalPagesCallbacks(callbacks);
+        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
         break;
     }
     case PageStorageRunMode::ONLY_V3:
+    {
+        // For V3, the GC is handled by `GlobalStoragePool::gc`, just register callbacks is OK.
+        data_storage_v3->registerExternalPagesCallbacks(callbacks);
+        break;
+    }
     case PageStorageRunMode::MIX_MODE:
     {
-        // We have transformed all pages from V2 to V3 in `restore`, so
-        // only need to register callbacks for V3.
+        // For V3, the GC is handled by `GlobalStoragePool::gc`.
+        // Since we have transformed all external pages from V2 to V3 in `StoragePool::restore`,
+        // just register callbacks to V3 is OK
         data_storage_v3->registerExternalPagesCallbacks(callbacks);
+        // we still need a gc_handle to reclaim the V2 disk space.
+        gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
         break;
     }
     default:
@@ -556,19 +572,36 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
     }
 }
 
-void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
+void StoragePool::shutdown()
 {
+    // Note: Should reset the gc_handle before unregistering the pages callbacks
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
+
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
         data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
         break;
     }
     case PageStorageRunMode::ONLY_V3:
+    {
+        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        break;
+    }
     case PageStorageRunMode::MIX_MODE:
     {
-        // We have transformed all pages from V2 to V3 in `restore`, so
+        meta_storage_v2->shutdown();
+        log_storage_v2->shutdown();
+        data_storage_v2->shutdown();
+        // We have transformed all external pages from V2 to V3 in `restore`, so
         // only need to unregister callbacks for V3.
         data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
         break;
@@ -577,7 +610,6 @@ void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
 }
-
 
 bool StoragePool::doV2Gc(const Settings & settings)
 {
@@ -617,15 +649,6 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 
     // Only do the v2 GC
     return doV2Gc(settings);
-}
-
-void StoragePool::shutdown()
-{
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
 }
 
 void StoragePool::drop()

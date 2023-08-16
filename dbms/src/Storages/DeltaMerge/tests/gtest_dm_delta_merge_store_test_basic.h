@@ -77,6 +77,12 @@ public:
         return s;
     }
 
+    Strings getAllStorePaths() const
+    {
+        auto path_delegate = store->path_pool->getStableDiskDelegator();
+        return path_delegate.listPaths();
+    }
+
 protected:
     DeltaMergeStorePtr store;
 };

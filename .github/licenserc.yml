@@ -37,5 +37,7 @@ header:
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'
+    - '**/OWNERS'
+    - 'OWNERS_ALIASES'
 
   comment: on-failure

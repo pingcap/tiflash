@@ -52,6 +52,11 @@ using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
 struct GCOptions;
 
+namespace tests
+{
+class DeltaMergeStoreTest;
+}
+
 inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStats
@@ -155,6 +160,7 @@ struct StoreStats
 class DeltaMergeStore : private boost::noncopyable
 {
 public:
+    friend class ::DB::DM::tests::DeltaMergeStoreTest;
     struct Settings
     {
         NotCompress not_compress_columns{};

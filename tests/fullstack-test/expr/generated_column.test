@@ -1,0 +1,45 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> CREATE TABLE test.t (`COL102` float DEFAULT NULL, `COL103` float DEFAULT NULL, `COL1` float GENERATED ALWAYS AS ((`COL102` DIV 10)) VIRTUAL, `COL2` varchar(20) COLLATE utf8mb4_bin DEFAULT NULL, `COL4` datetime DEFAULT NULL, `COL3` bigint DEFAULT NULL, `COL5` time DEFAULT NULL, KEY `UK_COL1` (`COL1`) /*!80000 INVISIBLE */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+mysql> insert into test.t (COL102, COL103, COL2, COL4, COL3, COL5) values (NULL, NULL, NULL, NULL, NULL, NULL);
+mysql> insert into test.t (COL102, COL103, COL2, COL4, COL3, COL5) values (NULL, NULL, 'r2Ic', NULL, NULL, NULL);
+mysql> insert into test.t (COL102, COL103, COL2, COL4, COL3, COL5) values (NULL, NULL, NULL, NULL, NULL, '700:11:11.123456');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash'; select * from test.t where col2 = 'r2Ic';
++--------+--------+------+------+------+------+------+
+| COL102 | COL103 | COL1 | COL2 | COL4 | COL3 | COL5 |
++--------+--------+------+------+------+------+------+
+|   NULL |   NULL | NULL | r2Ic | NULL | NULL | NULL |
++--------+--------+------+------+------+------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select * from test.t where col1 is NULL or col2 = 'r2Ic';
++--------+--------+------+------+------+------+-----------+
+| COL102 | COL103 | COL1 | COL2 | COL4 | COL3 | COL5      |
++--------+--------+------+------+------+------+-----------+
+|   NULL |   NULL | NULL | NULL | NULL | NULL | NULL      |
+|   NULL |   NULL | NULL | r2Ic | NULL | NULL | NULL      |
+|   NULL |   NULL | NULL | NULL | NULL | NULL | 700:11:11 |
++--------+--------+------+------+------+------+-----------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select hour(col5) from test.t where col2 is NULL;
++------------+
+| hour(col5) |
++------------+
+|       NULL |
+|        700 |
++------------+

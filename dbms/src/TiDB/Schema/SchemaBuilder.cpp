@@ -139,6 +139,11 @@ bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
     {
         return a.flen != b.flen || a.decimal != b.decimal;
     }
+    else if (a.tp == TiDB::TypeDatetime || a.tp == TiDB::TypeDate || a.tp == TiDB::TypeTimestamp)
+    {
+        // detect fsp changed in MyDateTime/MyTime
+        return a.flen != b.flen || a.decimal != b.decimal;
+    }
     return false;
 }
 

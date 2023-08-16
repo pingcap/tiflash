@@ -1190,7 +1190,7 @@ try
                     // check that lossy changes is forbidden
                     // check that changing the UNSIGNED attribute is forbidden
                     throw Exception(
-                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {}({}) from {} to {}",
+                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {} (column_id={}) from {} to {}",
                                     getName(),
                                     command.column_name,
                                     command.column_id,
@@ -1555,6 +1555,9 @@ void StorageDeltaMerge::startup()
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
+// Avoid calling virtual function `shutdown` in destructor,
+// we should use this function instead.
+// https://stackoverflow.com/a/12093250/4412495
 void StorageDeltaMerge::shutdownImpl()
 {
     bool v = false;

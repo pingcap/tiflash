@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
@@ -207,6 +208,7 @@ class RegionPersisterTest : public ::testing::Test
 public:
     RegionPersisterTest()
         : dir_path(TiFlashTestEnv::getTemporaryPath("/region_persister_test"))
+        , log(Logger::get())
     {
     }
 
@@ -234,6 +236,7 @@ protected:
     String dir_path;
 
     std::unique_ptr<PathPool> mocked_path_pool;
+    LoggerPtr log;
 };
 
 TEST_F(RegionPersisterTest, persister)
@@ -390,9 +393,9 @@ try
         {
             auto region = std::make_shared<Region>(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, tso++);
-            region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-            region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-            region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+            region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
+            region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+            region->insert(ColumnFamilyType::Lock, TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
             persister.persist(*region);
 
@@ -416,6 +419,74 @@ try
             auto new_region = new_regions[i];
             ASSERT_EQ(*new_region, *old_region) << " region:" << i;
         }
+    }
+}
+CATCH
+
+
+TEST_F(RegionPersisterTest, LargeRegion)
+try
+{
+    RegionManager region_manager;
+
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+
+    const TableID table_id = 100;
+    const RegionID region_id_base = 20;
+    const String large_value(1024 * 512, 'v');
+
+    PageStorageConfig config;
+    config.blob_file_limit_size = 32 * MB;
+    RegionMap regions;
+    {
+        UInt64 tso = 0;
+        RegionPersister persister(ctx, region_manager);
+        persister.restore(*mocked_path_pool, nullptr, config);
+
+        // Persist region
+        auto gen_region_data = [&](RegionID region_id, UInt64 expect_size) {
+            auto region = std::make_shared<Region>(createRegionMeta(region_id, table_id));
+            UInt64 handle_id = 0;
+            while (true)
+            {
+                if (auto data_size = region->dataSize(); data_size > expect_size)
+                {
+                    LOG_INFO(log, "will persist region_id={} size={}", region_id, data_size);
+                    break;
+                }
+                TiKVKey key = RecordKVFormat::genKey(table_id, handle_id, tso++);
+                region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue(large_value.data()));
+                region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+                region->insert(ColumnFamilyType::Lock, TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+                handle_id += 1;
+            }
+            return region;
+        };
+
+        std::vector<double> test_scales{0.5, 1.0, 1.5, 2.5};
+        for (size_t idx = 0; idx < test_scales.size(); ++idx)
+        {
+            auto scale = test_scales[idx];
+            auto region = gen_region_data(region_id_base + idx, config.blob_file_limit_size * scale);
+            persister.persist(*region);
+            regions.emplace(region->id(), region);
+        }
+        ASSERT_EQ(regions.size(), test_scales.size());
+    }
+
+    RegionMap restored_regions;
+    {
+        RegionPersister persister(ctx, region_manager);
+        restored_regions = persister.restore(*mocked_path_pool, nullptr, config);
+    }
+    ASSERT_EQ(restored_regions.size(), regions.size());
+    for (const auto & [region_id, region] : regions)
+    {
+        ASSERT_NE(restored_regions.find(region_id), restored_regions.end()) << region_id;
+        auto & new_region = restored_regions.at(region_id);
+        ASSERT_EQ(new_region->id(), region_id);
+        ASSERT_EQ(new_region->confVer(), region->confVer()) << region_id;
+        ASSERT_EQ(new_region->dataSize(), region->dataSize()) << region_id;
     }
 }
 CATCH

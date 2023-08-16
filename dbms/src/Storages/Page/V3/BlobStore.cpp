@@ -32,6 +32,7 @@
 #include <Storages/Page/WriteBatch.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
@@ -58,6 +59,7 @@ extern const int CHECKSUM_DOESNT_MATCH;
 namespace FailPoints
 {
 extern const char force_change_all_blobs_to_read_only[];
+extern const char exception_after_large_write_exceed[];
 } // namespace FailPoints
 
 namespace PS::V3
@@ -66,6 +68,8 @@ static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 
 using BlobStatPtr = BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
+static_assert(!std::is_same_v<ChecksumClass, Digest::XXH3>, "The checksum must support streaming checksum");
+static_assert(!std::is_same_v<ChecksumClass, Digest::City128>, "The checksum must support streaming checksum");
 
 /**********************
   * BlobStore methods *
@@ -159,7 +163,7 @@ FileUsageStatistics BlobStore::getFileUsageStatistics() const
     return usage;
 }
 
-PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     PageEntriesEdit edit;
     for (auto & write : wb.getWrites())
@@ -168,52 +172,113 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
         {
         case WriteBatchWriteType::PUT:
         {
+            const auto [blob_id, offset_in_file] = getPosFromStats(write.size);
+            auto blob_file = getBlobFile(blob_id);
             ChecksumClass digest;
-            PageEntryV3 entry;
+            // swap from WriteBatch instead of copying
+            PageFieldOffsetChecksums field_offset_and_checksum;
+            field_offset_and_checksum.swap(write.offsets);
 
-            auto [blob_id, offset_in_file] = getPosFromStats(write.size);
-
-            entry.file_id = blob_id;
-            entry.size = write.size;
-            entry.tag = write.tag;
-            entry.offset = offset_in_file;
-            // padding size won't work on big write batch
-            entry.padded_size = 0;
-
-            BufferBase::Buffer data_buf = write.read_buffer->buffer();
-
-            digest.update(data_buf.begin(), write.size);
-            entry.checksum = digest.checksum();
-
-            UInt64 field_begin, field_end;
-
-            for (size_t i = 0; i < write.offsets.size(); ++i)
+            ChecksumClass field_digest;
+            size_t cur_field_index = 0;
+            UInt64 cur_field_begin = 0, cur_field_end = 0;
+            if (!field_offset_and_checksum.empty())
             {
-                ChecksumClass field_digest;
-                field_begin = write.offsets[i].first;
-                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
-
-                field_digest.update(data_buf.begin() + field_begin, field_end - field_begin);
-                write.offsets[i].second = field_digest.checksum();
-            }
-
-            if (!write.offsets.empty())
-            {
-                // we can swap from WriteBatch instead of copying
-                entry.field_offsets.swap(write.offsets);
+                cur_field_begin = field_offset_and_checksum[cur_field_index].first;
+                cur_field_end = (cur_field_index == field_offset_and_checksum.size() - 1) ? write.size : field_offset_and_checksum[cur_field_index + 1].first;
             }
 
             try
             {
-                auto blob_file = getBlobFile(blob_id);
-                blob_file->write(data_buf.begin(), offset_in_file, write.size, write_limiter);
+                UInt64 buffer_begin_in_page = 0, buffer_end_in_page = 0;
+
+                while (true)
+                {
+                    // The write batch data size is large, we do NOT copy the data into a temporary buffer in order to
+                    // make the memory usage of tiflash more smooth. Instead, we process the data in ReadBuffer in a
+                    // streaming manner.
+                    BufferBase::Buffer data_buf = write.read_buffer->buffer();
+                    buffer_end_in_page = buffer_begin_in_page + data_buf.size();
+
+                    // TODO: Add static check to make sure the checksum support streaming
+                    digest.update(data_buf.begin(), data_buf.size()); // the checksum of the whole page
+
+                    // the checksum of each field
+                    if (!field_offset_and_checksum.empty())
+                    {
+                        while (true)
+                        {
+                            auto field_begin_in_buf = cur_field_begin <= buffer_begin_in_page ? 0 : cur_field_begin - buffer_begin_in_page;
+                            auto field_length_in_buf = cur_field_end > buffer_end_in_page ? data_buf.size() - field_begin_in_buf : cur_field_end - buffer_begin_in_page - field_begin_in_buf;
+                            field_digest.update(data_buf.begin() + field_begin_in_buf, field_length_in_buf);
+
+                            /*
+                             * This piece of buffer does not contain all data of current field, break the loop
+                             * PageBegin                                                            PageEnd
+                             *     │       │----------- Buffer Range -----------│                       │
+                             *     │    │------------- Current Field --------------│                    |
+                             *             ↑                                    ↑  Update field checksum
+                             */
+                            if (cur_field_end > buffer_end_in_page)
+                                break;
+
+                            /*
+                             * This piece of buffer contains all data of current field, update
+                             * checksum and continue to try get the checksum of next field until
+                             * this piece of buffer does not contain all data of field.
+                             * PageBegin                                                            PageEnd
+                             *     │       │----------- Buffer Range -----------│                       │
+                             *     │     │---- Field i ----│---- Field j ----│--- Field k ---│          |
+                             *             ↑               ↑                 ↑  ↑ Update field checksum
+                             */
+                            field_offset_and_checksum[cur_field_index].second = field_digest.checksum();
+
+                            // all fields' checksum is OK, break the loop
+                            if (cur_field_index >= field_offset_and_checksum.size() - 1)
+                                break;
+
+                            field_digest = ChecksumClass(); // reset
+                            cur_field_index += 1;
+                            cur_field_begin = field_offset_and_checksum[cur_field_index].first;
+                            cur_field_end = (cur_field_index == field_offset_and_checksum.size() - 1) ? write.size : field_offset_and_checksum[cur_field_index + 1].first;
+                        }
+                    }
+
+                    blob_file->write(data_buf.begin(), offset_in_file + buffer_begin_in_page, data_buf.size(), write_limiter);
+                    buffer_begin_in_page += data_buf.size();
+
+                    fiu_do_on(FailPoints::exception_after_large_write_exceed, {
+                        if (auto v = FailPointHelper::getFailPointVal(FailPoints::exception_after_large_write_exceed); v)
+                        {
+                            auto failpoint_bound = std::any_cast<size_t>(v.value());
+                            if (buffer_end_in_page > failpoint_bound)
+                            {
+                                throw Exception(ErrorCodes::FAIL_POINT_ERROR, "failpoint throw exception buffer_end={} write_end={}", buffer_end_in_page, failpoint_bound);
+                            }
+                        }
+                    });
+
+                    if (!write.read_buffer->next())
+                        break;
+                }
             }
             catch (DB::Exception & e)
             {
+                // If exception happens, remove the allocated space in BlobStat
                 removePosFromStats(blob_id, offset_in_file, write.size);
-                LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
+                LOG_ERROR(log, "large write failed, blob_id={} offset_in_file={} size={} msg={}", blob_id, offset_in_file, write.size, e.message());
                 throw e;
             }
+
+            const auto entry = PageEntryV3{
+                .file_id = blob_id,
+                .size = write.size,
+                .padded_size = 0, // padding size won't work on large write batch
+                .tag = write.tag,
+                .offset = offset_in_file,
+                .checksum = digest.checksum(),
+                .field_offsets = std::move(field_offset_and_checksum),
+            };
 
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
@@ -239,7 +304,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
     return edit;
 }
 
-PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+PageEntriesEdit BlobStore::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -272,7 +337,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
-                throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
+                throw Exception(fmt::format("write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
@@ -285,7 +350,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     // This can avoid allocating a big buffer for writing data and can smooth memory usage.
     if (all_page_data_size > config.file_limit_size)
     {
-        return handleLargeWrite(wb, write_limiter);
+        LOG_INFO(log, "handling large write, all_page_data_size={}", all_page_data_size);
+        return handleLargeWrite(std::move(wb), write_limiter);
     }
 
     char * buffer = static_cast<char *>(alloc(all_page_data_size));
@@ -398,7 +464,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
-        LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
+        LOG_ERROR(log, "write failed, blob_id={} offset_in_file={} size={} actually_allocated_size={} msg={}", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
         throw e;
     }
 
@@ -579,20 +645,49 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         }
     }
 
-    // Read with `FieldReadInfos`, buf_size must not be 0.
-    if (buf_size == 0)
+    PageMap page_map;
+    if (unlikely(buf_size == 0))
     {
-        throw Exception("Reading with fields but entry size is 0.", ErrorCodes::LOGICAL_ERROR);
+        // We should never persist an empty column inside a block. If the buf size is 0
+        // then this read with `FieldReadInfos` could be completely eliminated in the upper
+        // layer. Log a warning to check if it happens.
+        {
+            FmtBuffer buf;
+            buf.joinStr(
+                to_read.begin(),
+                to_read.end(),
+                [](const FieldReadInfo & info, FmtBuffer & fb) {
+                    fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+                },
+                ",");
+#ifndef NDEBUG
+            // throw an exception under debug mode so we should change the upper layer logic
+            throw Exception(fmt::format("Reading with fields but entry size is 0, read_info=[{}]", buf.toString()), ErrorCodes::LOGICAL_ERROR);
+#endif
+            // Log a warning under production release
+            LOG_WARNING(log, "Reading with fields but entry size is 0, read_info=[{}]", buf.toString());
+        }
+
+        // Allocating buffer with size == 0 could lead to unexpected behavior, skip the allocating and return
+        for (const auto & [page_id, entry, fields] : to_read)
+        {
+            UNUSED(entry, fields);
+            Page page(page_id);
+            page.data = ByteBuffer(nullptr, nullptr);
+            page_map.emplace(page_id.low, std::move(page));
+        }
+        return page_map;
     }
 
-    char * data_buf = static_cast<char *>(alloc(buf_size));
-    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
+
+    // Allocate one for holding all pages data
+    char * shared_data_buf = static_cast<char *>(alloc(buf_size));
+    MemHolder shared_mem_holder = createMemHolder(shared_data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
 
     std::set<FieldOffsetInsidePage> fields_offset_in_page;
-    char * pos = data_buf;
-    PageMap page_map;
+    char * pos = shared_data_buf;
     for (const auto & [page_id_v3, entry, fields] : to_read)
     {
         size_t read_size_this_entry = 0;
@@ -613,8 +708,8 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                 auto field_checksum = digest.checksum();
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
-                    throw Exception(
-                        fmt::format("Reading with fields meet checksum not match "
+                    throw Exception(ErrorCodes::CHECKSUM_DOESNT_MATCH,
+                                    "Reading with fields meet checksum not match "
                                     "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
                                     "[field_index={}] [field_offset={}] [field_size={}] "
                                     "[entry={}] [file={}]",
@@ -625,8 +720,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                                     beg_offset,
                                     size_to_read,
                                     toDebugString(entry),
-                                    blob_file->getPath()),
-                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                                    blob_file->getPath());
                 }
             }
 
@@ -636,7 +730,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
         Page page(page_id_v3);
         page.data = ByteBuffer(pos, write_offset);
-        page.mem_holder = mem_holder;
+        page.mem_holder = shared_mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
         page_map.emplace(page_id_v3.low, std::move(page));
@@ -644,11 +738,22 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         pos = write_offset;
     }
 
-    if (unlikely(pos != data_buf + buf_size))
-        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
-                                    data_buf + buf_size,
-                                    pos),
+    if (unlikely(pos != shared_data_buf + buf_size))
+    {
+        FmtBuffer buf;
+        buf.joinStr(
+            to_read.begin(),
+            to_read.end(),
+            [](const FieldReadInfo & info, FmtBuffer & fb) {
+                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+            },
+            ",");
+        throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
+                                    shared_data_buf + buf_size,
+                                    pos,
+                                    buf.toString()),
                         ErrorCodes::LOGICAL_ERROR);
+    }
     return page_map;
 }
 
@@ -720,30 +825,49 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(page_id_v3.low, page);
+
+        // Calculate the field_offsets from page entry
+        for (size_t index = 0; index < entry.field_offsets.size(); index++)
+        {
+            const auto offset = entry.field_offsets[index].first;
+            page.field_offsets.emplace(index, offset);
+        }
+
+        page_map.emplace(page_id_v3.low, std::move(page));
 
         pos += entry.size;
     }
 
     if (unlikely(pos != data_buf + buf_size))
-        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
+    {
+        FmtBuffer buf;
+        buf.joinStr(
+            entries.begin(),
+            entries.end(),
+            [](const PageIDAndEntryV3 & id_entry, FmtBuffer & fb) {
+                fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, toDebugString(id_entry.second));
+            },
+            ",");
+        throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
                                     data_buf + buf_size,
-                                    pos),
+                                    pos,
+                                    buf.toString()),
                         ErrorCodes::LOGICAL_ERROR);
+    }
 
     return page_map;
 }
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    if (!id_entry.second.isValid())
+    const auto & [page_id_v3, entry] = id_entry;
+    const size_t buf_size = entry.size;
+
+    if (!entry.isValid())
     {
         Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
         return page_not_found;
     }
-
-    const auto & [page_id_v3, entry] = id_entry;
-    const size_t buf_size = entry.size;
 
     // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
@@ -782,11 +906,19 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
+    // Calculate the field_offsets from page entry
+    for (size_t index = 0; index < entry.field_offsets.size(); index++)
+    {
+        const auto offset = entry.field_offsets[index].first;
+        page.field_offsets.emplace(index, offset);
+    }
+
     return page;
 }
 
 BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read_blob).Increment();
     assert(buffers != nullptr);
     BlobFilePtr blob_file = getBlobFile(blob_id);
     try

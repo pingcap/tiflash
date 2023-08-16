@@ -19,11 +19,11 @@
 #include <fiu-local.h>
 #include <fiu.h>
 
+#include <any>
 #include <unordered_map>
 
 namespace Poco
 {
-class Logger;
 namespace Util
 {
 class LayeredConfiguration;
@@ -48,7 +48,9 @@ class FailPointChannel;
 class FailPointHelper
 {
 public:
-    static void enableFailPoint(const String & fail_point_name);
+    static void enableFailPoint(const String & fail_point_name, std::optional<std::any> v = std::nullopt);
+
+    static std::optional<std::any> getFailPointVal(const String & fail_point_name);
 
     static void enablePauseFailPoint(const String & fail_point_name, UInt64 time);
 
@@ -67,6 +69,9 @@ public:
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
 
 private:
+#ifdef FIU_ENABLE
     static std::unordered_map<String, std::shared_ptr<FailPointChannel>> fail_point_wait_channels;
+    static std::unordered_map<String, std::any> fail_point_val;
+#endif
 };
 } // namespace DB

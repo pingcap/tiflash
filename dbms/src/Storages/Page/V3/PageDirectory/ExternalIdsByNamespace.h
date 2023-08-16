@@ -40,7 +40,8 @@ public:
 
     // Get all alive external ids of given `ns_id`
     // Will also cleanup the invalid external ids.
-    std::set<PageId> getAliveIds(NamespaceId ns_id) const;
+    // If the ns_id is invalid, std::nullopt will be returned.
+    std::optional<std::set<PageId>> getAliveIds(NamespaceId ns_id) const;
 
     // After table dropped, the `getAliveIds` with specified
     // `ns_id` will not be cleaned. We need this method to

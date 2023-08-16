@@ -78,35 +78,35 @@ try
 }
 CATCH
 
-TEST_P(StoreIngestTest, RangeSmallerThanData)
-try
-{
-    ASSERT_EQ(0, getRowsN());
-    auto block1 = fillBlock({.range = {0, 100}});
-    ASSERT_THROW({
-        ingestFiles({.range = {20, 40}, .blocks = {block1}, .clear = false});
-    },
-                 DB::Exception);
-}
-CATCH
-
-TEST_P(StoreIngestTest, RangeLargerThanData)
-try
-{
-    ASSERT_EQ(0, getRowsN());
-    auto block1 = fillBlock({.range = {0, 100}});
-    ingestFiles({.range = {-100, 110}, .blocks = {block1}, .clear = false});
-    ASSERT_TRUE(isFilled(0, 100));
-    ASSERT_EQ(100, getRowsN());
-
-    fill(-500, 500);
-    ingestFiles({.range = {-100, 110}, .blocks = {block1}, .clear = true});
-    ASSERT_TRUE(isFilled(-500, -100));
-    ASSERT_TRUE(isFilled(0, 100));
-    ASSERT_TRUE(isFilled(110, 500));
-    ASSERT_EQ(890, getRowsN());
-}
-CATCH
+//TEST_P(StoreIngestTest, RangeSmallerThanData)
+//try
+//{
+//    ASSERT_EQ(0, getRowsN());
+//    auto block1 = fillBlock({.range = {0, 100}});
+//    ASSERT_THROW({
+//        ingestFiles({.range = {20, 40}, .blocks = {block1}, .clear = false});
+//    },
+//                 DB::Exception);
+//}
+//CATCH
+//
+//TEST_P(StoreIngestTest, RangeLargerThanData)
+//try
+//{
+//    ASSERT_EQ(0, getRowsN());
+//    auto block1 = fillBlock({.range = {0, 100}});
+//    ingestFiles({.range = {-100, 110}, .blocks = {block1}, .clear = false});
+//    ASSERT_TRUE(isFilled(0, 100));
+//    ASSERT_EQ(100, getRowsN());
+//
+//    fill(-500, 500);
+//    ingestFiles({.range = {-100, 110}, .blocks = {block1}, .clear = true});
+//    ASSERT_TRUE(isFilled(-500, -100));
+//    ASSERT_TRUE(isFilled(0, 100));
+//    ASSERT_TRUE(isFilled(110, 500));
+//    ASSERT_EQ(890, getRowsN());
+//}
+//CATCH
 
 TEST_P(StoreIngestTest, OverlappedFiles)
 try

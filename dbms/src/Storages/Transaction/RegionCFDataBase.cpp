@@ -355,6 +355,13 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 UNUSED(versions_to_last_change);
                 break;
             }
+            case TXN_SOURCE_PREFIX_FOR_LOCK:
+            {
+                // Used for CDC, useless for TiFlash.
+                UInt64 txn_source_prefic = readVarUInt(data, len);
+                UNUSED(txn_source_prefic);
+                break;
+            }
             default:
             {
                 std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();

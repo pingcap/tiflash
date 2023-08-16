@@ -561,8 +561,9 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        dm_context.scan_context->total_create_snapshot_time_ms += watch.elapsedMilliseconds(););
+    SCOPE_EXIT({
+        dm_context.scan_context->total_create_snapshot_time_ms += watch.elapsedMilliseconds();
+    });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)

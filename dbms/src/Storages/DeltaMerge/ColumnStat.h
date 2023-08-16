@@ -36,7 +36,7 @@ using ColumnStats = std::unordered_map<ColId, ColumnStat>;
 
 inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
 {
-    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+    DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
     size_t count;
     DB::assertString("Columns: ", buf);
@@ -61,7 +61,7 @@ inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadB
         DB::readString(type_name, buf);
         DB::assertChar('\n', buf);
 
-        auto type = data_type_factory.get(type_name);
+        auto type = data_type_factory.getOrSet(type_name);
         column_sats.emplace(id, ColumnStat{id, type, avg_size, serialized_bytes});
     }
 }
