@@ -97,10 +97,16 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     if (diff.old_table_id == diff.table_id && diff.old_schema_id == diff.schema_id)
     {
         // Only internal changes in non-partitioned table, not affecting TiFlash
-        LOG_DEBUG(log, "Table is going to be exchanged, skipping for now. database_id={} table_id={}", diff.schema_id, diff.table_id);
+        LOG_DEBUG(
+            log,
+            "Table is going to be exchanged, skipping for now. database_id={} table_id={}",
+            diff.schema_id, diff.table_id);
         return;
     }
-    LOG_DEBUG(log, "Table and partition is exchanged. database_id={} table_id={}, part_db_id={}, part_table_id={} partition_id={}", diff.old_schema_id, diff.old_table_id, diff.affected_opts[0].schema_id, diff.affected_opts[0].table_id, diff.table_id);
+    LOG_DEBUG(
+        log,
+        "Table and partition is exchanged. database_id={} table_id={}, part_db_id={}, part_table_id={} partition_id={}",
+        diff.old_schema_id, diff.old_table_id, diff.affected_opts[0].schema_id, diff.affected_opts[0].table_id, diff.table_id);
     /// Table_id in diff is the partition id of which will be exchanged,
     /// Schema_id in diff is the non-partition table's schema id
     /// Old_table_id in diff is the non-partition table's table id
