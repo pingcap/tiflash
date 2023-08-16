@@ -32,7 +32,7 @@ enum class ColumnDefaultKind
 
 
 ColumnDefaultKind columnDefaultKindFromString(const std::string & str);
-std::string toString(const ColumnDefaultKind type);
+std::string toString(const ColumnDefaultKind kind);
 
 
 struct ColumnDefault

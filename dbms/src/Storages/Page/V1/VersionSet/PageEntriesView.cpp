@@ -14,6 +14,8 @@
 
 #include <Storages/Page/V1/VersionSet/PageEntriesVersionSetWithDelta.h>
 
+#include <ranges>
+
 namespace DB::PS::V1
 {
 ////  PageEntryMapView
@@ -55,7 +57,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     return entry;
 }
 
-const PageEntry PageEntriesView::at(const PageId page_id) const // NOLINT
+PageEntry PageEntriesView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
     if (!entry)
@@ -176,11 +178,11 @@ size_t PageEntriesView::numPages() const
 
     for (auto node = nodes.rbegin(); node != nodes.rend(); ++node) // NOLINT
     {
-        for (const auto & pair : (*node)->page_ref)
+        for (const auto & pair : node->page_ref)
         {
             page_ids.insert(pair.first);
         }
-        for (const auto & page_id_to_del : (*node)->ref_deletions)
+        for (const auto & page_id_to_del : node->ref_deletions)
         {
             page_ids.erase(page_id_to_del);
         }

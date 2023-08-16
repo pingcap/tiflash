@@ -46,11 +46,11 @@ struct Pattern
     std::string regexp;
     std::string function;
     std::vector<Retention> retentions;
-    UInt16 priority;
-    UInt8 is_default;
+    UInt16 priority = 0;
+    UInt8 is_default = 0;
 };
 
-static Pattern readOnePattern(const AbstractConfiguration & config, const std::string & path)
+Pattern readOnePattern(const AbstractConfiguration & config, const std::string & path)
 {
     Pattern pattern;
     AbstractConfiguration::Keys keys;
@@ -83,7 +83,7 @@ static Pattern readOnePattern(const AbstractConfiguration & config, const std::s
     return pattern;
 }
 
-static std::vector<Pattern> readPatterns(const AbstractConfiguration & config, const std::string & section)
+std::vector<Pattern> readPatterns(const AbstractConfiguration & config, const std::string & section)
 {
     AbstractConfiguration::Keys keys;
     std::vector<Pattern> result;
@@ -112,7 +112,7 @@ static std::vector<Pattern> readPatterns(const AbstractConfiguration & config, c
     return result;
 }
 
-static Strings getAllGraphiteSections(const AbstractConfiguration & config)
+Strings getAllGraphiteSections(const AbstractConfiguration & config)
 {
     Strings result;
 

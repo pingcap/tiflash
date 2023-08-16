@@ -313,8 +313,8 @@ struct LogReader::RecyclableHeader
 {
     Format::ChecksumType checksum = 0;
     UInt16 length = 0;
-    UInt8 type;
-    Format::LogNumberType log_num;
+    UInt8 type = 0;
+    Format::LogNumberType log_num = 0;
 };
 
 std::tuple<UInt8, size_t> LogReader::deserializeHeader(LogReader::RecyclableHeader * hdr, size_t * drop_size)

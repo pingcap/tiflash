@@ -16,6 +16,7 @@
 #include <Storages/Transaction/HashCheckHelper.h>
 #include <fcntl.h>
 
+// NOLINTBEGIN
 namespace DB
 {
 
@@ -115,3 +116,4 @@ void checkObjectHashInFile(
 } // namespace FileHashCheck
 
 } // namespace DB
+// NOLINTEND

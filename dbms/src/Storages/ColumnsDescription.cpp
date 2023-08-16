@@ -60,7 +60,7 @@ Names ColumnsDescription::getNamesOfPhysical() const
 
 NameAndTypePair ColumnsDescription::getPhysical(const String & column_name) const
 {
-    for (auto & it : boost::join(ordinary, materialized))
+    for (const auto & it : boost::join(ordinary, materialized))
         if (it.name == column_name)
             return it;
     throw Exception("There is no column " + column_name + " in table.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
@@ -69,7 +69,7 @@ NameAndTypePair ColumnsDescription::getPhysical(const String & column_name) cons
 
 bool ColumnsDescription::hasPhysical(const String & column_name) const
 {
-    for (auto & it : boost::join(ordinary, materialized))
+    for (const auto & it : boost::join(ordinary, materialized))
         if (it.name == column_name)
             return true;
     return false;
@@ -156,7 +156,7 @@ ColumnsDescription ColumnsDescription::parse(const String & str)
         assertChar('\n', buf);
 
         const char * begin = default_expr_str.data();
-        const auto end = begin + default_expr_str.size();
+        const auto * const end = begin + default_expr_str.size();
         ASTPtr default_expr = parseQuery(expr_parser, begin, end, "default expression", 0);
 
         if (ColumnDefaultKind::Default == default_kind)
