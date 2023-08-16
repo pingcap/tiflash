@@ -241,7 +241,7 @@ protected:
         assert(v != current);
         if (current != nullptr)
         {
-            current->release(lock);
+            current->release(lock); // NOLINT
         }
         current = v;
         current->increase(lock);

@@ -59,7 +59,7 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetW
     std::set<PageFileIdAndLevel> live_files;
     std::set<PageId> live_normal_pages;
     // Iterate all snapshot to collect all PageFile in used.
-    for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
+    for (auto s = snapshots->next; s != snapshots.get(); s = s->next) // NOLINT
     {
         collectLiveFilesFromVersionList(*(s->version()), live_files, live_normal_pages, need_scan_page_ids);
     }
@@ -69,7 +69,7 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetW
     return {live_files, live_normal_pages};
 }
 
-void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
+void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( // NOLINT
     const PageEntriesView & view,
     std::set<PageFileIdAndLevel> & live_files,
     std::set<PageId> & live_normal_pages,

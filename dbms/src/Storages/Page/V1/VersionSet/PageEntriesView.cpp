@@ -174,7 +174,7 @@ size_t PageEntriesView::numPages() const
     for (auto node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         nodes.emplace_back(node);
 
-    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node)
+    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node) // NOLINT
     {
         for (const auto & pair : (*node)->page_ref)
         {
