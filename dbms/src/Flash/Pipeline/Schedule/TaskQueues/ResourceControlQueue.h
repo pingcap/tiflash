@@ -77,10 +77,6 @@ private:
         }
     };
 
-    // 1. Update cpu time/RU of resource group.
-    // 2. Update resource_group_infos and reorder resource_group_infos by priority.
-    void updateResourceGroupStatisticWithoutLock(const std::string & name, UInt64 consumed_cpu_time);
-
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();
 
@@ -94,12 +90,6 @@ private:
 
     std::priority_queue<ResourceGroupInfo> resource_group_infos;
     ResourceGroupTaskQueue resource_group_task_queues;
-
-    // <resource_group_name, acculumated_cpu_time>
-    // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.
-    // This is to prevent the resource group from being updated too frequently.
-    // todo: Should register callback to LAC, so we can delete when RG is deleted.
-    std::unordered_map<std::string, UInt64> resource_group_statistic;
 
     FIFOQueryIdCache cancel_query_id_cache;
     std::deque<TaskPtr> cancel_task_queue;

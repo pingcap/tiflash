@@ -98,14 +98,13 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     while (true)
     {
         auto after_status = Impl::exec(task);
-        auto inc_time_spent = task->profile_info.elapsedFromPrev();
-        task_queue->updateStatistics(task, cur_status, inc_time_spent);
+        total_time_spent += task->profile_info.elapsedFromPrev();
         cur_status = after_status;
-        total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
         if (!Impl::isTargetStatus(cur_status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
+    task_queue->updateStatistics(task, cur_status, total_time_spent);
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
     switch (cur_status)

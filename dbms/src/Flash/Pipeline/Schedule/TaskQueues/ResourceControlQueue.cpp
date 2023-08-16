@@ -142,36 +142,9 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     const std::string & name = task->getResourceGroupName();
 
     std::lock_guard lock(mu);
-    auto iter = resource_group_statistic.find(name);
-    if (iter == resource_group_statistic.end())
-    {
-        UInt64 accumulated_cpu_time = inc_value;
-        if (accumulated_cpu_time >= YIELD_MAX_TIME_SPENT_NS)
-        {
-            updateResourceGroupStatisticWithoutLock(name, accumulated_cpu_time);
-            accumulated_cpu_time = 0;
-        }
-        resource_group_statistic.insert({name, accumulated_cpu_time});
-    }
-    else
-    {
-        iter->second += inc_value;
-        if (iter->second >= YIELD_MAX_TIME_SPENT_NS)
-        {
-            updateResourceGroupStatisticWithoutLock(name, iter->second);
-            iter->second = 0;
-        }
-    }
-}
-
-template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatisticWithoutLock(
-    const std::string & name,
-    UInt64 consumed_cpu_time)
-{
-    auto ru = toRU(consumed_cpu_time);
-    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, consumed_cpu_time);
-    LocalAdmissionController::global_instance->consumeResource(name, ru, consumed_cpu_time);
+    auto ru = toRU(inc_value);
+    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
+    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
     updateResourceGroupInfosWithoutLock();
 }
 
