@@ -39,9 +39,9 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
         for (auto & task : tasks)
         {
             submitWithoutLock(std::move(task));
+            cv.notify_one();
         }
     }
-    cv.notify_one();
 }
 
 template <typename NestedTaskQueueType>
@@ -88,6 +88,8 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 
         if (popTask(cancel_task_queue, task))
             return true;
+
+        updateResourceGroupInfosWithoutLock();
 
         while (!resource_group_infos.empty())
         {
@@ -137,7 +139,6 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
         cv.wait(lock);
-        updateResourceGroupInfosWithoutLock();
     }
 }
 
@@ -151,7 +152,6 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
     LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
-    updateResourceGroupInfosWithoutLock();
 }
 
 template <typename NestedTaskQueueType>
