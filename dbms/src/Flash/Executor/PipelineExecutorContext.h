@@ -196,8 +196,8 @@ private:
 
     QueryProfileInfo query_profile_info;
 
-    AutoSpillTrigger * auto_spill_trigger;
+    AutoSpillTrigger * auto_spill_trigger = nullptr;
 
-    RegisterOperatorSpillContext register_operator_spill_context;
+    RegisterOperatorSpillContext register_operator_spill_context = nullptr;
 };
 } // namespace DB
