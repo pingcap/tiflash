@@ -30,31 +30,20 @@
 
 namespace DB
 {
-class Server : public BaseDaemon
+class Server
+    : public BaseDaemon
     , public IServer
 {
 public:
     using ServerApplication::run;
 
-    Poco::Util::LayeredConfiguration & config() const override
-    {
-        return BaseDaemon::config();
-    }
+    Poco::Util::LayeredConfiguration & config() const override { return BaseDaemon::config(); }
 
-    Poco::Logger & logger() const override
-    {
-        return BaseDaemon::logger();
-    }
+    Poco::Logger & logger() const override { return BaseDaemon::logger(); }
 
-    Context & context() const override
-    {
-        return *global_context;
-    }
+    Context & context() const override { return *global_context; }
 
-    bool isCancelled() const override
-    {
-        return BaseDaemon::isCancelled();
-    }
+    bool isCancelled() const override { return BaseDaemon::isCancelled(); }
 
     void defineOptions(Poco::Util::OptionSet & _options) override;
 

@@ -147,51 +147,54 @@ String ServerInfo::debugString() const
 {
     FmtBuffer fmt_buf;
     // append cpu info
-    fmt_buf.fmtAppend("CPU: \n"
-                      "     logical cores: {}\n"
-                      "     physical cores: {}\n"
-                      "     frequency: {}\n"
-                      "     l1 cache size: {}\n"
-                      "     l1 cache line size: {}\n"
-                      "     l2 cache size: {}\n"
-                      "     l2 cache line size: {}\n"
-                      "     l3 cache size: {}\n"
-                      "     l3 cache line size: {}\n"
-                      "     arch: {}\n",
-                      cpu_info.logical_cores,
-                      cpu_info.physical_cores,
-                      cpu_info.frequency,
-                      cpu_info.l1_cache_size,
-                      cpu_info.l1_cache_line_size,
-                      cpu_info.l2_cache_size,
-                      cpu_info.l2_cache_line_size,
-                      cpu_info.l3_cache_size,
-                      cpu_info.l3_cache_line_size,
-                      cpu_info.arch);
+    fmt_buf.fmtAppend(
+        "CPU: \n"
+        "     logical cores: {}\n"
+        "     physical cores: {}\n"
+        "     frequency: {}\n"
+        "     l1 cache size: {}\n"
+        "     l1 cache line size: {}\n"
+        "     l2 cache size: {}\n"
+        "     l2 cache line size: {}\n"
+        "     l3 cache size: {}\n"
+        "     l3 cache line size: {}\n"
+        "     arch: {}\n",
+        cpu_info.logical_cores,
+        cpu_info.physical_cores,
+        cpu_info.frequency,
+        cpu_info.l1_cache_size,
+        cpu_info.l1_cache_line_size,
+        cpu_info.l2_cache_size,
+        cpu_info.l2_cache_line_size,
+        cpu_info.l3_cache_size,
+        cpu_info.l3_cache_line_size,
+        cpu_info.arch);
     // append disk info
     {
         const static String disk_type_str[] = {"UNKNOWN", "HDD", "SSD"};
         for (const auto & disk_info : disk_infos)
         {
-            fmt_buf.fmtAppend("Disk: \n"
-                              "     name: {}\n"
-                              "     type: {}\n"
-                              "     total space: {}\n"
-                              "     free space: {}\n"
-                              "     mount point: {}\n"
-                              "     fstype: {}\n",
-                              disk_info.name,
-                              disk_type_str[static_cast<UInt8>(disk_info.disk_type)],
-                              disk_info.total_space,
-                              disk_info.free_space,
-                              disk_info.mount_point,
-                              disk_info.fs_type);
+            fmt_buf.fmtAppend(
+                "Disk: \n"
+                "     name: {}\n"
+                "     type: {}\n"
+                "     total space: {}\n"
+                "     free space: {}\n"
+                "     mount point: {}\n"
+                "     fstype: {}\n",
+                disk_info.name,
+                disk_type_str[static_cast<UInt8>(disk_info.disk_type)],
+                disk_info.total_space,
+                disk_info.free_space,
+                disk_info.mount_point,
+                disk_info.fs_type);
         }
     }
     // append memory info
-    fmt_buf.fmtAppend("Memory: \n"
-                      "     capacity: {}\n",
-                      memory_info.capacity);
+    fmt_buf.fmtAppend(
+        "Memory: \n"
+        "     capacity: {}\n",
+        memory_info.capacity);
 
     return fmt_buf.toString();
 }
