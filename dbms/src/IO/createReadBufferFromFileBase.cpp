@@ -27,8 +27,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<ReadBufferFromFileBase>
-createReadBufferFromFileBase(
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
     const std::string & filename_,
     size_t estimated_size,
     size_t aio_threshold,

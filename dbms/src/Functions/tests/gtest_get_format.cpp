@@ -107,7 +107,8 @@ try
     // time_type: DATETIME
     // all locations
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"%Y-%m-%d %H.%i.%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H.%i.%s", "%Y%m%d%H%i%s"}),
+        createColumn<Nullable<String>>(
+            {"%Y-%m-%d %H.%i.%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H.%i.%s", "%Y%m%d%H%i%s"}),
         executeFunction(
             funcName,
             createConstColumn<Nullable<String>>(5, "DATETIME"),
@@ -116,7 +117,8 @@ try
     // time_type: TIMESTAMP
     // all locations
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"%Y-%m-%d %H.%i.%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H.%i.%s", "%Y%m%d%H%i%s"}),
+        createColumn<Nullable<String>>(
+            {"%Y-%m-%d %H.%i.%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H.%i.%s", "%Y%m%d%H%i%s"}),
         executeFunction(
             funcName,
             createConstColumn<Nullable<String>>(5, "TIMESTAMP"),

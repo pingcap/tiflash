@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadBufferAIO.h>
 #include <Core/Defines.h>
+#include <IO/ReadBufferAIO.h>
+#include <port/unistd.h>
+
 #include <boost/filesystem.hpp>
-#include <vector>
-#include <iostream>
+#include <cstdlib>
 #include <fstream>
 #include <functional>
-#include <cstdlib>
-#include <port/unistd.h>
+#include <iostream>
+#include <vector>
 
 
 namespace
@@ -80,29 +81,27 @@ void run()
     std::string buf5;
     prepare4(filename5, buf5);
 
-    const std::vector<std::function<bool()>> tests =
-    {
-        std::bind(test1, std::ref(filename)),
-        std::bind(test2, std::ref(filename), std::ref(buf)),
-        std::bind(test3, std::ref(filename), std::ref(buf)),
-        std::bind(test4, std::ref(filename), std::ref(buf)),
-        std::bind(test5, std::ref(filename), std::ref(buf)),
-        std::bind(test6, std::ref(filename), std::ref(buf)),
-        std::bind(test7, std::ref(filename), std::ref(buf)),
-        std::bind(test8, std::ref(filename), std::ref(buf)),
-        std::bind(test9, std::ref(filename), std::ref(buf)),
-        std::bind(test10, std::ref(filename), std::ref(buf)),
-        std::bind(test11, std::ref(filename)),
-        std::bind(test12, std::ref(filename), std::ref(buf)),
-        std::bind(test13, std::ref(filename2), std::ref(buf2)),
-        std::bind(test14, std::ref(filename), std::ref(buf)),
-        std::bind(test15, std::ref(filename3), std::ref(buf3)),
-        std::bind(test16, std::ref(filename3), std::ref(buf3)),
-        std::bind(test17, std::ref(filename4), std::ref(buf4)),
-        std::bind(test18, std::ref(filename5), std::ref(buf5)),
-        std::bind(test19, std::ref(filename), std::ref(buf)),
-        std::bind(test20, std::ref(filename), std::ref(buf))
-    };
+    const std::vector<std::function<bool()>> tests
+        = {std::bind(test1, std::ref(filename)),
+           std::bind(test2, std::ref(filename), std::ref(buf)),
+           std::bind(test3, std::ref(filename), std::ref(buf)),
+           std::bind(test4, std::ref(filename), std::ref(buf)),
+           std::bind(test5, std::ref(filename), std::ref(buf)),
+           std::bind(test6, std::ref(filename), std::ref(buf)),
+           std::bind(test7, std::ref(filename), std::ref(buf)),
+           std::bind(test8, std::ref(filename), std::ref(buf)),
+           std::bind(test9, std::ref(filename), std::ref(buf)),
+           std::bind(test10, std::ref(filename), std::ref(buf)),
+           std::bind(test11, std::ref(filename)),
+           std::bind(test12, std::ref(filename), std::ref(buf)),
+           std::bind(test13, std::ref(filename2), std::ref(buf2)),
+           std::bind(test14, std::ref(filename), std::ref(buf)),
+           std::bind(test15, std::ref(filename3), std::ref(buf3)),
+           std::bind(test16, std::ref(filename3), std::ref(buf3)),
+           std::bind(test17, std::ref(filename4), std::ref(buf4)),
+           std::bind(test18, std::ref(filename5), std::ref(buf5)),
+           std::bind(test19, std::ref(filename), std::ref(buf)),
+           std::bind(test20, std::ref(filename), std::ref(buf))};
 
     unsigned int num = 0;
     for (const auto & test : tests)
@@ -316,7 +315,7 @@ bool test7(const std::string & filename, const std::string & buf)
     newbuf.resize(buf.length() - DEFAULT_AIO_FILE_BLOCK_SIZE);
 
     DB::ReadBufferAIO in(filename, 3 * DEFAULT_AIO_FILE_BLOCK_SIZE);
-    (void) in.seek(DEFAULT_AIO_FILE_BLOCK_SIZE, SEEK_SET);
+    (void)in.seek(DEFAULT_AIO_FILE_BLOCK_SIZE, SEEK_SET);
     size_t count = in.read(&newbuf[0], newbuf.length());
     if (count != (9 * DEFAULT_AIO_FILE_BLOCK_SIZE))
         return false;
@@ -330,7 +329,7 @@ bool test8(const std::string & filename, const std::string & buf)
     newbuf.resize(DEFAULT_AIO_FILE_BLOCK_SIZE - 1);
 
     DB::ReadBufferAIO in(filename, 3 * DEFAULT_AIO_FILE_BLOCK_SIZE);
-    (void) in.seek(DEFAULT_AIO_FILE_BLOCK_SIZE + 1, SEEK_CUR);
+    (void)in.seek(DEFAULT_AIO_FILE_BLOCK_SIZE + 1, SEEK_CUR);
     size_t count = in.read(&newbuf[0], newbuf.length());
 
     if (count != newbuf.length())
@@ -352,7 +351,7 @@ bool test9(const std::string & filename, const std::string & buf)
         newbuf.resize(buf.length());
 
         DB::ReadBufferAIO in(filename, 3 * DEFAULT_AIO_FILE_BLOCK_SIZE);
-        size_t count =  in.read(&newbuf[0], newbuf.length());
+        size_t count = in.read(&newbuf[0], newbuf.length());
         if (count != newbuf.length())
             return false;
         in.setMaxBytes(9 * DEFAULT_AIO_FILE_BLOCK_SIZE);
@@ -381,7 +380,7 @@ bool test10(const std::string & filename, const std::string & buf)
             return false;
     }
 
-    (void) in.seek(2 * DEFAULT_AIO_FILE_BLOCK_SIZE, SEEK_CUR);
+    (void)in.seek(2 * DEFAULT_AIO_FILE_BLOCK_SIZE, SEEK_CUR);
 
     {
         std::string newbuf;
@@ -405,7 +404,7 @@ bool test11(const std::string & filename)
     try
     {
         DB::ReadBufferAIO in(filename, 3 * DEFAULT_AIO_FILE_BLOCK_SIZE);
-        (void) in.seek(-DEFAULT_AIO_FILE_BLOCK_SIZE, SEEK_SET);
+        (void)in.seek(-DEFAULT_AIO_FILE_BLOCK_SIZE, SEEK_SET);
     }
     catch (const DB::Exception &)
     {
@@ -425,11 +424,11 @@ bool test12(const std::string & filename, const std::string &)
         newbuf.resize(4 * DEFAULT_AIO_FILE_BLOCK_SIZE);
 
         DB::ReadBufferAIO in(filename, 3 * DEFAULT_AIO_FILE_BLOCK_SIZE);
-        size_t count =  in.read(&newbuf[0], newbuf.length());
+        size_t count = in.read(&newbuf[0], newbuf.length());
         if (count != newbuf.length())
             return false;
 
-        (void) in.seek(-(10 * DEFAULT_AIO_FILE_BLOCK_SIZE), SEEK_CUR);
+        (void)in.seek(-(10 * DEFAULT_AIO_FILE_BLOCK_SIZE), SEEK_CUR);
     }
     catch (const DB::Exception &)
     {
@@ -457,7 +456,7 @@ bool test14(const std::string & filename, const std::string & buf)
     newbuf.resize(1 + (DEFAULT_AIO_FILE_BLOCK_SIZE >> 1));
 
     DB::ReadBufferAIO in(filename, DEFAULT_AIO_FILE_BLOCK_SIZE);
-    (void) in.seek(2, SEEK_SET);
+    (void)in.seek(2, SEEK_SET);
     in.setMaxBytes(3 + (DEFAULT_AIO_FILE_BLOCK_SIZE >> 1));
 
     size_t count = in.read(&newbuf[0], newbuf.length());
@@ -660,7 +659,7 @@ bool test20(const std::string & filename, const std::string & buf)
             return false;
     }
 
-    (void) in.getPositionInFile();
+    (void)in.getPositionInFile();
 
     {
         std::string newbuf;
@@ -677,11 +676,10 @@ bool test20(const std::string & filename, const std::string & buf)
     return true;
 }
 
-}
+} // namespace
 
 int main()
 {
     run();
     return 0;
 }
-

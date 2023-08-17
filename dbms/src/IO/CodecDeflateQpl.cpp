@@ -52,11 +52,21 @@ CodecDeflateQpl::CodecDeflateQpl(qpl_path_t path)
                 delete[] jobs_buffer;
                 if (path == qpl_path_hardware)
                 {
-                    throw Exception(fmt::format("Initialization of IAA hardware failed: {} will attempt to use software DeflateQpl codec instead of hardware DeflateQpl codec.", std::to_string(status)), ErrorCodes::QPL_INIT_JOB_FAILED);
+                    throw Exception(
+                        fmt::format(
+                            "Initialization of IAA hardware failed: {} will attempt to use software DeflateQpl codec "
+                            "instead of hardware DeflateQpl codec.",
+                            std::to_string(status)),
+                        ErrorCodes::QPL_INIT_JOB_FAILED);
                 }
                 else
                 {
-                    throw Exception(fmt::format("Initialization of software DeflateQpl codec failed: {} QPL compression/decompression cannot be enabled.", std::to_string(status)), ErrorCodes::QPL_INIT_JOB_FAILED);
+                    throw Exception(
+                        fmt::format(
+                            "Initialization of software DeflateQpl codec failed: {} QPL compression/decompression "
+                            "cannot be enabled.",
+                            std::to_string(status)),
+                        ErrorCodes::QPL_INIT_JOB_FAILED);
                 }
             }
         }
@@ -156,7 +166,10 @@ Int32 CodecDeflateQpl::doCompressData(const char * source, UInt32 source_size, c
     {
         if (!(job_ptr = acquireJob(job_id)))
         {
-            throw Exception(std::string("DeflateQpl ") + qpl_excute_path + " codec failed.(Details: doCompressData->acquireJob fail, probably job pool exhausted)", ErrorCodes::QPL_ACQUIRE_JOB_FAILED);
+            throw Exception(
+                std::string("DeflateQpl ") + qpl_excute_path
+                    + " codec failed.(Details: doCompressData->acquireJob fail, probably job pool exhausted)",
+                ErrorCodes::QPL_ACQUIRE_JOB_FAILED);
         }
 
         job_ptr->op = qpl_op_compress;
@@ -178,7 +191,10 @@ Int32 CodecDeflateQpl::doCompressData(const char * source, UInt32 source_size, c
         else
         {
             releaseJob(job_id);
-            throw Exception(std::string("DeflateQpl ") + qpl_excute_path + " codec failed, doCompressData->qpl_execute_job with error code:" + std::to_string(status), ErrorCodes::QPL_COMPRESS_DATA_FAILED);
+            throw Exception(
+                std::string("DeflateQpl ") + qpl_excute_path
+                    + " codec failed, doCompressData->qpl_execute_job with error code:" + std::to_string(status),
+                ErrorCodes::QPL_COMPRESS_DATA_FAILED);
         }
     }
     catch (...)
@@ -197,7 +213,10 @@ Int32 CodecDeflateQpl::doDecompressData(const char * source, UInt32 source_size,
     {
         if (!(job_ptr = acquireJob(job_id)))
         {
-            throw Exception(std::string("DeflateQpl ") + qpl_excute_path + " codec failed.(Details: doDeCompressData->acquireJob fail, probably job pool exhausted)", ErrorCodes::QPL_ACQUIRE_JOB_FAILED);
+            throw Exception(
+                std::string("DeflateQpl ") + qpl_excute_path
+                    + " codec failed.(Details: doDeCompressData->acquireJob fail, probably job pool exhausted)",
+                ErrorCodes::QPL_ACQUIRE_JOB_FAILED);
         }
 
         job_ptr->op = qpl_op_decompress;
@@ -218,7 +237,10 @@ Int32 CodecDeflateQpl::doDecompressData(const char * source, UInt32 source_size,
         else
         {
             releaseJob(job_id);
-            throw Exception(std::string("DeflateQpl ") + qpl_excute_path + " codec failed, doDeCompressData->qpl_execute_job with error code:" + std::to_string(status), ErrorCodes::QPL_DECOMPRESS_DATA_FAILED);
+            throw Exception(
+                std::string("DeflateQpl ") + qpl_excute_path
+                    + " codec failed, doDeCompressData->qpl_execute_job with error code:" + std::to_string(status),
+                ErrorCodes::QPL_DECOMPRESS_DATA_FAILED);
         }
     }
     catch (...)

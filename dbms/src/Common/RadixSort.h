@@ -42,15 +42,9 @@
   */
 struct RadixSortMallocAllocator
 {
-    static void * allocate(size_t size)
-    {
-        return malloc(size);
-    }
+    static void * allocate(size_t size) { return malloc(size); }
 
-    static void deallocate(void * ptr, size_t /*size*/)
-    {
-        return free(ptr);
-    }
+    static void deallocate(void * ptr, size_t /*size*/) { return free(ptr); }
 };
 
 
@@ -81,14 +75,17 @@ struct RadixSortFloatTransform
 template <typename Float>
 struct RadixSortFloatTraits
 {
-    using Element = Float; /// The type of the element. It can be a structure with a key and some other payload. Or just a key.
+    using Element
+        = Float; /// The type of the element. It can be a structure with a key and some other payload. Or just a key.
     using Key = Float; /// The key to sort.
-    using CountType = uint32_t; /// Type for calculating histograms. In the case of a known small number of elements, it can be less than size_t.
+    using CountType
+        = uint32_t; /// Type for calculating histograms. In the case of a known small number of elements, it can be less than size_t.
 
     /// The type to which the key is transformed to do bit operations. This UInt is the same size as the key.
     using KeyBits = std::conditional_t<sizeof(Float) == 8, uint64_t, uint32_t>;
 
-    static constexpr size_t PART_SIZE_BITS = 8; /// With what pieces of the key, in bits, to do one pass - reshuffle of the array.
+    static constexpr size_t PART_SIZE_BITS
+        = 8; /// With what pieces of the key, in bits, to do one pass - reshuffle of the array.
 
     /// Converting a key into KeyBits is such that the order relation over the key corresponds to the order relation over KeyBits.
     using Transform = RadixSortFloatTransform<KeyBits>;
@@ -203,7 +200,8 @@ public:
         for (size_t i = 0; i < size; ++i)
         {
             if (!Traits::Transform::transform_is_simple)
-                Traits::extractKey(arr[i]) = bitsToKey(Traits::Transform::forward(keyToBits(Traits::extractKey(arr[i]))));
+                Traits::extractKey(arr[i])
+                    = bitsToKey(Traits::Transform::forward(keyToBits(Traits::extractKey(arr[i]))));
 
             for (size_t j = 0; j < NUM_PASSES; ++j)
                 ++histograms[j * HISTOGRAM_SIZE + getPart(j, keyToBits(Traits::extractKey(arr[i])))];
@@ -240,7 +238,8 @@ public:
 
                 /// On the last pass, we do the reverse transformation.
                 if (!Traits::Transform::transform_is_simple && j == NUM_PASSES - 1)
-                    Traits::extractKey(dest) = bitsToKey(Traits::Transform::backward(keyToBits(Traits::extractKey(reader[i]))));
+                    Traits::extractKey(dest)
+                        = bitsToKey(Traits::Transform::backward(keyToBits(Traits::extractKey(reader[i]))));
             }
         }
 
@@ -255,22 +254,19 @@ public:
 
 
 template <typename T>
-std::enable_if_t<std::is_unsigned_v<T> && std::is_integral_v<T>, void>
-radixSort(T * arr, size_t size)
+std::enable_if_t<std::is_unsigned_v<T> && std::is_integral_v<T>, void> radixSort(T * arr, size_t size)
 {
     return RadixSort<RadixSortUIntTraits<T>>::execute(arr, size);
 }
 
 template <typename T>
-std::enable_if_t<std::is_signed_v<T> && std::is_integral_v<T>, void>
-radixSort(T * arr, size_t size)
+std::enable_if_t<std::is_signed_v<T> && std::is_integral_v<T>, void> radixSort(T * arr, size_t size)
 {
     return RadixSort<RadixSortIntTraits<T>>::execute(arr, size);
 }
 
 template <typename T>
-std::enable_if_t<std::is_floating_point_v<T>, void>
-radixSort(T * arr, size_t size)
+std::enable_if_t<std::is_floating_point_v<T>, void> radixSort(T * arr, size_t size)
 {
     return RadixSort<RadixSortFloatTraits<T>>::execute(arr, size);
 }

@@ -34,8 +34,7 @@ class DaemonConfigTest : public ::testing::Test
 public:
     DaemonConfigTest()
         : log(&Poco::Logger::get("DaemonConfigTest"))
-    {
-    }
+    {}
 
     static void SetUpTestCase() {}
 
@@ -64,8 +63,12 @@ static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractCon
     if (typeid(channel) == typeid(Poco::TiFlashLogFileChannel))
     {
         auto * file_channel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
-        ASSERT_EQ(file_channel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
-        ASSERT_EQ(file_channel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "10"));
+        ASSERT_EQ(
+            file_channel->getProperty(Poco::FileChannel::PROP_ROTATION),
+            config.getRawString("logger.size", "100M"));
+        ASSERT_EQ(
+            file_channel->getProperty(Poco::FileChannel::PROP_PURGECOUNT),
+            config.getRawString("logger.count", "10"));
         return;
     }
     if (typeid(channel) == typeid(Poco::LevelFilterChannel))

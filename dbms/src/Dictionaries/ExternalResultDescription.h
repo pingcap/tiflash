@@ -49,4 +49,4 @@ struct ExternalResultDescription
     void init(const Block & sample_block_);
 };
 
-}
+} // namespace DB

@@ -81,7 +81,8 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 #undef CLONE
 
 
-void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 
@@ -100,20 +101,20 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 
     if (final)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
-                      << "FINAL" << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str << "FINAL"
+                      << (settings.hilite ? hilite_none : "");
     }
 
     if (sample_size)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
-                      << "SAMPLE " << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str << "SAMPLE "
+                      << (settings.hilite ? hilite_none : "");
         sample_size->formatImpl(settings, state, frame);
 
         if (sample_offset)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << ' '
-                          << "OFFSET " << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << ' ' << "OFFSET "
+                          << (settings.hilite ? hilite_none : "");
             sample_offset->formatImpl(settings, state, frame);
         }
     }
@@ -181,7 +182,8 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
 }
 
 
-void ASTTableJoin::formatImplAfterTable(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTableJoin::formatImplAfterTable(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     frame.need_parens = false;
 
@@ -208,7 +210,10 @@ void ASTTableJoin::formatImpl(const FormatSettings & settings, FormatState & sta
 }
 
 
-void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTablesInSelectQueryElement::formatImpl(
+    const FormatSettings & settings,
+    FormatState & state,
+    FormatStateStacked frame) const
 {
     if (table_expression)
     {
@@ -227,7 +232,8 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 }
 
 
-void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 

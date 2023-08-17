@@ -181,7 +181,12 @@ void ColumnArray::insertData(const char * pos, size_t length)
 }
 
 
-StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+StringRef ColumnArray::serializeValueIntoArena(
+    size_t n,
+    Arena & arena,
+    char const *& begin,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
@@ -210,7 +215,11 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
 }
 
 
-void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnArray::updateHashWithValue(
+    size_t n,
+    SipHash & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
@@ -220,7 +229,10 @@ void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDB
         getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
-void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnArray::updateHashWithValues(
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     for (size_t i = 0, sz = size(); i < sz; ++i)
     {
@@ -236,11 +248,17 @@ void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const 
     }
 }
 
-void ColumnArray::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnArray::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     auto s = offsets->size();
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
+                + std::to_string(hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 internal_hash(data->size());
     data->updateWeakHash32(internal_hash, collator, sort_key_container);
@@ -315,11 +333,7 @@ int ColumnArray::compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_dir
         if (int res = getData().compareAt(offsetAt(n) + i, rhs.offsetAt(m) + i, *rhs.data.get(), nan_direction_hint))
             return res;
 
-    return lhs_size < rhs_size
-        ? -1
-        : (lhs_size == rhs_size
-               ? 0
-               : 1);
+    return lhs_size < rhs_size ? -1 : (lhs_size == rhs_size ? 0 : 1);
 }
 
 
@@ -350,7 +364,8 @@ struct Less
 void ColumnArray::reserve(size_t n)
 {
     getOffsets().reserve(n);
-    getData().reserve(n); /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    getData().reserve(
+        n); /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
 }
 
 
@@ -377,7 +392,8 @@ bool ColumnArray::hasEqualOffsets(const ColumnArray & other) const
 
     const Offsets & offsets1 = getOffsets();
     const Offsets & offsets2 = other.getOffsets();
-    return offsets1.size() == offsets2.size() && 0 == memcmp(&offsets1[0], &offsets2[0], sizeof(offsets1[0]) * offsets1.size());
+    return offsets1.size() == offsets2.size()
+        && 0 == memcmp(&offsets1[0], &offsets2[0], sizeof(offsets1[0]) * offsets1.size());
 }
 
 
@@ -430,7 +446,8 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
     if (start + length > src_concrete.getOffsets().size())
         throw Exception(
             fmt::format(
-                "Parameters are out of bound in ColumnArray::insertRangeFrom method, start={}, length={}, src.size()={}",
+                "Parameters are out of bound in ColumnArray::insertRangeFrom method, start={}, length={}, "
+                "src.size()={}",
                 start,
                 length,
                 src_concrete.getOffsets().size()),
@@ -502,7 +519,13 @@ ColumnPtr ColumnArray::filterNumber(const Filter & filt, ssize_t result_size_hin
     auto & res_elems = static_cast<ColumnVector<T> &>(res->getData()).getData();
     Offsets & res_offsets = res->getOffsets();
 
-    filterArraysImpl<T>(static_cast<const ColumnVector<T> &>(*data).getData(), getOffsets(), res_elems, res_offsets, filt, result_size_hint);
+    filterArraysImpl<T>(
+        static_cast<const ColumnVector<T> &>(*data).getData(),
+        getOffsets(),
+        res_elems,
+        res_offsets,
+        filt,
+        result_size_hint);
     return res;
 }
 
@@ -555,7 +578,8 @@ ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hin
                 memcpy(&res_chars[res_chars_prev_size], &src_chars[prev_src_string_offset], chars_to_copy);
 
                 for (size_t j = 0; j < array_size; ++j)
-                    res_string_offsets.push_back(src_string_offsets[j + prev_src_offset] + prev_res_string_offset - prev_src_string_offset);
+                    res_string_offsets.push_back(
+                        src_string_offsets[j + prev_src_offset] + prev_res_string_offset - prev_src_string_offset);
 
                 prev_res_string_offset = res_string_offsets.back();
             }
@@ -633,12 +657,15 @@ ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_h
 
     auto res_null_map = ColumnUInt8::create();
 
-    filterArraysImplOnlyData(nullable_elems.getNullMapData(), getOffsets(), res_null_map->getData(), filt, result_size_hint);
+    filterArraysImplOnlyData(
+        nullable_elems.getNullMapData(),
+        getOffsets(),
+        res_null_map->getData(),
+        filt,
+        result_size_hint);
 
     return ColumnArray::create(
-        ColumnNullable::create(
-            filtered_array_of_nested.getDataPtr(),
-            std::move(res_null_map)),
+        ColumnNullable::create(filtered_array_of_nested.getDataPtr(), std::move(res_null_map)),
         filtered_offsets);
 }
 
@@ -734,7 +761,8 @@ void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_h
     }
 }
 
-ColumnPtr ColumnArray::replicateRange(size_t /*start_row*/, size_t /*end_row*/, const IColumn::Offsets & /*offsets*/) const
+ColumnPtr ColumnArray::replicateRange(size_t /*start_row*/, size_t /*end_row*/, const IColumn::Offsets & /*offsets*/)
+    const
 {
     throw Exception("not implement.", ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -830,7 +858,8 @@ ColumnPtr ColumnArray::replicateString(const Offsets & replicate_offsets) const
         /// The number of rows in the array.
         size_t value_size = src_offsets[i] - prev_src_offset;
         /// Number of characters in rows of the array, including zero/null bytes.
-        size_t sum_chars_size = value_size == 0 ? 0 : (src_string_offsets[prev_src_offset + value_size - 1] - prev_src_string_offset);
+        size_t sum_chars_size
+            = value_size == 0 ? 0 : (src_string_offsets[prev_src_offset + value_size - 1] - prev_src_string_offset);
 
         for (size_t j = 0; j < size_to_replicate; ++j)
         {
@@ -939,8 +968,9 @@ ColumnPtr ColumnArray::replicateNullable(const Offsets & replicate_offsets) cons
 
     auto array_of_nested = ColumnArray(nullable.getNestedColumnPtr()->assumeMutable(), getOffsetsPtr()->assumeMutable())
                                .replicate(replicate_offsets);
-    auto array_of_null_map = ColumnArray(nullable.getNullMapColumnPtr()->assumeMutable(), getOffsetsPtr()->assumeMutable())
-                                 .replicate(replicate_offsets);
+    auto array_of_null_map
+        = ColumnArray(nullable.getNullMapColumnPtr()->assumeMutable(), getOffsetsPtr()->assumeMutable())
+              .replicate(replicate_offsets);
 
     return ColumnArray::create(
         ColumnNullable::create(

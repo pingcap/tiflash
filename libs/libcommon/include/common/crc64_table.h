@@ -1517,10 +1517,10 @@ static inline uint64_t update16(uint64_t state, const std::array<uint8_t, 16> & 
     num = state;
 #endif
 
-    return TABLE_0[slice[15]] ^ TABLE_1[slice[14]] ^ TABLE_2[slice[13]] ^ TABLE_3[slice[12]] ^ TABLE_4[slice[11]] ^ TABLE_5[slice[10]]
-        ^ TABLE_6[slice[9]] ^ TABLE_7[slice[8]] ^ TABLE_8[slice[7] ^ s[7]] ^ TABLE_9[slice[6] ^ s[6]] ^ TABLE_10[slice[5] ^ s[5]]
-        ^ TABLE_11[slice[4] ^ s[4]] ^ TABLE_12[slice[3] ^ s[3]] ^ TABLE_13[slice[2] ^ s[2]] ^ TABLE_14[slice[1] ^ s[1]]
-        ^ TABLE_15[slice[0] ^ s[0]];
+    return TABLE_0[slice[15]] ^ TABLE_1[slice[14]] ^ TABLE_2[slice[13]] ^ TABLE_3[slice[12]] ^ TABLE_4[slice[11]]
+        ^ TABLE_5[slice[10]] ^ TABLE_6[slice[9]] ^ TABLE_7[slice[8]] ^ TABLE_8[slice[7] ^ s[7]]
+        ^ TABLE_9[slice[6] ^ s[6]] ^ TABLE_10[slice[5] ^ s[5]] ^ TABLE_11[slice[4] ^ s[4]] ^ TABLE_12[slice[3] ^ s[3]]
+        ^ TABLE_13[slice[2] ^ s[2]] ^ TABLE_14[slice[1] ^ s[1]] ^ TABLE_15[slice[0] ^ s[0]];
 }
 
 static inline uint64_t update_table(uint64_t state, const void * src, size_t length)

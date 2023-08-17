@@ -31,14 +31,16 @@ public:
     using ColStringType = typename TypeTraits<String>::FieldType;
     using ColUInt8Type = typename TypeTraits<UInt8>::FieldType;
 
-    ColumnsWithTypeAndName data{toVec<String>("col0", std::vector<ColStringType>(1000000, "aaaaaaaaaaaaa")),
-                                toVec<String>("col1", std::vector<ColStringType>(1000000, "aaaaaaaaaaaaa")),
-                                toVec<UInt8>("result", std::vector<ColUInt8Type>{})};
+    ColumnsWithTypeAndName data{
+        toVec<String>("col0", std::vector<ColStringType>(1000000, "aaaaaaaaaaaaa")),
+        toVec<String>("col1", std::vector<ColStringType>(1000000, "aaaaaaaaaaaaa")),
+        toVec<UInt8>("result", std::vector<ColUInt8Type>{})};
 
-    ColumnsWithTypeAndName like_data{toVec<String>("col0", std::vector<ColStringType>(1000000, "qwdgefwabchfue")),
-                                     createConstColumn<String>(1000000, "%abc%"),
-                                     createConstColumn<Int32>(1000000, static_cast<Int32>('\\')),
-                                     toVec<UInt8>("result", std::vector<ColUInt8Type>{})};
+    ColumnsWithTypeAndName like_data{
+        toVec<String>("col0", std::vector<ColStringType>(1000000, "qwdgefwabchfue")),
+        createConstColumn<String>(1000000, "%abc%"),
+        createConstColumn<Int32>(1000000, static_cast<Int32>('\\')),
+        toVec<UInt8>("result", std::vector<ColUInt8Type>{})};
 };
 
 class CollationLessBench : public CollationBench

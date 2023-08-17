@@ -22,22 +22,21 @@ namespace DB
 class MergingAndConvertingBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    MergingAndConvertingBlockInputStream(const MergingBucketsPtr & merging_buckets_, size_t concurrency_index_, const String & req_id)
+    MergingAndConvertingBlockInputStream(
+        const MergingBucketsPtr & merging_buckets_,
+        size_t concurrency_index_,
+        const String & req_id)
         : merging_buckets(merging_buckets_)
         , concurrency_index(concurrency_index_)
         , log(Logger::get(req_id))
-    {
-    }
+    {}
 
     String getName() const override { return "MergingAndConverting"; }
 
     Block getHeader() const override { return merging_buckets->getHeader(); }
 
 protected:
-    Block readImpl() override
-    {
-        return merging_buckets->getData(concurrency_index);
-    }
+    Block readImpl() override { return merging_buckets->getData(concurrency_index); }
 
 private:
     MergingBucketsPtr merging_buckets;

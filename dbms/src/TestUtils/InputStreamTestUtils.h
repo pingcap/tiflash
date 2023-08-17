@@ -55,7 +55,8 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream);
     const char * block_expr,
     const BlockInputStreamPtr & stream,
     const Block & expect_block);
-#define ASSERT_INPUTSTREAM_BLOCK_UR(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::InputStreamVSBlockUnrestrictlyCompare, val1, val2)
+#define ASSERT_INPUTSTREAM_BLOCK_UR(val1, val2) \
+    ASSERT_PRED_FORMAT2(::DB::tests::InputStreamVSBlockUnrestrictlyCompare, val1, val2)
 
 // Unrestrictly checking a part of columns read from inputstream.
 // Allowing the inputstream break the rows into serval smaller blocks.

@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <string>
+#include <Common/Stopwatch.h>
+#include <Core/Types.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
 
-#include <iostream>
-#include <sstream>
 #include <fstream>
 #include <iomanip>
-
-#include <Core/Types.h>
-#include <Common/Stopwatch.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
+#include <iostream>
+#include <sstream>
+#include <string>
 
 
 int main(int, char **)
@@ -49,9 +48,8 @@ int main(int, char **)
                 DB::writeChar('\t', compressed_buf);
             }
             stopwatch.stop();
-            std::cout << "Writing done (1). Elapsed: " << stopwatch.elapsedSeconds()
-                << ", " << (compressed_buf.count() / stopwatch.elapsedSeconds() / 1000000) << " MB/s"
-                << std::endl;
+            std::cout << "Writing done (1). Elapsed: " << stopwatch.elapsedSeconds() << ", "
+                      << (compressed_buf.count() / stopwatch.elapsedSeconds() / 1000000) << " MB/s" << std::endl;
         }
 
         {
@@ -73,9 +71,8 @@ int main(int, char **)
                 }
             }
             stopwatch.stop();
-            std::cout << "Reading done (1). Elapsed: " << stopwatch.elapsedSeconds()
-                << ", " << (compressed_buf.count() / stopwatch.elapsedSeconds() / 1000000) << " MB/s"
-                << std::endl;
+            std::cout << "Reading done (1). Elapsed: " << stopwatch.elapsedSeconds() << ", "
+                      << (compressed_buf.count() / stopwatch.elapsedSeconds() / 1000000) << " MB/s" << std::endl;
         }
     }
     catch (const DB::Exception & e)

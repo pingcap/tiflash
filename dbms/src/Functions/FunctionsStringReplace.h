@@ -37,20 +37,11 @@ class FunctionStringReplace : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionStringReplace>();
-    }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStringReplace>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 0;
-    }
+    size_t getNumberOfArguments() const override { return 0; }
 
     bool isVariadic() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -78,28 +69,34 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of first argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[2]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() > 3 && !arguments[3]->isInteger())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of forth argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[2]->getName() + " of forth argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() > 4 && !arguments[4]->isInteger())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of fifth argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[2]->getName() + " of fifth argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() > 5 && !arguments[5]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of sixth argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[2]->getName() + " of sixth argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -119,7 +116,9 @@ public:
             throw Exception("4th, 5th, 6th arguments of function " + getName() + " must be constants.");
         Int64 pos = column_pos == nullptr ? 1 : typeid_cast<const ColumnConst *>(column_pos.get())->getInt(0);
         Int64 occ = column_occ == nullptr ? 0 : typeid_cast<const ColumnConst *>(column_occ.get())->getInt(0);
-        String match_type = column_match_type == nullptr ? "" : typeid_cast<const ColumnConst *>(column_match_type.get())->getValue<String>();
+        String match_type = column_match_type == nullptr
+            ? ""
+            : typeid_cast<const ColumnConst *>(column_match_type.get())->getValue<String>();
 
         ColumnWithTypeAndName & column_result = block.getByPosition(result);
 
@@ -132,15 +131,36 @@ public:
         }
         else if (needle_const)
         {
-            executeImplNonConstReplacement(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
+            executeImplNonConstReplacement(
+                column_src,
+                column_needle,
+                column_replacement,
+                pos,
+                occ,
+                match_type,
+                column_result);
         }
         else if (replacement_const)
         {
-            executeImplNonConstNeedle(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
+            executeImplNonConstNeedle(
+                column_src,
+                column_needle,
+                column_replacement,
+                pos,
+                occ,
+                match_type,
+                column_result);
         }
         else
         {
-            executeImplNonConstNeedleReplacement(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
+            executeImplNonConstNeedleReplacement(
+                column_src,
+                column_needle,
+                column_replacement,
+                pos,
+                occ,
+                match_type,
+                column_result);
         }
     }
 
@@ -162,13 +182,33 @@ private:
         if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
-            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+            Impl::vector(
+                col->getChars(),
+                col->getOffsets(),
+                needle,
+                replacement,
+                pos,
+                occ,
+                match_type,
+                collator,
+                col_res->getChars(),
+                col_res->getOffsets());
             column_result.column = std::move(col_res);
         }
         else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
-            Impl::vectorFixed(col->getChars(), col->getN(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+            Impl::vectorFixed(
+                col->getChars(),
+                col->getN(),
+                needle,
+                replacement,
+                pos,
+                occ,
+                match_type,
+                collator,
+                col_res->getChars(),
+                col_res->getOffsets());
             column_result.column = std::move(col_res);
         }
         else
@@ -195,13 +235,35 @@ private:
             if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vectorNonConstNeedle(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+                Impl::vectorNonConstNeedle(
+                    col->getChars(),
+                    col->getOffsets(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    replacement,
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
             else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vectorFixedNonConstNeedle(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+                Impl::vectorFixedNonConstNeedle(
+                    col->getChars(),
+                    col->getN(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    replacement,
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
             else
@@ -233,13 +295,35 @@ private:
             if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vectorNonConstReplacement(col->getChars(), col->getOffsets(), needle, col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+                Impl::vectorNonConstReplacement(
+                    col->getChars(),
+                    col->getOffsets(),
+                    needle,
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
             else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vectorFixedNonConstReplacement(col->getChars(), col->getN(), needle, col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+                Impl::vectorFixedNonConstReplacement(
+                    col->getChars(),
+                    col->getN(),
+                    needle,
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
             else
@@ -270,13 +354,37 @@ private:
             if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vectorNonConstNeedleReplacement(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+                Impl::vectorNonConstNeedleReplacement(
+                    col->getChars(),
+                    col->getOffsets(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
             else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vectorFixedNonConstNeedleReplacement(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
+                Impl::vectorFixedNonConstNeedleReplacement(
+                    col->getChars(),
+                    col->getN(),
+                    col_needle->getChars(),
+                    col_needle->getOffsets(),
+                    col_replacement->getChars(),
+                    col_replacement->getOffsets(),
+                    pos,
+                    occ,
+                    match_type,
+                    collator,
+                    col_res->getChars(),
+                    col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
             else
@@ -286,7 +394,9 @@ private:
         }
         else
         {
-            throw Exception("Argument at index 2 and 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Argument at index 2 and 3 for function replace must be constant",
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 

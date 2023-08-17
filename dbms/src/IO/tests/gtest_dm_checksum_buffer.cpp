@@ -95,8 +95,11 @@ auto prepareIO()
 
 } // namespace
 
-#define TEST_STREAM(ALGO) \
-    TEST(ChecksumBuffer##ALGO, Streaming) { runStreamingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_STREAM(ALGO)                 \
+    TEST(ChecksumBuffer##ALGO, Streaming) \
+    {                                     \
+        runStreamingTest<Digest::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runStreamingTest()
@@ -133,8 +136,11 @@ TEST_STREAM(CRC64)
 TEST_STREAM(City128)
 TEST_STREAM(XXH3)
 
-#define TEST_SEEK(ALGO) \
-    TEST(ChecksumBuffer##ALGO, Seeking) { runSeekingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_SEEK(ALGO)                 \
+    TEST(ChecksumBuffer##ALGO, Seeking) \
+    {                                   \
+        runSeekingTest<Digest::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runSeekingTest()
@@ -164,10 +170,14 @@ void runSeekingTest()
                 ASSERT_EQ(current, buffer.getPositionInFile());
                 std::vector<char> data_slice(length);
                 std::vector<char> file_slice(length);
-                std::copy(data.begin() + current, data.begin() + current + static_cast<off_t>(length), data_slice.begin());
+                std::copy(
+                    data.begin() + current,
+                    data.begin() + current + static_cast<off_t>(length),
+                    data_slice.begin());
                 buffer.read(file_slice.data(), length);
-                ASSERT_EQ(data_slice, file_slice) << "seed: " << seed << "size: " << size << ", whence: " << whence << ", off: " << offset
-                                                  << ", pos: " << current << ", length: " << length << std::endl;
+                ASSERT_EQ(data_slice, file_slice)
+                    << "seed: " << seed << "size: " << size << ", whence: " << whence << ", off: " << offset
+                    << ", pos: " << current << ", length: " << length << std::endl;
                 current += static_cast<off_t>(length);
                 ASSERT_EQ(current, buffer.getPositionInFile());
             }
@@ -196,7 +206,9 @@ void runReadBigTest()
     auto [data, seed] = randomData(size);
     auto compare = data;
     {
-        auto file = provider->newWritableFile(filename, {"/tmp/test.enc", "test.enc"}, true, true, limiter->getWriteLimiter());
+        auto file
+            = provider
+                  ->newWritableFile(filename, {"/tmp/test.enc", "test.enc"}, true, true, limiter->getWriteLimiter());
         auto buffer = FramedChecksumWriteBuffer<D>(file);
         buffer.write(data.data(), data.size());
     }
@@ -219,8 +231,11 @@ void runReadBigTest()
     file.remove();
 }
 
-#define TEST_BIG_READING(ALGO) \
-    TEST(ChecksumBuffer##ALGO, BigReading) { runReadBigTest<DB::Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_BIG_READING(ALGO)              \
+    TEST(ChecksumBuffer##ALGO, BigReading)  \
+    {                                       \
+        runReadBigTest<DB::Digest::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 TEST_BIG_READING(None)
 TEST_BIG_READING(CRC32)
@@ -271,8 +286,11 @@ void runStackingTest()
     file.remove();
 }
 
-#define TEST_STACKING(ALGO) \
-    TEST(DMChecksumBuffer##ALGO, Stacking) { runStackingTest<ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_STACKING(ALGO)                    \
+    TEST(DMChecksumBuffer##ALGO, Stacking)     \
+    {                                          \
+        runStackingTest<ChecksumAlgo::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 TEST_STACKING(None)
 TEST_STACKING(CRC32)
@@ -343,8 +361,11 @@ void runStackedSeekingTest()
     file.remove();
 }
 
-#define TEST_STACKED_SEEKING(ALGO) \
-    TEST(DMChecksumBuffer##ALGO, StackedSeeking) { runStackedSeekingTest<DB::ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_STACKED_SEEKING(ALGO)                       \
+    TEST(DMChecksumBuffer##ALGO, StackedSeeking)         \
+    {                                                    \
+        runStackedSeekingTest<DB::ChecksumAlgo::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 TEST_STACKED_SEEKING(None)
 TEST_STACKED_SEEKING(CRC32)

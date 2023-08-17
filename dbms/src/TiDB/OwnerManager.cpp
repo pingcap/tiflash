@@ -61,8 +61,7 @@ OwnerManagerPtr OwnerManager::createMockOwner(std::string_view id)
     return std::make_shared<MockOwnerManager>(id);
 }
 
-OwnerManagerPtr
-OwnerManager::createS3GCOwner(
+OwnerManagerPtr OwnerManager::createS3GCOwner(
     Context & context,
     std::string_view id,
     const Etcd::ClientPtr & client,
@@ -85,8 +84,7 @@ EtcdOwnerManager::EtcdOwnerManager(
     , leader_ttl(owner_ttl)
     , global_ctx(context.getGlobalContext())
     , log(Logger::get(fmt::format("owner_id={}", id)))
-{
-}
+{}
 
 EtcdOwnerManager::~EtcdOwnerManager()
 {
@@ -154,13 +152,10 @@ void EtcdOwnerManager::campaignOwner()
     th_camaign = ThreadFactory::newThread(
         false,
         /*thread_name*/ "OwnerMgr",
-        [this, s = std::move(session)] {
-            camaignLoop(s);
-        });
+        [this, s = std::move(session)] { camaignLoop(s); });
 }
 
-std::pair<bool, Etcd::SessionPtr>
-EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
+std::pair<bool, Etcd::SessionPtr> EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
 {
     bool run_next_campaign = true;
     std::unique_lock lk(mtx_camaign);
@@ -169,7 +164,11 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_owner_mgr_state); v)
         {
             auto s = std::any_cast<EtcdOwnerManager::State>(v.value());
-            LOG_WARNING(log, "state change by failpoint {} -> {}", magic_enum::enum_name(state), magic_enum::enum_name(s));
+            LOG_WARNING(
+                log,
+                "state change by failpoint {} -> {}",
+                magic_enum::enum_name(state),
+                magic_enum::enum_name(s));
             state = s;
         }
     });
@@ -278,12 +277,9 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
 
             grpc::ClientContext watch_ctx;
             // waits until owner key get expired and deleted
-            th_watch_owner = ThreadFactory::newThread(
-                false,
-                "OwnerWatch",
-                [this, key = owner_key.value(), &watch_ctx] {
-                    watchOwner(key, &watch_ctx);
-                });
+            th_watch_owner = ThreadFactory::newThread(false, "OwnerWatch", [this, key = owner_key.value(), &watch_ctx] {
+                watchOwner(key, &watch_ctx);
+            });
 
             {
                 // etcd session expired / owner key get deleted / caller cancel,

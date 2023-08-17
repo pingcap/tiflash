@@ -21,14 +21,23 @@ namespace DB::mock
 class ExpandBinder2 : public ExecutorBinder
 {
 public:
-    ExpandBinder2(size_t & index_, const DAGSchema & output_schema_, std::vector<std::vector<ASTPtr>> exprs_list, std::vector<String> output_names, std::vector<tipb::FieldType> fts)
+    ExpandBinder2(
+        size_t & index_,
+        const DAGSchema & output_schema_,
+        std::vector<std::vector<ASTPtr>> exprs_list,
+        std::vector<String> output_names,
+        std::vector<tipb::FieldType> fts)
         : ExecutorBinder(index_, "expand_" + std::to_string(index_), output_schema_)
         , exprs_list(exprs_list)
         , output_names(output_names)
         , fts(fts)
     {}
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context) override;
 
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
 
@@ -39,5 +48,10 @@ private:
     std::vector<tipb::FieldType> fts;
 };
 
-ExecutorBinderPtr compileExpand2(ExecutorBinderPtr input, size_t & executor_index, std::vector<ASTPtr> level_select_list, std::vector<String> output_names, std::vector<tipb::FieldType> fts);
+ExecutorBinderPtr compileExpand2(
+    ExecutorBinderPtr input,
+    size_t & executor_index,
+    std::vector<ASTPtr> level_select_list,
+    std::vector<String> output_names,
+    std::vector<tipb::FieldType> fts);
 } // namespace DB::mock

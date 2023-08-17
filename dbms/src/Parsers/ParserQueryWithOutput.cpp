@@ -37,14 +37,10 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     ASTPtr query;
 
-    bool parsed = select_p.parse(pos, query, expected)
-        || show_tables_p.parse(pos, query, expected)
-        || describe_table_p.parse(pos, query, expected)
-        || show_processlist_p.parse(pos, query, expected)
-        || create_p.parse(pos, query, expected)
-        || alter_p.parse(pos, query, expected)
-        || rename_p.parse(pos, query, expected)
-        || drop_p.parse(pos, query, expected);
+    bool parsed = select_p.parse(pos, query, expected) || show_tables_p.parse(pos, query, expected)
+        || describe_table_p.parse(pos, query, expected) || show_processlist_p.parse(pos, query, expected)
+        || create_p.parse(pos, query, expected) || alter_p.parse(pos, query, expected)
+        || rename_p.parse(pos, query, expected) || drop_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

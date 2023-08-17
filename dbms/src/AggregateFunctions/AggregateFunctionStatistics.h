@@ -105,10 +105,7 @@ public:
         readBinary(m2, buf);
     }
 
-    void publish(IColumn & to) const
-    {
-        static_cast<ColumnFloat64 &>(to).getData().push_back(Op::apply(m2, count));
-    }
+    void publish(IColumn & to) const { static_cast<ColumnFloat64 &>(to).getData().push_back(Op::apply(m2, count)); }
 
 private:
     UInt64 count = 0;
@@ -125,10 +122,7 @@ class AggregateFunctionVariance final
 public:
     String getName() const override { return Op::name; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeFloat64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeFloat64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
@@ -354,7 +348,8 @@ public:
     void publish(IColumn & to) const
     {
         if constexpr (compute_marginal_moments)
-            static_cast<ColumnFloat64 &>(to).getData().push_back(Op::apply(co_moment, Base::left_m2, Base::right_m2, count));
+            static_cast<ColumnFloat64 &>(to).getData().push_back(
+                Op::apply(co_moment, Base::left_m2, Base::right_m2, count));
         else
             static_cast<ColumnFloat64 &>(to).getData().push_back(Op::apply(co_moment, count));
     }
@@ -375,10 +370,7 @@ class AggregateFunctionCovariance final
 public:
     String getName() const override { return Op::name; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeFloat64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeFloat64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {

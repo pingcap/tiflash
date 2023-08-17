@@ -16,7 +16,12 @@
 
 namespace DB::mock
 {
-void MockRuntimeFilter::toPB(const DAGSchema & source_schema, const DAGSchema & target_schema, int32_t collator_id, const Context & context, tipb::RuntimeFilter * rf)
+void MockRuntimeFilter::toPB(
+    const DAGSchema & source_schema,
+    const DAGSchema & target_schema,
+    int32_t collator_id,
+    const Context & context,
+    tipb::RuntimeFilter * rf)
 {
     rf->set_id(id);
     auto * source_expr_pb = rf->mutable_source_expr_list()->Add();

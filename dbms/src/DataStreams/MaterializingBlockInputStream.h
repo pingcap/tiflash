@@ -32,4 +32,4 @@ protected:
     Block readImpl() override;
 };
 
-}
+} // namespace DB

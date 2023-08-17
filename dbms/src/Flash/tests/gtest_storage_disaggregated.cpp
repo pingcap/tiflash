@@ -43,7 +43,10 @@ TEST_F(StorageDisaggregatedTest, BasicTest)
 try
 {
     ::mpp::DispatchTaskRequest dispatch_req;
-    auto dag_req = context.scan(db_name, table_name).aggregation({Count(col("s1"))}, {}).exchangeSender(tipb::PassThrough).build(context);
+    auto dag_req = context.scan(db_name, table_name)
+                       .aggregation({Count(col("s1"))}, {})
+                       .exchangeSender(tipb::PassThrough)
+                       .build(context);
     const auto & sender = dag_req->root_executor();
     ASSERT_EQ(sender.tp(), ::tipb::TypeExchangeSender);
     const auto & hash_agg = sender.exchange_sender().child();
@@ -77,7 +80,8 @@ try
     uint64_t store_id;
     std::vector<pingcap::kv::RegionVerID> region_ids;
     ::mpp::DispatchTaskRequest tiflash_storage_dispatch_req;
-    std::tie(tiflash_storage_dispatch_req, region_ids, store_id) = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task);
+    std::tie(tiflash_storage_dispatch_req, region_ids, store_id)
+        = storage.buildDispatchMPPTaskRequest(mock_batch_cop_task);
     ASSERT_EQ(region_ids.size(), 1);
     ASSERT_EQ(region_ids[0].id, 100);
     ASSERT_EQ(store_id, 1);

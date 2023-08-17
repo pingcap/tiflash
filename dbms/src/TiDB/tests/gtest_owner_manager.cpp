@@ -66,15 +66,9 @@ public:
     {}
 
 protected:
-    static Etcd::LeaseID getLeaderLease(EtcdOwnerManager * o)
-    {
-        return o->leader.lease();
-    }
+    static Etcd::LeaseID getLeaderLease(EtcdOwnerManager * o) { return o->leader.lease(); }
 
-    static void changeState(EtcdOwnerManager * o, EtcdOwnerManager::State s)
-    {
-        o->tryChangeState(s);
-    }
+    static void changeState(EtcdOwnerManager * o, EtcdOwnerManager::State s) { o->tryChangeState(s); }
 
     Int64 test_ttl{10};
     Int64 test_pause{test_ttl * 6};
@@ -255,7 +249,8 @@ try
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
     const String id = "owner_0";
-    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
+    auto owner0
+        = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
     auto owner_info = owner0->getOwnerID();
     EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
 
@@ -326,7 +321,8 @@ try
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
     const String id = "owner_0";
-    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
+    auto owner0
+        = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
     auto owner_info = owner0->getOwnerID();
     EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
 
@@ -398,7 +394,8 @@ try
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
     const String id = "owner_0";
-    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
+    auto owner0
+        = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
     auto owner_info = owner0->getOwnerID();
     EXPECT_EQ(owner_info.status, OwnerType::NotOwner) << magic_enum::enum_name(owner_info.status);
 

@@ -32,10 +32,7 @@ public:
         const String & req_id,
         const BlockInputStreamPtr & impl_);
 
-    String getName() const override
-    {
-        return "BlockInputStreamSourceOp";
-    }
+    String getName() const override { return "BlockInputStreamSourceOp"; }
 
 protected:
     void operatePrefixImpl() override;

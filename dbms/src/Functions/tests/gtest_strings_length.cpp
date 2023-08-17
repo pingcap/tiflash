@@ -59,7 +59,8 @@ TEST_F(StringLength, strAndStrTest)
         }
 
         Block test_block;
-        ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
+        ColumnWithTypeAndName ctn
+            = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
         ColumnsWithTypeAndName ctns{ctn};
         test_block.insert(ctn);
         ColumnNumbers cns{0};

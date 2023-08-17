@@ -40,7 +40,10 @@ constexpr char tmpNamePrefix[] = "_tiflash_tmp_";
 struct TmpTableNameGenerator
 {
     using TableName = std::pair<String, String>;
-    TableName operator()(const TableName & name) { return std::make_pair(name.first, String(tmpNamePrefix) + name.second); }
+    TableName operator()(const TableName & name)
+    {
+        return std::make_pair(name.first, String(tmpNamePrefix) + name.second);
+    }
 };
 
 struct TmpColNameGenerator

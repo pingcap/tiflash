@@ -39,8 +39,7 @@ HashProbeTransformExec::HashProbeTransformExec(
     , join(join_)
     , scan_hash_map_after_probe_stream(scan_hash_map_after_probe_stream_)
     , max_block_size(max_block_size_)
-{
-}
+{}
 
 HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 {
@@ -75,9 +74,15 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             ///             HashProbeTransformExec
             PipelineExecBuilder build_builder;
             auto req_id = fmt::format("{} restore_build_{}", log->identifier(), restore_info->stream_index);
-            build_builder.setSourceOp(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, req_id, restore_info->build_stream));
-            build_builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, req_id, restore_info->join, restore_info->stream_index));
-            TaskScheduler::instance->submit(std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build()));
+            build_builder.setSourceOp(
+                std::make_unique<IOBlockInputStreamSourceOp>(exec_context, req_id, restore_info->build_stream));
+            build_builder.setSinkOp(std::make_unique<HashJoinBuildSink>(
+                exec_context,
+                req_id,
+                restore_info->join,
+                restore_info->stream_index));
+            TaskScheduler::instance->submit(
+                std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build()));
 
             return restore_probe_exec;
         }
@@ -103,7 +108,8 @@ void HashProbeTransformExec::startRestoreProbe()
     // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
     assert(!probe_result_queue);
     probe_result_queue = std::make_shared<ResultQueue>(1);
-    TaskScheduler::instance->submit(std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
+    TaskScheduler::instance->submit(
+        std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
     probe_restore_stream.reset();
 }
 
@@ -225,7 +231,9 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProce
 
 #undef CONTINUE
 
-OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input)
+OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(
+    ProbeProcessInfo & probe_process_info,
+    Block & input)
 {
     assert(probe_process_info.all_rows_joined_finish);
     assert(probe_partition_blocks.empty());

@@ -37,7 +37,11 @@ class PosixRandomAccessFile : public RandomAccessFile
 public:
     static RandomAccessFilePtr create(const String & file_name_);
 
-    PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr, const FileSegmentPtr & file_seg_ = nullptr);
+    PosixRandomAccessFile(
+        const std::string & file_name_,
+        int flags,
+        const ReadLimiterPtr & read_limiter_ = nullptr,
+        const FileSegmentPtr & file_seg_ = nullptr);
 
     ~PosixRandomAccessFile() override;
 

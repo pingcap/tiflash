@@ -295,8 +295,12 @@ __attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std:
     switch (remaining / vector_length)
     {
     case 3:
-        result = compareArrayAVX2<4>({_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1), _mm256_load_si256(current_address + 2), tail},
-                                     filled_vector);
+        result = compareArrayAVX2<4>(
+            {_mm256_load_si256(current_address + 0),
+             _mm256_load_si256(current_address + 1),
+             _mm256_load_si256(current_address + 2),
+             tail},
+            filled_vector);
         break;
     case 2:
         result = compareArrayAVX2<3>(

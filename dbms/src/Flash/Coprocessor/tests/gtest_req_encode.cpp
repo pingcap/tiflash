@@ -37,8 +37,7 @@ bool isSameKeyRange(const coprocessor::KeyRange & actual, const pingcap::coproce
 
 bool isSameRegionId(const coprocessor::RegionInfo & actual, const pingcap::kv::RegionVerID & expect)
 {
-    return actual.region_id() == expect.id
-        && actual.region_epoch().conf_ver() == expect.conf_ver
+    return actual.region_id() == expect.id && actual.region_epoch().conf_ver() == expect.conf_ver
         && actual.region_epoch().version() == expect.ver;
 }
 #define ASSERT_REGION_ID_EQ(pb_region, expect) ASSERT_TRUE(isSameRegionId((pb_region), (expect)))

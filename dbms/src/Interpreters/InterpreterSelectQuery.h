@@ -75,9 +75,7 @@ public:
 
     Block getSampleBlock();
 
-    static Block getSampleBlock(
-        const ASTPtr & query_ptr_,
-        const Context & context_);
+    static Block getSampleBlock(const ASTPtr & query_ptr_, const Context & context_);
 
 private:
     struct Pipeline
@@ -98,19 +96,13 @@ private:
                 transform(stream);
         }
 
-        bool hasMoreThanOneStream() const
-        {
-            return streams.size();
-        }
+        bool hasMoreThanOneStream() const { return streams.size(); }
     };
 
     struct OnlyAnalyzeTag
     {
     };
-    InterpreterSelectQuery(
-        OnlyAnalyzeTag,
-        const ASTPtr & query_ptr_,
-        const Context & context_);
+    InterpreterSelectQuery(OnlyAnalyzeTag, const ASTPtr & query_ptr_, const Context & context_);
 
     void init(const Names & required_result_column_names);
 
@@ -176,7 +168,9 @@ private:
     void executeProjection(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeDistinct(Pipeline & pipeline, bool before_order, Names columns);
     void executeExtremes(Pipeline & pipeline);
-    void executeSubqueriesInSetsAndJoins(Pipeline & pipeline, std::unordered_map<String, SubqueryForSet> & subqueries_for_sets);
+    void executeSubqueriesInSetsAndJoins(
+        Pipeline & pipeline,
+        std::unordered_map<String, SubqueryForSet> & subqueries_for_sets);
 
     /** If there is a SETTINGS section in the SELECT query, then apply settings from it.
       *

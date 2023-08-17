@@ -12,54 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <iomanip>
-
-#include <IO/ReadHelpers.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-
 #include <Common/Stopwatch.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/ReadHelpers.h>
+
+#include <iomanip>
+#include <iostream>
 
 
 namespace test
 {
-    template <typename T>
-    void readIntText(T & x, DB::ReadBuffer & buf)
+template <typename T>
+void readIntText(T & x, DB::ReadBuffer & buf)
+{
+    bool negative = false;
+    x = 0;
+
+    if (unlikely(buf.eof()))
+        DB::throwReadAfterEOF();
+
+    if (std::is_signed_v<T> && *buf.position() == '-')
     {
-        bool negative = false;
-        x = 0;
-
-        if (unlikely(buf.eof()))
-            DB::throwReadAfterEOF();
-
-        if (std::is_signed_v<T> && *buf.position() == '-')
-        {
-            ++buf.position();
-            negative = true;
-        }
-
-        if (*buf.position() == '0')
-        {
-            ++buf.position();
-            return;
-        }
-
-        while (!buf.eof())
-        {
-            if ((*buf.position() & 0xF0) == 0x30)
-            {
-                x *= 10;
-                x += *buf.position() & 0x0F;
-                ++buf.position();
-            }
-            else
-                break;
-        }
-
-        if (std::is_signed_v<T> && negative)
-            x = -x;
+        ++buf.position();
+        negative = true;
     }
+
+    if (*buf.position() == '0')
+    {
+        ++buf.position();
+        return;
+    }
+
+    while (!buf.eof())
+    {
+        if ((*buf.position() & 0xF0) == 0x30)
+        {
+            x *= 10;
+            x += *buf.position() & 0x0F;
+            ++buf.position();
+        }
+        else
+            break;
+    }
+
+    if (std::is_signed_v<T> && negative)
+        x = -x;
 }
+} // namespace test
 
 
 int main(int, char **)
@@ -83,10 +82,9 @@ int main(int, char **)
         }
 
         watch.stop();
-        std::cerr << std::fixed << std::setprecision(2)
-            << "Read " << nums << " numbers (" << in.count() / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-            << nums / watch.elapsedSeconds() << " num/sec. (" << in.count() / watch.elapsedSeconds() / 1000000 << " MB/s.)"
-            << std::endl;
+        std::cerr << std::fixed << std::setprecision(2) << "Read " << nums << " numbers (" << in.count() / 1000000.0
+                  << " MB) in " << watch.elapsedSeconds() << " sec., " << nums / watch.elapsedSeconds() << " num/sec. ("
+                  << in.count() / watch.elapsedSeconds() / 1000000 << " MB/s.)" << std::endl;
     }
     catch (const DB::Exception & e)
     {

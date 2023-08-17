@@ -42,8 +42,7 @@ public:
         , required_columns(required_columns_)
         , column_defaults(column_defaults_)
         , context(context_)
-    {
-    }
+    {}
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;

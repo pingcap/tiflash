@@ -96,11 +96,7 @@ try
     {
         std::vector<UInt64> grouping_id{1, 4};
         std::vector<UInt64> meta_grouping_id{1, 2, 4, 8};
-        std::vector<std::vector<UInt64>> expects{
-            {0, 1},
-            {1, 1},
-            {1, 0},
-            {1, 1}};
+        std::vector<std::vector<UInt64>> expects{{0, 1}, {1, 1}, {1, 0}, {1, 1}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -120,11 +116,7 @@ try
     {
         std::vector<std::optional<UInt64>> grouping_id{1, 4, {}};
         std::vector<UInt64> meta_grouping_id{1, 2, 4, 8};
-        std::vector<std::vector<std::optional<UInt64>>> expects{
-            {0, 1, {}},
-            {1, 1, {}},
-            {1, 0, {}},
-            {1, 1, {}}};
+        std::vector<std::vector<std::optional<UInt64>>> expects{{0, 1, {}}, {1, 1, {}}, {1, 0, {}}, {1, 1, {}}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -173,14 +165,7 @@ try
     {
         std::vector<UInt64> grouping_id{2, 4};
         std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
-        std::vector<std::vector<UInt64>> expects{
-            {0, 0},
-            {1, 0},
-            {1, 0},
-            {1, 1},
-            {1, 1},
-            {1, 1},
-            {1, 1}};
+        std::vector<std::vector<UInt64>> expects{{0, 0}, {1, 0}, {1, 0}, {1, 1}, {1, 1}, {1, 1}, {1, 1}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -200,14 +185,8 @@ try
     {
         std::vector<std::optional<UInt64>> grouping_id{2, 4, {}};
         std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
-        std::vector<std::vector<std::optional<UInt64>>> expects{
-            {0, 0, {}},
-            {1, 0, {}},
-            {1, 0, {}},
-            {1, 1, {}},
-            {1, 1, {}},
-            {1, 1, {}},
-            {1, 1, {}}};
+        std::vector<std::vector<std::optional<UInt64>>>
+            expects{{0, 0, {}}, {1, 0, {}}, {1, 0, {}}, {1, 1, {}}, {1, 1, {}}, {1, 1, {}}, {1, 1, {}}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -256,11 +235,7 @@ try
     {
         std::vector<UInt64> grouping_id{1, 2, 3, 4};
         std::vector<std::set<UInt64>> meta_grouping_id{{2}, {3}, {2, 3}, {1, 3}};
-        std::vector<std::vector<UInt64>> expects{
-            {1, 0, 1, 1},
-            {1, 1, 0, 1},
-            {1, 0, 0, 1},
-            {0, 1, 0, 1}};
+        std::vector<std::vector<UInt64>> expects{{1, 0, 1, 1}, {1, 1, 0, 1}, {1, 0, 0, 1}, {0, 1, 0, 1}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -317,11 +292,7 @@ try
         // when grouping id is 0, it means all the grouping col as filled null and grouped. (= 1)
         // every grouping mark & 0 will get 0, deriving 1 in the result.
         std::vector<UInt64> grouping_id{2, 1, 3, 0};
-        std::vector<GroupingIDs> meta_grouping_id{
-            {0, 1},
-            {1, 2},
-            {1, 2},
-            {2, 1}};
+        std::vector<GroupingIDs> meta_grouping_id{{0, 1}, {1, 2}, {1, 2}, {2, 1}};
         // res: 11; 01; 00; 11
         std::vector<UInt64> expect{3, 1, 0, 3};
         size_t case_num = grouping_id.size();
@@ -345,11 +316,7 @@ try
 
         std::vector<UInt64> grouping_id{2, 2, 1, 3};
         // when gid > id means the col is needed, not be filling with null and grouped.(= 0)
-        std::vector<GroupingIDs> meta_grouping_id{
-            {0, 1},
-            {4, 1},
-            {4, 2},
-            {2, 1}};
+        std::vector<GroupingIDs> meta_grouping_id{{0, 1}, {4, 1}, {4, 2}, {2, 1}};
 
         // res: 00; 10; 11; 00
         std::vector<UInt64> expect{0, 2, 3, 0};

@@ -34,8 +34,7 @@ class TestFunctionBitNot : public DB::tests::FunctionTest
 {
 };
 
-#define ASSERT_BITNOT(t1, result) \
-    ASSERT_COLUMN_EQ(result, executeFunction("bitNot", {t1}))
+#define ASSERT_BITNOT(t1, result) ASSERT_COLUMN_EQ(result, executeFunction("bitNot", {t1}))
 
 TEST_F(TestFunctionBitNot, Simple)
 try
@@ -58,33 +57,41 @@ try
     ASSERT_BITNOT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<UInt64>>({UINT64_MAX - 1}));
     ASSERT_BITNOT(createColumn<Nullable<UInt64>>({1}), createColumn<Nullable<UInt64>>({UINT64_MAX - 1}));
 
-    ASSERT_BITNOT(createColumn<Int8>({0, 0, 1, 1}), createColumn<UInt64>({UINT64_MAX, UINT64_MAX, UINT64_MAX - 1, UINT64_MAX - 1}));
-    ASSERT_BITNOT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX - 1, std::nullopt, std::nullopt}));
+    ASSERT_BITNOT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createColumn<UInt64>({UINT64_MAX, UINT64_MAX, UINT64_MAX - 1, UINT64_MAX - 1}));
+    ASSERT_BITNOT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX - 1, std::nullopt, std::nullopt}));
     ASSERT_BITNOT(createConstColumn<Int8>(4, 0), createConstColumn<UInt64>(4, UINT64_MAX));
     ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<UInt64>(4, UINT64_MAX));
-    ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITNOT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 }
 CATCH
 
 TEST_F(TestFunctionBitNot, Boundary)
 try
 {
-    ASSERT_BITNOT(createColumn<Int64>({0, 1, -1, INT64_MAX, INT64_MIN}),
-                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0, static_cast<UInt64>(INT64_MAX) + 1, INT64_MAX}));
+    ASSERT_BITNOT(
+        createColumn<Int64>({0, 1, -1, INT64_MAX, INT64_MIN}),
+        createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0, static_cast<UInt64>(INT64_MAX) + 1, INT64_MAX}));
 
-    ASSERT_BITNOT(createColumn<UInt64>({0, 1, UINT64_MAX}),
-                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0}));
+    ASSERT_BITNOT(createColumn<UInt64>({0, 1, UINT64_MAX}), createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0}));
 }
 CATCH
 
 TEST_F(TestFunctionBitNot, UINT64)
 try
 {
-    ASSERT_BITNOT(createColumn<UInt64>({0, 0, UINT64_MAX, UINT64_MAX}),
-                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX, 0, 0}));
+    ASSERT_BITNOT(
+        createColumn<UInt64>({0, 0, UINT64_MAX, UINT64_MAX}),
+        createColumn<UInt64>({UINT64_MAX, UINT64_MAX, 0, 0}));
 
-    ASSERT_BITNOT(createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
-                  createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX, 0, 0, std::nullopt}));
+    ASSERT_BITNOT(
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
+        createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX, 0, 0, std::nullopt}));
 
 
     /*

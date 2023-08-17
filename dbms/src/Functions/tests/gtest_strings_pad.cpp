@@ -489,137 +489,157 @@ try
     // pad(const, const, const)
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
 
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, {}),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, {}),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, {}),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, {}),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, {}),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, {}),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
     // pad(const, const, column)
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"xxxxxxxxxabc", "yyyyyyyyyabc", "zzzzzzzzzabc", "eeeeeeeeeabc", "fffffffffabc"}),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
+        createColumn<Nullable<String>>(
+            {"xxxxxxxxxabc", "yyyyyyyyyabc", "zzzzzzzzzabc", "eeeeeeeeeabc", "fffffffffabc"}),
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"abcxxxxxxxxx", "abcyyyyyyyyy", "abczzzzzzzzz", "abceeeeeeeee", "abcfffffffff"}),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
+        createColumn<Nullable<String>>(
+            {"abcxxxxxxxxx", "abcyyyyyyyyy", "abczzzzzzzzz", "abceeeeeeeee", "abcfffffffff"}),
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
 
     // pad(const, column, const)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a", "ab", "abc", "xabc", "xxabc"}),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a", "ab", "abc", "abcx", "abcxx"}),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
     // pad(const, column, column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a", "ab", "abc", "eabc", "ffabc"}),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
-                        createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
+            createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a", "ab", "abc", "abce", "abcff"}),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
-                        createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createColumn<Nullable<Int64>>({1, 2, 3, 4, 5}),
+            createColumn<Nullable<String>>({"xxx", "yyy", "zzz", "eee", "fff"})));
 
     // pad(column, const, const)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1231231a", "123123ab", "12312abc", "1231abcd", "123abcde"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createConstColumn<Nullable<UInt64>>(5, 8),
-                        createConstColumn<Nullable<String>>(5, "123")));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createConstColumn<Nullable<UInt64>>(5, 8),
+            createConstColumn<Nullable<String>>(5, "123")));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a1231231", "ab123123", "abc12312", "abcd1231", "abcde123"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createConstColumn<Nullable<UInt64>>(5, 8),
-                        createConstColumn<Nullable<String>>(5, "123")));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createConstColumn<Nullable<UInt64>>(5, 8),
+            createConstColumn<Nullable<String>>(5, "123")));
 
     // pad(column, const, column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1212121a", "343434ab", "56565abc", "7878abcd", "999abcde"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createConstColumn<Nullable<UInt64>>(5, 8),
-                        createColumn<Nullable<String>>({"12", "34", "56", "78", "99"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createConstColumn<Nullable<UInt64>>(5, 8),
+            createColumn<Nullable<String>>({"12", "34", "56", "78", "99"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a1212121", "ab343434", "abc56565", "abcd7878", "abcde999"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createConstColumn<Nullable<UInt64>>(5, 8),
-                        createColumn<Nullable<String>>({"12", "34", "56", "78", "99"})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createConstColumn<Nullable<UInt64>>(5, 8),
+            createColumn<Nullable<String>>({"12", "34", "56", "78", "99"})));
 
     // pad(column, column, const)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1231231a", "123123ab", "12312abc", "1231abcd", "123abcde"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createColumn<Nullable<UInt64>>({8, 8, 8, 8, 8}),
-                        createConstColumn<Nullable<String>>(5, "123")));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createColumn<Nullable<UInt64>>({8, 8, 8, 8, 8}),
+            createConstColumn<Nullable<String>>(5, "123")));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a1231231", "ab123123", "abc12312", "abcd1231", "abcde123"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createColumn<Nullable<UInt64>>({8, 8, 8, 8, 8}),
-                        createConstColumn<Nullable<String>>(5, "123")));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createColumn<Nullable<UInt64>>({8, 8, 8, 8, 8}),
+            createConstColumn<Nullable<String>>(5, "123")));
 
     // pad(column, column, column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"123a", "123ab", "123abc", "121abcd", "111abcde"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 6, 7, 8}),
-                        createColumn<Nullable<String>>({"12345", "1234", "123", "12", "1"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createColumn<Nullable<UInt64>>({4, 5, 6, 7, 8}),
+            createColumn<Nullable<String>>({"12345", "1234", "123", "12", "1"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a123", "ab123", "abc123", "abcd121", "abcde111"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 6, 7, 8}),
-                        createColumn<Nullable<String>>({"12345", "1234", "123", "12", "1"})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"a", "ab", "abc", "abcd", "abcde"}),
+            createColumn<Nullable<UInt64>>({4, 5, 6, 7, 8}),
+            createColumn<Nullable<String>>({"12345", "1234", "123", "12", "1"})));
 }
 CATCH
 
@@ -629,126 +649,146 @@ try
     // Empty str.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"123 ", "12312", "ab", "    def"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({" ", "", "abc", "def"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 2, 7}),
-                        createColumn<Nullable<String>>({"123", "123", "", " "})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({" ", "", "abc", "def"}),
+            createColumn<Nullable<UInt64>>({4, 5, 2, 7}),
+            createColumn<Nullable<String>>({"123", "123", "", " "})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" 123", "12312", "ab", "def    "}),
-        executeFunction("rpadUTF8", createColumn<Nullable<String>>({" ", "", "abc", "def"}), createColumn<Nullable<UInt64>>({4, 5, 2, 7}), createColumn<Nullable<String>>({"123", "123", "", " "})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({" ", "", "abc", "def"}),
+            createColumn<Nullable<UInt64>>({4, 5, 2, 7}),
+            createColumn<Nullable<String>>({"123", "123", "", " "})));
 
     // Chinese.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"你 好 ", "杭州 西湖", "¿¿¿¿!!"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 6}),
-                        createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({" ", "西湖", "!!"}),
+            createColumn<Nullable<UInt64>>({4, 5, 6}),
+            createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" 你 好", "西湖杭州 ", "!!¿¿¿¿"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 6}),
-                        createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({" ", "西湖", "!!"}),
+            createColumn<Nullable<UInt64>>({4, 5, 6}),
+            createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"𝌃𝌃𝌃𝌃 ", "杭州 西湖", "¿¿¿¿!!"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!"}),
-                        createColumn<Nullable<UInt64>>({5, 5, 6}),
-                        createColumn<Nullable<String>>({"𝌃𝌃𝌃𝌃", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({" ", "西湖", "!!"}),
+            createColumn<Nullable<UInt64>>({5, 5, 6}),
+            createColumn<Nullable<String>>({"𝌃𝌃𝌃𝌃", "杭州 ll", "¿¿¿¿¿¿"})));
 
     // Length value is zero.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "", "", "", ""}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!", "test", "test1"}),
-                        createConstColumn<Nullable<UInt64>>(5, 0),
-                        createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿", "123", " "})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({" ", "西湖", "!!", "test", "test1"}),
+            createConstColumn<Nullable<UInt64>>(5, 0),
+            createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿", "123", " "})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "", "", "", ""}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!", "test", "test1"}),
-                        createConstColumn<Nullable<UInt64>>(5, 0),
-                        createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿", "123", " "})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({" ", "西湖", "!!", "test", "test1"}),
+            createConstColumn<Nullable<UInt64>>(5, 0),
+            createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿", "123", " "})));
 
     // Length value is less than zero. Expect Null.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, "a"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"abc", "abc"}),
-                        createColumn<Nullable<Int64>>({-1, 1}),
-                        createColumn<Nullable<String>>({"123", "123"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"abc", "abc"}),
+            createColumn<Nullable<Int64>>({-1, 1}),
+            createColumn<Nullable<String>>({"123", "123"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, "a"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"abc", "abc"}),
-                        createColumn<Nullable<Int64>>({-1, 1}),
-                        createColumn<Nullable<String>>({"123", "123"})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"abc", "abc"}),
+            createColumn<Nullable<Int64>>({-1, 1}),
+            createColumn<Nullable<String>>({"123", "123"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, "a"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"abc", "abc"}),
-                        createColumn<Nullable<Int8>>({-1, 1}),
-                        createColumn<Nullable<String>>({"123", "123"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"abc", "abc"}),
+            createColumn<Nullable<Int8>>({-1, 1}),
+            createColumn<Nullable<String>>({"123", "123"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, "a"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"abc", "abc"}),
-                        createColumn<Nullable<Int8>>({-1, 1}),
-                        createColumn<Nullable<String>>({"123", "123"})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"abc", "abc"}),
+            createColumn<Nullable<Int8>>({-1, 1}),
+            createColumn<Nullable<String>>({"123", "123"})));
 
     // Test padding_str is empty.
     // lpad("abc", 10, "") -> NULL
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, "xy"}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({"abc", "def", "xyz"}),
-                        createColumn<Nullable<UInt64>>({10, 100, 2}),
-                        createColumn<Nullable<String>>({"", "", ""})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({"abc", "def", "xyz"}),
+            createColumn<Nullable<UInt64>>({10, 100, 2}),
+            createColumn<Nullable<String>>({"", "", ""})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, "xy"}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({"abc", "def", "xyz"}),
-                        createColumn<Nullable<UInt64>>({10, 100, 2}),
-                        createColumn<Nullable<String>>({"", "", ""})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({"abc", "def", "xyz"}),
+            createColumn<Nullable<UInt64>>({10, 100, 2}),
+            createColumn<Nullable<String>>({"", "", ""})));
     // Null test
     // Result is Null if any column is all null.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, {}}),
-        executeFunction("lpadUTF8",
-                        createColumn<Nullable<String>>({{}, "abc", "def"}),
-                        createColumn<Nullable<UInt64>>({10, {}, 11}),
-                        createColumn<Nullable<String>>({"123", "456", {}})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<Nullable<String>>({{}, "abc", "def"}),
+            createColumn<Nullable<UInt64>>({10, {}, 11}),
+            createColumn<Nullable<String>>({"123", "456", {}})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, {}}),
-        executeFunction("rpadUTF8",
-                        createColumn<Nullable<String>>({{}, "abc", "def"}),
-                        createColumn<Nullable<UInt64>>({10, {}, 11}),
-                        createColumn<Nullable<String>>({"123", "456", {}})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<Nullable<String>>({{}, "abc", "def"}),
+            createColumn<Nullable<UInt64>>({10, {}, 11}),
+            createColumn<Nullable<String>>({"123", "456", {}})));
 
     // Test non-Nullable column.
     // Result is nullable even if arguments are all non-nullable.
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<String>(5, "abc"),
-                        createConstColumn<UInt8>(5, 12),
-                        createConstColumn<String>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<String>(5, "abc"),
+            createConstColumn<UInt8>(5, 12),
+            createConstColumn<String>(5, "xxx")));
 
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<String>(5, "abc"),
-                        createConstColumn<UInt8>(5, 12),
-                        createConstColumn<String>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<String>(5, "abc"),
+            createConstColumn<UInt8>(5, 12),
+            createConstColumn<String>(5, "xxx")));
 }
 CATCH
 
@@ -758,101 +798,117 @@ try
     // Different type of length column.
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt8>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt8>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt16>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt16>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt32>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt32>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int8>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int8>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int16>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int16>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int32>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int32>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     // rpad
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt8>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt8>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt16>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt16>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt32>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt32>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<UInt64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<UInt64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int8>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int8>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int16>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int16>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int32>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int32>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpadUTF8",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpadUTF8",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 }
 CATCH
 
@@ -862,45 +918,51 @@ try
     // Basic test.
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpad",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "lpad",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpad",
-                        createConstColumn<Nullable<String>>(5, "abc"),
-                        createConstColumn<Nullable<Int64>>(5, 12),
-                        createConstColumn<Nullable<String>>(5, "xxx")));
+        executeFunction(
+            "rpad",
+            createConstColumn<Nullable<String>>(5, "abc"),
+            createConstColumn<Nullable<Int64>>(5, 12),
+            createConstColumn<Nullable<String>>(5, "xxx")));
 
     // Empty str.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"123 ", "12312", "ab", "    def", "111abc", "12", {}}),
-        executeFunction("lpad",
-                        createColumn<Nullable<String>>({" ", "", "abc", "def", "abc", "123456789", "abc"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 2, 7, 6, 2, -1}),
-                        createColumn<Nullable<String>>({"123", "123", "", " ", "1", "", "1"})));
+        executeFunction(
+            "lpad",
+            createColumn<Nullable<String>>({" ", "", "abc", "def", "abc", "123456789", "abc"}),
+            createColumn<Nullable<UInt64>>({4, 5, 2, 7, 6, 2, -1}),
+            createColumn<Nullable<String>>({"123", "123", "", " ", "1", "", "1"})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" 123", "12312", "ab", "def    ", "abc111", "12", {}}),
-        executeFunction("rpad",
-                        createColumn<Nullable<String>>({" ", "", "abc", "def", "abc", "123456789", "abc"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 2, 7, 6, 2, -1}),
-                        createColumn<Nullable<String>>({"123", "123", "", " ", "1", "", "1"})));
+        executeFunction(
+            "rpad",
+            createColumn<Nullable<String>>({" ", "", "abc", "def", "abc", "123456789", "abc"}),
+            createColumn<Nullable<UInt64>>({4, 5, 2, 7, 6, 2, -1}),
+            createColumn<Nullable<String>>({"123", "123", "", " ", "1", "", "1"})));
 
     // Chinese.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"\xE4\xBD\xA0\x20", "\xe8\xa5\xbf\xe6\xb9", "\xc2\xbf\xc2\xbf\x21\x21"}),
-        executeFunction("lpad",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 6}),
-                        createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "lpad",
+            createColumn<Nullable<String>>({" ", "西湖", "!!"}),
+            createColumn<Nullable<UInt64>>({4, 5, 6}),
+            createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"\x20\xE4\xBD\xA0", "\xe8\xa5\xbf\xe6\xb9", "\x21\x21\xc2\xbf\xc2\xbf"}),
-        executeFunction("rpad",
-                        createColumn<Nullable<String>>({" ", "西湖", "!!"}),
-                        createColumn<Nullable<UInt64>>({4, 5, 6}),
-                        createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "rpad",
+            createColumn<Nullable<String>>({" ", "西湖", "!!"}),
+            createColumn<Nullable<UInt64>>({4, 5, 6}),
+            createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 }
 CATCH
 
@@ -912,60 +974,68 @@ try
     // Basic test.
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "xxxxxxxxxabc"),
-        executeFunction("lpad",
-                        createConstColumn<String>(5, "abc"),
-                        createConstColumn<Int64>(5, 12),
-                        createConstColumn<String>(5, "xxx")));
+        executeFunction(
+            "lpad",
+            createConstColumn<String>(5, "abc"),
+            createConstColumn<Int64>(5, 12),
+            createConstColumn<String>(5, "xxx")));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, "abcxxxxxxxxx"),
-        executeFunction("rpad",
-                        createConstColumn<String>(5, "abc"),
-                        createConstColumn<Int64>(5, 12),
-                        createConstColumn<String>(5, "xxx")));
+        executeFunction(
+            "rpad",
+            createConstColumn<String>(5, "abc"),
+            createConstColumn<Int64>(5, 12),
+            createConstColumn<String>(5, "xxx")));
 
     // Empty str.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"123 ", "12312", "ab", "    def", "111abc", "12"}),
-        executeFunction("lpad",
-                        createColumn<String>({" ", "", "abc", "def", "abc", "123456789"}),
-                        createColumn<UInt64>({4, 5, 2, 7, 6, 2}),
-                        createColumn<String>({"123", "123", "", " ", "1", ""})));
+        executeFunction(
+            "lpad",
+            createColumn<String>({" ", "", "abc", "def", "abc", "123456789"}),
+            createColumn<UInt64>({4, 5, 2, 7, 6, 2}),
+            createColumn<String>({"123", "123", "", " ", "1", ""})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" 123", "12312", "ab", "def    ", "abc111", "12"}),
-        executeFunction("rpad",
-                        createColumn<String>({" ", "", "abc", "def", "abc", "123456789"}),
-                        createColumn<UInt64>({4, 5, 2, 7, 6, 2}),
-                        createColumn<String>({"123", "123", "", " ", "1", ""})));
+        executeFunction(
+            "rpad",
+            createColumn<String>({" ", "", "abc", "def", "abc", "123456789"}),
+            createColumn<UInt64>({4, 5, 2, 7, 6, 2}),
+            createColumn<String>({"123", "123", "", " ", "1", ""})));
 
     // Chinese.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"\xE4\xBD\xA0\x20", "\xe8\xa5\xbf\xe6\xb9", "\xc2\xbf\xc2\xbf\x21\x21"}),
-        executeFunction("lpad",
-                        createColumn<String>({" ", "西湖", "!!"}),
-                        createColumn<UInt64>({4, 5, 6}),
-                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "lpad",
+            createColumn<String>({" ", "西湖", "!!"}),
+            createColumn<UInt64>({4, 5, 6}),
+            createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"\x20\xE4\xBD\xA0", "\xe8\xa5\xbf\xe6\xb9", "\x21\x21\xc2\xbf\xc2\xbf"}),
-        executeFunction("rpad",
-                        createColumn<String>({" ", "西湖", "!!"}),
-                        createColumn<UInt64>({4, 5, 6}),
-                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "rpad",
+            createColumn<String>({" ", "西湖", "!!"}),
+            createColumn<UInt64>({4, 5, 6}),
+            createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 
     // utf8 test
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"你 好 ", "杭州 西湖", "¿¿¿¿!!"}),
-        executeFunction("lpadUTF8",
-                        createColumn<String>({" ", "西湖", "!!"}),
-                        createColumn<UInt64>({4, 5, 6}),
-                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "lpadUTF8",
+            createColumn<String>({" ", "西湖", "!!"}),
+            createColumn<UInt64>({4, 5, 6}),
+            createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" 你 好", "西湖杭州 ", "!!¿¿¿¿"}),
-        executeFunction("rpadUTF8",
-                        createColumn<String>({" ", "西湖", "!!"}),
-                        createColumn<UInt64>({4, 5, 6}),
-                        createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+        executeFunction(
+            "rpadUTF8",
+            createColumn<String>({" ", "西湖", "!!"}),
+            createColumn<UInt64>({4, 5, 6}),
+            createColumn<String>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
 }
 CATCH
 } // namespace tests

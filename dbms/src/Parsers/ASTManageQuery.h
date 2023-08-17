@@ -21,21 +21,21 @@ namespace DB
 {
 namespace ManageOperation
 {
-    enum Enum
-    {
-        Flush,
-        Status,
-        Check,
-        DeleteRows,
-        MergeDelta,
-    };
+enum Enum
+{
+    Flush,
+    Status,
+    Check,
+    DeleteRows,
+    MergeDelta,
+};
 
-    inline const char * toString(UInt64 op)
-    {
-        static const char * data[] = {"Flush", "Status", "Check", "Delete Rows", "Merge Delta"};
-        return op < 5 ? data[op] : "Unknown operation";
-    }
+inline const char * toString(UInt64 op)
+{
+    static const char * data[] = {"Flush", "Status", "Check", "Delete Rows", "Merge Delta"};
+    return op < 5 ? data[op] : "Unknown operation";
 }
+} // namespace ManageOperation
 
 /** Manage query
   */
@@ -63,14 +63,16 @@ public:
     }
 
 protected:
-    void formatImpl(const FormatSettings & settings, FormatState & /*state*/, FormatStateStacked /*frame*/) const override
+    void formatImpl(const FormatSettings & settings, FormatState & /*state*/, FormatStateStacked /*frame*/)
+        const override
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "MANAGE TABLE " << (settings.hilite ? hilite_none : "")
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "MANAGE TABLE "
+                      << (settings.hilite ? hilite_none : "")
                       << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table) << " "
                       << (settings.hilite ? hilite_keyword : "") << ManageOperation::toString(operation)
                       << (settings.hilite ? hilite_none : "");
-        if(operation == ManageOperation::Enum::DeleteRows)
+        if (operation == ManageOperation::Enum::DeleteRows)
             settings.ostr << " " << rows;
     }
 };
-}
+} // namespace DB

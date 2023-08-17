@@ -43,8 +43,7 @@ public:
 
     explicit TiFlashSecurityConfig(const LoggerPtr & log_)
         : log(log_)
-    {
-    }
+    {}
 
     void init(Poco::Util::AbstractConfiguration & config)
     {
@@ -161,7 +160,8 @@ public:
         auto auth_context = grpc_context->auth_context();
         for (auto && [property_name, common_name] : *auth_context)
         {
-            if (property_name == GRPC_X509_CN_PROPERTY_NAME && allowed_common_names.count(String(common_name.data(), common_name.size())))
+            if (property_name == GRPC_X509_CN_PROPERTY_NAME
+                && allowed_common_names.count(String(common_name.data(), common_name.size())))
                 return true;
         }
         return false;
@@ -186,7 +186,12 @@ public:
         options.pem_cert_chain = readFile(cert_path);
         options.pem_private_key = readFile(key_path);
         ssl_cerd_options_cached = true;
-        LOG_INFO(log, "read new SslCredentialOptions: ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+        LOG_INFO(
+            log,
+            "read new SslCredentialOptions: ca_path: {}, cert_path: {}, key_path: {}",
+            ca_path,
+            cert_path,
+            key_path);
         return options;
     }
 
@@ -255,7 +260,9 @@ private:
         }
         else if (miss_ca_path || miss_cert_path || miss_key_path)
         {
-            throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(
+                "ca_path, cert_path, key_path must be set at the same time.",
+                ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
         else
         {

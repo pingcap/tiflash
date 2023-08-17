@@ -42,7 +42,12 @@ private:
     class SpillWriter
     {
     public:
-        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, bool append_write, const Block & header, size_t spill_version);
+        SpillWriter(
+            const FileProviderPtr & file_provider,
+            const String & file_name,
+            bool append_write,
+            const Block & header,
+            size_t spill_version);
         SpillDetails finishWrite();
         void write(const Block & block);
 

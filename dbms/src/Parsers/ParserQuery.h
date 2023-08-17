@@ -27,8 +27,11 @@ private:
 
     const char * getName() const override { return "Query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
 public:
-    ParserQuery(const char * end) : end(end) {}
+    ParserQuery(const char * end)
+        : end(end)
+    {}
 };
 
-}
+} // namespace DB

@@ -38,8 +38,9 @@ public:
                 nested_arguments.push_back(array->getNestedType());
             else
                 throw Exception(
-                    "Illegal type " + type->getName() + " of argument"
-                                                        " for aggregate function with "
+                    "Illegal type " + type->getName()
+                        + " of argument"
+                          " for aggregate function with "
                         + getName() + " suffix. Must be array.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }

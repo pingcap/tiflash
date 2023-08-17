@@ -24,7 +24,8 @@ constexpr auto cluster_id_key = "cluster.cluster_id";
 
 auto microsecondsUTC()
 {
-    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 } // namespace
 

@@ -26,7 +26,10 @@ namespace DB::tests
 class AggregationTest : public ::testing::Test
 {
 public:
-    ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type);
+    ::testing::AssertionResult checkAggReturnType(
+        const String & agg_name,
+        const DataTypes & data_types,
+        const DataTypePtr & expect_type);
 
     static void SetUpTestCase();
 };

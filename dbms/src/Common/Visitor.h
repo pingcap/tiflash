@@ -121,15 +121,15 @@ protected:
     template <typename T>
     void visitImpl(Type &)
     {
-        throw Exception("visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
-                            + demangle(typeid(Derived).name()),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
+                + demangle(typeid(Derived).name()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 };
 
 template <typename Derived, typename VisitorBase, typename Type, typename... Types>
-class VisitorImplHelper<Derived, VisitorBase, Type, Types...>
-    : public VisitorImplHelper<Derived, VisitorBase, Types...>
+class VisitorImplHelper<Derived, VisitorBase, Type, Types...> : public VisitorImplHelper<Derived, VisitorBase, Types...>
 {
 public:
     using VisitorImplHelper<Derived, VisitorBase, Types...>::visit;
@@ -139,14 +139,18 @@ protected:
     template <typename T>
     void visitImpl(Type &)
     {
-        throw Exception("visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
-                            + demangle(typeid(Derived).name()),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
+                + demangle(typeid(Derived).name()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 };
 
 template <typename Derived, typename VisitorBase>
-class VisitorImpl : public ApplyTypeListForClass<VisitorImplHelper, typename TypeListConcat<TypeList<Derived, VisitorBase>, typename VisitorBase::List>::Type>::Type
+class VisitorImpl
+    : public ApplyTypeListForClass<
+          VisitorImplHelper,
+          typename TypeListConcat<TypeList<Derived, VisitorBase>, typename VisitorBase::List>::Type>::Type
 {
 };
 

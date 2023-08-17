@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <map>
-#include <Parsers/Lexer.h>
-#include <Parsers/TokenIterator.h>
 #include <Core/Types.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/Lexer.h>
+#include <Parsers/TokenIterator.h>
+
+#include <map>
 
 
 /// How to test:
@@ -29,8 +30,7 @@
 
 using namespace DB;
 
-std::map<TokenType, const char *> hilite =
-{
+std::map<TokenType, const char *> hilite = {
     {TokenType::Whitespace, "\033[0;44m"},
     {TokenType::Comment, "\033[1;46m"},
     {TokenType::BareWord, "\033[1m"},
@@ -109,7 +109,7 @@ int main(int, char **)
     }
 
     writeChar('\n', out);
-/*
+    /*
     Tokens tokens(query.data(), query.data() + query.size());
     TokenIterator token(tokens);
 

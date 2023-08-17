@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <mutex>
-#include <Poco/ThreadPool.h>
 #include <Poco/Ext/SessionPoolHelpers.h>
+#include <Poco/ThreadPool.h>
+
+#include <mutex>
 
 
 std::shared_ptr<Poco::Data::SessionPool> createAndCheckResizePocoSessionPool(PocoSessionPoolConstructor pool_constr)

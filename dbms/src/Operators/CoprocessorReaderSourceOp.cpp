@@ -70,10 +70,7 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
         {
             assert(reader_res);
             assert(reader_res->second || reader_res->first.finished);
-            auto result = coprocessor_reader->toResult(
-                *reader_res,
-                block_queue,
-                header);
+            auto result = coprocessor_reader->toResult(*reader_res, block_queue, header);
             reader_res.reset();
 
             if (result.meet_error)

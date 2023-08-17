@@ -40,10 +40,7 @@ struct FineGrainedShuffle
         , batch_size(executor ? executor->fine_grained_shuffle_batch_size() : 0)
     {}
 
-    bool enable() const
-    {
-        return enableFineGrainedShuffle(stream_count);
-    }
+    bool enable() const { return enableFineGrainedShuffle(stream_count); }
 
     const UInt64 stream_count;
     const UInt64 batch_size;

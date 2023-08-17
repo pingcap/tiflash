@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/IRowInputStream.h>
 #include <Common/Exception.h>
+#include <DataStreams/IRowInputStream.h>
 
 
 namespace DB
@@ -21,7 +21,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 void IRowInputStream::syncAfterError()
@@ -29,4 +29,4 @@ void IRowInputStream::syncAfterError()
     throw Exception("Method syncAfterError is not implemented for input format", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-}
+} // namespace DB

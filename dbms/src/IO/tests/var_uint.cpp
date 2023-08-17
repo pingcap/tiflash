@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <string>
-
-#include <iostream>
-#include <IO/VarInt.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteBufferFromString.h>
 #include <Poco/HexBinaryEncoder.h>
+
+#include <iostream>
+#include <string>
 
 
 static void parse_trash_string_as_uint_must_fail(const std::string & str)
@@ -50,8 +50,7 @@ int main(int argc, char ** argv)
 
     if (argc != 2)
     {
-        std::cerr << "Usage: " << std::endl
-            << argv[0] << " unsigned_number" << std::endl;
+        std::cerr << "Usage: " << std::endl << argv[0] << " unsigned_number" << std::endl;
         return 1;
     }
 

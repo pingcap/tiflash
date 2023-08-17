@@ -43,7 +43,12 @@ inline UInt64 ComplexKeyCacheDictionary::getCellIdx(const StringRef key) const
 }
 
 
-ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const std::string & name, const DictionaryStructure & dict_struct, DictionarySourcePtr source_ptr, const DictionaryLifetime dict_lifetime, const size_t size)
+ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(
+    const std::string & name,
+    const DictionaryStructure & dict_struct,
+    DictionarySourcePtr source_ptr,
+    const DictionaryLifetime dict_lifetime,
+    const size_t size)
     : name{name}
     , dict_struct(dict_struct)
     , source_ptr{std::move(source_ptr)}
@@ -61,7 +66,12 @@ ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const std::string & name, c
 }
 
 ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const ComplexKeyCacheDictionary & other)
-    : ComplexKeyCacheDictionary{other.name, other.dict_struct, other.source_ptr->clone(), other.dict_lifetime, other.size}
+    : ComplexKeyCacheDictionary{
+        other.name,
+        other.dict_struct,
+        other.source_ptr->clone(),
+        other.dict_lifetime,
+        other.size}
 {}
 
 void ComplexKeyCacheDictionary::getString(
@@ -126,7 +136,10 @@ void ComplexKeyCacheDictionary::getString(
 /// true  true    impossible
 ///
 /// todo: split this func to two: find_for_get and find_for_set
-ComplexKeyCacheDictionary::FindResult ComplexKeyCacheDictionary::findCellIdx(const StringRef & key, const CellMetadata::time_point_t now, const size_t hash) const
+ComplexKeyCacheDictionary::FindResult ComplexKeyCacheDictionary::findCellIdx(
+    const StringRef & key,
+    const CellMetadata::time_point_t now,
+    const size_t hash) const
 {
     auto pos = hash;
     auto oldest_id = pos;
@@ -162,7 +175,10 @@ ComplexKeyCacheDictionary::FindResult ComplexKeyCacheDictionary::findCellIdx(con
     return {oldest_id, false, false};
 }
 
-void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<UInt8> & out) const
+void ComplexKeyCacheDictionary::has(
+    const Columns & key_columns,
+    const DataTypes & key_types,
+    PaddedPODArray<UInt8> & out) const
 {
     dict_struct.validateKeyTypes(key_types);
 
@@ -208,7 +224,9 @@ void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes
         return;
 
     std::vector<size_t> required_rows(outdated_keys.size());
-    std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) { return pair.getMapped().front(); });
+    std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) {
+        return pair.getMapped().front();
+    });
 
     /// request new values
     update(
@@ -249,9 +267,7 @@ ComplexKeyCacheDictionary::Attribute & ComplexKeyCacheDictionary::getAttribute(c
 {
     const auto it = attribute_index_by_name.find(attribute_name);
     if (it == std::end(attribute_index_by_name))
-        throw Exception{
-            name + ": no such attribute '" + attribute_name + "'",
-            ErrorCodes::BAD_ARGUMENTS};
+        throw Exception{name + ": no such attribute '" + attribute_name + "'", ErrorCodes::BAD_ARGUMENTS};
 
     return attributes[it->second];
 }
@@ -337,9 +353,7 @@ template StringRef ComplexKeyCacheDictionary::placeKeysInPool<ArenaWithFreeLists
     ArenaWithFreeLists & pool);
 
 
-StringRef ComplexKeyCacheDictionary::placeKeysInFixedSizePool(
-    const size_t row,
-    const Columns & key_columns) const
+StringRef ComplexKeyCacheDictionary::placeKeysInFixedSizePool(const size_t row, const Columns & key_columns) const
 {
     auto * const res = fixed_size_keys_pool->alloc();
     auto * place = res;
@@ -371,16 +385,19 @@ StringRef ComplexKeyCacheDictionary::copyKey(const StringRef key) const
 
 bool ComplexKeyCacheDictionary::isEmptyCell(const UInt64 idx) const
 {
-    return (cells[idx].key == StringRef{} && (idx != zero_cell_idx || cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t())));
+    return (
+        cells[idx].key == StringRef{}
+        && (idx != zero_cell_idx
+            || cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t())));
 }
 
-BlockInputStreamPtr ComplexKeyCacheDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
+BlockInputStreamPtr ComplexKeyCacheDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size)
+    const
 {
     std::vector<StringRef> keys;
     {
         for (auto idx : ext::range(0, cells.size()))
-            if (!isEmptyCell(idx)
-                && !cells[idx].isDefault())
+            if (!isEmptyCell(idx) && !cells[idx].isDefault())
                 keys.push_back(cells[idx].key);
     }
 

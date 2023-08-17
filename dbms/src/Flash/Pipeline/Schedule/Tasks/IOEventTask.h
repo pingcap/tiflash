@@ -22,17 +22,9 @@ template <bool is_input>
 class IOEventTask : public EventTask
 {
 public:
-    IOEventTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_)
-        : EventTask(
-            exec_context_,
-            req_id,
-            event_,
-            is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
-    {
-    }
+    IOEventTask(PipelineExecutorContext & exec_context_, const String & req_id, const EventPtr & event_)
+        : EventTask(exec_context_, req_id, event_, is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
+    {}
 
 private:
     ExecTaskStatus executeImpl() final

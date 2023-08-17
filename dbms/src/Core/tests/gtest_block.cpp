@@ -36,7 +36,19 @@ TEST_F(BlockTest, TestEstimateBytesForSpillNormalColumn)
 try
 {
     ColumnsWithTypeAndName columns;
-    std::vector<String> all_types{"Int64", "Int32", "UInt64", "UInt32", "Decimal(5,2)", "Decimal(10,2)", "Decimal(20,2)", "Decimal(40,2)", "MyDate", "MyDateTime", "String", "FixedString(10)"};
+    std::vector<String> all_types{
+        "Int64",
+        "Int32",
+        "UInt64",
+        "UInt32",
+        "Decimal(5,2)",
+        "Decimal(10,2)",
+        "Decimal(20,2)",
+        "Decimal(40,2)",
+        "MyDate",
+        "MyDateTime",
+        "String",
+        "FixedString(10)"};
     for (auto & type_name : all_types)
     {
         DataTypePtr types[2];
@@ -63,7 +75,11 @@ try
     pool->alloc(1024 * 1024);
     /// case 1, agg function not allocate memory in arena
     std::vector<String> types{"Int64", "String", "Nullable(Int64)", "Nullable(String)"};
-    std::vector<size_t> data_size{16, ColumnString::APPROX_STRING_SIZE * 2, 24, ColumnString::APPROX_STRING_SIZE * 2 + 8};
+    std::vector<size_t> data_size{
+        16,
+        ColumnString::APPROX_STRING_SIZE * 2,
+        24,
+        ColumnString::APPROX_STRING_SIZE * 2 + 8};
     for (size_t i = 0; i < types.size(); ++i)
     {
         auto agg_data_type = DataTypeFactory::instance().get(fmt::format("AggregateFunction(Min, {})", types[i]));

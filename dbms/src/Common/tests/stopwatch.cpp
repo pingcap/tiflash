@@ -37,9 +37,11 @@ int main(int, char **)
             {
                 if (auto lock = watch.compareAndRestartDeferred(1))
                 {
-                    std::cerr << "Thread " << i << ": begin iteration " << iteration << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
+                    std::cerr << "Thread " << i << ": begin iteration " << iteration
+                              << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    std::cerr << "Thread " << i << ": end iteration " << iteration << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
+                    std::cerr << "Thread " << i << ": end iteration " << iteration
+                              << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
                     ++iteration;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));

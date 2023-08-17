@@ -36,35 +36,17 @@ public:
 
     ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
-    void close() override
-    {
-        file->close();
-    }
+    void close() override { file->close(); }
 
-    int fsync() override
-    {
-        return file->fsync();
-    }
+    int fsync() override { return file->fsync(); }
 
-    int ftruncate(off_t length) override
-    {
-        return file->ftruncate(length);
-    }
+    int ftruncate(off_t length) override { return file->ftruncate(length); }
 
-    int getFd() const override
-    {
-        return file->getFd();
-    }
+    int getFd() const override { return file->getFd(); }
 
-    bool isClosed() const override
-    {
-        return file->isClosed();
-    }
+    bool isClosed() const override { return file->isClosed(); }
 
-    String getFileName() const override
-    {
-        return file->getFileName();
-    }
+    String getFileName() const override { return file->getFileName(); }
 
 private:
     WriteReadableFilePtr file;

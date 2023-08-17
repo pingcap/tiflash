@@ -29,13 +29,7 @@ struct SimpleIncrement
         : value(start)
     {}
 
-    void set(UInt64 new_value)
-    {
-        value = new_value;
-    }
+    void set(UInt64 new_value) { value = new_value; }
 
-    UInt64 get()
-    {
-        return ++value;
-    }
+    UInt64 get() { return ++value; }
 };

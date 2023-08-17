@@ -25,8 +25,7 @@ struct DataTypeWithTypeName
     DataTypeWithTypeName(const DataTypePtr & t, const String & n)
         : type(t)
         , name(n)
-    {
-    }
+    {}
 
     DataTypePtr type;
     String name;

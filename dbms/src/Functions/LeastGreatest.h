@@ -77,7 +77,10 @@ public:
     {
         if (arguments.size() < 2)
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be at least 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypePtr type_res = arguments[0];
@@ -97,7 +100,10 @@ public:
         if (num_arguments < 2)
         {
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be at least 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
         DataTypes data_types(num_arguments);
@@ -111,7 +117,8 @@ public:
         for (size_t i = 1; i < arguments.size(); ++i)
         {
             Block temp_block{pre_col, block.getByPosition(arguments[i])};
-            DataTypePtr res_type = function_builder.getReturnTypeImpl({pre_col.type, block.getByPosition(arguments[i]).type});
+            DataTypePtr res_type
+                = function_builder.getReturnTypeImpl({pre_col.type, block.getByPosition(arguments[i]).type});
             temp_block.insert({nullptr, res_type, "res_col"});
             function->executeImpl(temp_block, col_nums, 2);
             pre_col = std::move(temp_block.getByPosition(2));
@@ -138,9 +145,15 @@ struct LeastGreatestStringImpl
         int res = 0;
         auto pre_offset = StringUtil::offsetAt(c_offsets, i);
         if constexpr (use_collator)
-            res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
+            res = collator->compare(
+                reinterpret_cast<const char *>(&a_data[0]),
+                a_size,
+                reinterpret_cast<const char *>(&b_data[0]),
+                b_size);
         else
-            res = mem_utils::CompareStrView({reinterpret_cast<const char *>(&a_data[0]), a_size}, {reinterpret_cast<const char *>(&b_data[0]), b_size});
+            res = mem_utils::CompareStrView(
+                {reinterpret_cast<const char *>(&a_data[0]), a_size},
+                {reinterpret_cast<const char *>(&b_data[0]), b_size});
 
         if constexpr (least)
         {
@@ -201,9 +214,15 @@ struct LeastGreatestStringImpl
     {
         int res = 0;
         if constexpr (use_collator)
-            res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
+            res = collator->compare(
+                reinterpret_cast<const char *>(&a_data[0]),
+                a_size,
+                reinterpret_cast<const char *>(&b_data[0]),
+                b_size);
         else
-            res = mem_utils::CompareStrView({reinterpret_cast<const char *>(&a_data[0]), a_size}, {reinterpret_cast<const char *>(&b_data[0]), b_size});
+            res = mem_utils::CompareStrView(
+                {reinterpret_cast<const char *>(&a_data[0]), a_size},
+                {reinterpret_cast<const char *>(&b_data[0]), b_size});
 
         if constexpr (least)
         {
@@ -318,14 +337,15 @@ struct LeastGreatestStringImpl
     }
 
     // constant_constant
-    static void process(
-        const TiDB::TiDBCollatorPtr & collator,
-        StringRef & a,
-        const StringRef & b)
+    static void process(const TiDB::TiDBCollatorPtr & collator, StringRef & a, const StringRef & b)
     {
         int res = 0;
         if constexpr (use_collator)
-            res = collator->compare(reinterpret_cast<const char *>(a.data), a.size, reinterpret_cast<const char *>(b.data), b.size);
+            res = collator->compare(
+                reinterpret_cast<const char *>(a.data),
+                a.size,
+                reinterpret_cast<const char *>(b.data),
+                b.size);
         else
             res = a.compare(b);
 
@@ -355,7 +375,14 @@ struct StringOperationImpl
     {
         size_t size = a_offsets.size();
         for (size_t i = 0; i < size; ++i)
-            LeastGreatestStringImpl<least, use_collator>::process(collator, a_data, a_offsets, b_data, b_offsets, res_ref, i);
+            LeastGreatestStringImpl<least, use_collator>::process(
+                collator,
+                a_data,
+                a_offsets,
+                b_data,
+                b_offsets,
+                res_ref,
+                i);
     }
 
     static void NO_INLINE stringRefVectorStringVector(
@@ -401,10 +428,7 @@ struct StringOperationImpl
             LeastGreatestStringImpl<least, use_collator>::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
     }
 
-    static void constantConstant(
-        const TiDB::TiDBCollatorPtr & collator,
-        StringRef & a,
-        StringRef & b)
+    static void constantConstant(const TiDB::TiDBCollatorPtr & collator, StringRef & a, StringRef & b)
     {
         LeastGreatestStringImpl<least, use_collator>::process(collator, a, b);
     }
@@ -434,16 +458,17 @@ public:
     {
         if (arguments.size() < 2)
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be at least 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & argument : arguments)
         {
             if (!argument->isString())
             {
-                throw Exception(
-                    fmt::format("argument type not string"),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(fmt::format("argument type not string"), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
         return std::make_shared<DataTypeString>();
@@ -455,7 +480,10 @@ public:
         if (num_arguments < 2)
         {
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be at least 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
         if (collator)
@@ -497,10 +525,9 @@ public:
 
             if (string_columns.empty()) // fill the result column
             {
-                block.getByPosition(result).column
-                    = block
-                          .getByPosition(result)
-                          .type->createColumnConst(const_columns[0]->size(), Field(const_res.toString()));
+                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(
+                    const_columns[0]->size(),
+                    Field(const_res.toString()));
                 return;
             }
         }

@@ -39,10 +39,7 @@ public:
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }
 
-    String getName() const override
-    {
-        return "ExchangeReceiverSourceOp";
-    }
+    String getName() const override { return "ExchangeReceiverSourceOp"; }
 
     IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 

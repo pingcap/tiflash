@@ -34,10 +34,7 @@ public:
         , limit(limit_)
     {}
 
-    String getName() const override
-    {
-        return "PartialSortTransformOp";
-    }
+    String getName() const override { return "PartialSortTransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

@@ -109,11 +109,11 @@ public:
     using SubstreamPath = std::vector<Substream>;
 
     using StreamCallback = std::function<void(const SubstreamPath &)>;
-    virtual void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+    virtual void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const { callback(path); }
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath && path) const
     {
-        callback(path);
+        enumerateStreams(callback, path);
     }
-    void enumerateStreams(const StreamCallback & callback, SubstreamPath && path) const { enumerateStreams(callback, path); }
     void enumerateStreams(const StreamCallback & callback) const { enumerateStreams(callback, {}); }
 
     using OutputStreamGetter = std::function<WriteBuffer *(const SubstreamPath &)>;
@@ -171,13 +171,20 @@ public:
         bool position_independent_encoding,
         SubstreamPath && path) const
     {
-        deserializeBinaryBulkWithMultipleStreams(column, getter, limit, avg_value_size_hint, position_independent_encoding, path);
+        deserializeBinaryBulkWithMultipleStreams(
+            column,
+            getter,
+            limit,
+            avg_value_size_hint,
+            position_independent_encoding,
+            path);
     }
 
     /** Override these methods for data types that require just single stream (most of data types).
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
-    virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const;
+    virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint)
+        const;
 
     /** Serialization/deserialization of individual values.
       *
@@ -232,7 +239,12 @@ public:
     /** Text serialization intended for using in JSON format.
       * force_quoting_64bit_integers parameter forces to brace UInt64 and Int64 types into quotes.
       */
-    virtual void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON & settings) const = 0;
+    virtual void serializeTextJSON(
+        const IColumn & column,
+        size_t row_num,
+        WriteBuffer & ostr,
+        const FormatSettingsJSON & settings) const
+        = 0;
     virtual void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const = 0;
 
     /** Text serialization for putting into the XML format.
@@ -378,7 +390,8 @@ public:
 
     virtual bool isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() const
     {
-        return isValueUnambiguouslyRepresentedInContiguousMemoryRegion() && (isValueRepresentedByNumber() || isFixedString());
+        return isValueUnambiguouslyRepresentedInContiguousMemoryRegion()
+            && (isValueRepresentedByNumber() || isFixedString());
     };
 
     virtual bool isString() const { return false; };

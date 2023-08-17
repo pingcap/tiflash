@@ -28,10 +28,7 @@ void SyncPointCtl::enable(const char * name)
 {
     {
         std::unique_lock lock(mu);
-        channels.try_emplace(name,
-                             std::make_pair(
-                                 std::make_shared<SyncChannel>(),
-                                 std::make_shared<SyncChannel>()));
+        channels.try_emplace(name, std::make_pair(std::make_shared<SyncChannel>(), std::make_shared<SyncChannel>()));
     }
     fiu_enable(name, 1, nullptr, 0);
     LOG_DEBUG(getLogger(), "Enabled: {}", name);
@@ -88,8 +85,11 @@ void SyncPointCtl::sync(const char * name)
     // Print a stack, which is helpful to know where undesired SYNC_FOR comes from.
     LOG_DEBUG(getLogger(), "SYNC_FOR({}) trying... \n\n# Current Stack: {}", name, StackTrace().toString());
     auto result = ch_1->send();
-    LOG_DEBUG(getLogger(), "SYNC_FOR({}) {}", name, //
-              result ? "matched waitAndPause(), paused until calling next()..." : "cancelled");
+    LOG_DEBUG(
+        getLogger(),
+        "SYNC_FOR({}) {}",
+        name, //
+        result ? "matched waitAndPause(), paused until calling next()..." : "cancelled");
     if (!result)
         return;
     result = ch_2->recv();
@@ -98,8 +98,7 @@ void SyncPointCtl::sync(const char * name)
 
 #else
 
-void SyncPointCtl::enable(const char *)
-{}
+void SyncPointCtl::enable(const char *) {}
 
 void SyncPointCtl::disable(const char *) {}
 

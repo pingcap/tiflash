@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadHelpers.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Interpreters/convertFieldToType.h>
-#include <Parsers/TokenIterator.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <DataStreams/ValuesRowInputStream.h>
 #include <Common/FieldVisitors.h>
-#include <Core/Block.h>
 #include <Common/typeid_cast.h>
+#include <Core/Block.h>
+#include <DataStreams/ValuesRowInputStream.h>
+#include <IO/ReadHelpers.h>
+#include <Interpreters/convertFieldToType.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/TokenIterator.h>
 
 
 namespace DB
@@ -28,20 +28,27 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
-    extern const int CANNOT_PARSE_QUOTED_STRING;
-    extern const int CANNOT_PARSE_NUMBER;
-    extern const int CANNOT_PARSE_DATE;
-    extern const int CANNOT_PARSE_DATETIME;
-    extern const int CANNOT_READ_ARRAY_FROM_TEXT;
-    extern const int CANNOT_PARSE_DATE;
-    extern const int SYNTAX_ERROR;
-    extern const int VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE;
-}
+extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+extern const int CANNOT_PARSE_QUOTED_STRING;
+extern const int CANNOT_PARSE_NUMBER;
+extern const int CANNOT_PARSE_DATE;
+extern const int CANNOT_PARSE_DATETIME;
+extern const int CANNOT_READ_ARRAY_FROM_TEXT;
+extern const int CANNOT_PARSE_DATE;
+extern const int SYNTAX_ERROR;
+extern const int VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE;
+} // namespace ErrorCodes
 
 
-ValuesRowInputStream::ValuesRowInputStream(ReadBuffer & istr_, const Block & header_, const Context & context_, bool interpret_expressions_)
-    : istr(istr_), header(header_), context(context_), interpret_expressions(interpret_expressions_)
+ValuesRowInputStream::ValuesRowInputStream(
+    ReadBuffer & istr_,
+    const Block & header_,
+    const Context & context_,
+    bool interpret_expressions_)
+    : istr(istr_)
+    , header(header_)
+    , context(context_)
+    , interpret_expressions(interpret_expressions_)
 {
     /// In this format, BOM at beginning of stream cannot be confused with value, so it is safe to skip it.
     skipBOMIfExists(istr);
@@ -94,10 +101,8 @@ bool ValuesRowInputStream::read(MutableColumns & columns)
               * This is an exceptional case.
               */
             if (e.code() == ErrorCodes::CANNOT_PARSE_INPUT_ASSERTION_FAILED
-                || e.code() == ErrorCodes::CANNOT_PARSE_QUOTED_STRING
-                || e.code() == ErrorCodes::CANNOT_PARSE_NUMBER
-                || e.code() == ErrorCodes::CANNOT_PARSE_DATE
-                || e.code() == ErrorCodes::CANNOT_PARSE_DATETIME
+                || e.code() == ErrorCodes::CANNOT_PARSE_QUOTED_STRING || e.code() == ErrorCodes::CANNOT_PARSE_NUMBER
+                || e.code() == ErrorCodes::CANNOT_PARSE_DATE || e.code() == ErrorCodes::CANNOT_PARSE_DATETIME
                 || e.code() == ErrorCodes::CANNOT_READ_ARRAY_FROM_TEXT)
             {
                 /// TODO Case when the expression does not fit entirely in the buffer.
@@ -118,8 +123,11 @@ bool ValuesRowInputStream::read(MutableColumns & columns)
 
                 ASTPtr ast;
                 if (!parser.parse(token_iterator, ast, expected))
-                    throw Exception("Cannot parse expression of type " + type.getName() + " here: "
-                        + String(prev_istr_position, std::min(SHOW_CHARS_ON_SYNTAX_ERROR, istr.buffer().end() - prev_istr_position)),
+                    throw Exception(
+                        "Cannot parse expression of type " + type.getName() + " here: "
+                            + String(
+                                prev_istr_position,
+                                std::min(SHOW_CHARS_ON_SYNTAX_ERROR, istr.buffer().end() - prev_istr_position)),
                         ErrorCodes::SYNTAX_ERROR);
 
                 istr.position() = const_cast<char *>(token_iterator->begin);
@@ -131,9 +139,12 @@ bool ValuesRowInputStream::read(MutableColumns & columns)
                 {
                     /// Check that we are indeed allowed to insert a NULL.
                     if (!type.isNullable())
-                        throw Exception{"Expression returns value " + applyVisitor(FieldVisitorToString(), value)
-                            + ", that is out of range of type " + type.getName()
-                            + ", at: " + String(prev_istr_position, std::min(SHOW_CHARS_ON_SYNTAX_ERROR, istr.buffer().end() - prev_istr_position)),
+                        throw Exception{
+                            "Expression returns value " + applyVisitor(FieldVisitorToString(), value)
+                                + ", that is out of range of type " + type.getName() + ", at: "
+                                + String(
+                                    prev_istr_position,
+                                    std::min(SHOW_CHARS_ON_SYNTAX_ERROR, istr.buffer().end() - prev_istr_position)),
                             ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE};
                 }
 
@@ -158,4 +169,4 @@ bool ValuesRowInputStream::read(MutableColumns & columns)
     return true;
 }
 
-}
+} // namespace DB

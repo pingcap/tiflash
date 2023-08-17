@@ -33,10 +33,7 @@ public:
         , expression(expression_)
     {}
 
-    String getName() const override
-    {
-        return "ExpressionTransformOp";
-    }
+    String getName() const override { return "ExpressionTransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

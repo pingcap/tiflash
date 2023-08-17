@@ -18,9 +18,7 @@
 namespace DB
 {
 
-Block AddExtraTableIDColumnTransformAction::buildHeader(
-    const Block & inner_header_,
-    int extra_table_id_index)
+Block AddExtraTableIDColumnTransformAction::buildHeader(const Block & inner_header_, int extra_table_id_index)
 {
     auto header = inner_header_.cloneEmpty();
     if (extra_table_id_index != InvalidColumnID)
@@ -50,16 +48,14 @@ AddExtraTableIDColumnTransformAction::AddExtraTableIDColumnTransformAction(
     int extra_table_id_index_)
     : header(buildHeader(inner_header_, extra_table_id_index_))
     , extra_table_id_index(extra_table_id_index_)
-{
-}
+{}
 
 AddExtraTableIDColumnTransformAction::AddExtraTableIDColumnTransformAction(
     const DM::ColumnDefines & columns_to_read_,
     int extra_table_id_index_)
     : header(buildHeader(columns_to_read_, extra_table_id_index_))
     , extra_table_id_index(extra_table_id_index_)
-{
-}
+{}
 
 Block AddExtraTableIDColumnTransformAction::getHeader() const
 {
@@ -74,7 +70,11 @@ bool AddExtraTableIDColumnTransformAction::transform(Block & block, TableID phys
     if (extra_table_id_index != InvalidColumnID)
     {
         const auto & extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
-        ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
+        ColumnWithTypeAndName col{
+            {},
+            extra_table_id_col_define.type,
+            extra_table_id_col_define.name,
+            extra_table_id_col_define.id};
         size_t row_number = block.rows();
         auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
         col.column = std::move(col_data);

@@ -44,10 +44,7 @@ TrackedMppDataPacketPtr newDataPacket(const String & data)
 class TestReceivedMessageQueue : public testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        log = std::make_shared<Logger>("TestReceivedMessageQueue");
-    }
+    void SetUp() override { log = std::make_shared<Logger>("TestReceivedMessageQueue"); }
     void TearDown() override {}
 
     LoggerPtr log;
@@ -89,16 +86,25 @@ try
             for (size_t fine_grained_stream_size : fine_grained_stream_count)
             {
                 std::atomic<Int64> data_size_in_queue;
-                ReceivedMessageQueue queue(buffer_size, log, &data_size_in_queue, fine_grained, fine_grained_stream_size);
+                ReceivedMessageQueue
+                    queue(buffer_size, log, &data_size_in_queue, fine_grained, fine_grained_stream_size);
                 for (size_t i = 0; i < buffer_size; ++i)
                 {
                     /// is_force = false
-                    auto result = queue.pushPacket<false>(0, "mock", newDataPacket(fmt::format("test_{}", i)), ReceiverMode::Async);
+                    auto result = queue.pushPacket<false>(
+                        0,
+                        "mock",
+                        newDataPacket(fmt::format("test_{}", i)),
+                        ReceiverMode::Async);
                     ASSERT_TRUE(result);
                 }
                 ASSERT_TRUE(!queue.isWritable());
                 /// is_force = true
-                auto result = queue.pushPacket<true>(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), ReceiverMode::Async);
+                auto result = queue.pushPacket<true>(
+                    0,
+                    "mock",
+                    newDataPacket(fmt::format("test_{}", buffer_size)),
+                    ReceiverMode::Async);
                 ASSERT_TRUE(result);
                 if (fine_grained)
                 {
@@ -147,7 +153,8 @@ try
             for (size_t fine_grained_stream_size : fine_grained_stream_count)
             {
                 std::atomic<Int64> data_size_in_queue;
-                ReceivedMessageQueue queue(buffer_size, log, &data_size_in_queue, fine_grained, fine_grained_stream_size);
+                ReceivedMessageQueue
+                    queue(buffer_size, log, &data_size_in_queue, fine_grained, fine_grained_stream_size);
                 DummyGRPCKickTag tag;
                 std::vector<GRPCKickTag *> tag_vec;
                 queue.grpc_recv_queue.setKickFuncForTest([&](GRPCKickTag * t) -> grpc_call_error {
@@ -160,7 +167,8 @@ try
                     ASSERT_TRUE(result == MPMCQueueResult::OK);
                 }
                 ASSERT_TRUE(!queue.isWritable());
-                auto result = queue.pushAsyncGRPCPacket(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
+                auto result
+                    = queue.pushAsyncGRPCPacket(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
                 ASSERT_TRUE(result == MPMCQueueResult::FULL);
                 if (fine_grained)
                 {

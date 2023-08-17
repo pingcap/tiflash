@@ -33,10 +33,17 @@ extern template class Param<ParamInt<false>, true>;
 extern template class Param<ParamInt<true>, true>;
 extern template class Param<ParamInt<false>, false>;
 
-#define EXECUTE_REGEXP_INSTR()                                                                                                                                                                                                            \
-    do                                                                                                                                                                                                                                    \
-    {                                                                                                                                                                                                                                     \
-        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(POS_PARAM_PTR_VAR_NAME), *(OCCUR_PARAM_PTR_VAR_NAME), *(RET_OP_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
+#define EXECUTE_REGEXP_INSTR()                 \
+    do                                         \
+    {                                          \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(       \
+            RES_ARG_VAR_NAME,                  \
+            *(EXPR_PARAM_PTR_VAR_NAME),        \
+            *(PAT_PARAM_PTR_VAR_NAME),         \
+            *(POS_PARAM_PTR_VAR_NAME),         \
+            *(OCCUR_PARAM_PTR_VAR_NAME),       \
+            *(RET_OP_PARAM_PTR_VAR_NAME),      \
+            *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
 // Method to get actual match type param
@@ -90,7 +97,8 @@ extern template class Param<ParamInt<false>, false>;
 
 // Implementation of regexp_instr function
 template <typename Name>
-class FunctionStringRegexpInstr : public FunctionStringRegexpBase
+class FunctionStringRegexpInstr
+    : public FunctionStringRegexpBase
     , public IFunction
 {
 public:
@@ -134,7 +142,14 @@ public:
     }
 
     template <typename ExprT, typename PatT, typename PosT, typename OccurT, typename RetOpT, typename MatchTypeT>
-    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(
+        ColumnWithTypeAndName & res_arg,
+        const ExprT & expr_param,
+        const PatT & pat_param,
+        const PosT & pos_param,
+        const OccurT & occur_param,
+        const RetOpT & ret_op_param,
+        const MatchTypeT & match_type_param) const
     {
         size_t col_size = expr_param.getDataNum();
 
@@ -154,9 +169,12 @@ public:
         Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param.template getInt<Int64>(0) : -1;
 
         // Check if args are all const columns
-        if constexpr (ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst() && MatchTypeT::isConst())
+        if constexpr (
+            ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst()
+            && MatchTypeT::isConst())
         {
-            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0)
+                || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
@@ -182,7 +200,8 @@ public:
         ResultType default_val = 0;
         vec_res.assign(col_size, default_val);
 
-        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
+        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol()
+            || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
 #define GET_POS_VALUE(idx)                          \
     do                                              \
@@ -245,7 +264,8 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i))
+                    if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i)
+                        || ret_op_param.isNullAt(i))
                     {
                         null_map[i] = 1;
                         continue;
@@ -288,7 +308,8 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i) || match_type_param.isNullAt(i))
+                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i)
+                        || occur_param.isNullAt(i) || ret_op_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
                         null_map[i] = 1;
                         continue;
@@ -343,7 +364,8 @@ public:
 
         if (null_presence.has_null_constant)
         {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            block.getByPosition(result).column
+                = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }
 

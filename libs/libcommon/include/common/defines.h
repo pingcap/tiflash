@@ -152,8 +152,7 @@
 /// A template function for suppressing warnings about unused variables or function results.
 template <typename... Args>
 constexpr void UNUSED(Args &&... args [[maybe_unused]])
-{
-}
+{}
 
 /// \name TIFLASH_NO_OPTIMIZE
 /// \tparam T arbitrary type
@@ -181,10 +180,7 @@ constexpr void UNUSED(Args &&... args [[maybe_unused]])
 template <typename T>
 static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
 {
-    asm volatile(""
-                 :
-                 : "r,m"(var)
-                 : "memory");
+    asm volatile("" : : "r,m"(var) : "memory");
 }
 
 /*!
@@ -193,9 +189,11 @@ static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
  * To prevent this warning we define this function inside every macros with pragmas.
  */
 #ifdef __clang__
-#define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
+#define TIFLASH_DUMMY_FUNCTION_DEFINITION \
+    [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
 #ifndef __APPLE__
-#define tiflash_compiler_builtin_memcpy __builtin_memcpy_inline // __builtin_memcpy_inline gurantees that compiler will not emit call to libc's memcpy
+#define tiflash_compiler_builtin_memcpy \
+    __builtin_memcpy_inline // __builtin_memcpy_inline gurantees that compiler will not emit call to libc's memcpy
 #else
 #define tiflash_compiler_builtin_memcpy __builtin_memcpy
 #endif

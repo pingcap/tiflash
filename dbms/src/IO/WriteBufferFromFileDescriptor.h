@@ -41,17 +41,11 @@ public:
     /** Could be used before initialization if needed 'fd' was not passed to constructor.
       * It's not possible to change 'fd' during work.
       */
-    void setFD(int fd_)
-    {
-        fd = fd_;
-    }
+    void setFD(int fd_) { fd = fd_; }
 
     ~WriteBufferFromFileDescriptor() override;
 
-    int getFD() const override
-    {
-        return fd;
-    }
+    int getFD() const override { return fd; }
 
     off_t getPositionInFile() override;
 

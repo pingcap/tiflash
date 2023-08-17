@@ -148,15 +148,9 @@ public:
         }
     }
 
-    size_t getNumActiveThreads() const
-    {
-        return active_threads;
-    }
+    size_t getNumActiveThreads() const { return active_threads; }
 
-    size_t getMaxThreads() const
-    {
-        return max_threads;
-    }
+    size_t getMaxThreads() const { return max_threads; }
 
 private:
     /// Single source data

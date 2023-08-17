@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <string>
-
-#include <iostream>
-#include <fstream>
-
-#include <Core/Types.h>
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
-#include <IO/readFloatText.h>
-#include <IO/WriteHelpers.h>
+#include <Core/Types.h>
+#include <IO/CompressedReadBuffer.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/CompressedReadBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <IO/readFloatText.h>
+
+#include <fstream>
+#include <iostream>
+#include <string>
 
 
 /** How to test:
@@ -54,7 +53,7 @@ $ for i in {1..10}; do echo $i; time ./read_float_perf < numbers$i.tsv; done
 using namespace DB;
 
 
-template <typename T, void F(T&, ReadBuffer&)>
+template <typename T, void F(T &, ReadBuffer &)>
 void NO_INLINE loop(ReadBuffer & in, WriteBuffer & out)
 {
     T sum = 0;
@@ -70,7 +69,8 @@ void NO_INLINE loop(ReadBuffer & in, WriteBuffer & out)
     }
 
     watch.stop();
-    out << "Read in " << watch.elapsedSeconds() << " sec, " << formatReadableSizeWithBinarySuffix(in.count() / watch.elapsedSeconds()) << "/sec, result = " << sum << "\n";
+    out << "Read in " << watch.elapsedSeconds() << " sec, "
+        << formatReadableSizeWithBinarySuffix(in.count() / watch.elapsedSeconds()) << "/sec, result = " << sum << "\n";
 }
 
 
@@ -86,9 +86,12 @@ try
     ReadBufferFromFileDescriptor in(STDIN_FILENO);
     WriteBufferFromFileDescriptor out(STDOUT_FILENO);
 
-    if (method == 1) loop<T, readFloatTextPrecise>(in, out);
-    if (method == 2) loop<T, readFloatTextFast>(in, out);
-    if (method == 3) loop<T, readFloatTextSimple>(in, out);
+    if (method == 1)
+        loop<T, readFloatTextPrecise>(in, out);
+    if (method == 2)
+        loop<T, readFloatTextFast>(in, out);
+    if (method == 3)
+        loop<T, readFloatTextSimple>(in, out);
 
     return 0;
 }

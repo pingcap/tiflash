@@ -53,7 +53,8 @@ template <typename CRTP>
 class VolnitskyBase
 {
 protected:
-    using Offset = UInt8; /// Offset in the needle. For the basic algorithm, the length of the needle must not be greater than 255.
+    using Offset
+        = UInt8; /// Offset in the needle. For the basic algorithm, the length of the needle must not be greater than 255.
     using Ngram = UInt16; /// n-gram (2 bytes).
 
     const UInt8 * const needle;
@@ -80,8 +81,7 @@ public:
         : needle{reinterpret_cast<const UInt8 *>(needle)}
         , needle_size{needle_size}
         , fallback{
-              needle_size < 2 * sizeof(Ngram)
-              || needle_size >= std::numeric_limits<Offset>::max()
+              needle_size < 2 * sizeof(Ngram) || needle_size >= std::numeric_limits<Offset>::max()
               || (haystack_size_hint && haystack_size_hint < min_haystack_size_for_algorithm)}
     {
         if (fallback)
@@ -111,8 +111,7 @@ public:
         for (; pos <= haystack_end - needle_size; pos += step)
         {
             /// We look at all the cells of the hash table that can correspond to the n-gram from haystack.
-            for (size_t cell_num = toNGram(pos) % hash_size; hash[cell_num];
-                 cell_num = (cell_num + 1) % hash_size)
+            for (size_t cell_num = toNGram(pos) % hash_size; hash[cell_num]; cell_num = (cell_num + 1) % hash_size)
             {
                 /// When found - compare bytewise, using the offset from the hash table.
                 const auto res = pos - (hash[cell_num] - 1);
@@ -135,10 +134,7 @@ protected:
     CRTP & self() { return static_cast<CRTP &>(*this); }
     const CRTP & self() const { return const_cast<VolnitskyBase *>(this)->self(); }
 
-    static const Ngram & toNGram(const UInt8 * const pos)
-    {
-        return *reinterpret_cast<const Ngram *>(pos);
-    }
+    static const Ngram & toNGram(const UInt8 * const pos) { return *reinterpret_cast<const Ngram *>(pos); }
 
     void putNGramBase(const Ngram ngram, const int offset)
     {
@@ -212,8 +208,7 @@ struct VolnitskyImpl<true, ASCII> : VolnitskyBase<VolnitskyImpl<true, ASCII>>
     VolnitskyImpl(const char * const needle, const size_t needle_size, const size_t haystack_size_hint = 0)
         : VolnitskyBase<VolnitskyImpl<true, ASCII>>{needle, needle_size, haystack_size_hint}
         , fallback_searcher{needle, needle_size}
-    {
-    }
+    {}
 
     void putNGram(const UInt8 * const pos, const int offset, const UInt8 * const /*begin*/)
     {
@@ -241,18 +236,14 @@ struct VolnitskyImpl<false, true> : VolnitskyBase<VolnitskyImpl<false, true>>
     VolnitskyImpl(const char * const needle, const size_t needle_size, const size_t haystack_size_hint = 0)
         : VolnitskyBase{needle, needle_size, haystack_size_hint}
         , fallback_searcher{needle, needle_size}
-    {
-    }
+    {}
 
     void putNGram(const UInt8 * const pos, const int offset, const UInt8 * const /*begin*/)
     {
         putNGramASCIICaseInsensitive(pos, offset);
     }
 
-    bool compare(const UInt8 * const pos) const
-    {
-        return fallback_searcher.compare(pos);
-    }
+    bool compare(const UInt8 * const pos) const { return fallback_searcher.compare(pos); }
 
     const UInt8 * search_fallback(const UInt8 * const haystack, const UInt8 * const haystack_end) const
     {
@@ -269,8 +260,7 @@ struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<false, false>>
     VolnitskyImpl(const char * const needle, const size_t needle_size, const size_t haystack_size_hint = 0)
         : VolnitskyBase{needle, needle_size, haystack_size_hint}
         , fallback_searcher{needle, needle_size}
-    {
-    }
+    {}
 
     void putNGram(const UInt8 * const pos, const int offset, const UInt8 * const begin)
     {
@@ -360,7 +350,8 @@ struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<false, false>>
                 /// second sequence always start immediately after u_pos
                 auto second_seq_pos = pos + 1;
 
-                const auto second_u32 = utf8.convert(second_seq_pos); /// TODO This assumes valid UTF-8 or zero byte after needle.
+                const auto second_u32
+                    = utf8.convert(second_seq_pos); /// TODO This assumes valid UTF-8 or zero byte after needle.
                 const auto second_l_u32 = Poco::Unicode::toLower(second_u32);
                 const auto second_u_u32 = Poco::Unicode::toUpper(second_u32);
 
@@ -455,10 +446,7 @@ struct VolnitskyImpl<false, false> : VolnitskyBase<VolnitskyImpl<false, false>>
         }
     }
 
-    bool compare(const UInt8 * const pos) const
-    {
-        return fallback_searcher.compare(pos);
-    }
+    bool compare(const UInt8 * const pos) const { return fallback_searcher.compare(pos); }
 
     const UInt8 * search_fallback(const UInt8 * const haystack, const UInt8 * const haystack_end) const
     {

@@ -107,8 +107,7 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadUpdatedAll()
 
 BlockInputStreamPtr ClickHouseDictionarySource::loadIds(const std::vector<UInt64> & ids)
 {
-    return createStreamForSelectiveLoad(
-        query_builder.composeLoadIdsQuery(ids));
+    return createStreamForSelectiveLoad(query_builder.composeLoadIdsQuery(ids));
 }
 
 
@@ -117,10 +116,7 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadKeys(
     const std::vector<size_t> & requested_rows)
 {
     return createStreamForSelectiveLoad(
-        query_builder.composeLoadKeysQuery(
-            key_columns,
-            requested_rows,
-            ExternalQueryBuilder::IN_WITH_TUPLES));
+        query_builder.composeLoadKeysQuery(key_columns, requested_rows, ExternalQueryBuilder::IN_WITH_TUPLES));
 }
 
 bool ClickHouseDictionarySource::hasUpdateField() const

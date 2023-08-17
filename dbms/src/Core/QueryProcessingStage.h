@@ -33,9 +33,7 @@ enum Enum
 inline const char * toString(UInt64 stage)
 {
     static const char * data[] = {"FetchColumns", "WithMergeableState", "Complete"};
-    return stage < 3
-        ? data[stage]
-        : "Unknown stage";
+    return stage < 3 ? data[stage] : "Unknown stage";
 }
 } // namespace QueryProcessingStage
 

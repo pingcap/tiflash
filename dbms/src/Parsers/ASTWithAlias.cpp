@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ASTWithAlias.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/ASTWithAlias.h>
 
 
 namespace DB
@@ -35,7 +35,7 @@ void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & sta
 
     /// If there is an alias, then parentheses are required around the entire expression, including the alias. Because a record of the form `0 AS x + 0` is syntactically invalid.
     if (frame.need_parens && !alias.empty())
-        settings.ostr <<'(';
+        settings.ostr << '(';
 
     formatImplWithoutAlias(settings, state, frame);
 
@@ -43,8 +43,8 @@ void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & sta
     {
         writeAlias(alias, settings.ostr, settings.hilite);
         if (frame.need_parens)
-            settings.ostr <<')';
+            settings.ostr << ')';
     }
 }
 
-}
+} // namespace DB

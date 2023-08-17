@@ -24,4 +24,4 @@ namespace DB
 std::string readInvalidateQuery(IProfilingBlockInputStream & block_input_stream);
 
 
-}
+} // namespace DB

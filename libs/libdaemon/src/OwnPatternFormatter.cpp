@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <daemon/OwnPatternFormatter.h>
-
-#include <functional>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
-#include <optional>
-#include <sys/time.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <daemon/BaseDaemon.h>
+#include <daemon/OwnPatternFormatter.h>
+#include <sys/time.h>
+
+#include <functional>
+#include <optional>
 
 
 void OwnPatternFormatter::format(const Poco::Message & msg, std::string & text)

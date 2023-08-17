@@ -21,10 +21,23 @@ using MockServerConfig = tests::MockServerConfig;
 struct DecodedTiKVKey;
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
+BlockInputStreamPtr executeQuery(
+    Context & context,
+    RegionID region_id,
+    const DAGProperties & properties,
+    QueryTasks & query_tasks,
+    MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
-BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
-BlockInputStreamPtr executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+BlockInputStreamPtr executeNonMPPQuery(
+    Context & context,
+    RegionID region_id,
+    const DAGProperties & properties,
+    QueryTasks & query_tasks,
+    MakeResOutputStream & func_wrap_output_stream);
+BlockInputStreamPtr executeMPPQueryWithMultipleContext(
+    const DAGProperties & properties,
+    QueryTasks & query_tasks,
+    std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 tipb::SelectResponse executeDAGRequest(
     Context & context,
@@ -35,5 +48,9 @@ tipb::SelectResponse executeDAGRequest(
     Timestamp start_ts,
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 
-bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
+bool runAndCompareDagReq(
+    const coprocessor::Request & req,
+    const coprocessor::Response & res,
+    Context & context,
+    String & unequal_msg);
 } // namespace DB

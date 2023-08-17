@@ -25,10 +25,7 @@ struct JoinImpl
 
     static constexpr auto type = "Join";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_join();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_join(); }
 };
 
 using JoinStatisticsBase = ExecutorStatistics<JoinImpl>;

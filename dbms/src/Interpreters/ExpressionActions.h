@@ -115,7 +115,9 @@ public:
     static ExpressionAction copyColumn(const std::string & from_name, const std::string & to_name);
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
-    static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
+    static ExpressionAction ordinaryJoin(
+        std::shared_ptr<const Join> join_,
+        const NamesAndTypesList & columns_added_by_join_);
     static ExpressionAction expandSource(GroupingSets grouping_sets);
     static ExpressionAction convertToNullable(const std::string & col_name);
 
@@ -250,10 +252,7 @@ struct ExpressionActionsChain
 
     void finalize();
 
-    void clear()
-    {
-        steps.clear();
-    }
+    void clear() { steps.clear(); }
 
     ExpressionActionsPtr getLastActions()
     {

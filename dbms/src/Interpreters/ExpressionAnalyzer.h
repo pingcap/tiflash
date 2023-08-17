@@ -195,7 +195,12 @@ private:
       * For literal nodes, substitute aliases.
       */
     void normalizeTree();
-    void normalizeTreeImpl(ASTPtr & ast, MapOfASTs & finished_asts, SetOfASTs & current_asts, std::string current_alias, size_t level);
+    void normalizeTreeImpl(
+        ASTPtr & ast,
+        MapOfASTs & finished_asts,
+        SetOfASTs & current_asts,
+        std::string current_alias,
+        size_t level);
 
     ///    Eliminates injective function calls and constant expressions from group by statement
     void optimizeGroupBy();
@@ -254,12 +259,13 @@ private:
       * The set of columns available_joined_columns are the columns available from JOIN, they are not needed for reading from the main table.
       * Put in required_joined_columns the set of columns available from JOIN and needed.
       */
-    void getRequiredSourceColumnsImpl(const ASTPtr & ast,
-                                      const NameSet & available_columns,
-                                      NameSet & required_source_columns,
-                                      NameSet & ignored_names,
-                                      const NameSet & available_joined_columns,
-                                      NameSet & required_joined_columns);
+    void getRequiredSourceColumnsImpl(
+        const ASTPtr & ast,
+        const NameSet & available_columns,
+        NameSet & required_source_columns,
+        NameSet & ignored_names,
+        const NameSet & available_joined_columns,
+        NameSet & required_joined_columns);
 
     /// columns - the columns that are present before the transformations begin.
     static void initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns);
@@ -285,7 +291,11 @@ private:
       *  only one ("main") table is supported. Ambiguity is not detected or resolved.
       */
     void translateQualifiedNames();
-    void translateQualifiedNamesImpl(ASTPtr & ast, const String & database_name, const String & table_name, const String & alias);
+    void translateQualifiedNamesImpl(
+        ASTPtr & ast,
+        const String & database_name,
+        const String & table_name,
+        const String & alias);
 
     /** Sometimes we have to calculate more columns in SELECT clause than will be returned from query.
       * This is the case when we have DISTINCT : we require more columns in SELECT even if we need less columns in result.

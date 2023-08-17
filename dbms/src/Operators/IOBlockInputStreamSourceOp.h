@@ -35,21 +35,12 @@ public:
         setHeader(impl->getHeader());
     }
 
-    String getName() const override
-    {
-        return "IOBlockInputStreamSourceOp";
-    }
+    String getName() const override { return "IOBlockInputStreamSourceOp"; }
 
 protected:
-    void operatePrefixImpl() override
-    {
-        impl->readPrefix();
-    }
+    void operatePrefixImpl() override { impl->readPrefix(); }
 
-    void operateSuffixImpl() override
-    {
-        impl->readSuffix();
-    }
+    void operateSuffixImpl() override { impl->readSuffix(); }
 
     OperatorStatus readImpl(Block & block) override
     {

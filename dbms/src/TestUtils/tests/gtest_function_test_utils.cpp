@@ -21,9 +21,7 @@ namespace tests
 TEST(TestFunctionTestUtils, CompareFloat64Column)
 try
 {
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1.23456789}),
-        createColumn<Float64>({1.23456789}));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.23456789}), createColumn<Float64>({1.23456789}));
 }
 CATCH
 

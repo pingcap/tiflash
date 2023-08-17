@@ -38,7 +38,11 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, Int64 max_buffered_bytes, const BlockInputStreamPtr & in_, const String & req_id)
+    SharedQueryBlockInputStream(
+        size_t clients,
+        Int64 max_buffered_bytes,
+        const BlockInputStreamPtr & in_,
+        const String & req_id)
         : queue(CapacityLimits(clients, max_buffered_bytes), [](const Block & block) { return block.allocatedBytes(); })
         , log(Logger::get(req_id))
         , in(in_)
@@ -106,10 +110,7 @@ public:
         ptr->cancel(kill);
     }
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
-    {
-        ++cnt;
-    }
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override { ++cnt; }
 
 protected:
     /// The BlockStreamProfileInfo of SharedQuery is useless,
@@ -137,10 +138,7 @@ protected:
 
         return block;
     }
-    Block readImpl() override
-    {
-        throw Exception("Unsupport");
-    }
+    Block readImpl() override { throw Exception("Unsupport"); }
 
     void fetchBlocks()
     {

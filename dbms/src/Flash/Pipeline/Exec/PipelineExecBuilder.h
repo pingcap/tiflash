@@ -40,10 +40,7 @@ struct PipelineExecBuilder
 class PipelineExecGroupBuilder
 {
 public:
-    PipelineExecGroupBuilder()
-    {
-        groups.emplace_back();
-    }
+    PipelineExecGroupBuilder() { groups.emplace_back(); }
 
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 

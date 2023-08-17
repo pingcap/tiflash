@@ -91,10 +91,7 @@ public:
         }
     }
 
-    static MemoryTrackerPtr createGlobalRoot()
-    {
-        return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true));
-    }
+    static MemoryTrackerPtr createGlobalRoot() { return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true)); }
 
     ~MemoryTracker();
 
@@ -121,7 +118,10 @@ public:
       */
     void setOrRaiseLimit(Int64 value);
 
-    void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit.store(value, std::memory_order_relaxed); }
+    void setBytesThatRssLargerThanLimit(Int64 value)
+    {
+        bytes_rss_larger_than_limit.store(value, std::memory_order_relaxed);
+    }
 
     void setFaultProbability(double value) { fault_probability = value; }
 

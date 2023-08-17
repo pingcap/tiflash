@@ -68,7 +68,9 @@ const ASTTablesInSelectQueryElement * getJoin(ASTSelectQuery & ast_query)
             if (!joined_table)
                 joined_table = &tables_element;
             else
-                throw Exception("Support for more than one JOIN in query is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(
+                    "Support for more than one JOIN in query is not implemented",
+                    ErrorCodes::NOT_IMPLEMENTED);
         }
     }
     return joined_table;
@@ -148,7 +150,9 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
                 if (!identifier.children.empty())
                 {
                     if (identifier.children.size() != 2)
-                        throw Exception("Qualified table name could have only two components", ErrorCodes::LOGICAL_ERROR);
+                        throw Exception(
+                            "Qualified table name could have only two components",
+                            ErrorCodes::LOGICAL_ERROR);
 
                     database_name = typeid_cast<const ASTIdentifier &>(*identifier.children[0]).name;
                     table_name = typeid_cast<const ASTIdentifier &>(*identifier.children[1]).name;
@@ -190,8 +194,10 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
                 }
             }
         }
-        auto left_ts = mock::compileTableScan(executor_index, left_table_info, "", left_table_alias, left_append_pk_column);
-        auto right_ts = mock::compileTableScan(executor_index, right_table_info, "", right_table_alias, right_append_pk_column);
+        auto left_ts
+            = mock::compileTableScan(executor_index, left_table_info, "", left_table_alias, left_append_pk_column);
+        auto right_ts
+            = mock::compileTableScan(executor_index, right_table_info, "", right_table_alias, right_append_pk_column);
         root_executor = mock::compileJoin(executor_index, left_ts, right_ts, joined_table->table_join);
     }
 
@@ -204,7 +210,8 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
     /// TopN.
     if (ast_query.order_expression_list && ast_query.limit_length)
     {
-        root_executor = compileTopN(root_executor, executor_index, ast_query.order_expression_list, ast_query.limit_length);
+        root_executor
+            = compileTopN(root_executor, executor_index, ast_query.order_expression_list, ast_query.limit_length);
     }
     else if (ast_query.limit_length)
     {
@@ -228,7 +235,8 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
     if (has_gby || has_agg_func)
     {
         if (!properties.is_mpp_query
-            && (dynamic_cast<mock::LimitBinder *>(root_executor.get()) != nullptr || dynamic_cast<mock::TopNBinder *>(root_executor.get()) != nullptr))
+            && (dynamic_cast<mock::LimitBinder *>(root_executor.get()) != nullptr
+                || dynamic_cast<mock::TopNBinder *>(root_executor.get()) != nullptr))
             throw Exception("Limit/TopN and Agg cannot co-exist in non-mpp mode.", ErrorCodes::LOGICAL_ERROR);
 
         root_executor = compileAggregation(
@@ -276,7 +284,8 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     ASTSelectQuery & ast_query = typeid_cast<ASTSelectQuery &>(*ast);
 
     size_t executor_index = 0;
-    auto [root_executor, has_uniq_raw_res] = compileQueryBlock(context, executor_index, schema_fetcher, properties, ast_query);
+    auto [root_executor, has_uniq_raw_res]
+        = compileQueryBlock(context, executor_index, schema_fetcher, properties, ast_query);
     if (has_uniq_raw_res)
         func_wrap_output_stream = [](BlockInputStreamPtr in) {
             return std::make_shared<UniqRawResReformatBlockOutputStream>(in);
@@ -294,7 +303,9 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
         root_executor->columnPrune(used_columns);
     }
 
-    return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index, context), func_wrap_output_stream);
+    return std::make_tuple(
+        queryPlanToQueryTasks(properties, root_executor, executor_index, context),
+        func_wrap_output_stream);
 }
 
 TableID findTableIdForQueryFragment(ExecutorBinderPtr root_executor, bool must_have_table_id)
@@ -334,7 +345,10 @@ QueryFragments mppQueryToQueryFragments(
     MPPCtxPtr mpp_ctx)
 {
     QueryFragments fragments;
-    std::unordered_map<String, std::pair<std::shared_ptr<mock::ExchangeReceiverBinder>, std::shared_ptr<mock::ExchangeSenderBinder>>> exchange_map;
+    std::unordered_map<
+        String,
+        std::pair<std::shared_ptr<mock::ExchangeReceiverBinder>, std::shared_ptr<mock::ExchangeSenderBinder>>>
+        exchange_map;
     root_executor->toMPPSubPlan(executor_index, properties, exchange_map);
     TableID table_id = findTableIdForQueryFragment(root_executor, exchange_map.empty());
     std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
@@ -354,20 +368,32 @@ QueryFragments mppQueryToQueryFragments(
     for (auto & exchange : exchange_map)
     {
         mpp_ctx->sender_target_task_ids = current_task_ids;
-        auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
+        auto sub_fragments
+            = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
         receiver_source_task_ids_map[exchange.first] = sub_fragments[sub_fragments.size() - 1].task_ids;
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
     }
-    fragments.emplace_back(root_executor, table_id, for_root_fragment, std::move(sender_target_task_ids), std::move(receiver_source_task_ids_map), std::move(current_task_ids));
+    fragments.emplace_back(
+        root_executor,
+        table_id,
+        for_root_fragment,
+        std::move(sender_target_task_ids),
+        std::move(receiver_source_task_ids_map),
+        std::move(current_task_ids));
     return fragments;
 }
 
-QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, ExecutorBinderPtr root_executor, size_t & executor_index)
+QueryFragments queryPlanToQueryFragments(
+    const DAGProperties & properties,
+    ExecutorBinderPtr root_executor,
+    size_t & executor_index)
 {
     if (properties.is_mpp_query)
     {
-        ExecutorBinderPtr root_exchange_sender
-            = std::make_shared<mock::ExchangeSenderBinder>(executor_index, root_executor->output_schema, tipb::PassThrough);
+        ExecutorBinderPtr root_exchange_sender = std::make_shared<mock::ExchangeSenderBinder>(
+            executor_index,
+            root_executor->output_schema,
+            tipb::PassThrough);
         root_exchange_sender->children.push_back(root_executor);
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts);

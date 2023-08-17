@@ -39,4 +39,4 @@ Block MaterializingBlockInputStream::readImpl()
     return materializeBlock(children.back()->read());
 }
 
-}
+} // namespace DB

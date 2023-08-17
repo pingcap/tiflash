@@ -43,17 +43,19 @@ namespace DB
 template <typename Thread>
 ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_)
     : ThreadPoolImpl(max_threads_, max_threads_, max_threads_)
-{
-}
+{}
 
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_)
+ThreadPoolImpl<Thread>::ThreadPoolImpl(
+    size_t max_threads_,
+    size_t max_free_threads_,
+    size_t queue_size_,
+    bool shutdown_on_exception_)
     : max_threads(max_threads_)
     , max_free_threads(max_free_threads_)
     , queue_size(queue_size_)
     , shutdown_on_exception(shutdown_on_exception_)
-{
-}
+{}
 
 template <typename Thread>
 void ThreadPoolImpl<Thread>::setMaxThreads(size_t value)
@@ -91,7 +93,11 @@ void ThreadPoolImpl<Thread>::setQueueSize(size_t value)
 
 template <typename Thread>
 template <typename ReturnType>
-ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::optional<uint64_t> wait_microseconds, bool propagate_opentelemetry_tracing_context)
+ReturnType ThreadPoolImpl<Thread>::scheduleImpl(
+    Job job,
+    ssize_t priority,
+    std::optional<uint64_t> wait_microseconds,
+    bool propagate_opentelemetry_tracing_context)
 {
     UNUSED(propagate_opentelemetry_tracing_context);
 
@@ -104,11 +110,12 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
                 std::swap(exception, first_exception);
                 std::rethrow_exception(exception);
             }
-            throw DB::Exception(DB::ErrorCodes::CANNOT_SCHEDULE_TASK,
-                                "Cannot schedule a task: {} (threads={}, jobs={})",
-                                reason,
-                                threads.size(),
-                                scheduled_jobs);
+            throw DB::Exception(
+                DB::ErrorCodes::CANNOT_SCHEDULE_TASK,
+                "Cannot schedule a task: {} (threads={}, jobs={})",
+                reason,
+                threads.size(),
+                scheduled_jobs);
         }
         else
             return false;
@@ -159,8 +166,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
             }
         }
 
-        jobs.emplace(std::move(job),
-                     priority);
+        jobs.emplace(std::move(job), priority);
 
         ++scheduled_jobs;
     }
@@ -183,7 +189,11 @@ bool ThreadPoolImpl<Thread>::trySchedule(Job job, ssize_t priority, uint64_t wai
 }
 
 template <typename Thread>
-void ThreadPoolImpl<Thread>::scheduleOrThrow(Job job, ssize_t priority, uint64_t wait_microseconds, bool propagate_opentelemetry_tracing_context)
+void ThreadPoolImpl<Thread>::scheduleOrThrow(
+    Job job,
+    ssize_t priority,
+    uint64_t wait_microseconds,
+    bool propagate_opentelemetry_tracing_context)
 {
     scheduleImpl<void>(std::move(job), priority, wait_microseconds, propagate_opentelemetry_tracing_context);
 }
@@ -290,7 +300,8 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
             try
             {
                 CurrentMetrics::Increment metric_active_threads(
-                    std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive : CurrentMetrics::LocalThreadActive);
+                    std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive
+                                                        : CurrentMetrics::LocalThreadActive);
 
                 job();
 
@@ -347,11 +358,11 @@ void GlobalThreadPool::initialize(size_t max_threads, size_t max_free_threads, s
 {
     if (the_instance)
     {
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR,
-                            "The global thread pool is initialized twice");
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "The global thread pool is initialized twice");
     }
 
-    the_instance.reset(new GlobalThreadPool(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/));
+    the_instance.reset(
+        new GlobalThreadPool(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/));
 }
 
 void GlobalThreadPool::registerFinalizer(std::function<void()> fn)

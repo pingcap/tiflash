@@ -49,15 +49,23 @@ public:
     }
 
     template <typename Integer>
-    void test(const std::optional<String> & str, const std::optional<Integer> & length, const std::optional<String> & result)
+    void test(
+        const std::optional<String> & str,
+        const std::optional<Integer> & length,
+        const std::optional<String> & result)
     {
         auto inner_test = [&](bool is_str_const, bool is_length_const) {
-            bool is_one_of_args_null_const = (is_str_const && !str.has_value()) || (is_length_const && !length.has_value());
+            bool is_one_of_args_null_const
+                = (is_str_const && !str.has_value()) || (is_length_const && !length.has_value());
             bool is_result_const = (is_str_const && is_length_const) || is_one_of_args_null_const;
-            auto expected_res_column = is_result_const ? (is_one_of_args_null_const ? createConstColumn<Nullable<String>>(1, result) : createConstColumn<String>(1, result.value()))
-                                                       : createColumn<Nullable<String>>({result});
-            auto str_column = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
-            auto length_column = is_length_const ? createConstColumn<Nullable<Integer>>(1, length) : createColumn<Nullable<Integer>>({length});
+            auto expected_res_column = is_result_const
+                ? (is_one_of_args_null_const ? createConstColumn<Nullable<String>>(1, result)
+                                             : createConstColumn<String>(1, result.value()))
+                : createColumn<Nullable<String>>({result});
+            auto str_column
+                = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
+            auto length_column = is_length_const ? createConstColumn<Nullable<Integer>>(1, length)
+                                                 : createColumn<Nullable<Integer>>({length});
             auto actual_res_column = executeFunction(func_name, str_column, length_column);
             ASSERT_COLUMN_EQ(expected_res_column, actual_res_column);
         };
@@ -76,7 +84,8 @@ public:
                 executeFunction(
                     func_name,
                     is_str_const ? createConstColumn<Nullable<String>>(1, "") : createColumn<Nullable<String>>({""}),
-                    is_length_const ? createConstColumn<Nullable<Integer>>(1, 0) : createColumn<Nullable<Integer>>({0})),
+                    is_length_const ? createConstColumn<Nullable<Integer>>(1, 0)
+                                    : createColumn<Nullable<Integer>>({0})),
                 Exception);
         };
         std::vector<bool> is_consts = {true, false};
@@ -136,7 +145,15 @@ try
         createColumn<Nullable<String>>({"", "a", "", "a", "", "", "a", "a"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string}),
+            createColumn<Nullable<String>>(
+                {second_case_string,
+                 second_case_string,
+                 second_case_string,
+                 second_case_string,
+                 second_case_string,
+                 second_case_string,
+                 second_case_string,
+                 second_case_string}),
             createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "a", "", "a", "", "", "a", "a"}),

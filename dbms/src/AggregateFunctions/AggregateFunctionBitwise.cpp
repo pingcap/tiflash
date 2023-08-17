@@ -23,7 +23,10 @@ namespace DB
 namespace
 {
 template <template <typename> class Data>
-AggregateFunctionPtr createAggregateFunctionBitwise(const std::string & name, const DataTypes & argument_types, const Array & parameters)
+AggregateFunctionPtr createAggregateFunctionBitwise(
+    const std::string & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -53,9 +56,18 @@ void registerAggregateFunctionsBitwise(AggregateFunctionFactory & factory)
     factory.registerFunction("groupBitXor", createAggregateFunctionBitwise<AggregateFunctionGroupBitXorData>);
 
     /// Aliases for compatibility with MySQL.
-    factory.registerFunction("BIT_OR", createAggregateFunctionBitwise<AggregateFunctionGroupBitOrData>, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("BIT_AND", createAggregateFunctionBitwise<AggregateFunctionGroupBitAndData>, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("BIT_XOR", createAggregateFunctionBitwise<AggregateFunctionGroupBitXorData>, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(
+        "BIT_OR",
+        createAggregateFunctionBitwise<AggregateFunctionGroupBitOrData>,
+        AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(
+        "BIT_AND",
+        createAggregateFunctionBitwise<AggregateFunctionGroupBitAndData>,
+        AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(
+        "BIT_XOR",
+        createAggregateFunctionBitwise<AggregateFunctionGroupBitXorData>,
+        AggregateFunctionFactory::CaseInsensitive);
 }
 
 } // namespace DB

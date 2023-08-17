@@ -43,8 +43,12 @@ public:
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
     // `timeout_s`, it will throw exception.
-    virtual std::pair<bool, String>
-    sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s) = 0;
+    virtual std::pair<bool, String> sendTryAddLockRequest(
+        const String & data_file_key,
+        UInt32 lock_store_id,
+        UInt32 lock_seq,
+        Int64 timeout_s)
+        = 0;
 
     // Try mark the `data_file_key` as deleted
     // If the file is marked as deleted, return <true, "">
@@ -52,16 +56,13 @@ public:
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
     // `timeout_s`, it will throw exception.
-    virtual std::pair<bool, String>
-    sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) = 0;
+    virtual std::pair<bool, String> sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) = 0;
 };
 
 class S3LockClient : public IS3LockClient
 {
 public:
-    explicit S3LockClient(
-        pingcap::kv::Cluster * kv_cluster_,
-        OwnerManagerPtr s3gc_owner_);
+    explicit S3LockClient(pingcap::kv::Cluster * kv_cluster_, OwnerManagerPtr s3gc_owner_);
 
     // Try add lock to the `data_file_key` by `lock_store_id` and `lock_seq`
     // If the file is locked successfully, return <true, "">
@@ -69,8 +70,11 @@ public:
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
     // `timeout_s`, it will throw exception.
-    std::pair<bool, String>
-    sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s) override;
+    std::pair<bool, String> sendTryAddLockRequest(
+        const String & data_file_key,
+        UInt32 lock_store_id,
+        UInt32 lock_seq,
+        Int64 timeout_s) override;
 
     // Try mark the `data_file_key` as deleted
     // If the file is marked as deleted, return <true, "">
@@ -78,16 +82,11 @@ public:
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
     // `timeout_s`, it will throw exception.
-    std::pair<bool, String>
-    sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) override;
+    std::pair<bool, String> sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) override;
 
 private:
     template <typename Response, typename Request, typename SendRpc>
-    std::pair<bool, String> makeCall(
-        SendRpc send,
-        const Request & req,
-        Int64 timeout_s,
-        const LoggerPtr & tracing_log);
+    std::pair<bool, String> makeCall(SendRpc send, const Request & req, Int64 timeout_s, const LoggerPtr & tracing_log);
 
     String getOwnerAddr(const Timepoint & deadline, const LoggerPtr & tracing_log);
     String updateOwnerAddr(const Timepoint & deadline, const LoggerPtr & tracing_log);

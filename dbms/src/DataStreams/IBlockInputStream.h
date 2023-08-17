@@ -83,7 +83,9 @@ public:
       */
     virtual BlockExtraInfo getBlockExtraInfo() const
     {
-        throw Exception("Method getBlockExtraInfo is not supported by the data stream " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method getBlockExtraInfo is not supported by the data stream " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Read something before starting all data or after the end of all data.
@@ -136,7 +138,10 @@ public:
     /// If this stream generates data in order by some keys, return true.
     virtual bool isSortedOutput() const { return false; }
     /// In case of isGroupedOutput or isSortedOutput, return corresponding SortDescription
-    virtual const SortDescription & getSortDescription() const { throw Exception("Output of " + getName() + " is not sorted", ErrorCodes::OUTPUT_IS_NOT_SORTED); }
+    virtual const SortDescription & getSortDescription() const
+    {
+        throw Exception("Output of " + getName() + " is not sorted", ErrorCodes::OUTPUT_IS_NOT_SORTED);
+    }
 
     /** Must be called before read, readPrefix.
       */

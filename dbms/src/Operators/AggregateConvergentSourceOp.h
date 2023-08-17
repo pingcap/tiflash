@@ -30,10 +30,7 @@ public:
         size_t index_,
         const String & req_id);
 
-    String getName() const override
-    {
-        return "AggregateConvergentSourceOp";
-    }
+    String getName() const override { return "AggregateConvergentSourceOp"; }
 
 protected:
     void operateSuffixImpl() override;

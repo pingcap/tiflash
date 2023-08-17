@@ -111,7 +111,12 @@ void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
         auto req_data_obj = req_data_json_obj.extract<JSONObjectPtr>();
         auto req_type = req_data_obj->getValue<uint16_t>(REQ_TYPE);
         if (req_type != COP_REQUEST_TYPE)
-            throw Exception(fmt::format("Currently only support cop_request({}), while receive type({})!", COP_REQUEST_TYPE, req_type), ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                fmt::format(
+                    "Currently only support cop_request({}), while receive type({})!",
+                    COP_REQUEST_TYPE,
+                    req_type),
+                ErrorCodes::BAD_ARGUMENTS);
         String request;
         decodeBase64(req_data_obj->getValue<String>(REQUEST), request);
         coprocessor::Request cop_request;
@@ -172,7 +177,12 @@ NaturalDag::LoadedRegionInfo NaturalDag::loadRegion(const Poco::Dynamic::Var & r
     String region_end;
     decodeBase64(region_obj->getValue<String>(REGION_END), region_end);
     region.end = RecordKVFormat::encodeAsTiKVKey(region_end);
-    LOG_INFO(log, "RegionID: {}, RegionStart: {}, RegionEnd: {}", region.id, printAsBytes(region.start), printAsBytes(region.end));
+    LOG_INFO(
+        log,
+        "RegionID: {}, RegionStart: {}, RegionEnd: {}",
+        region.id,
+        printAsBytes(region.start),
+        printAsBytes(region.end));
 
     auto pairs_json = region_obj->getArray(REGION_KEYVALUE_DATA);
     for (const auto & pair_json : *pairs_json)
@@ -230,13 +240,22 @@ void NaturalDag::buildTables(Context & context)
                 UInt64 commit_ts = pd_client->getTS();
                 raft_cmdpb::RaftCmdRequest request;
                 RegionBench::addRequestsToRaftCmd(request, pair.first, pair.second, prewrite_ts, commit_ts, false);
-                RegionBench::applyWriteRaftCmd(*tmt.getKVStore(), std::move(request), region.id, MockTiKV::instance().getRaftIndex(region.id), MockTiKV::instance().getRaftTerm(region.id), tmt);
+                RegionBench::applyWriteRaftCmd(
+                    *tmt.getKVStore(),
+                    std::move(request),
+                    region.id,
+                    MockTiKV::instance().getRaftIndex(region.id),
+                    MockTiKV::instance().getRaftTerm(region.id),
+                    tmt);
             }
         }
     }
 }
 
-void NaturalDag::buildDatabase(Context & context, std::shared_ptr<TiDBSchemaSyncerManager> & schema_syncer, const String & db_name)
+void NaturalDag::buildDatabase(
+    Context & context,
+    std::shared_ptr<TiDBSchemaSyncerManager> & schema_syncer,
+    const String & db_name)
 {
     auto result = MockTiDB::instance().getDBIDByName(db_name);
     if (result.first)

@@ -65,29 +65,25 @@ extern const int OVERFLOW_ERROR;
     */
 
 template <typename T>
-inline std::enable_if_t<std::is_integral_v<T> && (sizeof(T) <= sizeof(UInt32)), T>
-roundDownToPowerOfTwo(T x)
+inline std::enable_if_t<std::is_integral_v<T> && (sizeof(T) <= sizeof(UInt32)), T> roundDownToPowerOfTwo(T x)
 {
     return x <= 0 ? 0 : (T(1) << (31 - __builtin_clz(x)));
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_integral_v<T> && (sizeof(T) == sizeof(UInt64)), T>
-roundDownToPowerOfTwo(T x)
+inline std::enable_if_t<std::is_integral_v<T> && (sizeof(T) == sizeof(UInt64)), T> roundDownToPowerOfTwo(T x)
 {
     return x <= 0 ? 0 : (T(1) << (63 - __builtin_clzll(x)));
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_same_v<T, Float32>, T>
-roundDownToPowerOfTwo(T x)
+inline std::enable_if_t<std::is_same_v<T, Float32>, T> roundDownToPowerOfTwo(T x)
 {
     return ext::bit_cast<T>(ext::bit_cast<UInt32>(x) & ~((1ULL << 23) - 1));
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_same_v<T, Float64>, T>
-roundDownToPowerOfTwo(T x)
+inline std::enable_if_t<std::is_same_v<T, Float64>, T> roundDownToPowerOfTwo(T x)
 {
     return ext::bit_cast<T>(ext::bit_cast<UInt64>(x) & ~((1ULL << 52) - 1));
 }
@@ -114,10 +110,7 @@ struct RoundToExp2Impl
 {
     using ResultType = T;
 
-    static inline T apply(T x)
-    {
-        return roundDownToPowerOfTwo<T>(x);
-    }
+    static inline T apply(T x) { return roundDownToPowerOfTwo<T>(x); }
 };
 
 
@@ -214,12 +207,13 @@ struct DecimalRoundingComputation
 {
     static_assert(IsDecimal<T>);
     static const size_t data_count = 1;
-    static size_t prepare(size_t scale)
-    {
-        return scale;
-    }
+    static size_t prepare(size_t scale) { return scale; }
     // compute need decimal_scale to interpret decimals
-    static inline void compute(const T * __restrict in, size_t scale, OutputType * __restrict out, ScaleType decimal_scale)
+    static inline void compute(
+        const T * __restrict in,
+        size_t scale,
+        OutputType * __restrict out,
+        ScaleType decimal_scale)
     {
         static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
         Float64 val = in->template toFloat<Float64>(decimal_scale);
@@ -283,10 +277,7 @@ struct IntegerRoundingComputation
 {
     static const size_t data_count = 1;
 
-    static size_t prepare(size_t scale)
-    {
-        return scale;
-    }
+    static size_t prepare(size_t scale) { return scale; }
 
     static ALWAYS_INLINE T computeImpl(T x, T scale)
     {
@@ -367,10 +358,7 @@ public:
         return _mm_round_ps(val, int(mode));
     }
 
-    static VectorType prepare(size_t scale)
-    {
-        return load1(scale);
-    }
+    static VectorType prepare(size_t scale) { return load1(scale); }
 };
 
 template <>
@@ -392,10 +380,7 @@ public:
         return _mm_round_pd(val, int(mode));
     }
 
-    static VectorType prepare(size_t scale)
-    {
-        return load1(scale);
-    }
+    static VectorType prepare(size_t scale) { return load1(scale); }
 };
 
 #else
@@ -415,7 +400,9 @@ inline float roundWithMode(float x, RoundingMode mode)
     case RoundingMode::Trunc:
         return truncf(x);
     default:
-        throw Exception("Logical error: unexpected 'mode' parameter passed to function roundWithMode", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: unexpected 'mode' parameter passed to function roundWithMode",
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -432,7 +419,9 @@ inline double roundWithMode(double x, RoundingMode mode)
     case RoundingMode::Trunc:
         return trunc(x);
     default:
-        throw Exception("Logical error: unexpected 'mode' parameter passed to function roundWithMode", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: unexpected 'mode' parameter passed to function roundWithMode",
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -455,10 +444,7 @@ public:
         return roundWithMode(val, mode);
     }
 
-    static VectorType prepare(size_t scale)
-    {
-        return load1(scale);
-    }
+    static VectorType prepare(size_t scale) { return load1(scale); }
 };
 
 #endif
@@ -625,7 +611,10 @@ private:
     using Data = T;
 
 public:
-    static NO_INLINE void apply(const DecimalPaddedPODArray<T> & in, size_t scale, typename ColumnVector<Int64>::Container & out)
+    static NO_INLINE void apply(
+        const DecimalPaddedPODArray<T> & in,
+        size_t scale,
+        typename ColumnVector<Int64>::Container & out)
     {
         ScaleType decimal_scale = in.getScale();
         const T * end_in = in.data() + in.size();
@@ -650,7 +639,10 @@ private:
     using Data = T;
 
 public:
-    static NO_INLINE void apply(const DecimalPaddedPODArray<T> & in, size_t scale, typename ColumnDecimal<T>::Container & out)
+    static NO_INLINE void apply(
+        const DecimalPaddedPODArray<T> & in,
+        size_t scale,
+        typename ColumnDecimal<T>::Container & out)
     {
         ScaleType decimal_scale = in.getScale();
         const T * end_in = in.data() + in.size();
@@ -695,9 +687,10 @@ struct Dispatcher
                 throw Exception("Scale argument for rounding functions must be constant.", ErrorCodes::ILLEGAL_COLUMN);
 
             Field scale_field = static_cast<const ColumnConst &>(scale_column).getField();
-            if (scale_field.getType() != Field::Types::UInt64
-                && scale_field.getType() != Field::Types::Int64)
-                throw Exception("Scale argument for rounding functions must have integer type.", ErrorCodes::ILLEGAL_COLUMN);
+            if (scale_field.getType() != Field::Types::UInt64 && scale_field.getType() != Field::Types::Int64)
+                throw Exception(
+                    "Scale argument for rounding functions must have integer type.",
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             scale_arg = scale_field.get<Int64>();
         }
@@ -719,7 +712,13 @@ struct Dispatcher
 
 private:
     template <typename VecRes, typename ColRes, typename Col>
-    static void applyInternal(const Col * col, VecRes & vec_res, ColRes & col_res, Block & block, Int64 scale_arg, size_t result)
+    static void applyInternal(
+        const Col * col,
+        VecRes & vec_res,
+        ColRes & col_res,
+        Block & block,
+        Int64 scale_arg,
+        size_t result)
     {
         size_t scale = 1;
         vec_res.resize(col->getData().size());
@@ -738,12 +737,18 @@ private:
         else if (scale_arg > 0)
         {
             scale = pow(10, scale_arg);
-            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Positive, OutputType>::apply(col->getData(), scale, vec_res);
+            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Positive, OutputType>::apply(
+                col->getData(),
+                scale,
+                vec_res);
         }
         else
         {
             scale = pow(10, -scale_arg);
-            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Negative, OutputType>::apply(col->getData(), scale, vec_res);
+            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Negative, OutputType>::apply(
+                col->getData(),
+                scale,
+                vec_res);
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -786,10 +791,7 @@ private:
     }
 
 public:
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -799,7 +801,10 @@ public:
     {
         if ((arguments.empty()) || (arguments.size() > 2))
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
@@ -816,31 +821,26 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!(executeForType<UInt8>(block, arguments, result)
-              || executeForType<UInt16>(block, arguments, result)
-              || executeForType<UInt32>(block, arguments, result)
-              || executeForType<UInt64>(block, arguments, result)
-              || executeForType<Int8>(block, arguments, result)
-              || executeForType<Int16>(block, arguments, result)
-              || executeForType<Int32>(block, arguments, result)
-              || executeForType<Int64>(block, arguments, result)
-              || executeForType<Float32>(block, arguments, result)
-              || executeForType<Float64>(block, arguments, result)
+        if (!(executeForType<UInt8>(block, arguments, result) || executeForType<UInt16>(block, arguments, result)
+              || executeForType<UInt32>(block, arguments, result) || executeForType<UInt64>(block, arguments, result)
+              || executeForType<Int8>(block, arguments, result) || executeForType<Int16>(block, arguments, result)
+              || executeForType<Int32>(block, arguments, result) || executeForType<Int64>(block, arguments, result)
+              || executeForType<Float32>(block, arguments, result) || executeForType<Float64>(block, arguments, result)
               || executeForType<Decimal32>(block, arguments, result)
               || executeForType<Decimal64>(block, arguments, result)
               || executeForType<Decimal128>(block, arguments, result)
               || executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception(
-                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                fmt::format(
+                    "Illegal column {} of argument of function {}",
+                    block.getByPosition(arguments[0]).column->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
-    bool hasInformationAboutMonotonicity() const override
-    {
-        return true;
-    }
+    bool hasInformationAboutMonotonicity() const override { return true; }
 
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
     {
@@ -875,10 +875,7 @@ private:
     }
 
 public:
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -887,7 +884,10 @@ public:
     {
         if ((arguments.empty()) || (arguments.size() > 2))
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
@@ -903,21 +903,20 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!(executeForType<Decimal32>(block, arguments, result)
-              || executeForType<Decimal64>(block, arguments, result)
+        if (!(executeForType<Decimal32>(block, arguments, result) || executeForType<Decimal64>(block, arguments, result)
               || executeForType<Decimal128>(block, arguments, result)
               || executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception(
-                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                fmt::format(
+                    "Illegal column {} of argument of function {}",
+                    block.getByPosition(arguments[0]).column->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
-    bool hasInformationAboutMonotonicity() const override
-    {
-        return true;
-    }
+    bool hasInformationAboutMonotonicity() const override { return true; }
 
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
     {
@@ -1234,7 +1233,13 @@ struct TiDBRoundArguments
     MutableColumnPtr & output_column;
 };
 
-template <typename InputType, typename FracType, typename OutputType, typename InputColumn, typename FracColumn, typename OutputColumn>
+template <
+    typename InputType,
+    typename FracType,
+    typename OutputType,
+    typename InputColumn,
+    typename FracColumn,
+    typename OutputColumn>
 struct TiDBRound
 {
     static void apply(const TiDBRoundArguments & args)
@@ -1317,7 +1322,8 @@ struct TiDBRound
                     if constexpr (std::is_floating_point_v<InputType>)
                         output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
                     else if constexpr (IsDecimal<InputType>)
-                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data[i], info);
+                        output_data[i]
+                            = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data[i], info);
                     else
                         output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
                 }
@@ -1340,7 +1346,10 @@ public:
     size_t getNumberOfArguments() const override { return 2; }
     bool useDefaultImplementationForNulls() const override { return true; }
     bool hasInformationAboutMonotonicity() const override { return true; }
-    Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override { return {true, true, true}; }
+    Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
+    {
+        return {true, true, true};
+    }
 
     // default implementation might make const frac column into a non-const one, while const frac and
     // non-const frac column can generate different return types. Plese see TiDBRoundPrecisionInferer for details.
@@ -1367,7 +1376,9 @@ private:
         else
         {
             throw Exception(
-                fmt::format("Illegal frac column with type {}, expect const Int64/UInt64", column->getField().getTypeName()),
+                fmt::format(
+                    "Illegal frac column with type {}, expect const Int64/UInt64",
+                    column->getField().getTypeName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -1460,7 +1471,21 @@ private:
     template <typename F>
     bool castToNumericDataTypes(const IDataType * input_type, const F & f) const
     {
-        return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(input_type, f);
+        return castTypeToEither<
+            DataTypeFloat32,
+            DataTypeFloat64,
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256,
+            DataTypeInt8,
+            DataTypeUInt8,
+            DataTypeInt16,
+            DataTypeUInt16,
+            DataTypeInt32,
+            DataTypeUInt32,
+            DataTypeInt64,
+            DataTypeUInt64>(input_type, f);
     }
 
     void checkInputTypeAndApply(const TiDBRoundArguments & args) const
@@ -1472,7 +1497,10 @@ private:
             }))
         {
             throw Exception(
-                fmt::format("Illegal column type {} for the first argument of function {}", args.input_type->getName(), getName()),
+                fmt::format(
+                    "Illegal column type {} for the first argument of function {}",
+                    args.input_type->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -1488,16 +1516,17 @@ private:
                 DataTypeInt16,
                 DataTypeUInt16,
                 DataTypeInt8,
-                DataTypeUInt8>(
-                args.frac_type.get(),
-                [&](const auto & frac_type, bool) {
-                    using FracDataType = std::decay_t<decltype(frac_type)>;
-                    checkOutputTypeAndApply<InputType, typename FracDataType::FieldType>(args);
-                    return true;
-                }))
+                DataTypeUInt8>(args.frac_type.get(), [&](const auto & frac_type, bool) {
+                using FracDataType = std::decay_t<decltype(frac_type)>;
+                checkOutputTypeAndApply<InputType, typename FracDataType::FieldType>(args);
+                return true;
+            }))
         {
             throw Exception(
-                fmt::format("Illegal column type {} for the second argument of function {}", args.frac_type->getName(), getName()),
+                fmt::format(
+                    "Illegal column type {} for the second argument of function {}",
+                    args.frac_type->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -1510,7 +1539,9 @@ private:
                 return checkColumnsAndApply<InputType, FracType, typename OutputDataType::FieldType>(args);
             }))
         {
-            throw TiFlashException(fmt::format("Unexpected return type for function {}", getName()), Errors::Coprocessor::Internal);
+            throw TiFlashException(
+                fmt::format("Unexpected return type for function {}", getName()),
+                Errors::Coprocessor::Internal);
         }
     }
 
@@ -1520,14 +1551,17 @@ private:
         constexpr bool check_integer_output
             = is_signed_v<InputType> ? std::is_same_v<OutputType, Int64> : std::is_same_v<OutputType, UInt64>;
 
-        if constexpr ((std::is_floating_point_v<InputType> && !std::is_same_v<OutputType, Float64>)
-                      || (IsDecimal<InputType> && !IsDecimal<OutputType>) || (is_integer_v<InputType> && !check_integer_output))
+        if constexpr (
+            (std::is_floating_point_v<InputType> && !std::is_same_v<OutputType, Float64>)
+            || (IsDecimal<InputType> && !IsDecimal<OutputType>) || (is_integer_v<InputType> && !check_integer_output))
             return false;
         else
         {
-            using InputColumn = std::conditional_t<IsDecimal<InputType>, ColumnDecimal<InputType>, ColumnVector<InputType>>;
+            using InputColumn
+                = std::conditional_t<IsDecimal<InputType>, ColumnDecimal<InputType>, ColumnVector<InputType>>;
             using FracColumn = ColumnVector<FracType>;
-            using OutputColumn = std::conditional_t<IsDecimal<OutputType>, ColumnDecimal<OutputType>, ColumnVector<OutputType>>;
+            using OutputColumn
+                = std::conditional_t<IsDecimal<OutputType>, ColumnDecimal<OutputType>, ColumnVector<OutputType>>;
 
             if (args.input_column->isColumnConst())
             {
@@ -1551,8 +1585,13 @@ private:
     void checkArguments(const ColumnsWithTypeAndName & arguments) const
     {
         if (arguments.size() != getNumberOfArguments())
-            throw Exception(fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}", getName(), arguments.size(), getNumberOfArguments()),
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be {}",
+                    getName(),
+                    arguments.size(),
+                    getNumberOfArguments()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         auto input_type = arguments[0].type;
         if (!input_type->isNumber() && !input_type->isDecimal())
@@ -1603,10 +1642,7 @@ using FunctionTruncDecimalToInt = FunctionRoundingDecimalToInt<NameTruncDecimalT
 struct PositiveMonotonicity
 {
     static bool has() { return true; }
-    static IFunction::Monotonicity get(const Field &, const Field &)
-    {
-        return {true};
-    }
+    static IFunction::Monotonicity get(const Field &, const Field &) { return {true}; }
 };
 
 // clang-format off

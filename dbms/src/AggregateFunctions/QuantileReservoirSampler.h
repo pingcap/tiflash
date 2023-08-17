@@ -38,10 +38,7 @@ struct QuantileReservoirSampler
     using Data = ReservoirSampler<Value, ReservoirSamplerOnEmpty::RETURN_NAN_OR_ZERO>;
     Data data;
 
-    void add(const Value & x)
-    {
-        data.insert(x);
-    }
+    void add(const Value & x) { data.insert(x); }
 
     template <typename Weight>
     void add(const Value &, const Weight &)
@@ -49,26 +46,14 @@ struct QuantileReservoirSampler
         throw Exception("Method add with weight is not implemented for ReservoirSampler", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void merge(const QuantileReservoirSampler & rhs)
-    {
-        data.merge(rhs.data);
-    }
+    void merge(const QuantileReservoirSampler & rhs) { data.merge(rhs.data); }
 
-    void serialize(WriteBuffer & buf) const
-    {
-        data.write(buf);
-    }
+    void serialize(WriteBuffer & buf) const { data.write(buf); }
 
-    void deserialize(ReadBuffer & buf)
-    {
-        data.read(buf);
-    }
+    void deserialize(ReadBuffer & buf) { data.read(buf); }
 
     /// Get the value of the `level` quantile. The level must be between 0 and 1.
-    Value get(Float64 level)
-    {
-        return data.quantileInterpolated(level);
-    }
+    Value get(Float64 level) { return data.quantileInterpolated(level); }
 
     /// Get the `size` values of `levels` quantiles. Write `size` results starting with `result` address.
     /// indices - an array of index levels such that the corresponding elements will go in ascending order.
@@ -79,10 +64,7 @@ struct QuantileReservoirSampler
     }
 
     /// The same, but in the case of an empty state, NaN is returned.
-    Float64 getFloat(Float64 level)
-    {
-        return data.quantileInterpolated(level);
-    }
+    Float64 getFloat(Float64 level) { return data.quantileInterpolated(level); }
 
     void getManyFloat(const Float64 * levels, const size_t * indices, size_t size, Float64 * result)
     {

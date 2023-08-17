@@ -31,10 +31,7 @@ public:
         SharedAggregateRestorerPtr && restorer_,
         const String & req_id);
 
-    String getName() const override
-    {
-        return "AggregateRestoreSourceOp";
-    }
+    String getName() const override { return "AggregateRestoreSourceOp"; }
 
 protected:
     OperatorStatus readImpl(Block & block) override;

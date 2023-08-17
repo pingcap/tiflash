@@ -120,14 +120,17 @@ void CreatingSetsBlockInputStream::createAll()
             {
                 for (auto & elem : subqueries_for_sets)
                 {
-                    if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+                    if (elem.second
+                            .source) /// There could be prepared in advance Set/Join - no source is specified for them.
                     {
                         if (isCancelledOrThrowIfKilled())
                         {
                             thread_manager->wait();
                             return;
                         }
-                        thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
+                        thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] {
+                            createOne(item);
+                        });
                         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                     }
                 }
@@ -150,10 +153,7 @@ void CreatingSetsBlockInputStream::createAll()
                 exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
         }
-        LOG_INFO(
-            log,
-            "Creating all tasks takes {} sec. ",
-            watch.elapsedSeconds());
+        LOG_INFO(log, "Creating all tasks takes {} sec. ", watch.elapsedSeconds());
 
         created = true;
     }
@@ -248,9 +248,15 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg.append("Created. ");
 
             if (subquery.set)
-                msg.fmtAppend("Set with {} entries from {} rows. ", head_rows > 0 ? subquery.set->getTotalRowCount() : 0, head_rows);
+                msg.fmtAppend(
+                    "Set with {} entries from {} rows. ",
+                    head_rows > 0 ? subquery.set->getTotalRowCount() : 0,
+                    head_rows);
             if (subquery.join)
-                msg.fmtAppend("Join with {} entries from {} rows. ", head_rows > 0 ? subquery.join->getTotalRowCount() : 0, head_rows);
+                msg.fmtAppend(
+                    "Join with {} entries from {} rows. ",
+                    head_rows > 0 ? subquery.join->getTotalRowCount() : 0,
+                    head_rows);
             if (subquery.table)
                 msg.fmtAppend("Table with {} rows. ", head_rows);
 

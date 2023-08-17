@@ -22,7 +22,13 @@
 #include <sstream>
 
 
-static void formatReadable(double size, DB::WriteBuffer & out, int precision, const char ** units, size_t units_size, double delimiter)
+static void formatReadable(
+    double size,
+    DB::WriteBuffer & out,
+    int precision,
+    const char ** units,
+    size_t units_size,
+    double delimiter)
 {
     size_t i = 0;
     for (; i + 1 < units_size && fabs(size) >= delimiter; ++i)

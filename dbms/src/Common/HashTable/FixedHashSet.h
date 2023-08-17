@@ -17,7 +17,8 @@
 #include <Common/HashTable/FixedHashTable.h>
 
 template <typename Key, typename Allocator = HashTableAllocator>
-class FixedHashSet : public FixedHashTable<Key, FixedHashTableCell<Key>, FixedHashTableStoredSize<FixedHashTableCell<Key>>, Allocator>
+class FixedHashSet
+    : public FixedHashTable<Key, FixedHashTableCell<Key>, FixedHashTableStoredSize<FixedHashTableCell<Key>>, Allocator>
 {
 public:
     using Cell = FixedHashTableCell<Key>;

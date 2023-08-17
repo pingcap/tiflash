@@ -52,42 +52,53 @@ try
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnVector(non-null)
-    data_col_ptr = createColumn<DataTypeMyDateTime::FieldType>(
-                       {
-                           MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt(),
-                           MyDateTime(1969, 1, 2, 1, 1, 1, 1).toPackedUInt(),
-                           MyDateTime(2000, 12, 31, 10, 10, 10, 700).toPackedUInt(),
-                           MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt(),
-                       })
-                       .column;
+    data_col_ptr
+        = createColumn<DataTypeMyDateTime::FieldType>({
+                                                          MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt(),
+                                                          MyDateTime(1969, 1, 2, 1, 1, 1, 1).toPackedUInt(),
+                                                          MyDateTime(2000, 12, 31, 10, 10, 10, 700).toPackedUInt(),
+                                                          MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt(),
+                                                      })
+              .column;
     input_col = ColumnWithTypeAndName(data_col_ptr, datetime_type_ptr, "input");
     output_col = createColumn<Nullable<UInt32>>({{}, 719164, 730850, 738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnConst(non-null)
-    input_col = ColumnWithTypeAndName(createConstColumn<DataTypeMyDateTime::FieldType>(1, MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt()).column, datetime_type_ptr, "input");
+    input_col = ColumnWithTypeAndName(
+        createConstColumn<DataTypeMyDateTime::FieldType>(1, MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt()).column,
+        datetime_type_ptr,
+        "input");
     output_col = createConstColumn<Nullable<UInt32>>(1, {738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnConst(nullable)
-    input_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt()).column, nullable_datetime_type_ptr, "input");
+    input_col = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(
+            1,
+            MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt())
+            .column,
+        nullable_datetime_type_ptr,
+        "input");
     output_col = createConstColumn<Nullable<UInt32>>(1, {738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnConst(nullable(null))
-    input_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, {}).column, nullable_datetime_type_ptr, "input");
+    input_col = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, {}).column,
+        nullable_datetime_type_ptr,
+        "input");
     output_col = createConstColumn<Nullable<UInt32>>(1, {});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// MyDate ColumnVector(non-null)
-    data_col_ptr = createColumn<DataTypeMyDate::FieldType>(
-                       {
-                           MyDate(0000, 0, 1).toPackedUInt(),
-                           MyDate(0000, 1, 1).toPackedUInt(),
-                           MyDate(1969, 1, 1).toPackedUInt(),
-                           MyDate(2000, 12, 1).toPackedUInt(),
-                           MyDate(2022, 3, 14).toPackedUInt(),
-                       })
+    data_col_ptr = createColumn<DataTypeMyDate::FieldType>({
+                                                               MyDate(0000, 0, 1).toPackedUInt(),
+                                                               MyDate(0000, 1, 1).toPackedUInt(),
+                                                               MyDate(1969, 1, 1).toPackedUInt(),
+                                                               MyDate(2000, 12, 1).toPackedUInt(),
+                                                               MyDate(2022, 3, 14).toPackedUInt(),
+                                                           })
                        .column;
     input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
     output_col = createColumn<Nullable<UInt32>>({{}, 1, 719163, 730820, 738593});

@@ -26,14 +26,19 @@
 
 
 template <typename TKey, typename TMapped, typename Hash, bool save_hash_in_cell>
-struct LRUHashMapCell : public std::conditional_t<save_hash_in_cell, HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>, HashMapCell<TKey, TMapped, Hash, HashTableNoState>>
+struct LRUHashMapCell
+    : public std::conditional_t<
+          save_hash_in_cell,
+          HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>,
+          HashMapCell<TKey, TMapped, Hash, HashTableNoState>>
 {
 public:
     using Key = TKey;
 
-    using Base = std::conditional_t<save_hash_in_cell,
-                                    HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>,
-                                    HashMapCell<TKey, TMapped, Hash, HashTableNoState>>;
+    using Base = std::conditional_t<
+        save_hash_in_cell,
+        HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>,
+        HashMapCell<TKey, TMapped, Hash, HashTableNoState>>;
 
     using Mapped = typename Base::Mapped;
     using State = typename Base::State;
@@ -88,7 +93,13 @@ struct LRUHashMapCellNodeTraits
 };
 
 template <typename TKey, typename TValue, typename Disposer, typename Hash, bool save_hash_in_cells>
-class LRUHashMapImpl : private HashMapTable<TKey, LRUHashMapCell<TKey, TValue, Hash, save_hash_in_cells>, Hash, HashTableGrower<>, HashTableAllocator>
+class LRUHashMapImpl
+    : private HashMapTable<
+          TKey,
+          LRUHashMapCell<TKey, TValue, Hash, save_hash_in_cells>,
+          Hash,
+          HashTableGrower<>,
+          HashTableAllocator>
 {
     using Base = HashMapTable<
         TKey,
@@ -120,7 +131,10 @@ public:
     using reverse_iterator = typename LRUList::reverse_iterator;
     using const_reverse_iterator = typename LRUList::const_reverse_iterator;
 
-    explicit LRUHashMapImpl(size_t max_size_, bool preallocate_max_size_in_hash_map = false, Disposer disposer_ = Disposer())
+    explicit LRUHashMapImpl(
+        size_t max_size_,
+        bool preallocate_max_size_in_hash_map = false,
+        Disposer disposer_ = Disposer())
         : Base(preallocate_max_size_in_hash_map ? max_size_ : 32)
         , max_size(max_size_)
         , disposer(std::move(disposer_))
@@ -128,15 +142,9 @@ public:
         assert(max_size > 0);
     }
 
-    ~LRUHashMapImpl()
-    {
-        clear();
-    }
+    ~LRUHashMapImpl() { clear(); }
 
-    std::pair<Cell *, bool> ALWAYS_INLINE insert(const Key & key, const Value & value)
-    {
-        return emplace(key, value);
-    }
+    std::pair<Cell *, bool> ALWAYS_INLINE insert(const Key & key, const Value & value) { return emplace(key, value); }
 
     std::pair<Cell *, bool> ALWAYS_INLINE insert(const Key & key, Value && value)
     {
@@ -219,10 +227,7 @@ public:
         return const_cast<std::decay_t<decltype(*this)> *>(this)->get(key);
     }
 
-    bool ALWAYS_INLINE contains(const Key & key) const
-    {
-        return find(key) != nullptr;
-    }
+    bool ALWAYS_INLINE contains(const Key & key) const { return find(key) != nullptr; }
 
     Value & ALWAYS_INLINE operator[](const Key & key)
     {
@@ -286,8 +291,16 @@ struct DefaultLRUHashMapCellDisposer
     void operator()(const Key &, const Mapped &) const {}
 };
 
-template <typename Key, typename Value, typename Disposer = DefaultLRUHashMapCellDisposer<Key, Value>, typename Hash = DefaultHash<Key>>
+template <
+    typename Key,
+    typename Value,
+    typename Disposer = DefaultLRUHashMapCellDisposer<Key, Value>,
+    typename Hash = DefaultHash<Key>>
 using LRUHashMap = LRUHashMapImpl<Key, Value, Disposer, Hash, false>;
 
-template <typename Key, typename Value, typename Disposer = DefaultLRUHashMapCellDisposer<Key, Value>, typename Hash = DefaultHash<Key>>
+template <
+    typename Key,
+    typename Value,
+    typename Disposer = DefaultLRUHashMapCellDisposer<Key, Value>,
+    typename Hash = DefaultHash<Key>>
 using LRUHashMapWithSavedHash = LRUHashMapImpl<Key, Value, Disposer, Hash, true>;

@@ -61,17 +61,16 @@ class GroupArrayNumericImpl final
     UInt64 max_elems;
 
 public:
-    explicit GroupArrayNumericImpl(const DataTypePtr & data_type_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
+    explicit GroupArrayNumericImpl(
+        const DataTypePtr & data_type_,
+        UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
         : data_type(data_type_)
         , max_elems(max_elems_)
     {}
 
     String getName() const override { return "groupArray"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(data_type);
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(data_type); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -92,7 +91,8 @@ public:
         }
         else
         {
-            UInt64 elems_to_insert = std::min(static_cast<size_t>(max_elems) - cur_elems.value.size(), rhs_elems.value.size());
+            UInt64 elems_to_insert
+                = std::min(static_cast<size_t>(max_elems) - cur_elems.value.size(), rhs_elems.value.size());
             cur_elems.value.insert(rhs_elems.value.begin(), rhs_elems.value.begin() + elems_to_insert, arena);
         }
     }
@@ -114,7 +114,9 @@ public:
             throw Exception("Too large array size", ErrorCodes::TOO_LARGE_ARRAY_SIZE);
 
         if (limit_num_elems && unlikely(size > max_elems))
-            throw Exception("Too large array size, it should not exceed " + toString(max_elems), ErrorCodes::TOO_LARGE_ARRAY_SIZE);
+            throw Exception(
+                "Too large array size, it should not exceed " + toString(max_elems),
+                ErrorCodes::TOO_LARGE_ARRAY_SIZE);
 
         auto & value = this->data(place).value;
 
@@ -136,10 +138,7 @@ public:
         data_to.insert(this->data(place).value.begin(), this->data(place).value.end());
     }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
@@ -166,7 +165,8 @@ struct GroupArrayListNodeBase
     /// Clones existing node (does not modify next field)
     Node * clone(Arena * arena)
     {
-        return reinterpret_cast<Node *>(const_cast<char *>(arena->insert(reinterpret_cast<char *>(this), sizeof(Node) + size)));
+        return reinterpret_cast<Node *>(
+            const_cast<char *>(arena->insert(reinterpret_cast<char *>(this), sizeof(Node) + size)));
     }
 
     /// Write node to buffer
@@ -206,10 +206,7 @@ struct GroupArrayListNodeString : public GroupArrayListNodeBase<GroupArrayListNo
         return node;
     }
 
-    void insertInto(IColumn & column)
-    {
-        static_cast<ColumnString &>(column).insertData(data(), size);
-    }
+    void insertInto(IColumn & column) { static_cast<ColumnString &>(column).insertData(data(), size); }
 };
 
 struct GroupArrayListNodeGeneral : public GroupArrayListNodeBase<GroupArrayListNodeGeneral>
@@ -228,10 +225,7 @@ struct GroupArrayListNodeGeneral : public GroupArrayListNodeBase<GroupArrayListN
         return node;
     }
 
-    void insertInto(IColumn & column)
-    {
-        column.deserializeAndInsertFromArena(data());
-    }
+    void insertInto(IColumn & column) { column.deserializeAndInsertFromArena(data()); }
 };
 
 
@@ -248,7 +242,9 @@ struct GroupArrayGeneralListData
 /// It has poor performance in case of many small objects
 template <typename Node, bool limit_num_elems>
 class GroupArrayGeneralListImpl final
-    : public IAggregateFunctionDataHelper<GroupArrayGeneralListData<Node>, GroupArrayGeneralListImpl<Node, limit_num_elems>>
+    : public IAggregateFunctionDataHelper<
+          GroupArrayGeneralListData<Node>,
+          GroupArrayGeneralListImpl<Node, limit_num_elems>>
 {
     using Data = GroupArrayGeneralListData<Node>;
     static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
@@ -362,7 +358,9 @@ public:
             throw Exception("Too large array size", ErrorCodes::TOO_LARGE_ARRAY_SIZE);
 
         if (limit_num_elems && unlikely(elems > max_elems))
-            throw Exception("Too large array size, it should not exceed " + toString(max_elems), ErrorCodes::TOO_LARGE_ARRAY_SIZE);
+            throw Exception(
+                "Too large array size, it should not exceed " + toString(max_elems),
+                ErrorCodes::TOO_LARGE_ARRAY_SIZE);
 
         Node * prev = Node::read(buf, arena);
         data(place).first = prev;
@@ -401,10 +399,7 @@ public:
         }
     }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };

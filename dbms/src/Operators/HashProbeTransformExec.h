@@ -61,7 +61,10 @@ public:
 
     // For probe stage
     Block joinBlock(ProbeProcessInfo & probe_process_info) { return join->joinBlock(probe_process_info); }
-    void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list) { join->dispatchProbeBlock(block, partition_blocks_list, op_index); }
+    void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list)
+    {
+        join->dispatchProbeBlock(block, partition_blocks_list, op_index);
+    }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool quickCheckProbeFinished() const { return join->quickCheckProbeFinished(); }

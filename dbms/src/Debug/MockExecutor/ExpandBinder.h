@@ -30,7 +30,11 @@ public:
         , grouping_sets_columns(gss)
     {}
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context) override;
 
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
 
@@ -39,5 +43,9 @@ private:
     MockVVecGroupingNameVec grouping_sets_columns;
 };
 
-ExecutorBinderPtr compileExpand(ExecutorBinderPtr input, size_t & executor_index, MockVVecGroupingNameVec grouping_set_columns, std::set<String> set);
+ExecutorBinderPtr compileExpand(
+    ExecutorBinderPtr input,
+    size_t & executor_index,
+    MockVVecGroupingNameVec grouping_set_columns,
+    std::set<String> set);
 } // namespace DB::mock

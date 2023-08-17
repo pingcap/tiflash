@@ -47,15 +47,9 @@ struct Memory
         alloc();
     }
 
-    ~Memory()
-    {
-        dealloc();
-    }
+    ~Memory() { dealloc(); }
 
-    Memory(Memory && rhs) noexcept
-    {
-        *this = std::move(rhs);
-    }
+    Memory(Memory && rhs) noexcept { *this = std::move(rhs); }
 
     Memory & operator=(Memory && rhs) noexcept
     {
@@ -140,7 +134,10 @@ protected:
 
 public:
     /// If non-nullptr 'existing_memory' is passed, then buffer will not create its own memory and will use existing_memory without ownership.
-    explicit BufferWithOwnMemory(size_t size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
+    explicit BufferWithOwnMemory(
+        size_t size = DBMS_DEFAULT_BUFFER_SIZE,
+        char * existing_memory = nullptr,
+        size_t alignment = 0)
         : Base(nullptr, 0)
         , memory(existing_memory ? 0 : size, alignment)
     {

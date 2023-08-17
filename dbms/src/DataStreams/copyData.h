@@ -31,6 +31,10 @@ void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<boo
 
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled);
 
-void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled, const std::function<void(const Block & block)> & progress);
+void copyData(
+    IBlockInputStream & from,
+    IBlockOutputStream & to,
+    const std::function<bool()> & is_cancelled,
+    const std::function<void(const Block & block)> & progress);
 
 } // namespace DB

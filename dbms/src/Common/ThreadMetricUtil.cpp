@@ -30,11 +30,16 @@ bool tryToResetMaxThreadsMetrics()
     if (now > last_max_thds_metric_reset_ts_tmp + max_thds_metric_reset_interval)
     {
         last_max_thds_metric_reset_ts.store(now, std::memory_order_relaxed);
-        GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value());
-        GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value());
-        GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value());
-        GET_METRIC(tiflash_thread_count, type_max_active_threads_of_thdpool).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value());
-        GET_METRIC(tiflash_thread_count, type_max_threads_of_thdpool).Set(GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Value());
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp)
+            .Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value());
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp)
+            .Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value());
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_raw)
+            .Set(GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value());
+        GET_METRIC(tiflash_thread_count, type_max_active_threads_of_thdpool)
+            .Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value());
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_thdpool)
+            .Set(GET_METRIC(tiflash_thread_count, type_total_threads_of_thdpool).Value());
         return true;
     }
     return false;

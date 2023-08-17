@@ -55,10 +55,7 @@ public:
         return ColumnArray::create(nested_column->assumeMutable(), offsets_column->assumeMutable());
     }
 
-    static Ptr create(const ColumnPtr & nested_column)
-    {
-        return ColumnArray::create(nested_column->assumeMutable());
-    }
+    static Ptr create(const ColumnPtr & nested_column) { return ColumnArray::create(nested_column->assumeMutable()); }
 
     template <typename... Args, typename = typename std::enable_if<IsMutableColumns<Args...>::value>::type>
     static MutablePtr create(Args &&... args)
@@ -77,10 +74,16 @@ public:
     void get(size_t n, Field & res) const override;
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
+    StringRef serializeValueIntoArena(
+        size_t n,
+        Arena & arena,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr &,
+        String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+        const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insert(const Field & x) override;
@@ -113,7 +116,8 @@ public:
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
-    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets)
+        const override;
     ColumnPtr convertToFullColumnIfConst() const override;
     void getExtremes(Field & min, Field & max) const override;
 
@@ -126,15 +130,9 @@ public:
     IColumn & getOffsetsColumn() { return offsets->assumeMutableRef(); }
     const IColumn & getOffsetsColumn() const { return *offsets; }
 
-    Offsets & ALWAYS_INLINE getOffsets()
-    {
-        return static_cast<ColumnOffsets &>(offsets->assumeMutableRef()).getData();
-    }
+    Offsets & ALWAYS_INLINE getOffsets() { return static_cast<ColumnOffsets &>(offsets->assumeMutableRef()).getData(); }
 
-    const Offsets & ALWAYS_INLINE getOffsets() const
-    {
-        return static_cast<const ColumnOffsets &>(*offsets).getData();
-    }
+    const Offsets & ALWAYS_INLINE getOffsets() const { return static_cast<const ColumnOffsets &>(*offsets).getData(); }
 
     const ColumnPtr & getDataPtr() const { return data; }
     ColumnPtr & getDataPtr() { return data; }
@@ -163,7 +161,10 @@ private:
     ColumnPtr offsets;
 
     size_t ALWAYS_INLINE offsetAt(size_t i) const { return i == 0 ? 0 : getOffsets()[i - 1]; }
-    size_t ALWAYS_INLINE sizeAt(size_t i) const { return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]); }
+    size_t ALWAYS_INLINE sizeAt(size_t i) const
+    {
+        return i == 0 ? getOffsets()[0] : (getOffsets()[i] - getOffsets()[i - 1]);
+    }
 
 
     /// Multiply values if the nested column is ColumnVector<T>.

@@ -53,8 +53,7 @@ public:
         , set_elements(std::make_unique<SetElements>())
         , unique_set_elements(std::make_shared<std::set<Field>>())
         , collators(std::move(collators_))
-    {
-    }
+    {}
 
     bool empty() const { return data.empty(); }
 
@@ -71,7 +70,10 @@ public:
     /**
       * Create a Set from DAG Expr, used when processing DAG Request
       */
-    std::vector<const tipb::Expr *> createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements);
+    std::vector<const tipb::Expr *> createFromDAGExpr(
+        const DataTypes & types,
+        const tipb::Expr & expr,
+        bool fill_set_elements);
 
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.

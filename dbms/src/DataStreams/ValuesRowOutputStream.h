@@ -41,5 +41,4 @@ private:
     WriteBuffer & ostr;
 };
 
-}
-
+} // namespace DB

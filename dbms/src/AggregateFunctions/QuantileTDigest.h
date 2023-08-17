@@ -76,10 +76,7 @@ class QuantileTDigest
             return *this;
         }
 
-        bool operator<(const Centroid & other) const
-        {
-            return mean < other.mean;
-        }
+        bool operator<(const Centroid & other) const { return mean < other.mean; }
     };
 
 
@@ -101,7 +98,10 @@ class QuantileTDigest
     /// The memory will be allocated to several elements at once, so that the state occupies 64 bytes.
     static constexpr size_t bytes_in_arena = 64 - sizeof(PODArray<Centroid>) - sizeof(Count) - sizeof(UInt32);
 
-    using Summary = PODArray<Centroid, bytes_in_arena / sizeof(Centroid), AllocatorWithStackMemory<Allocator<false>, bytes_in_arena>>;
+    using Summary = PODArray<
+        Centroid,
+        bytes_in_arena / sizeof(Centroid),
+        AllocatorWithStackMemory<Allocator<false>, bytes_in_arena>>;
 
     Summary summary;
     Count count = 0;
@@ -211,10 +211,7 @@ class QuantileTDigest
 public:
     /** Adds to the digest a change in `x` with a weight of `cnt` (default 1)
       */
-    void add(T x, UInt64 cnt = 1)
-    {
-        addCentroid(Centroid(Value(x), Count(cnt)));
-    }
+    void add(T x, UInt64 cnt = 1) { addCentroid(Centroid(Value(x), Count(cnt))); }
 
     void merge(const QuantileTDigest & other)
     {
@@ -330,15 +327,9 @@ public:
             result[levels_permutation[result_num]] = rest_of_results;
     }
 
-    T get(Float64 level)
-    {
-        return getImpl<T>(level);
-    }
+    T get(Float64 level) { return getImpl<T>(level); }
 
-    Float32 getFloat(Float64 level)
-    {
-        return getImpl<Float32>(level);
-    }
+    Float32 getFloat(Float64 level) { return getImpl<Float32>(level); }
 
     void getMany(const Float64 * levels, const size_t * indices, size_t size, T * result)
     {

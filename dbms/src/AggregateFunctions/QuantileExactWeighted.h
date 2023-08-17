@@ -64,10 +64,7 @@ struct QuantileExactWeighted
             map[pair.getKey()] += pair.getMapped();
     }
 
-    void serialize(WriteBuffer & buf) const
-    {
-        map.write(buf);
-    }
+    void serialize(WriteBuffer & buf) const { map.write(buf); }
 
     void deserialize(ReadBuffer & buf)
     {

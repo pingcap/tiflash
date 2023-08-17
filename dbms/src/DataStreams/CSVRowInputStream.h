@@ -32,7 +32,12 @@ public:
     /** with_names - in the first line the header with column names
       * with_types - on the next line header with type names
       */
-    CSVRowInputStream(ReadBuffer & istr_, const Block & header_, const char delimiter_, bool with_names_ = false, bool with_types_ = false);
+    CSVRowInputStream(
+        ReadBuffer & istr_,
+        const Block & header_,
+        const char delimiter_,
+        bool with_names_ = false,
+        bool with_types_ = false);
 
     bool read(MutableColumns & columns) override;
     void readPrefix() override;
@@ -62,8 +67,11 @@ private:
 
     void updateDiagnosticInfo();
 
-    bool parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
-        WriteBuffer & out, size_t max_length_of_column_name, size_t max_length_of_data_type_name);
+    bool parseRowAndPrintDiagnosticInfo(
+        MutableColumns & columns,
+        WriteBuffer & out,
+        size_t max_length_of_column_name,
+        size_t max_length_of_data_type_name);
 };
 
-}
+} // namespace DB

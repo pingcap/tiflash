@@ -643,8 +643,7 @@ try
                 3);
         }
         catch (...)
-        {
-        }
+        {}
         ASSERT_EQ(retry, 2);
     }
 

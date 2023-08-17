@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ParserPartition.h>
+#include <Common/typeid_cast.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPartition.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ASTPartition.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Common/typeid_cast.h>
+#include <Parsers/ParserPartition.h>
 
 namespace DB
 {
@@ -91,4 +91,4 @@ bool ParserPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-}
+} // namespace DB

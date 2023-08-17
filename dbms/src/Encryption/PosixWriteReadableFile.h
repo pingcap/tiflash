@@ -41,15 +41,9 @@ public:
 
     ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
-    int getFd() const override
-    {
-        return fd;
-    }
+    int getFd() const override { return fd; }
 
-    bool isClosed() const override
-    {
-        return fd == -1;
-    }
+    bool isClosed() const override { return fd == -1; }
 
     int fsync() override;
 
@@ -57,10 +51,7 @@ public:
 
     ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
-    String getFileName() const override
-    {
-        return file_name;
-    }
+    String getFileName() const override { return file_name; }
 
     void close() override;
 

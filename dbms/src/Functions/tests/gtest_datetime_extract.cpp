@@ -38,20 +38,41 @@ class TestDateTimeExtract : public DB::tests::FunctionTest
 TEST_F(TestDateTimeExtract, ExtractFromString)
 try
 {
-    auto test = [&](const std::vector<String> & units, const String & datetime_value, const std::vector<Int64> & results) {
-        for (size_t i = 0; i < units.size(); ++i)
-        {
-            const auto & unit = units[i];
-            const auto & result = results[i];
-            // nullable/non-null string
-            ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({datetime_value})));
-            ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toVec<String>({datetime_value})));
-            // const string
-            ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), createConstColumn<String>(1, {datetime_value})));
-            // null
-            ASSERT_COLUMN_EQ(toNullableVec<Int64>({std::nullopt}), executeFunction("extractMyDateTimeFromString", createConstColumn<String>(1, {unit}), toNullableVec<String>({std::nullopt})));
-        }
-    };
+    auto test
+        = [&](const std::vector<String> & units, const String & datetime_value, const std::vector<Int64> & results) {
+              for (size_t i = 0; i < units.size(); ++i)
+              {
+                  const auto & unit = units[i];
+                  const auto & result = results[i];
+                  // nullable/non-null string
+                  ASSERT_COLUMN_EQ(
+                      toNullableVec<Int64>({result}),
+                      executeFunction(
+                          "extractMyDateTimeFromString",
+                          createConstColumn<String>(1, {unit}),
+                          toNullableVec<String>({datetime_value})));
+                  ASSERT_COLUMN_EQ(
+                      toVec<Int64>({result}),
+                      executeFunction(
+                          "extractMyDateTimeFromString",
+                          createConstColumn<String>(1, {unit}),
+                          toVec<String>({datetime_value})));
+                  // const string
+                  ASSERT_COLUMN_EQ(
+                      createConstColumn<Int64>(1, result),
+                      executeFunction(
+                          "extractMyDateTimeFromString",
+                          createConstColumn<String>(1, {unit}),
+                          createConstColumn<String>(1, {datetime_value})));
+                  // null
+                  ASSERT_COLUMN_EQ(
+                      toNullableVec<Int64>({std::nullopt}),
+                      executeFunction(
+                          "extractMyDateTimeFromString",
+                          createConstColumn<String>(1, {unit}),
+                          toNullableVec<String>({std::nullopt})));
+              }
+          };
 
     std::vector<String> units{
         "day_microsecond",
@@ -100,12 +121,32 @@ try
         const auto & unit = units[i];
         const auto & result = results[i];
         // nullable/non-null datetime
-        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumn({datetime_value}, 6)));
-        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumn<false>({datetime_value}, 6)));
+        ASSERT_COLUMN_EQ(
+            toNullableVec<Int64>({result}),
+            executeFunction(
+                "extractMyDateTime",
+                createConstColumn<String>(1, {unit}),
+                createDateTimeColumn({datetime_value}, 6)));
+        ASSERT_COLUMN_EQ(
+            toVec<Int64>({result}),
+            executeFunction(
+                "extractMyDateTime",
+                createConstColumn<String>(1, {unit}),
+                createDateTimeColumn<false>({datetime_value}, 6)));
         // const datetime
-        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumnConst(1, {datetime_value}, 6)));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, result),
+            executeFunction(
+                "extractMyDateTime",
+                createConstColumn<String>(1, {unit}),
+                createDateTimeColumnConst(1, {datetime_value}, 6)));
         // null
-        ASSERT_COLUMN_EQ(toNullableVec<Int64>({std::nullopt}), executeFunction("extractMyDateTime", createConstColumn<String>(1, {unit}), createDateTimeColumn({std::nullopt}, 6)));
+        ASSERT_COLUMN_EQ(
+            toNullableVec<Int64>({std::nullopt}),
+            executeFunction(
+                "extractMyDateTime",
+                createConstColumn<String>(1, {unit}),
+                createDateTimeColumn({std::nullopt}, 6)));
     }
 }
 CATCH

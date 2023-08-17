@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/AsynchronousWriteBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/copyData.h>
+
+#include <iostream>
 
 
 int main(int, char **)

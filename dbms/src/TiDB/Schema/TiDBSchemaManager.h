@@ -33,20 +33,23 @@ public:
     {
         if (!mock_getter and !mock_mapper)
         {
-            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false, false>>(cluster, keyspace_id));
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(
+                std::make_shared<TiDBSchemaSyncer<false, false>>(cluster, keyspace_id));
             schema_syncers[keyspace_id] = schema_syncer;
             return schema_syncer;
         }
         else if (mock_getter and mock_mapper)
         {
             // for mock test
-            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(
+                std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
             schema_syncers[keyspace_id] = schema_syncer;
             return schema_syncer;
         }
 
         // for unit test
-        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, false>>(cluster, keyspace_id));
+        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(
+            std::make_shared<TiDBSchemaSyncer<true, false>>(cluster, keyspace_id));
         schema_syncers[keyspace_id] = schema_syncer;
         return schema_syncer;
     }

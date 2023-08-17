@@ -26,7 +26,8 @@ extern const int CURRENT_WRITE_BUFFER_IS_EXHAUSTED;
 }
 
 
-class ReadBufferFromMemoryWriteBuffer : public ReadBuffer
+class ReadBufferFromMemoryWriteBuffer
+    : public ReadBuffer
     , boost::noncopyable
     , private Allocator<false>
 {
@@ -88,7 +89,11 @@ private:
 };
 
 
-MemoryWriteBuffer::MemoryWriteBuffer(size_t max_total_size_, size_t initial_chunk_size_, double growth_rate_, size_t max_chunk_size_)
+MemoryWriteBuffer::MemoryWriteBuffer(
+    size_t max_total_size_,
+    size_t initial_chunk_size_,
+    double growth_rate_,
+    size_t max_chunk_size_)
     : WriteBuffer(nullptr, 0)
     , max_total_size(max_total_size_)
     , initial_chunk_size(initial_chunk_size_)

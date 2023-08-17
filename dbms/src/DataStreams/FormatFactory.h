@@ -29,9 +29,18 @@ class Context;
 class FormatFactory
 {
 public:
-    static BlockInputStreamPtr getInput(const String & name, ReadBuffer & buf, const Block & sample, const Context & context, size_t max_block_size);
+    static BlockInputStreamPtr getInput(
+        const String & name,
+        ReadBuffer & buf,
+        const Block & sample,
+        const Context & context,
+        size_t max_block_size);
 
-    static BlockOutputStreamPtr getOutput(const String & name, WriteBuffer & buf, const Block & sample, const Context & context);
+    static BlockOutputStreamPtr getOutput(
+        const String & name,
+        WriteBuffer & buf,
+        const Block & sample,
+        const Context & context);
 };
 
 } // namespace DB

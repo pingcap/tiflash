@@ -79,7 +79,9 @@ bool memoryEqualAVX512x4Loop(ConstBytePtr & p1, ConstBytePtr & p2, size_t & size
 }
 
 template <size_t N>
-__attribute__((always_inline, pure)) inline bool compareArrayAVX512(const VectorType (&data)[N], VectorType filled_vector)
+__attribute__((always_inline, pure)) inline bool compareArrayAVX512(
+    const VectorType (&data)[N],
+    VectorType filled_vector)
 {
     static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
 
@@ -159,8 +161,12 @@ __attribute__((pure)) bool memoryIsByteAVX512(const void * data, size_t size, st
     switch (remaining / vector_length)
     {
     case 3:
-        result = compareArrayAVX512<4>({_mm512_load_si512(current_address + 0), _mm512_load_si512(current_address + 1), _mm512_load_si512(current_address + 2), tail},
-                                       filled_vector);
+        result = compareArrayAVX512<4>(
+            {_mm512_load_si512(current_address + 0),
+             _mm512_load_si512(current_address + 1),
+             _mm512_load_si512(current_address + 2),
+             tail},
+            filled_vector);
         break;
     case 2:
         result = compareArrayAVX512<3>(

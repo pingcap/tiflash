@@ -65,8 +65,7 @@ bool ExternalLoaderConfigRepository::exists(const std::string & config_file) con
     return Poco::File(config_file).exists();
 }
 
-Poco::Timestamp ExternalLoaderConfigRepository::getLastModificationTime(
-    const std::string & config_file) const
+Poco::Timestamp ExternalLoaderConfigRepository::getLastModificationTime(const std::string & config_file) const
 {
     return Poco::File(config_file).getLastModified();
 }

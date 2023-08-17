@@ -83,9 +83,7 @@ void testScatter(int num_rows, int num_columns, int seconds)
 
     auto cur = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
-    std::cout
-        << fmt::format("Scatter/s: {:<10}", counter.load() * 1000 / duration.count())
-        << std::endl;
+    std::cout << fmt::format("Scatter/s: {:<10}", counter.load() * 1000 / duration.count()) << std::endl;
 }
 
 } // namespace
@@ -95,19 +93,15 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
 {
     if (argc < 2 || argc > 6)
     {
-        std::cerr << fmt::format("Usage: {} [int|int64] [scatter] <rows=10000> <columns=5> <seconds=10>", argv[0]) << std::endl;
+        std::cerr << fmt::format("Usage: {} [int|int64] [scatter] <rows=10000> <columns=5> <seconds=10>", argv[0])
+                  << std::endl;
         exit(1);
     }
 
     using TestHandler = std::function<void(int rows, int columns, int seconds)>;
-    static const std::unordered_map<
-        String,
-        std::unordered_map<String, TestHandler>>
-        handlers = {
-            {"int",
-             {{"scatter", DB::tests::testScatter<Int32>}}},
-            {"int64",
-             {{"scatter", DB::tests::testScatter<Int64>}}}};
+    static const std::unordered_map<String, std::unordered_map<String, TestHandler>> handlers
+        = {{"int", {{"scatter", DB::tests::testScatter<Int32>}}},
+           {"int64", {{"scatter", DB::tests::testScatter<Int64>}}}};
 
     String type_name = argv[1];
     String method = argv[2];
@@ -127,14 +121,7 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
 
     auto handler = find_handler("method", method, find_handler("type", type_name, handlers));
 
-    std::cout
-        << fmt::format(
-               "Test {}-{} rows={} columns={} seconds={}",
-               type_name,
-               method,
-               rows,
-               columns,
-               seconds)
-        << std::endl;
+    std::cout << fmt::format("Test {}-{} rows={} columns={} seconds={}", type_name, method, rows, columns, seconds)
+              << std::endl;
     handler(rows, columns, seconds);
 }

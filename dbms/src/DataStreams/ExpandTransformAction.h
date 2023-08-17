@@ -22,9 +22,7 @@ namespace DB
 struct ExpandTransformAction
 {
 public:
-    ExpandTransformAction(
-        const Block & header_,
-        const Expand2Ptr & expand_);
+    ExpandTransformAction(const Block & header_, const Expand2Ptr & expand_);
 
     void transform(Block & block);
     bool tryOutput(Block & block);

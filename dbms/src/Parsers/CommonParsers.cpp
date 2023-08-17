@@ -15,8 +15,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Parsers/CommonParsers.h>
 #include <common/find_symbols.h>
-
-#include <string.h>        /// strncmp, strncasecmp
+#include <string.h> /// strncmp, strncasecmp
 
 
 namespace DB
@@ -24,13 +23,13 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
-ParserKeyword::ParserKeyword(const char * s_) : s(s_)
-{
-}
+ParserKeyword::ParserKeyword(const char * s_)
+    : s(s_)
+{}
 
 
 const char * ParserKeyword::getName() const
@@ -78,4 +77,4 @@ bool ParserKeyword::parseImpl(Pos & pos, ASTPtr & /*node*/, Expected & expected)
     return true;
 }
 
-}
+} // namespace DB

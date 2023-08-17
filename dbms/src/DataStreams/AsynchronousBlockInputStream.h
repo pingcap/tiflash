@@ -35,10 +35,7 @@ namespace DB
 class AsynchronousBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    AsynchronousBlockInputStream(const BlockInputStreamPtr & in)
-    {
-        children.push_back(in);
-    }
+    AsynchronousBlockInputStream(const BlockInputStreamPtr & in) { children.push_back(in); }
 
     String getName() const override { return "Asynchronous"; }
 

@@ -32,8 +32,9 @@ extern const int EXTERNAL_LOADABLE_ALREADY_EXISTS;
 } // namespace ErrorCodes
 
 
-ExternalLoadableLifetime::ExternalLoadableLifetime(const Poco::Util::AbstractConfiguration & config,
-                                                   const std::string & config_prefix)
+ExternalLoadableLifetime::ExternalLoadableLifetime(
+    const Poco::Util::AbstractConfiguration & config,
+    const std::string & config_prefix)
 {
     const auto & lifetime_min_key = config_prefix + ".min";
     const auto has_min = config.has(lifetime_min_key);
@@ -56,20 +57,20 @@ void ExternalLoader::reloadPeriodically()
 }
 
 
-ExternalLoader::ExternalLoader(const Poco::Util::AbstractConfiguration & config,
-                               const ExternalLoaderUpdateSettings & update_settings,
-                               const ExternalLoaderConfigSettings & config_settings,
-                               std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
-                               Poco::Logger * log,
-                               const std::string & loadable_object_name)
+ExternalLoader::ExternalLoader(
+    const Poco::Util::AbstractConfiguration & config,
+    const ExternalLoaderUpdateSettings & update_settings,
+    const ExternalLoaderConfigSettings & config_settings,
+    std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
+    Poco::Logger * log,
+    const std::string & loadable_object_name)
     : config(config)
     , update_settings(update_settings)
     , config_settings(config_settings)
     , config_repository(std::move(config_repository))
     , log(log)
     , object_name(loadable_object_name)
-{
-}
+{}
 
 void ExternalLoader::init(bool throw_on_error)
 {
@@ -226,7 +227,10 @@ void ExternalLoader::reloadAndUpdate(bool throw_on_error)
     }
 }
 
-void ExternalLoader::reloadFromConfigFiles(const bool throw_on_error, const bool force_reload, const std::string & only_dictionary)
+void ExternalLoader::reloadFromConfigFiles(
+    const bool throw_on_error,
+    const bool force_reload,
+    const std::string & only_dictionary)
 {
     const auto config_paths = config_repository->list(config, config_settings.path_setting_name);
 
@@ -246,7 +250,11 @@ void ExternalLoader::reloadFromConfigFiles(const bool throw_on_error, const bool
     }
 }
 
-void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const bool throw_on_error, const bool force_reload, const std::string & loadable_name)
+void ExternalLoader::reloadFromConfigFile(
+    const std::string & config_path,
+    const bool throw_on_error,
+    const bool force_reload,
+    const std::string & loadable_name)
 {
     if (config_path.empty() || !config_repository->exists(config_path))
     {
@@ -284,7 +292,12 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                 if (!startsWith(key, config_settings.external_config))
                 {
                     if (!startsWith(key, "comment") && !startsWith(key, "include_from"))
-                        LOG_WARNING(log, "{}: unknown node in file: '{}', expected '{}'", config_path, key, config_settings.external_config);
+                        LOG_WARNING(
+                            log,
+                            "{}: unknown node in file: '{}', expected '{}'",
+                            config_path,
+                            key,
+                            config_settings.external_config);
                     continue;
                 }
 
@@ -308,9 +321,10 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
 
                     /// Object with the same name was declared in other config file.
                     if (object_it != std::end(loadable_objects) && object_it->second.origin != config_path)
-                        throw Exception(object_name + " '" + name + "' from file " + config_path
-                                            + " already declared in file " + object_it->second.origin,
-                                        ErrorCodes::EXTERNAL_LOADABLE_ALREADY_EXISTS);
+                        throw Exception(
+                            object_name + " '" + name + "' from file " + config_path + " already declared in file "
+                                + object_it->second.origin,
+                            ErrorCodes::EXTERNAL_LOADABLE_ALREADY_EXISTS);
 
                     auto object_ptr = create(name, *config, key);
 
@@ -334,7 +348,8 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                         {
                             std::uniform_int_distribution<UInt64> distribution(lifetime.min_sec, lifetime.max_sec);
 
-                            update_times[name] = std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)};
+                            update_times[name]
+                                = std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)};
                         }
                     }
 
@@ -371,7 +386,9 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                             loadable_it->second.exception = exception_ptr;
                     }
 
-                    tryLogCurrentException(log, "Cannot create " + object_name + " '" + name + "' from config path " + config_path);
+                    tryLogCurrentException(
+                        log,
+                        "Cannot create " + object_name + " '" + name + "' from config path " + config_path);
 
                     /// propagate exception
                     if (throw_on_error)
@@ -394,7 +411,9 @@ void ExternalLoader::reload(const std::string & name)
     /// Check that specified object was loaded
     const std::lock_guard lock{map_mutex};
     if (!loadable_objects.count(name))
-        throw Exception("Failed to load " + object_name + " '" + name + "' during the reload process", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Failed to load " + object_name + " '" + name + "' during the reload process",
+            ErrorCodes::BAD_ARGUMENTS);
 }
 
 ExternalLoader::LoadablePtr ExternalLoader::getLoadableImpl(const std::string & name, bool throw_on_error) const
@@ -410,8 +429,9 @@ ExternalLoader::LoadablePtr ExternalLoader::getLoadableImpl(const std::string & 
     }
 
     if (!it->second.loadable && throw_on_error)
-        it->second.exception ? std::rethrow_exception(it->second.exception)
-                             : throw Exception{object_name + " '" + name + "' is not loaded", ErrorCodes::LOGICAL_ERROR};
+        it->second.exception
+            ? std::rethrow_exception(it->second.exception)
+            : throw Exception{object_name + " '" + name + "' is not loaded", ErrorCodes::LOGICAL_ERROR};
 
     return it->second.loadable;
 }

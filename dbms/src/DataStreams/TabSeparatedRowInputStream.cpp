@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
-
 #include <DataStreams/TabSeparatedRowInputStream.h>
 #include <DataStreams/verbosePrintString.h>
+#include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
 
 
 namespace DB
@@ -25,13 +24,20 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INCORRECT_DATA;
-    extern const int LOGICAL_ERROR;
-}
+extern const int INCORRECT_DATA;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
-TabSeparatedRowInputStream::TabSeparatedRowInputStream(ReadBuffer & istr_, const Block & header_, bool with_names_, bool with_types_)
-    : istr(istr_), header(header_), with_names(with_names_), with_types(with_types_)
+TabSeparatedRowInputStream::TabSeparatedRowInputStream(
+    ReadBuffer & istr_,
+    const Block & header_,
+    bool with_names_,
+    bool with_types_)
+    : istr(istr_)
+    , header(header_)
+    , with_names(with_names_)
+    , with_types(with_types_)
 {
     size_t num_columns = header.columns();
     data_types.resize(num_columns);
@@ -78,10 +84,13 @@ void TabSeparatedRowInputStream::readPrefix()
 static void checkForCarriageReturn(ReadBuffer & istr)
 {
     if (istr.position()[0] == '\r' || (istr.position() != istr.buffer().begin() && istr.position()[-1] == '\r'))
-        throw Exception("\nYou have carriage return (\\r, 0x0D, ASCII 13) at end of first row."
-            "\nIt's like your input data has DOS/Windows style line separators, that are illegal in TabSeparated format."
+        throw Exception(
+            "\nYou have carriage return (\\r, 0x0D, ASCII 13) at end of first row."
+            "\nIt's like your input data has DOS/Windows style line separators, that are illegal in TabSeparated "
+            "format."
             " You must transform your file to Unix format."
-            "\nBut if you really need carriage return at end of string value of last column, you need to escape it as \\r.",
+            "\nBut if you really need carriage return at end of string value of last column, you need to escape it as "
+            "\\r.",
             ErrorCodes::INCORRECT_DATA);
 }
 
@@ -120,7 +129,7 @@ bool TabSeparatedRowInputStream::read(MutableColumns & columns)
 
 String TabSeparatedRowInputStream::getDiagnosticInfo()
 {
-    if (istr.eof())        /// Buffer has gone, cannot extract information about what has been parsed.
+    if (istr.eof()) /// Buffer has gone, cannot extract information about what has been parsed.
         return {};
 
     WriteBufferFromOwnString out;
@@ -173,8 +182,11 @@ String TabSeparatedRowInputStream::getDiagnosticInfo()
 }
 
 
-bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
-    WriteBuffer & out, size_t max_length_of_column_name, size_t max_length_of_data_type_name)
+bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(
+    MutableColumns & columns,
+    WriteBuffer & out,
+    size_t max_length_of_column_name,
+    size_t max_length_of_data_type_name)
 {
     size_t size = data_types.size();
     for (size_t i = 0; i < size; ++i)
@@ -185,9 +197,16 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns &
             return false;
         }
 
-        out << "Column " << i << ", " << std::string((i < 10 ? 2 : i < 100 ? 1 : 0), ' ')
-            << "name: " << header.safeGetByPosition(i).name << ", " << std::string(max_length_of_column_name - header.safeGetByPosition(i).name.size(), ' ')
-            << "type: " << data_types[i]->getName() << ", " << std::string(max_length_of_data_type_name - data_types[i]->getName().size(), ' ');
+        out << "Column " << i << ", "
+            << std::string(
+                   (i < 10        ? 2
+                        : i < 100 ? 1
+                                  : 0),
+                   ' ')
+            << "name: " << header.safeGetByPosition(i).name << ", "
+            << std::string(max_length_of_column_name - header.safeGetByPosition(i).name.size(), ' ')
+            << "type: " << data_types[i]->getName() << ", "
+            << std::string(max_length_of_data_type_name - data_types[i]->getName().size(), ' ');
 
         auto prev_position = istr.position();
         std::exception_ptr exception;
@@ -224,7 +243,8 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns &
         if (exception)
         {
             if (data_types[i]->getName() == "DateTime")
-                out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
+                out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 "
+                       "digits) format.\n";
             else if (data_types[i]->getName() == "Date")
                 out << "ERROR: Date must be in YYYY-MM-DD format.\n";
             else
@@ -243,7 +263,8 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns &
                 out << "\n";
 
                 if (data_types[i]->getName() == "DateTime")
-                    out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
+                    out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 "
+                           "digits) format.\n";
                 else if (data_types[i]->getName() == "Date")
                     out << "ERROR: Date must be in YYYY-MM-DD format.\n";
 
@@ -265,13 +286,14 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns &
                     if (*istr.position() == '\t')
                     {
                         out << "ERROR: Tab found where line feed is expected."
-                            " It's like your file has more columns than expected.\n"
-                            "And if your file have right number of columns, maybe it have unescaped tab in value.\n";
+                               " It's like your file has more columns than expected.\n"
+                               "And if your file have right number of columns, maybe it have unescaped tab in value.\n";
                     }
                     else if (*istr.position() == '\r')
                     {
                         out << "ERROR: Carriage return found where line feed is expected."
-                            " It's like your file has DOS/Windows style line separators, that is illegal in TabSeparated format.\n";
+                               " It's like your file has DOS/Windows style line separators, that is illegal in "
+                               "TabSeparated format.\n";
                     }
                     else
                     {
@@ -294,8 +316,9 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns &
                 if (*istr.position() == '\n')
                 {
                     out << "ERROR: Line feed found where tab is expected."
-                        " It's like your file has less columns than expected.\n"
-                        "And if your file have right number of columns, maybe it have unescaped backslash in value before tab, which cause tab has escaped.\n";
+                           " It's like your file has less columns than expected.\n"
+                           "And if your file have right number of columns, maybe it have unescaped backslash in value "
+                           "before tab, which cause tab has escaped.\n";
                 }
                 else if (*istr.position() == '\r')
                 {
@@ -333,4 +356,4 @@ void TabSeparatedRowInputStream::updateDiagnosticInfo()
     pos_of_current_row = istr.position();
 }
 
-}
+} // namespace DB

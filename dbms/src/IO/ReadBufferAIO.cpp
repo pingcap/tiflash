@@ -86,7 +86,9 @@ ReadBufferAIO::~ReadBufferAIO()
 void ReadBufferAIO::setMaxBytes(size_t max_bytes_read_)
 {
     if (is_started)
-        throw Exception("Illegal attempt to set the maximum number of bytes to read from file " + filename, ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Illegal attempt to set the maximum number of bytes to read from file " + filename,
+            ErrorCodes::LOGICAL_ERROR);
     max_bytes_read = max_bytes_read_;
 }
 
@@ -170,12 +172,15 @@ off_t ReadBufferAIO::doSeek(off_t off, int whence)
         new_pos_in_file = getPositionInFile() + off;
     }
     else
-        throw Exception("ReadBufferAIO::seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(
+            "ReadBufferAIO::seek expects SEEK_SET or SEEK_CUR as whence",
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (new_pos_in_file != getPositionInFile())
     {
         off_t first_read_pos_in_file = first_unread_pos_in_file - static_cast<off_t>(working_buffer.size());
-        if (hasPendingData() && (new_pos_in_file >= first_read_pos_in_file) && (new_pos_in_file <= first_unread_pos_in_file))
+        if (hasPendingData() && (new_pos_in_file >= first_read_pos_in_file)
+            && (new_pos_in_file <= first_unread_pos_in_file))
         {
             /// Moved, but remained within the buffer.
             pos = working_buffer.begin() + (new_pos_in_file - first_read_pos_in_file);
@@ -246,14 +251,16 @@ void ReadBufferAIO::prepare()
     /// Region of the disk from which we want to read data.
     const off_t region_begin = first_unread_pos_in_file;
 
-    if ((requested_byte_count > std::numeric_limits<off_t>::max()) || (first_unread_pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(requested_byte_count))))
+    if ((requested_byte_count > std::numeric_limits<off_t>::max())
+        || (first_unread_pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(requested_byte_count))))
         throw Exception("An overflow occurred during file operation", ErrorCodes::LOGICAL_ERROR);
 
     const off_t region_end = first_unread_pos_in_file + requested_byte_count;
 
     /// The aligned region of the disk from which we will read the data.
     region_left_padding = region_begin % DEFAULT_AIO_FILE_BLOCK_SIZE;
-    const size_t region_right_padding = (DEFAULT_AIO_FILE_BLOCK_SIZE - (region_end % DEFAULT_AIO_FILE_BLOCK_SIZE)) % DEFAULT_AIO_FILE_BLOCK_SIZE;
+    const size_t region_right_padding
+        = (DEFAULT_AIO_FILE_BLOCK_SIZE - (region_end % DEFAULT_AIO_FILE_BLOCK_SIZE)) % DEFAULT_AIO_FILE_BLOCK_SIZE;
 
     region_aligned_begin = region_begin - region_left_padding;
 

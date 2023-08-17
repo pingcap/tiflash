@@ -65,8 +65,8 @@ public:
     {
         if (arguments.size() < 2)
             throw Exception{
-                "Number of arguments for function " + getName() + " doesn't match: passed "
-                    + toString(arguments.size()) + ", should be at least 2.",
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should be at least 2.",
                 ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
         const auto * const first_arg = arguments.front().get();
@@ -150,7 +150,8 @@ private:
 
             if (is_const)
             {
-                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(size, toField(Impl::apply(val, mask)));
+                block.getByPosition(result).column
+                    = block.getByPosition(result).type->createColumnConst(size, toField(Impl::apply(val, mask)));
             }
             else
             {
@@ -179,7 +180,8 @@ private:
 
         for (const auto i : ext::range(1, arguments.size()))
         {
-            if (auto pos_col_const = checkAndGetColumnConst<ColumnVector<ValueType>>(block.getByPosition(arguments[i]).column.get()))
+            if (auto pos_col_const
+                = checkAndGetColumnConst<ColumnVector<ValueType>>(block.getByPosition(arguments[i]).column.get()))
             {
                 const auto pos = pos_col_const->template getValue<ValueType>();
                 mask = mask | (1 << pos);
@@ -203,10 +205,8 @@ private:
         {
             const auto * const pos_col = block.getByPosition(arguments[i]).column.get();
 
-            if (!addToMaskImpl<UInt8>(mask, pos_col)
-                && !addToMaskImpl<UInt16>(mask, pos_col)
-                && !addToMaskImpl<UInt32>(mask, pos_col)
-                && !addToMaskImpl<UInt64>(mask, pos_col))
+            if (!addToMaskImpl<UInt8>(mask, pos_col) && !addToMaskImpl<UInt16>(mask, pos_col)
+                && !addToMaskImpl<UInt32>(mask, pos_col) && !addToMaskImpl<UInt64>(mask, pos_col))
                 throw Exception{
                     "Illegal column " + pos_col->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_COLUMN};

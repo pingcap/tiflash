@@ -33,18 +33,20 @@ public:
         return *this;
     }
 
-    template <typename CompiledFormat, //
-              typename... Args,
-              fmt::enable_if_t<(fmt::detail::is_compiled_format<CompiledFormat>::value), int> = 0>
+    template <
+        typename CompiledFormat, //
+        typename... Args,
+        fmt::enable_if_t<(fmt::detail::is_compiled_format<CompiledFormat>::value), int> = 0>
     constexpr FmtBuffer & fmtAppend(const CompiledFormat & cf, const Args &... args)
     {
         fmt::format_to(std::back_inserter(buffer), cf, std::forward<Args>(args)...);
         return *this;
     }
 
-    template <typename S, //
-              typename... Args,
-              fmt::enable_if_t<(fmt::detail::is_compiled_string<S>::value), int> = 0>
+    template <
+        typename S, //
+        typename... Args,
+        fmt::enable_if_t<(fmt::detail::is_compiled_string<S>::value), int> = 0>
     constexpr FmtBuffer & fmtAppend(const S & s, Args &&... args)
     {
         fmt::format_to(std::back_inserter(buffer), s, std::forward<Args>(args)...);
@@ -63,24 +65,16 @@ public:
         return *this;
     }
 
-    std::string toString() const
-    {
-        return fmt::to_string(buffer);
-    }
+    std::string toString() const { return fmt::to_string(buffer); }
 
     template <typename Iter>
-    FmtBuffer & joinStr(
-        Iter first,
-        Iter end)
+    FmtBuffer & joinStr(Iter first, Iter end)
     {
         return joinStr(first, end, ", ");
     }
 
     template <typename Iter>
-    FmtBuffer & joinStr(
-        Iter first,
-        Iter end,
-        std::string_view delimiter)
+    FmtBuffer & joinStr(Iter first, Iter end, std::string_view delimiter)
     {
         auto func = [](const auto & s, FmtBuffer & fb) {
             fb.append(s);

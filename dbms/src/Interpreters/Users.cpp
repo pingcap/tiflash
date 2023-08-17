@@ -112,7 +112,8 @@ private:
         UInt8 remaining_bits = prefix_bits % 8;
 
         return 0 == memcmp(lhs, rhs, prefix_bytes)
-            && (remaining_bits % 8 == 0 || (lhs[prefix_bytes] >> (8 - remaining_bits)) == (rhs[prefix_bytes] >> (8 - remaining_bits)));
+            && (remaining_bits % 8 == 0
+                || (lhs[prefix_bytes] >> (8 - remaining_bits)) == (rhs[prefix_bytes] >> (8 - remaining_bits)));
     }
 };
 
@@ -148,14 +149,20 @@ private:
                 if (ai->ai_family == AF_INET6)
                 {
                     if (addr_v6
-                        == Poco::Net::IPAddress(&reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_addr, sizeof(in6_addr), reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_scope_id))
+                        == Poco::Net::IPAddress(
+                            &reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_addr,
+                            sizeof(in6_addr),
+                            reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_scope_id))
                     {
                         return true;
                     }
                 }
                 else if (ai->ai_family == AF_INET)
                 {
-                    if (addr_v6 == toIPv6(Poco::Net::IPAddress(&reinterpret_cast<sockaddr_in *>(ai->ai_addr)->sin_addr, sizeof(in_addr))))
+                    if (addr_v6
+                        == toIPv6(Poco::Net::IPAddress(
+                            &reinterpret_cast<sockaddr_in *>(ai->ai_addr)->sin_addr,
+                            sizeof(in_addr))))
                     {
                         return true;
                     }
@@ -191,7 +198,8 @@ private:
 
         /// Resolve by hand, because Poco library doesn't have such functionality.
         char domain[1024];
-        int gai_errno = getnameinfo(sock_addr.addr(), sock_addr.length(), domain, sizeof(domain), nullptr, 0, NI_NAMEREQD);
+        int gai_errno
+            = getnameinfo(sock_addr.addr(), sock_addr.length(), domain, sizeof(domain), nullptr, 0, NI_NAMEREQD);
         if (0 != gai_errno)
             throw Exception("Cannot getnameinfo: " + std::string(gai_strerror(gai_errno)), ErrorCodes::DNS_ERROR);
 
@@ -227,11 +235,12 @@ bool AddressPatterns::contains(const Poco::Net::IPAddress & addr) const
         }
         catch (const DB::Exception & e)
         {
-            LOG_WARNING(&Poco::Logger::get("AddressPatterns"),
-                        "Failed to check if pattern contains address {}. {}, code = {}",
-                        addr.toString(),
-                        e.displayText(),
-                        e.code());
+            LOG_WARNING(
+                &Poco::Logger::get("AddressPatterns"),
+                "Failed to check if pattern contains address {}. {}, code = {}",
+                addr.toString(),
+                e.displayText(),
+                e.code());
 
             if (e.code() == ErrorCodes::DNS_ERROR)
             {
@@ -288,8 +297,10 @@ User::User(const String & name_, const String & config_elem, Poco::Util::Abstrac
     bool has_password_sha256_hex = config.has(config_elem + ".password_sha256_hex");
 
     if (has_password && has_password_sha256_hex)
-        throw Exception("Both fields 'password' and 'password_sha256_hex' are specified for user " + name + ". Must be only one of them.",
-                        ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Both fields 'password' and 'password_sha256_hex' are specified for user " + name
+                + ". Must be only one of them.",
+            ErrorCodes::BAD_ARGUMENTS);
 
     if (has_password)
         password = config.getString(config_elem + ".password");
@@ -299,9 +310,10 @@ User::User(const String & name_, const String & config_elem, Poco::Util::Abstrac
         password_sha256_hex = Poco::toLower(config.getString(config_elem + ".password_sha256_hex"));
 
         if (password_sha256_hex.size() != 64)
-            throw Exception("password_sha256_hex for user " + name + " has length " + toString(password_sha256_hex.size())
-                                + " but must be exactly 64 symbols.",
-                            ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                "password_sha256_hex for user " + name + " has length " + toString(password_sha256_hex.size())
+                    + " but must be exactly 64 symbols.",
+                ErrorCodes::BAD_ARGUMENTS);
     }
 
     profile = config.getString(config_elem + ".profile");

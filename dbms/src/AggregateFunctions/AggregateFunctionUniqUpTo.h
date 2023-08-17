@@ -47,10 +47,7 @@ struct __attribute__((__packed__)) AggregateFunctionUniqUpToData : AggregationCo
     T * data;
 
 
-    size_t size() const
-    {
-        return count;
-    }
+    size_t size() const { return count; }
 
     /// threshold - for how many elements there is room in a `data`.
     void insert(T x, UInt8 threshold)
@@ -139,7 +136,8 @@ struct AggregateFunctionUniqUpToData<UInt128> : AggregateFunctionUniqUpToData<UI
 
 
 template <typename T>
-class AggregateFunctionUniqUpTo final : public IAggregateFunctionDataHelper<AggregateFunctionUniqUpToData<T>, AggregateFunctionUniqUpTo<T>>
+class AggregateFunctionUniqUpTo final
+    : public IAggregateFunctionDataHelper<AggregateFunctionUniqUpToData<T>, AggregateFunctionUniqUpTo<T>>
 {
 private:
     UInt8 threshold;
@@ -147,20 +145,13 @@ private:
 public:
     explicit AggregateFunctionUniqUpTo(UInt8 threshold)
         : threshold(threshold)
-    {
-    }
+    {}
 
-    size_t sizeOfData() const override
-    {
-        return sizeof(AggregateFunctionUniqUpToData<T>) + sizeof(T) * threshold;
-    }
+    size_t sizeOfData() const override { return sizeof(AggregateFunctionUniqUpToData<T>) + sizeof(T) * threshold; }
 
     String getName() const override { return "uniqUpTo"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
@@ -197,7 +188,9 @@ public:
   */
 template <bool argument_is_tuple>
 class AggregateFunctionUniqUpToVariadic final
-    : public IAggregateFunctionDataHelper<AggregateFunctionUniqUpToData<UInt64>, AggregateFunctionUniqUpToVariadic<argument_is_tuple>>
+    : public IAggregateFunctionDataHelper<
+          AggregateFunctionUniqUpToData<UInt64>,
+          AggregateFunctionUniqUpToVariadic<argument_is_tuple>>
 {
 private:
     size_t num_args = 0;
@@ -220,14 +213,17 @@ public:
 
     String getName() const override { return "uniqUpTo"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).insert(UniqVariadicHash<AggregateFunctionUniqUpToData<UInt64>, false, argument_is_tuple>::apply(this->data(place), num_args, columns, row_num), threshold);
+        this->data(place).insert(
+            UniqVariadicHash<AggregateFunctionUniqUpToData<UInt64>, false, argument_is_tuple>::apply(
+                this->data(place),
+                num_args,
+                columns,
+                row_num),
+            threshold);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

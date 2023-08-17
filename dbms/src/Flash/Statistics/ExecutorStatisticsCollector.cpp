@@ -41,7 +41,8 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
         {
             for (const auto & stream_ptr : map_entry.second)
             {
-                if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
+                if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get());
+                    exchange_receiver_stream_ptr)
                     exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
             }
         }
@@ -68,9 +69,7 @@ String ExecutorStatisticsCollector::profilesToJson() const
     buffer.joinStr(
         profiles.cbegin(),
         profiles.cend(),
-        [](const auto & s, FmtBuffer & fb) {
-            fb.append(s.second->toJson());
-        },
+        [](const auto & s, FmtBuffer & fb) { fb.append(s.second->toJson()); },
         ",");
     buffer.append("]");
     return buffer.toString();
@@ -166,7 +165,12 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
         current.scan_context->merge(*(iter->second));
 
     current.time_processed_ns += dag_context->compile_time_ns;
-    fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, force_fill_executor_id);
+    fillTiExecutionSummary(
+        *dag_context,
+        response.add_execution_summaries(),
+        current,
+        executor_id,
+        force_fill_executor_id);
 }
 
 void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & response)
@@ -227,7 +231,12 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectRespo
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
-        fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, force_fill_executor_id);
+        fillTiExecutionSummary(
+            *dag_context,
+            response.add_execution_summaries(),
+            p.second,
+            p.first,
+            force_fill_executor_id);
 }
 
 } // namespace DB

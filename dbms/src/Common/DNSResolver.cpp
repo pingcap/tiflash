@@ -152,12 +152,22 @@ DNSResolver::IPAddresses hostByName(const std::string & host)
     }
     catch (const Poco::Net::DNSException & e)
     {
-        LOG_ERROR(&Poco::Logger::get("DNSResolver"), "Cannot resolve host ({}), error {}: {}.", host, e.code(), e.name());
+        LOG_ERROR(
+            &Poco::Logger::get("DNSResolver"),
+            "Cannot resolve host ({}), error {}: {}.",
+            host,
+            e.code(),
+            e.name());
         addresses.clear();
     }
     catch (Poco::IOException & e)
     {
-        LOG_ERROR(&Poco::Logger::get("DNSResolver"), "Cannot resolve host ({}), io error {}: {}.", host, e.code(), e.name());
+        LOG_ERROR(
+            &Poco::Logger::get("DNSResolver"),
+            "Cannot resolve host ({}), io error {}: {}.",
+            host,
+            e.code(),
+            e.name());
         addresses.clear();
     }
 
@@ -194,9 +204,13 @@ DNSResolver::IPAddresses resolveIPAddressImpl(const std::string & host)
     return addresses;
 }
 
-DNSResolver::IPAddresses resolveIPAddressWithCache(LRUCache<std::string, DNSResolver::IPAddresses> & cache, const std::string & host)
+DNSResolver::IPAddresses resolveIPAddressWithCache(
+    LRUCache<std::string, DNSResolver::IPAddresses> & cache,
+    const std::string & host)
 {
-    auto [result, _] = cache.getOrSet(host, [&host]() { return std::make_shared<DNSResolver::IPAddresses>(resolveIPAddressImpl(host)); });
+    auto [result, _] = cache.getOrSet(host, [&host]() {
+        return std::make_shared<DNSResolver::IPAddresses>(resolveIPAddressImpl(host));
+    });
     return *result;
 }
 
@@ -218,7 +232,9 @@ std::unordered_set<String> reverseResolveWithCache(
     LRUCache<Poco::Net::IPAddress, std::unordered_set<std::string>> & cache,
     const Poco::Net::IPAddress & address)
 {
-    auto [result, _] = cache.getOrSet(address, [&address]() { return std::make_shared<std::unordered_set<String>>(reverseResolveImpl(address)); });
+    auto [result, _] = cache.getOrSet(address, [&address]() {
+        return std::make_shared<std::unordered_set<String>>(reverseResolveImpl(address));
+    });
     return *result;
 }
 
@@ -307,7 +323,8 @@ std::vector<Poco::Net::SocketAddress> DNSResolver::resolveAddressList(const std:
     if (!impl->disable_cache)
         addToNewHosts(host);
 
-    std::vector<Poco::Net::IPAddress> ips = impl->disable_cache ? hostByName(host) : resolveIPAddressWithCache(impl->cache_host, host);
+    std::vector<Poco::Net::IPAddress> ips
+        = impl->disable_cache ? hostByName(host) : resolveIPAddressWithCache(impl->cache_host, host);
     auto ips_end = std::unique(ips.begin(), ips.end());
 
     addresses.reserve(ips_end - ips.begin());

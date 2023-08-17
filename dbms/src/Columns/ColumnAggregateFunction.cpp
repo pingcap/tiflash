@@ -54,7 +54,8 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     if (start + length > from_concrete.getData().size())
         throw Exception(
             fmt::format(
-                "Parameters are out of bound in ColumnAggregateFunction::insertRangeFrom method, start={}, length={}, from.size()={}",
+                "Parameters are out of bound in ColumnAggregateFunction::insertRangeFrom method, start={}, length={}, "
+                "from.size()={}",
                 start,
                 length,
                 from_concrete.getData().size()),
@@ -136,14 +137,18 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
 }
 
 /// Is required to support operations with Set
-void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
+void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &)
+    const
 {
     WriteBufferFromOwnString wbuf;
     func->serialize(getData()[n], wbuf);
     hash.update(wbuf.str().c_str(), wbuf.str().size());
 }
 
-void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
+void ColumnAggregateFunction::updateHashWithValues(
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
 {
     for (size_t i = 0, size = getData().size(); i < size; ++i)
     {
@@ -158,7 +163,10 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
     auto s = data.size();
     if (hash.getData().size() != data.size())
         throw Exception(
-            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            fmt::format(
+                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+                s,
+                hash.getData().size()),
             ErrorCodes::LOGICAL_ERROR);
 
     auto & hash_data = hash.getData();
@@ -198,7 +206,8 @@ size_t ColumnAggregateFunction::allocatedBytes() const
 
 size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
 {
-    static const std::unordered_set<String> trivial_agg_func_name{"sum", "min", "max", "count", "avg", "first_row", "any"};
+    static const std::unordered_set<String>
+        trivial_agg_func_name{"sum", "min", "max", "count", "avg", "first_row", "any"};
     if (trivial_agg_func_name.find(func->getName()) != trivial_agg_func_name.end())
     {
         size_t res = func->sizeOfData() * size();
@@ -304,7 +313,12 @@ void ColumnAggregateFunction::insertDefault()
     function->create(getData().back());
 }
 
-StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, const TiDB::TiDBCollatorPtr &, String &) const
+StringRef ColumnAggregateFunction::serializeValueIntoArena(
+    size_t n,
+    Arena & dst,
+    const char *& begin,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
 {
     IAggregateFunction * function = func.get();
     WriteBufferFromArena out(dst, begin);
@@ -312,7 +326,9 @@ StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst
     return out.finish();
 }
 
-const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &)
+const char * ColumnAggregateFunction::deserializeAndInsertFromArena(
+    const char * src_arena,
+    const TiDB::TiDBCollatorPtr &)
 {
     IAggregateFunction * function = func.get();
 
@@ -349,7 +365,8 @@ void ColumnAggregateFunction::popBack(size_t n)
     data.resize_assume_reserved(new_size);
 }
 
-ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
+ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets)
+    const
 {
     size_t size = data.size();
     if (size != offsets.size())
@@ -378,7 +395,8 @@ ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_r
     return res;
 }
 
-MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const
+MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector)
+    const
 {
     /// Columns with scattered values will point to this column as the owner of values.
     MutableColumns columns(num_columns);
@@ -401,12 +419,18 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     return columns;
 }
 
-void ColumnAggregateFunction::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const
+void ColumnAggregateFunction::scatterTo(
+    ScatterColumns & columns [[maybe_unused]],
+    const Selector & selector [[maybe_unused]]) const
 {
     throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }
 
-void ColumnAggregateFunction::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, IColumn::Permutation & res) const
+void ColumnAggregateFunction::getPermutation(
+    bool /*reverse*/,
+    size_t /*limit*/,
+    int /*nan_direction_hint*/,
+    IColumn::Permutation & res) const
 {
     size_t s = getData().size();
     res.resize(s);

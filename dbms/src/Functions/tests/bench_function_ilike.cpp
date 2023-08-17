@@ -68,20 +68,30 @@ public:
 
     ColumnWithTypeAndName escape = createConstColumn<Int32>(1, static_cast<Int32>('\\'));
 
-    ColumnsWithTypeAndName lower_data11{toVec<String>("col0", std::vector<ColStringType>(data_num, "aaaaaaaaaaaaaaaaa"))};
-    ColumnsWithTypeAndName lower_data12{toVec<String>("col1", std::vector<ColStringType>(data_num, "aaaaaaaaaaaaaaaaa"))};
+    ColumnsWithTypeAndName lower_data11{
+        toVec<String>("col0", std::vector<ColStringType>(data_num, "aaaaaaaaaaaaaaaaa"))};
+    ColumnsWithTypeAndName lower_data12{
+        toVec<String>("col1", std::vector<ColStringType>(data_num, "aaaaaaaaaaaaaaaaa"))};
 
-    ColumnsWithTypeAndName lower_data21{toVec<String>("col0", std::vector<ColStringType>(data_num, "AAAAAAAAAAAAAAAAA"))};
-    ColumnsWithTypeAndName lower_data22{toVec<String>("col1", std::vector<ColStringType>(data_num, "AAAAAAAAAAAAAAAAA"))};
+    ColumnsWithTypeAndName lower_data21{
+        toVec<String>("col0", std::vector<ColStringType>(data_num, "AAAAAAAAAAAAAAAAA"))};
+    ColumnsWithTypeAndName lower_data22{
+        toVec<String>("col1", std::vector<ColStringType>(data_num, "AAAAAAAAAAAAAAAAA"))};
 
-    ColumnsWithTypeAndName lower_data31{toVec<String>("col0", std::vector<ColStringType>(data_num, "aAaAaAaAaAaAaAaAa"))};
-    ColumnsWithTypeAndName lower_data32{toVec<String>("col1", std::vector<ColStringType>(data_num, "aAaAaAaAaAaAaAaAa"))};
+    ColumnsWithTypeAndName lower_data31{
+        toVec<String>("col0", std::vector<ColStringType>(data_num, "aAaAaAaAaAaAaAaAa"))};
+    ColumnsWithTypeAndName lower_data32{
+        toVec<String>("col1", std::vector<ColStringType>(data_num, "aAaAaAaAaAaAaAaAa"))};
 
-    ColumnsWithTypeAndName lower_data41{toVec<String>("col0", std::vector<ColStringType>(data_num, "嗯嗯嗯嗯嗯嗯嗯嗯嗯嗯"))};
-    ColumnsWithTypeAndName lower_data42{toVec<String>("col1", std::vector<ColStringType>(data_num, "嗯嗯嗯嗯嗯嗯嗯嗯嗯嗯"))};
+    ColumnsWithTypeAndName lower_data41{
+        toVec<String>("col0", std::vector<ColStringType>(data_num, "嗯嗯嗯嗯嗯嗯嗯嗯嗯嗯"))};
+    ColumnsWithTypeAndName lower_data42{
+        toVec<String>("col1", std::vector<ColStringType>(data_num, "嗯嗯嗯嗯嗯嗯嗯嗯嗯嗯"))};
 
-    ColumnsWithTypeAndName lower_data51{toVec<String>("col0", std::vector<ColStringType>(data_num, "a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯"))};
-    ColumnsWithTypeAndName lower_data52{toVec<String>("col1", std::vector<ColStringType>(data_num, "a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯"))};
+    ColumnsWithTypeAndName lower_data51{
+        toVec<String>("col0", std::vector<ColStringType>(data_num, "a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯"))};
+    ColumnsWithTypeAndName lower_data52{
+        toVec<String>("col1", std::vector<ColStringType>(data_num, "a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯a嗯"))};
 
     ColumnsWithTypeAndName like_data1{
         toVec<String>("col0", std::vector<ColStringType>(data_num, "aaaaaaaaaaaaaaaaa")),
@@ -146,7 +156,8 @@ try
         Block(lower_data32),
         Block(lower_data42),
         Block(lower_data52)};
-    std::vector<Block> like_blocks{Block(like_data1), Block(like_data2), Block(like_data3), Block(like_data4), Block(like_data5)};
+    std::vector<Block>
+        like_blocks{Block(like_data1), Block(like_data2), Block(like_data3), Block(like_data4), Block(like_data5)};
 
     for (auto & block : lower_blocks)
         block.insert({nullptr, std::make_shared<DataTypeString>(), "res"});

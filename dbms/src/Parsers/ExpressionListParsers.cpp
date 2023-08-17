@@ -12,81 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/IAST.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
-
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
-
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/IAST.h>
 #include <Parsers/ParserCreateQuery.h>
-
-#include <Common/StringUtils/StringUtils.h>
 
 
 namespace DB
 {
 
 
-const char * ParserMultiplicativeExpression::operators[] =
-{
-    "*",     "multiply",
-    "/",     "divide",
-    "%",     "modulo",
-    nullptr
-};
+const char * ParserMultiplicativeExpression::operators[] = {"*", "multiply", "/", "divide", "%", "modulo", nullptr};
 
-const char * ParserUnaryMinusExpression::operators[] =
-{
-    "-",     "negate",
-    nullptr
-};
+const char * ParserUnaryMinusExpression::operators[] = {"-", "negate", nullptr};
 
-const char * ParserAdditiveExpression::operators[] =
-{
-    "+",     "plus",
-    "-",     "minus",
-    nullptr
-};
+const char * ParserAdditiveExpression::operators[] = {"+", "plus", "-", "minus", nullptr};
 
-const char * ParserComparisonExpression::operators[] =
-{
-    "==",            "equals",
-    "!=",            "notEquals",
-    "<>",            "notEquals",
-    "<=",            "lessOrEquals",
-    ">=",            "greaterOrEquals",
-    "<",             "less",
-    ">",             "greater",
-    "=",             "equals",
-    "LIKE",          "like",
-    "NOT LIKE",      "notLike",
-    "IN",            "in",
-    "NOT IN",        "notIn",
-    "GLOBAL IN",     "globalIn",
-    "GLOBAL NOT IN", "globalNotIn",
-    nullptr
-};
+const char * ParserComparisonExpression::operators[]
+    = {"==",
+       "equals",
+       "!=",
+       "notEquals",
+       "<>",
+       "notEquals",
+       "<=",
+       "lessOrEquals",
+       ">=",
+       "greaterOrEquals",
+       "<",
+       "less",
+       ">",
+       "greater",
+       "=",
+       "equals",
+       "LIKE",
+       "like",
+       "NOT LIKE",
+       "notLike",
+       "IN",
+       "in",
+       "NOT IN",
+       "notIn",
+       "GLOBAL IN",
+       "globalIn",
+       "GLOBAL NOT IN",
+       "globalNotIn",
+       nullptr};
 
-const char * ParserLogicalNotExpression::operators[] =
-{
-    "NOT", "not",
-    nullptr
-};
+const char * ParserLogicalNotExpression::operators[] = {"NOT", "not", nullptr};
 
-const char * ParserArrayElementExpression::operators[] =
-{
-    "[", "arrayElement",
-    nullptr
-};
+const char * ParserArrayElementExpression::operators[] = {"[", "arrayElement", nullptr};
 
-const char * ParserTupleElementExpression::operators[] =
-{
-    ".", "tupleElement",
-    nullptr
-};
-
+const char * ParserTupleElementExpression::operators[] = {".", "tupleElement", nullptr};
 
 
 bool ParserList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
@@ -393,7 +374,8 @@ bool ParserLambdaExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
             was_open = true;
         }
 
-        if (!ParserList(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma)).parse(pos, inner_arguments, expected))
+        if (!ParserList(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma))
+                 .parse(pos, inner_arguments, expected))
             break;
 
         if (was_open)
@@ -427,8 +409,7 @@ bool ParserLambdaExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         outer_arguments->children.push_back(expression);
 
         return true;
-    }
-    while (false);
+    } while (false);
 
     pos = begin;
     return elem_parser.parse(pos, node, expected);
@@ -469,7 +450,7 @@ bool ParserPrefixUnaryOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Ex
         }
 
         if (even)
-            it = jt;    /// Zero the result of parsing the first NOT. It turns out, as if there is no `NOT` chain at all.
+            it = jt; /// Zero the result of parsing the first NOT. It turns out, as if there is no `NOT` chain at all.
     }
 
     ASTPtr elem;
@@ -522,53 +503,58 @@ bool ParserUnaryMinusExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & 
 }
 
 
-bool ParserArrayElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &expected)
+bool ParserArrayElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
         std::make_unique<ParserExpressionElement>(),
-        std::make_unique<ParserExpressionWithOptionalAlias>(false)
-    }.parse(pos, node, expected);
+        std::make_unique<ParserExpressionWithOptionalAlias>(false)}
+        .parse(pos, node, expected);
 }
 
 
-bool ParserTupleElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &expected)
+bool ParserTupleElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
         std::make_unique<ParserArrayElementExpression>(),
-        std::make_unique<ParserUnsignedInteger>()
-    }.parse(pos, node, expected);
+        std::make_unique<ParserUnsignedInteger>()}
+        .parse(pos, node, expected);
 }
 
 
-ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, bool prefer_alias_to_column_name)
-    : impl(std::make_unique<ParserWithOptionalAlias>(std::make_unique<ParserExpression>(),
-                                                     allow_alias_without_as_keyword, prefer_alias_to_column_name))
-{
-}
+ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(
+    bool allow_alias_without_as_keyword,
+    bool prefer_alias_to_column_name)
+    : impl(std::make_unique<ParserWithOptionalAlias>(
+        std::make_unique<ParserExpression>(),
+        allow_alias_without_as_keyword,
+        prefer_alias_to_column_name))
+{}
 
 
 ParserExpressionInCastExpression::ParserExpressionInCastExpression(bool allow_alias_without_as_keyword)
-    : impl(std::make_unique<ParserCastExpressionWithOptionalAlias>(std::make_unique<ParserExpression>(),
-                                                                   allow_alias_without_as_keyword, false))
-{
-}
+    : impl(std::make_unique<ParserCastExpressionWithOptionalAlias>(
+        std::make_unique<ParserExpression>(),
+        allow_alias_without_as_keyword,
+        false))
+{}
 
 
 bool ParserExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserList(
-        std::make_unique<ParserExpressionWithOptionalAlias>(allow_alias_without_as_keyword, prefer_alias_to_column_name),
-        std::make_unique<ParserToken>(TokenType::Comma))
+               std::make_unique<ParserExpressionWithOptionalAlias>(
+                   allow_alias_without_as_keyword,
+                   prefer_alias_to_column_name),
+               std::make_unique<ParserToken>(TokenType::Comma))
         .parse(pos, node, expected);
 }
 
 
 bool ParserNotEmptyExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return nested_parser.parse(pos, node, expected)
-        && !typeid_cast<ASTExpressionList &>(*node).children.empty();
+    return nested_parser.parse(pos, node, expected) && !typeid_cast<ASTExpressionList &>(*node).children.empty();
 }
 
 
@@ -669,4 +655,4 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
 }
 
 
-}
+} // namespace DB

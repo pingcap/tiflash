@@ -18,7 +18,5 @@
 
 namespace DB
 {
-void assertOperatorStatus(
-    OperatorStatus status,
-    std::initializer_list<OperatorStatus> expect_running_statuses);
+void assertOperatorStatus(OperatorStatus status, std::initializer_list<OperatorStatus> expect_running_statuses);
 } // namespace DB

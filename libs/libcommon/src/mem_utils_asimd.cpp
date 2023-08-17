@@ -49,9 +49,23 @@ __attribute__((always_inline, pure)) inline bool memoryEqualASIMDx8(const char *
     auto p2_ = reinterpret_cast<const uint8_t *>(p2);
     auto vec_length = sizeof(uint8x16_t);
     uint8x16_t lhs[]
-        = {vld1q_u8(p1_ + vec_length * 0), vld1q_u8(p1_ + vec_length * 1), vld1q_u8(p1_ + vec_length * 2), vld1q_u8(p1_ + vec_length * 3), vld1q_u8(p1_ + vec_length * 4), vld1q_u8(p1_ + vec_length * 5), vld1q_u8(p1_ + vec_length * 6), vld1q_u8(p1_ + vec_length * 7)};
+        = {vld1q_u8(p1_ + vec_length * 0),
+           vld1q_u8(p1_ + vec_length * 1),
+           vld1q_u8(p1_ + vec_length * 2),
+           vld1q_u8(p1_ + vec_length * 3),
+           vld1q_u8(p1_ + vec_length * 4),
+           vld1q_u8(p1_ + vec_length * 5),
+           vld1q_u8(p1_ + vec_length * 6),
+           vld1q_u8(p1_ + vec_length * 7)};
     uint8x16_t rhs[]
-        = {vld1q_u8(p2_ + vec_length * 0), vld1q_u8(p2_ + vec_length * 1), vld1q_u8(p2_ + vec_length * 2), vld1q_u8(p2_ + vec_length * 3), vld1q_u8(p2_ + vec_length * 4), vld1q_u8(p2_ + vec_length * 5), vld1q_u8(p2_ + vec_length * 6), vld1q_u8(p2_ + vec_length * 7)};
+        = {vld1q_u8(p2_ + vec_length * 0),
+           vld1q_u8(p2_ + vec_length * 1),
+           vld1q_u8(p2_ + vec_length * 2),
+           vld1q_u8(p2_ + vec_length * 3),
+           vld1q_u8(p2_ + vec_length * 4),
+           vld1q_u8(p2_ + vec_length * 5),
+           vld1q_u8(p2_ + vec_length * 6),
+           vld1q_u8(p2_ + vec_length * 7)};
     uint64x2_t compared[] = {
         compareConvert(lhs[0], rhs[0]),
         compareConvert(lhs[1], rhs[1]),
@@ -82,11 +96,20 @@ __attribute__((always_inline, pure)) inline bool memoryEqualASIMDx4(const char *
     auto p2_ = reinterpret_cast<const uint8_t *>(p2);
     auto vec_length = sizeof(uint8x16_t);
     uint8x16_t lhs[]
-        = {vld1q_u8(p1_ + vec_length * 0), vld1q_u8(p1_ + vec_length * 1), vld1q_u8(p1_ + vec_length * 2), vld1q_u8(p1_ + vec_length * 3)};
+        = {vld1q_u8(p1_ + vec_length * 0),
+           vld1q_u8(p1_ + vec_length * 1),
+           vld1q_u8(p1_ + vec_length * 2),
+           vld1q_u8(p1_ + vec_length * 3)};
     uint8x16_t rhs[]
-        = {vld1q_u8(p2_ + vec_length * 0), vld1q_u8(p2_ + vec_length * 1), vld1q_u8(p2_ + vec_length * 2), vld1q_u8(p2_ + vec_length * 3)};
+        = {vld1q_u8(p2_ + vec_length * 0),
+           vld1q_u8(p2_ + vec_length * 1),
+           vld1q_u8(p2_ + vec_length * 2),
+           vld1q_u8(p2_ + vec_length * 3)};
     uint64x2_t compared[]
-        = {compareConvert(lhs[0], rhs[0]), compareConvert(lhs[1], rhs[1]), compareConvert(lhs[2], rhs[2]), compareConvert(lhs[3], rhs[3])};
+        = {compareConvert(lhs[0], rhs[0]),
+           compareConvert(lhs[1], rhs[1]),
+           compareConvert(lhs[2], rhs[2]),
+           compareConvert(lhs[3], rhs[3])};
     uint64x2_t combined1[] = {vandq_u64(compared[0], compared[1]), vandq_u64(compared[2], compared[3])};
     uint64x2_t combined2 = vandq_u64(combined1[0], combined1[1]);
     return checkU64(combined2);
@@ -214,7 +237,9 @@ __attribute__((pure)) bool memoryEqualASIMD(const char * p1, const char * p2, si
 }
 
 template <size_t N>
-__attribute__((always_inline, pure)) inline bool compareArrayASIMD(const uint8x16_t (&data)[N], uint8x16_t filled_vector)
+__attribute__((always_inline, pure)) inline bool compareArrayASIMD(
+    const uint8x16_t (&data)[N],
+    uint8x16_t filled_vector)
 {
     static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
 
@@ -288,8 +313,12 @@ __attribute__((pure)) bool memoryIsByteASIMD(const void * data, const size_t siz
     switch (remaining / vector_length)
     {
     case 3:
-        result = compareArrayASIMD<4>({vld1q_u8(current_address + 0 * vector_length), vld1q_u8(current_address + 1 * vector_length), vld1q_u8(current_address + 2 * vector_length), tail},
-                                      filled_vector);
+        result = compareArrayASIMD<4>(
+            {vld1q_u8(current_address + 0 * vector_length),
+             vld1q_u8(current_address + 1 * vector_length),
+             vld1q_u8(current_address + 2 * vector_length),
+             tail},
+            filled_vector);
         break;
     case 2:
         result = compareArrayASIMD<3>(

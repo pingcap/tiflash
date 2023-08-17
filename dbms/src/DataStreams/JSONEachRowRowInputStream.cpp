@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadHelpers.h>
 #include <DataStreams/JSONEachRowRowInputStream.h>
+#include <IO/ReadHelpers.h>
 
 
 namespace DB
@@ -21,20 +21,23 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INCORRECT_DATA;
-    extern const int CANNOT_READ_ALL_DATA;
-}
+extern const int INCORRECT_DATA;
+extern const int CANNOT_READ_ALL_DATA;
+} // namespace ErrorCodes
 
 
 JSONEachRowRowInputStream::JSONEachRowRowInputStream(ReadBuffer & istr_, const Block & header_, bool skip_unknown_)
-    : istr(istr_), header(header_), skip_unknown(skip_unknown_), name_map(header.columns())
+    : istr(istr_)
+    , header(header_)
+    , skip_unknown(skip_unknown_)
+    , name_map(header.columns())
 {
     /// In this format, BOM at beginning of stream cannot be confused with value, so it is safe to skip it.
     skipBOMIfExists(istr);
 
     size_t num_columns = header.columns();
     for (size_t i = 0; i < num_columns; ++i)
-        name_map[header.safeGetByPosition(i).name] = i;        /// NOTE You could place names more cache-locally.
+        name_map[header.safeGetByPosition(i).name] = i; /// NOTE You could place names more cache-locally.
 }
 
 
@@ -104,7 +107,9 @@ bool JSONEachRowRowInputStream::read(MutableColumns & columns)
         skipWhitespaceIfAny(istr);
 
         if (istr.eof())
-            throw Exception("Unexpected end of stream while parsing JSONEachRow format", ErrorCodes::CANNOT_READ_ALL_DATA);
+            throw Exception(
+                "Unexpected end of stream while parsing JSONEachRow format",
+                ErrorCodes::CANNOT_READ_ALL_DATA);
         else if (*istr.position() == '}')
         {
             ++istr.position();
@@ -128,7 +133,9 @@ bool JSONEachRowRowInputStream::read(MutableColumns & columns)
         if (name_map.end() == it)
         {
             if (!skip_unknown)
-                throw Exception("Unknown field found while parsing JSONEachRow format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
+                throw Exception(
+                    "Unknown field found while parsing JSONEachRow format: " + name_ref.toString(),
+                    ErrorCodes::INCORRECT_DATA);
 
             skipColonDelimeter(istr);
             skipJSONFieldPlain(istr, name_ref);
@@ -138,7 +145,9 @@ bool JSONEachRowRowInputStream::read(MutableColumns & columns)
         size_t index = it->getMapped();
 
         if (read_columns[index])
-            throw Exception("Duplicate field found while parsing JSONEachRow format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
+            throw Exception(
+                "Duplicate field found while parsing JSONEachRow format: " + name_ref.toString(),
+                ErrorCodes::INCORRECT_DATA);
 
         skipColonDelimeter(istr);
 
@@ -161,4 +170,4 @@ void JSONEachRowRowInputStream::syncAfterError()
     skipToUnescapedNextLineOrEOF(istr);
 }
 
-}
+} // namespace DB

@@ -24,9 +24,7 @@ namespace DB::tests
 class InterpreterTestUtils : public ExecutorTest
 {
 public:
-    void runAndAssert(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency);
+    void runAndAssert(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
 protected:
     void initExpectResults();

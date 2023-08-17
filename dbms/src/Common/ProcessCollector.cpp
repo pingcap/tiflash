@@ -36,10 +36,26 @@ std::vector<prometheus::MetricFamily> ProcessCollector::Collect() const
 
     std::vector<prometheus::MetricFamily> familes;
     familes.reserve(4);
-    familes.emplace_back(prometheus::MetricFamily{CPU_METRIC_NAME, CPU_METRIC_HELP, prometheus::MetricType::Gauge, std::vector<prometheus::ClientMetric>{cpu_total.Collect()}});
-    familes.emplace_back(prometheus::MetricFamily{VSIZE_METRIC_NAME, VSIZE_METRIC_HELP, prometheus::MetricType::Gauge, std::vector<prometheus::ClientMetric>{vsize.Collect()}});
-    familes.emplace_back(prometheus::MetricFamily{RSS_METRIC_NAME, RSS_METRIC_HELP, prometheus::MetricType::Gauge, std::vector<prometheus::ClientMetric>{rss.Collect()}});
-    familes.emplace_back(prometheus::MetricFamily{START_TIME_METRIC_NAME, START_TIME_METRIC_HELP, prometheus::MetricType::Gauge, std::vector<prometheus::ClientMetric>{start_time.Collect()}});
+    familes.emplace_back(prometheus::MetricFamily{
+        CPU_METRIC_NAME,
+        CPU_METRIC_HELP,
+        prometheus::MetricType::Gauge,
+        std::vector<prometheus::ClientMetric>{cpu_total.Collect()}});
+    familes.emplace_back(prometheus::MetricFamily{
+        VSIZE_METRIC_NAME,
+        VSIZE_METRIC_HELP,
+        prometheus::MetricType::Gauge,
+        std::vector<prometheus::ClientMetric>{vsize.Collect()}});
+    familes.emplace_back(prometheus::MetricFamily{
+        RSS_METRIC_NAME,
+        RSS_METRIC_HELP,
+        prometheus::MetricType::Gauge,
+        std::vector<prometheus::ClientMetric>{rss.Collect()}});
+    familes.emplace_back(prometheus::MetricFamily{
+        START_TIME_METRIC_NAME,
+        START_TIME_METRIC_HELP,
+        prometheus::MetricType::Gauge,
+        std::vector<prometheus::ClientMetric>{start_time.Collect()}});
     return familes;
 }
 

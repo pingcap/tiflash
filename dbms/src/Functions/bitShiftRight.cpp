@@ -43,7 +43,8 @@ struct BitShiftRightImpl<A, B, false>
         // since other types will all be cast to uint64 before shift operation
         // according to DAGExpressionAnalyzerHelper::buildBitwiseFunction.
         // Therefore, we simply suppress clang-tidy checking here.
-        return static_cast<Result>(a) >> static_cast<Result>(b); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+        return static_cast<Result>(a)
+            >> static_cast<Result>(b); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)

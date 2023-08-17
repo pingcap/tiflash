@@ -24,4 +24,4 @@ void writeParenthesisedString(const String & s, WriteBuffer & buf)
     writeChar(')', buf);
 }
 
-}
+} // namespace DB

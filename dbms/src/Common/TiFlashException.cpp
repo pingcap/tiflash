@@ -62,14 +62,20 @@ void TiFlashErrorRegistry::initialize()
         }                                                                                           \
         __VA_ARGS__                                                                                 \
     }
-#define E(error_code, desc, workaround, message_template) registerError(NAME, #error_code, desc, workaround, message_template);
+#define E(error_code, desc, workaround, message_template) \
+    registerError(NAME, #error_code, desc, workaround, message_template);
 
     ERROR_CLASS_LIST
 #undef C
 #undef E
 }
 
-void TiFlashErrorRegistry::registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
+void TiFlashErrorRegistry::registerError(
+    const std::string & error_class,
+    const std::string & error_code,
+    const std::string & description,
+    const std::string & workaround,
+    const std::string & message_template)
 {
     TiFlashError error{error_class, error_code, description, workaround, message_template};
     if (errors().find({error_class, error_code}) == errors().end())
@@ -82,7 +88,12 @@ void TiFlashErrorRegistry::registerError(const std::string & error_class, const 
     }
 }
 
-void TiFlashErrorRegistry::registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
+void TiFlashErrorRegistry::registerErrorWithNumericCode(
+    const std::string & error_class,
+    int error_code,
+    const std::string & description,
+    const std::string & workaround,
+    const std::string & message_template)
 {
     std::string error_code_str = std::to_string(error_code);
     registerError(error_class, error_code_str, description, workaround, message_template);
@@ -103,7 +114,8 @@ std::string TiFlashException::standardText() const
     return text;
 }
 
-std::optional<TiFlashError> TiFlashErrorRegistry::get(const std::string & error_class, const std::string & error_code) const
+std::optional<TiFlashError> TiFlashErrorRegistry::get(const std::string & error_class, const std::string & error_code)
+    const
 {
     auto error = errors().find({error_class, error_code});
     if (error != errors().end())

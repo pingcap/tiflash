@@ -22,7 +22,11 @@
 
 namespace DB::mock
 {
-bool ProjectBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ProjectBinder::toTiPBExecutor(
+    tipb::Executor * tipb_executor,
+    int32_t collator_id,
+    const MPPInfo & mpp_info,
+    const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeProjection);
     tipb_executor->set_executor_id(name);
@@ -53,8 +57,12 @@ bool ProjectBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t colla
 
 void ProjectBinder::columnPrune(std::unordered_set<String> & used_columns)
 {
-    output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-                        output_schema.end());
+    output_schema.erase(
+        std::remove_if(
+            output_schema.begin(),
+            output_schema.end(),
+            [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+        output_schema.end());
     std::unordered_set<String> used_input_columns;
     for (auto & expr : exprs)
     {
@@ -98,7 +106,9 @@ ExecutorBinderPtr compileProject(ExecutorBinderPtr input, size_t & executor_inde
         else
         {
             exprs.push_back(expr);
-            auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(), [&](const auto & field) { return field.first == expr->getColumnName(); });
+            auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(), [&](const auto & field) {
+                return field.first == expr->getColumnName();
+            });
             if (ft != input->output_schema.end())
             {
                 output_schema.emplace_back(ft->first, ft->second);

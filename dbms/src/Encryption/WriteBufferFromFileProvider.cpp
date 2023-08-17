@@ -29,7 +29,14 @@ WriteBufferFromFileProvider::WriteBufferFromFileProvider(
     char * existing_memory,
     size_t alignment)
     : WriteBufferFromWritableFile(
-        file_provider_->newWritableFile(file_name_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags, mode),
+        file_provider_->newWritableFile(
+            file_name_,
+            encryption_path_,
+            true,
+            create_new_encryption_info_,
+            write_limiter_,
+            flags,
+            mode),
         buf_size,
         existing_memory,
         alignment)

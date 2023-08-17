@@ -77,11 +77,7 @@ void Event::insertEvent(const EventPtr & insert_event)
 void Event::onInputFinish()
 {
     auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
-    RUNTIME_ASSERT(
-        cur_value >= 0,
-        log,
-        "unfinished_inputs cannot < 0, but actual value is {}",
-        cur_value);
+    RUNTIME_ASSERT(cur_value >= 0, log, "unfinished_inputs cannot < 0, but actual value is {}", cur_value);
     if (0 == cur_value)
         schedule();
 }
@@ -167,11 +163,7 @@ void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
     assertStatus(EventStatus::SCHEDULED);
     exec_context.update(task_profile_info);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
-    RUNTIME_ASSERT(
-        remaining_tasks >= 0,
-        log,
-        "remaining_tasks must >= 0, but actual value is {}",
-        remaining_tasks);
+    RUNTIME_ASSERT(remaining_tasks >= 0, log, "remaining_tasks must >= 0, but actual value is {}", remaining_tasks);
 #ifndef NDEBUG
     LOG_TRACE(log, "one task finished, {} tasks remaining", remaining_tasks);
 #endif // !NDEBUG

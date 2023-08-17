@@ -153,9 +153,7 @@ FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
                 const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
                 const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
 
-                usage.merge(log_usage)
-                    .merge(meta_usage)
-                    .merge(data_usage);
+                usage.merge(log_usage).merge(meta_usage).merge(data_usage);
             }
         }
         break;
@@ -228,8 +226,12 @@ void AsynchronousMetrics::update()
                     if (auto store = dt_storage->getStoreIfInited(); store)
                     {
                         auto stat = store->getStoreStats();
-                        calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
+                        calculateMax(
+                            max_dt_stable_oldest_snapshot_lifetime,
+                            stat.storage_stable_oldest_snapshot_lifetime);
+                        calculateMax(
+                            max_dt_delta_oldest_snapshot_lifetime,
+                            stat.storage_delta_oldest_snapshot_lifetime);
                         calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
                         calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                     }
@@ -274,7 +276,15 @@ void AsynchronousMetrics::update()
         size_t current_commit;
         size_t peak_commit;
         size_t page_faults;
-        mi_process_info(&elapsed_msecs, &user_msecs, &system_msecs, &current_rss, &peak_rss, &current_commit, &peak_commit, &page_faults);
+        mi_process_info(
+            &elapsed_msecs,
+            &user_msecs,
+            &system_msecs,
+            &current_rss,
+            &peak_rss,
+            &current_commit,
+            &peak_commit,
+            &page_faults);
         MI_STATS_SET(elapsed_msecs);
         MI_STATS_SET(user_msecs);
         MI_STATS_SET(system_msecs);

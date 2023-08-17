@@ -24,9 +24,7 @@ class EventTask : public Task
 {
 public:
     // Only used for unit test.
-    EventTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_);
+    EventTask(PipelineExecutorContext & exec_context_, const EventPtr & event_);
 
     EventTask(
         PipelineExecutorContext & exec_context_,

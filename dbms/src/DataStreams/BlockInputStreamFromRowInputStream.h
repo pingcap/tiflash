@@ -62,4 +62,4 @@ private:
     size_t num_errors = 0;
 };
 
-}
+} // namespace DB

@@ -185,7 +185,10 @@ struct TiFlashError
     const std::string description;
 
     std::string standardName() const { return "FLASH:" + error_class + ":" + error_code; }
-    bool is(const TiFlashError & other) const { return error_class == other.error_class && error_code == other.error_code; }
+    bool is(const TiFlashError & other) const
+    {
+        return error_class == other.error_class && error_code == other.error_code;
+    }
 };
 
 namespace Errors
@@ -226,9 +229,19 @@ protected:
     ~TiFlashErrorRegistry();
 
 private:
-    void registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
+    void registerError(
+        const std::string & error_class,
+        const std::string & error_code,
+        const std::string & description,
+        const std::string & workaround,
+        const std::string & message_template = "");
 
-    void registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
+    void registerErrorWithNumericCode(
+        const std::string & error_class,
+        int error_code,
+        const std::string & description,
+        const std::string & workaround,
+        const std::string & message_template = "");
 
     void initialize();
 

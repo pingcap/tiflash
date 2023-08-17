@@ -14,13 +14,14 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
+#include <Common/HashTable/HashMap.h>
+#include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/IDictionary.h>
 #include <Dictionaries/IDictionarySource.h>
-#include <Dictionaries/DictionaryStructure.h>
-#include <Common/HashTable/HashMap.h>
-#include <Columns/ColumnString.h>
-#include <ext/range.h>
+
 #include <atomic>
+#include <ext/range.h>
 #include <memory>
 #include <tuple>
 
@@ -32,8 +33,11 @@ class RangeHashedDictionary final : public IDictionaryBase
 {
 public:
     RangeHashedDictionary(
-        const std::string & name, const DictionaryStructure & dict_struct, DictionarySourcePtr source_ptr,
-        const DictionaryLifetime dict_lifetime, bool require_nonempty);
+        const std::string & name,
+        const DictionaryStructure & dict_struct,
+        DictionarySourcePtr source_ptr,
+        const DictionaryLifetime dict_lifetime,
+        bool require_nonempty);
 
     RangeHashedDictionary(const RangeHashedDictionary & other);
 
@@ -63,19 +67,18 @@ public:
 
     const DictionaryStructure & getStructure() const override { return dict_struct; }
 
-    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override
-    {
-        return creation_time;
-    }
+    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override { return creation_time; }
 
     bool isInjective(const std::string & attribute_name) const override
     {
         return dict_struct.attributes[&getAttribute(attribute_name) - attributes.data()].injective;
     }
 
-#define DECLARE_MULTIPLE_GETTER(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const PaddedPODArray<Key> & ids, const PaddedPODArray<UInt16> & dates,\
+#define DECLARE_MULTIPLE_GETTER(TYPE)         \
+    void get##TYPE(                           \
+        const std::string & attribute_name,   \
+        const PaddedPODArray<Key> & ids,      \
+        const PaddedPODArray<UInt16> & dates, \
         PaddedPODArray<TYPE> & out) const;
     DECLARE_MULTIPLE_GETTER(UInt8)
     DECLARE_MULTIPLE_GETTER(UInt16)
@@ -91,7 +94,9 @@ public:
 #undef DECLARE_MULTIPLE_GETTER
 
     void getString(
-        const std::string & attribute_name, const PaddedPODArray<Key> & ids, const PaddedPODArray<UInt16> & dates,
+        const std::string & attribute_name,
+        const PaddedPODArray<Key> & ids,
+        const PaddedPODArray<UInt16> & dates,
         ColumnString * out) const;
 
     BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const override;
@@ -128,23 +133,33 @@ private:
         T value;
     };
 
-    template <typename T> using Values = std::vector<Value<T>>;
-    template <typename T> using Collection = HashMap<UInt64, Values<T>>;
-    template <typename T> using Ptr = std::unique_ptr<Collection<T>>;
+    template <typename T>
+    using Values = std::vector<Value<T>>;
+    template <typename T>
+    using Collection = HashMap<UInt64, Values<T>>;
+    template <typename T>
+    using Ptr = std::unique_ptr<Collection<T>>;
 
     struct Attribute final
     {
     public:
         AttributeUnderlyingType type;
-        std::tuple<UInt8, UInt16, UInt32, UInt64,
-                   UInt128,
-                   Int8, Int16, Int32, Int64,
-                   Float32, Float64,
-                   String> null_values;
-        std::tuple<Ptr<UInt8>, Ptr<UInt16>, Ptr<UInt32>, Ptr<UInt64>,
-                   Ptr<UInt128>,
-                   Ptr<Int8>, Ptr<Int16>, Ptr<Int32>, Ptr<Int64>,
-                   Ptr<Float32>, Ptr<Float64>, Ptr<StringRef>> maps;
+        std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String>
+            null_values;
+        std::tuple<
+            Ptr<UInt8>,
+            Ptr<UInt16>,
+            Ptr<UInt32>,
+            Ptr<UInt64>,
+            Ptr<UInt128>,
+            Ptr<Int8>,
+            Ptr<Int16>,
+            Ptr<Int32>,
+            Ptr<Int64>,
+            Ptr<Float32>,
+            Ptr<Float64>,
+            Ptr<StringRef>>
+            maps;
         std::unique_ptr<Arena> string_arena;
     };
 
@@ -187,12 +202,17 @@ private:
 
     const Attribute & getAttributeWithType(const std::string & name, const AttributeUnderlyingType type) const;
 
-    void getIdsAndDates(PaddedPODArray<Key> & ids,
-                        PaddedPODArray<UInt16> & start_dates, PaddedPODArray<UInt16> & end_dates) const;
+    void getIdsAndDates(
+        PaddedPODArray<Key> & ids,
+        PaddedPODArray<UInt16> & start_dates,
+        PaddedPODArray<UInt16> & end_dates) const;
 
     template <typename T>
-    void getIdsAndDates(const Attribute & attribute, PaddedPODArray<Key> & ids,
-                        PaddedPODArray<UInt16> & start_dates, PaddedPODArray<UInt16> & end_dates) const;
+    void getIdsAndDates(
+        const Attribute & attribute,
+        PaddedPODArray<Key> & ids,
+        PaddedPODArray<UInt16> & start_dates,
+        PaddedPODArray<UInt16> & end_dates) const;
 
     const std::string name;
     const DictionaryStructure dict_struct;
@@ -213,4 +233,4 @@ private:
     std::exception_ptr creation_exception;
 };
 
-}
+} // namespace DB

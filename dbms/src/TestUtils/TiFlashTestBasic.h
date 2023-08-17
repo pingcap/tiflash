@@ -113,16 +113,14 @@ inline DataTypes typesFromString(const String & str)
     return data_types;
 }
 
-#define CHECK_TESTS_WITH_DATA_ENABLED                                                     \
-    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                        \
-    {                                                                                     \
-        const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info(); \
-        LOG_INFO(&Poco::Logger::get("GTEST"),                                             \
-                 fmt::format(                                                             \
-                     "Test: {}.{} is disabled.",                                          \
-                     test_info->test_case_name(),                                         \
-                     test_info->name()));                                                 \
-        return;                                                                           \
+#define CHECK_TESTS_WITH_DATA_ENABLED                                                                 \
+    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                    \
+    {                                                                                                 \
+        const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info();             \
+        LOG_INFO(                                                                                     \
+            &Poco::Logger::get("GTEST"),                                                              \
+            fmt::format("Test: {}.{} is disabled.", test_info->test_case_name(), test_info->name())); \
+        return;                                                                                       \
     }
 } // namespace tests
 } // namespace DB

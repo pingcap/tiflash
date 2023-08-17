@@ -41,24 +41,18 @@ public:
 
     /// Register a function by its name.
     /// No locking, you must register all functions before usage of get.
-    void registerFunction(
-        const String & name,
-        Creator creator);
+    void registerFunction(const String & name, Creator creator);
 
     template <typename Function>
     void registerFunction()
     {
-        registerFunction(
-            Function::name,
-            [](const DataTypes & argument_types) {
-                return std::make_shared<Function>(argument_types);
-            });
+        registerFunction(Function::name, [](const DataTypes & argument_types) {
+            return std::make_shared<Function>(argument_types);
+        });
     }
 
     /// Throws an exception if not found.
-    WindowFunctionPtr get(
-        const String & name,
-        const DataTypes & argument_types) const;
+    WindowFunctionPtr get(const String & name, const DataTypes & argument_types) const;
 
     /// Returns nullptr if not found.
     WindowFunctionPtr tryGet(const String & name, const DataTypes & argument_types) const;
@@ -66,9 +60,7 @@ public:
     bool isWindowFunctionName(const String & name) const;
 
 private:
-    WindowFunctionPtr getImpl(
-        const String & name,
-        const DataTypes & argument_types) const;
+    WindowFunctionPtr getImpl(const String & name, const DataTypes & argument_types) const;
 
 private:
     using WindowFunctions = std::unordered_map<String, Creator>;

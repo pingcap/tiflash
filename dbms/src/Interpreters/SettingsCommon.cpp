@@ -163,7 +163,10 @@ void SettingMemoryLimit::set(UInt64 x)
 void SettingMemoryLimit::set(double x)
 {
     if (x < 0.0 || x >= 1.0)
-        throw Exception("Memory limit (in double) should be in range [0.0, 1.0), it means a ratio of total RAM, or you can set it in UInt64, which means the limit bytes.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(
+            "Memory limit (in double) should be in range [0.0, 1.0), it means a ratio of total RAM, or you can set it "
+            "in UInt64, which means the limit bytes.",
+            ErrorCodes::INVALID_CONFIG_PARAMETER);
     value = x;
     changed = true;
 }
@@ -178,7 +181,9 @@ void SettingMemoryLimit::set(const Field & x)
         set(safeGet<Float64>(x));
     }
     else
-        throw Exception(std::string("Bad type of setting. Expected UInt64 or Float64, got ") + x.getTypeName(), ErrorCodes::TYPE_MISMATCH);
+        throw Exception(
+            std::string("Bad type of setting. Expected UInt64 or Float64, got ") + x.getTypeName(),
+            ErrorCodes::TYPE_MISMATCH);
 }
 void SettingMemoryLimit::set(const String & x)
 {
@@ -209,18 +214,19 @@ SettingMemoryLimit::UInt64OrDouble SettingMemoryLimit::get() const
 
 UInt64 SettingMemoryLimit::getActualBytes(UInt64 total_ram) const
 {
-    return std::visit([&](auto && arg) -> UInt64 {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_same_v<T, UInt64>)
-        {
-            return arg;
-        }
-        else if constexpr (std::is_same_v<T, double>)
-        {
-            return total_ram * arg;
-        }
-    },
-                      get());
+    return std::visit(
+        [&](auto && arg) -> UInt64 {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, UInt64>)
+            {
+                return arg;
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+                return total_ram * arg;
+            }
+        },
+        get());
 }
 
 } // namespace DB

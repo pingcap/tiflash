@@ -20,14 +20,8 @@ namespace DB
 class CollectProcInfoBackgroundTask
 {
 public:
-    CollectProcInfoBackgroundTask()
-    {
-        begin();
-    }
-    ~CollectProcInfoBackgroundTask()
-    {
-        end();
-    }
+    CollectProcInfoBackgroundTask() { begin(); }
+    ~CollectProcInfoBackgroundTask() { end(); }
 
 private:
     void begin();

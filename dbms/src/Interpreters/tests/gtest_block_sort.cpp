@@ -34,7 +34,8 @@ public:
     using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 
     const String single_col_name{"single_col"};
-    const ColumnWithString col0_ori{"col0-1  ", "col0-7", "col0-0    ", "col0-3", "col0-4", "col0-6", "col0-2 ", "col0-5"};
+    const ColumnWithString
+        col0_ori{"col0-1  ", "col0-7", "col0-0    ", "col0-3", "col0-4", "col0-6", "col0-2 ", "col0-5"};
     const std::vector<String> col_name{"age", "gender", "country", "int64", "uint64"};
 };
 
@@ -44,8 +45,7 @@ try
     {
         /// Test multi-columns
 
-        const ColumnsWithTypeAndName
-            ori_col
+        const ColumnsWithTypeAndName ori_col
             = {toVec<Int64>(col_name[0], ColumnWithInt64{5, 1, 2, 3, 4, 6}),
                toVec<String>(col_name[1], ColumnWithString{"5", "1    ", "2  ", "2", "4", "6"}),
                toVec<String>(col_name[2], ColumnWithString{"1", "2", "3", "4", "1 ", "2"})};
@@ -59,7 +59,9 @@ try
                         Block block(ori_col);
                         SortDescription description;
                         const auto * collator_1_ptr = TiDB::ITiDBCollator::getCollator(collator_default);
-                        const auto * collator_2_ptr = same_col ? collator_1_ptr : TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
+                        const auto * collator_2_ptr = same_col
+                            ? collator_1_ptr
+                            : TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
                         description.emplace_back(ori_col[1].name, direction, 0, collator_1_ptr);
                         description.emplace_back(ori_col[2].name, direction, 0, collator_2_ptr);
                         sortBlock(block, description, limit);
@@ -87,14 +89,12 @@ try
         }
     }
     {
-        const ColumnsWithTypeAndName
-            ori_col
-            = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
-                toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
-                toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
-                toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
-            };
+        const ColumnsWithTypeAndName ori_col = {
+            toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
+            toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
+            toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
+            toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
+        };
         for (bool no_collation : {true, false})
         {
             Block block(ori_col);

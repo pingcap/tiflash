@@ -33,10 +33,7 @@ public:
         assert(result_queue);
     }
 
-    String getName() const override
-    {
-        return "GetResultSinkOp";
-    }
+    String getName() const override { return "GetResultSinkOp"; }
 
 protected:
     OperatorStatus writeImpl(Block && block) override;

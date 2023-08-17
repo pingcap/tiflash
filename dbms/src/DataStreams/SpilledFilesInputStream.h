@@ -56,7 +56,11 @@ private:
         CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
-        SpilledFileStream(SpilledFileInfo && spilled_file_info_, const Block & header, const FileProviderPtr & file_provider, Int64 max_supported_spill_version)
+        SpilledFileStream(
+            SpilledFileInfo && spilled_file_info_,
+            const Block & header,
+            const FileProviderPtr & file_provider,
+            Int64 max_supported_spill_version)
             : spilled_file_info(std::move(spilled_file_info_))
             , file_in(file_provider, spilled_file_info.path, EncryptionPath(spilled_file_info.path, ""))
             , compressed_in(file_in)
@@ -64,9 +68,10 @@ private:
             Int64 file_spill_version = 0;
             readVarInt(file_spill_version, compressed_in);
             if (file_spill_version > max_supported_spill_version)
-                throw Exception(fmt::format("Spiller meet spill files that is not supported, max supported version {}, file version {}",
-                                            max_supported_spill_version,
-                                            file_spill_version));
+                throw Exception(fmt::format(
+                    "Spiller meet spill files that is not supported, max supported version {}, file version {}",
+                    max_supported_spill_version,
+                    file_spill_version));
             block_in = std::make_shared<NativeBlockInputStream>(compressed_in, header, file_spill_version);
         }
     };

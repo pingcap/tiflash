@@ -115,14 +115,14 @@ public:
     //void protect() override { data.protect(); }
     void reserve(size_t n) override { data.reserve(n); }
 
-    void insertFrom(const IColumn & src, size_t n) override { data.push_back(static_cast<const Self &>(src).getData()[n]); }
+    void insertFrom(const IColumn & src, size_t n) override
+    {
+        data.push_back(static_cast<const Self &>(src).getData()[n]);
+    }
     void insertData(const char * src, size_t /*length*/) override;
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
     void insertDefault() override { data.push_back(T()); }
-    void insertManyDefaults(size_t length) override
-    {
-        data.resize_fill(data.size() + length, T());
-    }
+    void insertManyDefaults(size_t length) override { data.resize_fill(data.size() + length, T()); }
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
@@ -138,10 +138,16 @@ public:
         return StringRef(reinterpret_cast<const char *>(data.data()), byteSize());
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
+    StringRef serializeValueIntoArena(
+        size_t n,
+        Arena & arena,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr &,
+        String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+        const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
@@ -221,9 +227,13 @@ protected:
             sort_end = res.begin() + limit;
 
         if (reverse)
-            std::partial_sort(res.begin(), sort_end, res.end(), [this](size_t a, size_t b) { return data[a].value > data[b].value; });
+            std::partial_sort(res.begin(), sort_end, res.end(), [this](size_t a, size_t b) {
+                return data[a].value > data[b].value;
+            });
         else
-            std::partial_sort(res.begin(), sort_end, res.end(), [this](size_t a, size_t b) { return data[a].value < data[b].value; });
+            std::partial_sort(res.begin(), sort_end, res.end(), [this](size_t a, size_t b) {
+                return data[a].value < data[b].value;
+            });
     }
 };
 

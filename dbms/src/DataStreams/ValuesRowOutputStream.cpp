@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/ValuesRowOutputStream.h>
-
-#include <IO/WriteHelpers.h>
 #include <Columns/IColumn.h>
+#include <DataStreams/ValuesRowOutputStream.h>
 #include <DataTypes/IDataType.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -25,8 +24,7 @@ namespace DB
 
 ValuesRowOutputStream::ValuesRowOutputStream(WriteBuffer & ostr_)
     : ostr(ostr_)
-{
-}
+{}
 
 void ValuesRowOutputStream::flush()
 {
@@ -59,4 +57,4 @@ void ValuesRowOutputStream::writeRowBetweenDelimiter()
 }
 
 
-}
+} // namespace DB

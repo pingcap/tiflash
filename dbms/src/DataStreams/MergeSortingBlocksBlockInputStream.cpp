@@ -67,9 +67,7 @@ Block MergeSortingBlocksBlockInputStream::readImpl()
         return res;
     }
 
-    return !has_collation
-        ? mergeImpl<SortCursor>(queue)
-        : mergeImpl<SortCursorWithCollation>(queue_with_collation);
+    return !has_collation ? mergeImpl<SortCursor>(queue) : mergeImpl<SortCursorWithCollation>(queue_with_collation);
 }
 
 

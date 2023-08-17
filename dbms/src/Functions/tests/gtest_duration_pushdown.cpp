@@ -36,14 +36,30 @@ TEST_F(DurationPushDown, durationPushDownTest)
 try
 {
     ColumnWithTypeAndName result_col(
-        createColumn<Nullable<DataTypeMyDuration::FieldType>>({-1, 0, 1, {}, INT64_MAX, INT64_MIN, (838 * 3600 + 59 * 60 + 59) * 1000000000L, -(838 * 3600 + 59 * 60 + 59) * 1000000000L}).column,
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({-1,
+                                                               0,
+                                                               1,
+                                                               {},
+                                                               INT64_MAX,
+                                                               INT64_MIN,
+                                                               (838 * 3600 + 59 * 60 + 59) * 1000000000L,
+                                                               -(838 * 3600 + 59 * 60 + 59) * 1000000000L})
+            .column,
         makeNullable(std::make_shared<DataTypeMyDuration>(1)),
         "result");
     ASSERT_COLUMN_EQ(
         result_col,
         executeFunction(
             "FunctionConvertDurationFromNanos",
-            {createColumn<Nullable<Int64>>({-1, 0, 1, {}, INT64_MAX, INT64_MIN, (838 * 3600 + 59 * 60 + 59) * 1000000000L, -(838 * 3600 + 59 * 60 + 59) * 1000000000L}),
+            {createColumn<Nullable<Int64>>(
+                 {-1,
+                  0,
+                  1,
+                  {},
+                  INT64_MAX,
+                  INT64_MIN,
+                  (838 * 3600 + 59 * 60 + 59) * 1000000000L,
+                  -(838 * 3600 + 59 * 60 + 59) * 1000000000L}),
              createConstColumn<Int64>(8, 1)},
             nullptr,
             true));
@@ -56,8 +72,7 @@ try
         result_col2,
         executeFunction(
             "FunctionConvertDurationFromNanos",
-            {createConstColumn<Int64>(3, 3),
-             createConstColumn<Int64>(3, 2)},
+            {createConstColumn<Int64>(3, 3), createConstColumn<Int64>(3, 2)},
             nullptr,
             true));
 }
@@ -85,7 +100,9 @@ try
 
     // Test Overflow
     ColumnWithTypeAndName input2(
-        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(838 * 3600 + 59 * 60 + 59) * 1000000000L + 999999000L + 1000L}).column,
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>(
+            {(838 * 3600 + 59 * 60 + 59) * 1000000000L + 999999000L + 1000L})
+            .column,
         makeNullable(std::make_shared<DataTypeMyDuration>(6)),
         "result");
     try
@@ -103,7 +120,9 @@ try
     };
 
     ColumnWithTypeAndName input3(
-        createColumn<Nullable<DataTypeMyDuration::FieldType>>({-(838 * 3600 + 59 * 60 + 59) * 1000000000L - 999999000L - 1000L}).column,
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>(
+            {-(838 * 3600 + 59 * 60 + 59) * 1000000000L - 999999000L - 1000L})
+            .column,
         makeNullable(std::make_shared<DataTypeMyDuration>(6)),
         "result");
     try
@@ -140,7 +159,8 @@ try
 
     std::random_device rd;
     std::default_random_engine gen = std::default_random_engine(rd());
-    std::uniform_int_distribution<int> sign_dis(0, 1), hour_dis(0, 838), minute_dis(0, 59), second_dis(0, 59), microSecond_dis(0, 999999);
+    std::uniform_int_distribution<int> sign_dis(0, 1), hour_dis(0, 838), minute_dis(0, 59), second_dis(0, 59),
+        microSecond_dis(0, 999999);
     for (int i = 0; i < rowNum; i++)
     {
         auto sign = (sign_dis(gen) == 0) ? 1 : -1;
@@ -159,7 +179,10 @@ try
     ColumnWithTypeAndName hour_out(std::move(hour_column), std::make_shared<DataTypeInt64>(), "hour");
     ColumnWithTypeAndName minute_out(std::move(minute_column), std::make_shared<DataTypeInt64>(), "minute");
     ColumnWithTypeAndName second_out(std::move(second_column), std::make_shared<DataTypeInt64>(), "second");
-    ColumnWithTypeAndName microSecond_out(std::move(microSecond_column), std::make_shared<DataTypeInt64>(), "microSecond");
+    ColumnWithTypeAndName microSecond_out(
+        std::move(microSecond_column),
+        std::make_shared<DataTypeInt64>(),
+        "microSecond");
     ASSERT_COLUMN_EQ(hour_out, executeFunction("hour", input4));
     ASSERT_COLUMN_EQ(minute_out, executeFunction("minute", input4));
     ASSERT_COLUMN_EQ(second_out, executeFunction("second", input4));
@@ -183,7 +206,9 @@ try
 
     // Test Overflow
     ColumnWithTypeAndName input2(
-        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(838 * 3600 + 59 * 60 + 59) * 1000000000L + 999999000L + 1000L}).column,
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>(
+            {(838 * 3600 + 59 * 60 + 59) * 1000000000L + 999999000L + 1000L})
+            .column,
         makeNullable(std::make_shared<DataTypeMyDuration>(6)),
         "result");
     try
@@ -201,7 +226,9 @@ try
     };
 
     ColumnWithTypeAndName input3(
-        createColumn<Nullable<DataTypeMyDuration::FieldType>>({-(838 * 3600 + 59 * 60 + 59) * 1000000000L - 999999000L - 1000L}).column,
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>(
+            {-(838 * 3600 + 59 * 60 + 59) * 1000000000L - 999999000L - 1000L})
+            .column,
         makeNullable(std::make_shared<DataTypeMyDuration>(6)),
         "result");
     try
@@ -229,7 +256,8 @@ try
 
     std::random_device rd;
     std::default_random_engine gen = std::default_random_engine(rd());
-    std::uniform_int_distribution<int> sign_dis(0, 1), hour_dis(0, 838), minute_dis(0, 59), second_dis(0, 59), microSecond_dis(0, 999999);
+    std::uniform_int_distribution<int> sign_dis(0, 1), hour_dis(0, 838), minute_dis(0, 59), second_dis(0, 59),
+        microSecond_dis(0, 999999);
     for (int i = 0; i < rowNum; ++i)
     {
         auto sign = (sign_dis(gen) == 0) ? 1 : -1;

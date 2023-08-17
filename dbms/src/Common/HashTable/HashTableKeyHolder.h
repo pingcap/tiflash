@@ -121,13 +121,9 @@ inline void ALWAYS_INLINE keyHolderPersistKey(DB::ArenaKeyHolder && holder)
     holder.key.data = holder.pool.insert(holder.key.data, holder.key.size);
 }
 
-inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &)
-{
-}
+inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &) {}
 
-inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &&)
-{
-}
+inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &&) {}
 
 namespace DB
 {
@@ -153,13 +149,9 @@ inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder && hold
     return holder.key;
 }
 
-inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &)
-{
-}
+inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &) {}
 
-inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &&)
-{
-}
+inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &&) {}
 
 inline void ALWAYS_INLINE keyHolderDiscardKey(DB::SerializedKeyHolder & holder)
 {

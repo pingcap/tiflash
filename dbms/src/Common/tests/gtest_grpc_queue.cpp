@@ -47,10 +47,7 @@ public:
         tag = nullptr;
     }
 
-    void checkTagInQueue(GRPCKickTag * t)
-    {
-        GTEST_ASSERT_EQ(t, queue.tag);
-    }
+    void checkTagInQueue(GRPCKickTag * t) { GTEST_ASSERT_EQ(t, queue.tag); }
 };
 
 TEST_F(TestGRPCSendQueue, Sequential)

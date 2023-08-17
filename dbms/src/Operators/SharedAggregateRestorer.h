@@ -106,9 +106,7 @@ enum class SharedLoadResult
 class SharedAggregateRestorer
 {
 public:
-    SharedAggregateRestorer(
-        Aggregator & aggregator_,
-        SharedSpilledBucketDataLoaderPtr loader_);
+    SharedAggregateRestorer(Aggregator & aggregator_, SharedSpilledBucketDataLoaderPtr loader_);
 
     bool tryPop(Block & block);
 

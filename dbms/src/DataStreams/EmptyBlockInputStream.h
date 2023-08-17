@@ -25,25 +25,18 @@ namespace DB
 class EmptyBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    EmptyBlockInputStream(const Block & header_) : header(header_) {}
+    EmptyBlockInputStream(const Block & header_)
+        : header(header_)
+    {}
 
-    String getName() const override
-    {
-        return "Empty";
-    }
+    String getName() const override { return "Empty"; }
 
-    Block getHeader() const override
-    {
-        return header;
-    }
+    Block getHeader() const override { return header; }
 
 protected:
-    Block readImpl() override
-    {
-        return {};
-    }
+    Block readImpl() override { return {}; }
 
 private:
     Block header;
 };
-}
+} // namespace DB

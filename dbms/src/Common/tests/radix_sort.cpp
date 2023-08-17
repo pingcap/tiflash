@@ -66,11 +66,8 @@ int main(int argc, char ** argv)
 
         watch.stop();
         double elapsed = watch.elapsedSeconds();
-        std::cerr
-            << "Filled in " << elapsed
-            << " (" << n / elapsed << " elem/sec., "
-            << n * sizeof(Key) / elapsed / 1048576 << " MB/sec.)"
-            << std::endl;
+        std::cerr << "Filled in " << elapsed << " (" << n / elapsed << " elem/sec., "
+                  << n * sizeof(Key) / elapsed / 1048576 << " MB/sec.)" << std::endl;
     }
 
     if (n <= 100)
@@ -94,11 +91,8 @@ int main(int argc, char ** argv)
 
         watch.stop();
         double elapsed = watch.elapsedSeconds();
-        std::cerr
-            << "Sorted in " << elapsed
-            << " (" << n / elapsed << " elem/sec., "
-            << n * sizeof(Key) / elapsed / 1048576 << " MB/sec.)"
-            << std::endl;
+        std::cerr << "Sorted in " << elapsed << " (" << n / elapsed << " elem/sec., "
+                  << n * sizeof(Key) / elapsed / 1048576 << " MB/sec.)" << std::endl;
     }
 
     {
@@ -114,12 +108,9 @@ int main(int argc, char ** argv)
 
         watch.stop();
         double elapsed = watch.elapsedSeconds();
-        std::cerr
-            << "Checked in " << elapsed
-            << " (" << n / elapsed << " elem/sec., "
-            << n * sizeof(Key) / elapsed / 1048576 << " MB/sec.)"
-            << std::endl
-            << "Result: " << (i == n ? "Ok." : "Fail!") << std::endl;
+        std::cerr << "Checked in " << elapsed << " (" << n / elapsed << " elem/sec., "
+                  << n * sizeof(Key) / elapsed / 1048576 << " MB/sec.)" << std::endl
+                  << "Result: " << (i == n ? "Ok." : "Fail!") << std::endl;
     }
 
     if (n <= 1000)

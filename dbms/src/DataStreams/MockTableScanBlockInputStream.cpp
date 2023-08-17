@@ -16,7 +16,10 @@
 
 namespace DB
 {
-MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size, bool is_infinite_)
+MockTableScanBlockInputStream::MockTableScanBlockInputStream(
+    ColumnsWithTypeAndName columns,
+    size_t max_block_size,
+    bool is_infinite_)
     : columns(columns)
     , output_index(0)
     , max_block_size(max_block_size)

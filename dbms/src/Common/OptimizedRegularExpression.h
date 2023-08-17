@@ -98,10 +98,7 @@ public:
 
     explicit OptimizedRegularExpressionImpl(const std::string & regexp_, int options = 0);
 
-    bool match(const std::string & subject) const
-    {
-        return match(subject.data(), subject.size());
-    }
+    bool match(const std::string & subject) const { return match(subject.data(), subject.size()); }
 
     bool match(const std::string & subject, Match & match_) const
     {
@@ -128,9 +125,16 @@ public:
     /// Get the regexp re2 or nullptr if the pattern is trivial (for output to the log).
     const std::unique_ptr<RegexType> & getRE2() const { return re2; }
 
-    static void analyze(const std::string & regexp_, std::string & required_substring, bool & is_trivial, bool & required_substring_is_prefix);
+    static void analyze(
+        const std::string & regexp_,
+        std::string & required_substring,
+        bool & is_trivial,
+        bool & required_substring_is_prefix);
 
-    void getAnalyzeResult(std::string & out_required_substring, bool & out_is_trivial, bool & out_required_substring_is_prefix) const
+    void getAnalyzeResult(
+        std::string & out_required_substring,
+        bool & out_is_trivial,
+        bool & out_required_substring_is_prefix) const
     {
         out_required_substring = required_substring;
         out_is_trivial = is_trivial;
@@ -139,19 +143,54 @@ public:
 
     Int64 instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op);
     std::optional<StringRef> substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur);
-    void replace(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const Instructions & instructions, Int64 pos, Int64 occur);
+    void replace(
+        const char * subject,
+        size_t subject_size,
+        DB::ColumnString::Chars_t & res_data,
+        DB::ColumnString::Offset & res_offset,
+        const Instructions & instructions,
+        Int64 pos,
+        Int64 occur);
 
 private:
     Int64 processInstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
     Int64 instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op);
 
-    std::optional<StringRef> processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
+    std::optional<StringRef> processSubstrEmptyStringExpr(
+        const char * expr,
+        size_t expr_size,
+        size_t byte_pos,
+        Int64 occur);
     std::optional<StringRef> substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur);
 
-    void replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions);
-    void replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions);
-    void replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, const Instructions & instructions);
-    void replaceMatchedStringWithInstructions(DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, StringPieceType * matches, const Instructions & instructions);
+    void replaceImpl(
+        const char * subject,
+        size_t subject_size,
+        DB::ColumnString::Chars_t & res_data,
+        DB::ColumnString::Offset & res_offset,
+        Int64 byte_pos,
+        Int64 occur,
+        const Instructions & instructions);
+    void replaceOneImpl(
+        const char * subject,
+        size_t subject_size,
+        DB::ColumnString::Chars_t & res_data,
+        DB::ColumnString::Offset & res_offset,
+        Int64 byte_pos,
+        Int64 occur,
+        const Instructions & instructions);
+    void replaceAllImpl(
+        const char * subject,
+        size_t subject_size,
+        DB::ColumnString::Chars_t & res_data,
+        DB::ColumnString::Offset & res_offset,
+        Int64 byte_pos,
+        const Instructions & instructions);
+    void replaceMatchedStringWithInstructions(
+        DB::ColumnString::Chars_t & res_data,
+        DB::ColumnString::Offset & res_offset,
+        StringPieceType * matches,
+        const Instructions & instructions);
 
     bool is_trivial;
     bool required_substring_is_prefix;

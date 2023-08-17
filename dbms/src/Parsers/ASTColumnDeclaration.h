@@ -69,10 +69,11 @@ protected:
 
         if (default_expression)
         {
-            settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << default_specifier << (settings.hilite ? hilite_none : "") << ' ';
+            settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << default_specifier
+                          << (settings.hilite ? hilite_none : "") << ' ';
             default_expression->formatImpl(settings, state, frame);
         }
     }
 };
 
-}
+} // namespace DB

@@ -25,7 +25,10 @@ extern const int TIMEOUT_EXCEEDED;
 } // namespace ErrorCodes
 
 
-MultiplexedConnections::MultiplexedConnections(Connection & connection, const Settings & settings_, const ThrottlerPtr & throttler)
+MultiplexedConnections::MultiplexedConnections(
+    Connection & connection,
+    const Settings & settings_,
+    const ThrottlerPtr & throttler)
     : settings(settings_)
 {
     connection.setThrottler(throttler);
@@ -144,8 +147,9 @@ Connection::Packet MultiplexedConnections::receivePacket()
 BlockExtraInfo MultiplexedConnections::getBlockExtraInfo() const
 {
     if (!block_extra_info)
-        throw Exception("MultiplexedConnections object not configured for block extra info support",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "MultiplexedConnections object not configured for block extra info support",
+            ErrorCodes::LOGICAL_ERROR);
     return *block_extra_info;
 }
 
@@ -307,7 +311,9 @@ MultiplexedConnections::ReplicaState & MultiplexedConnections::getReplicaForRead
         int n = Poco::Net::Socket::select(read_list, write_list, except_list, settings.receive_timeout);
 
         if (n == 0)
-            throw Exception("Timeout exceeded while reading from " + dumpAddressesUnlocked(), ErrorCodes::TIMEOUT_EXCEEDED);
+            throw Exception(
+                "Timeout exceeded while reading from " + dumpAddressesUnlocked(),
+                ErrorCodes::TIMEOUT_EXCEEDED);
     }
 
     /// TODO Absolutely wrong code: read_list could be empty; rand() is not thread safe and has low quality; motivation of rand is unclear.

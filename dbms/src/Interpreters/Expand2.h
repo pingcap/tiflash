@@ -43,7 +43,10 @@ public:
     ///
     /// \param leveled_projections_actions
     /// \param level_alias_projections
-    explicit Expand2(ExpressionActionsPtrVec projections_actions_, ExpressionActionsPtr before_expand_actions_, NamesWithAliasesVec projections_);
+    explicit Expand2(
+        ExpressionActionsPtrVec projections_actions_,
+        ExpressionActionsPtr before_expand_actions_,
+        NamesWithAliasesVec projections_);
     Block next(const Block & block_cache, size_t i_th_projection);
     String getLevelProjectionDes() const;
     size_t getLevelProjectionNum() const;

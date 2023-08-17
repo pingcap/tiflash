@@ -58,8 +58,9 @@ To assert_cast(From && from)
         throw DB::Exception(e.what(), DB::ErrorCodes::LOGICAL_ERROR);
     }
 
-    throw DB::Exception("Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
-                        DB::ErrorCodes::BAD_CAST);
+    throw DB::Exception(
+        "Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
+        DB::ErrorCodes::BAD_CAST);
 #else
     return static_cast<To>(from);
 #endif

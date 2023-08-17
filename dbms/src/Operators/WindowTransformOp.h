@@ -27,10 +27,7 @@ public:
         const String & req_id_,
         const WindowDescription & window_description_);
 
-    String getName() const override
-    {
-        return "WindowTransformOp";
-    }
+    String getName() const override { return "WindowTransformOp"; }
 
 protected:
     void operateSuffixImpl() override;

@@ -45,8 +45,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     size_t args_size = args.size();
     if (dynamic_cast<ASTLiteral *>(args[args_size - 1].get()) != nullptr)
         has_partition_id = true;
-    const String & partition_id
-        = has_partition_id ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args_size - 1]).value)) : "";
+    const String & partition_id = has_partition_id
+        ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args_size - 1]).value))
+        : "";
     size_t offset = has_partition_id ? 1 : 0;
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 2 - offset]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 1 - offset]).name;
@@ -54,8 +55,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     const auto & table_info = RegionBench::getTableInfo(context, database_name, table_name);
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     if (args_size < 3 + 2 * handle_column_size || args_size > 3 + 2 * handle_column_size + 1)
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-id]",
-                        ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-id]",
+            ErrorCodes::BAD_ARGUMENTS);
 
     if (table_info.is_common_handle)
     {
@@ -65,11 +67,13 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         for (size_t i = 0; i < handle_column_size; i++)
         {
             const auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
-            auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
+            auto start_field
+                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());
-            auto end_field
-                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + handle_column_size + i]).value);
+            auto end_field = RegionBench::convertField(
+                column_info,
+                typeid_cast<const ASTLiteral &>(*args[1 + handle_column_size + i]).value);
             TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(end_field, column_info.tp);
             end_keys.emplace_back(end_datum.field());
         }
@@ -78,7 +82,11 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        output(fmt::format("put region #{}, range{} to table #{} with kvstore.onSnapshot", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys()), table_id));
+        output(fmt::format(
+            "put region #{}, range{} to table #{} with kvstore.onSnapshot",
+            region_id,
+            RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys()),
+            table_id));
     }
     else
     {
@@ -89,7 +97,12 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        output(fmt::format("put region #{}, range[{}, {}) to table #{} with kvstore.onSnapshot", region_id, start, end, table_id));
+        output(fmt::format(
+            "put region #{}, range[{}, {}) to table #{} with kvstore.onSnapshot",
+            region_id,
+            start,
+            end,
+            table_id));
     }
 }
 
@@ -110,7 +123,12 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     }
 }
 
-void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
+void dbgFuncDumpAllRegion(
+    Context & context,
+    TableID table_id,
+    bool ignore_none,
+    bool dump_status,
+    DBGInvoker::Printer & output)
 {
     size_t size = 0;
     context.getTMTContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
@@ -140,7 +158,10 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             if (*rawkeys.first >= *rawkeys.second && ignore_none)
                 return;
 
-            fmt_buf.fmtAppend("{} ranges: {}, ", region->toString(dump_status), RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys));
+            fmt_buf.fmtAppend(
+                "{} ranges: {}, ",
+                region->toString(dump_status),
+                RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys));
         }
         fmt_buf.fmtAppend("state: {}", raft_serverpb::PeerState_Name(region->peerState()));
         if (auto s = region->dataInfo(); s.size() > 2)

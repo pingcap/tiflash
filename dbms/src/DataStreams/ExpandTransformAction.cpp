@@ -20,14 +20,11 @@
 
 namespace DB
 {
-ExpandTransformAction::ExpandTransformAction(
-    const Block & header_,
-    const Expand2Ptr & expand_)
+ExpandTransformAction::ExpandTransformAction(const Block & header_, const Expand2Ptr & expand_)
     : header(header_)
     , expand(expand_)
     , i_th_project(0)
-{
-}
+{}
 
 Block ExpandTransformAction::getHeader() const
 {

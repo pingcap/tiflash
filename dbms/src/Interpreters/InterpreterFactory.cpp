@@ -63,7 +63,10 @@ static void throwIfReadOnly(Context & context)
 }
 
 
-std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & context, QueryProcessingStage::Enum stage)
+std::unique_ptr<IInterpreter> InterpreterFactory::get(
+    ASTPtr & query,
+    Context & context,
+    QueryProcessingStage::Enum stage)
 {
     if (typeid_cast<ASTSelectQuery *>(query.get()))
     {

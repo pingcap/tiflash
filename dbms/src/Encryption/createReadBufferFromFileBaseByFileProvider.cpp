@@ -60,8 +60,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     }
 }
 
-std::unique_ptr<ReadBufferFromFileBase>
-createReadBufferFromFileBaseByFileProvider(
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -90,8 +89,7 @@ createReadBufferFromFileBaseByFileProvider(
 }
 
 
-std::unique_ptr<ReadBufferFromFileBase>
-createReadBufferFromData(
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromData(
     String && data,
     const String & file_name,
     size_t estimated_size,

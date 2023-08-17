@@ -91,12 +91,18 @@ enum Enum
 /// See https://www.securecoding.cert.org/confluence/display/cplusplus/INT36-CPP.+Do+not+use+out-of-range+enumeration+values
 inline const char * toString(UInt64 packet)
 {
-    static const char * data[] = {"Hello", "Data", "Exception", "Progress", "Pong", "EndOfStream", "ProfileInfo", "Totals", "Extremes", "TablesStatusResponse"};
-    return packet < 10
-        ? data[packet]
-        : packet == LockInfos
-        ? "LockInfos"
-        : "Unknown packet";
+    static const char * data[]
+        = {"Hello",
+           "Data",
+           "Exception",
+           "Progress",
+           "Pong",
+           "EndOfStream",
+           "ProfileInfo",
+           "Totals",
+           "Extremes",
+           "TablesStatusResponse"};
+    return packet < 10 ? data[packet] : packet == LockInfos ? "LockInfos" : "Unknown packet";
 }
 } // namespace Server
 
@@ -118,9 +124,7 @@ enum Enum
 inline const char * toString(UInt64 packet)
 {
     static const char * data[] = {"Hello", "Query", "Data", "Cancel", "Ping", "TablesStatusRequest"};
-    return packet < 6
-        ? data[packet]
-        : "Unknown packet";
+    return packet < 6 ? data[packet] : "Unknown packet";
 }
 } // namespace Client
 

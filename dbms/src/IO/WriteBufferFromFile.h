@@ -62,10 +62,7 @@ public:
     /// Close file before destruction of object.
     void close() override;
 
-    std::string getFileName() const override
-    {
-        return file_name;
-    }
+    std::string getFileName() const override { return file_name; }
 };
 
 } // namespace DB

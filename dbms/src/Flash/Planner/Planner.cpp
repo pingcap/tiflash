@@ -21,9 +21,7 @@
 
 namespace DB
 {
-Planner::Planner(
-    Context & context_,
-    const PlanQuerySource & plan_source_)
+Planner::Planner(Context & context_, const PlanQuerySource & plan_source_)
     : context(context_)
     , plan_source(plan_source_)
     , max_streams(context.getMaxStreams())

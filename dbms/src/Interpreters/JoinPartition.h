@@ -73,7 +73,15 @@ using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 class JoinPartition
 {
 public:
-    JoinPartition(JoinMapMethod join_map_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t partition_index_, size_t max_block_size, const HashJoinSpillContextPtr & hash_join_spill_context_, const LoggerPtr & log_, bool has_other_condition_)
+    JoinPartition(
+        JoinMapMethod join_map_type_,
+        ASTTableJoin::Kind kind_,
+        ASTTableJoin::Strictness strictness_,
+        size_t partition_index_,
+        size_t max_block_size,
+        const HashJoinSpillContextPtr & hash_join_spill_context_,
+        const LoggerPtr & log_,
+        bool has_other_condition_)
         : partition_index(partition_index_)
         , kind(kind_)
         , strictness(strictness_)
@@ -121,10 +129,7 @@ public:
     Blocks trySpillBuildPartition(std::unique_lock<std::mutex> & partition_lock);
     Blocks trySpillProbePartition(std::unique_lock<std::mutex> & partition_lock);
     bool hasBuildData() const { return !build_partition.original_blocks.empty(); }
-    void addMemoryUsage(size_t delta)
-    {
-        memory_usage += delta;
-    }
+    void addMemoryUsage(size_t delta) { memory_usage += delta; }
     void subMemoryUsage(size_t delta)
     {
         if likely (memory_usage >= delta)
@@ -229,7 +234,8 @@ private:
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
-    MapsAllFullWithRowFlag maps_all_full_with_row_flag; /// For RIGHT_SEMI | RIGHT_ANTI_SEMI | RIGHT_OUTER with other conditions
+    MapsAllFullWithRowFlag
+        maps_all_full_with_row_flag; /// For RIGHT_SEMI | RIGHT_ANTI_SEMI | RIGHT_OUTER with other conditions
     /// For right outer/full/rightSemi/rightAnti join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions

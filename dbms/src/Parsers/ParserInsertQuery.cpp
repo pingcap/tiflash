@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/typeid_cast.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTInsertQuery.h>
-
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserInsertQuery.h>
-#include <Parsers/ASTFunction.h>
 #include <Parsers/ParserPartition.h>
-
-#include <Common/typeid_cast.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
 #include <common/logger_useful.h>
 
 
@@ -34,7 +32,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
+extern const int SYNTAX_ERROR;
 }
 
 
@@ -59,7 +57,10 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserIdentifier name_p;
-    ParserList columns_p(std::make_unique<ParserCompoundIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserList columns_p(
+        std::make_unique<ParserCompoundIdentifier>(),
+        std::make_unique<ParserToken>(TokenType::Comma),
+        false);
     ParserFunction table_function_p;
 
     ASTPtr database;
@@ -139,14 +140,16 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         data = name_pos->end;
 
         if (data < end && *data == ';')
-            throw Exception("You have excessive ';' symbol before data for INSERT.\n"
-                                    "Example:\n\n"
-                                    "INSERT INTO t (x, y) FORMAT TabSeparated\n"
-                                    ";\tHello\n"
-                                    "2\tWorld\n"
-                                    "\n"
-                                    "Note that there is no ';' just after format name, "
-                                    "you need to put at least one whitespace symbol before the data.", ErrorCodes::SYNTAX_ERROR);
+            throw Exception(
+                "You have excessive ';' symbol before data for INSERT.\n"
+                "Example:\n\n"
+                "INSERT INTO t (x, y) FORMAT TabSeparated\n"
+                ";\tHello\n"
+                "2\tWorld\n"
+                "\n"
+                "Note that there is no ';' just after format name, "
+                "you need to put at least one whitespace symbol before the data.",
+                ErrorCodes::SYNTAX_ERROR);
 
         while (data < end && (*data == ' ' || *data == '\t' || *data == '\f'))
             ++data;
@@ -159,7 +162,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (data < end && *data == '\n')
             ++data;
     }
-    else if (s_select.ignore(pos, expected) || s_selraw.ignore(pos, expected) || s_with.ignore(pos,expected))
+    else if (s_select.ignore(pos, expected) || s_selraw.ignore(pos, expected) || s_with.ignore(pos, expected))
     {
         pos = before_select;
         ParserSelectWithUnionQuery select_p;
@@ -202,4 +205,4 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-}
+} // namespace DB

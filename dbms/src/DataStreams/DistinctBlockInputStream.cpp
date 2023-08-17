@@ -22,7 +22,11 @@ namespace ErrorCodes
 extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
-DistinctBlockInputStream::DistinctBlockInputStream(const BlockInputStreamPtr & input, const SizeLimits & set_size_limits, size_t limit_hint_, const Names & columns)
+DistinctBlockInputStream::DistinctBlockInputStream(
+    const BlockInputStreamPtr & input,
+    const SizeLimits & set_size_limits,
+    size_t limit_hint_,
+    const Names & columns)
     : columns_names(columns)
     , limit_hint(limit_hint_)
     , set_size_limits(set_size_limits)
@@ -81,7 +85,11 @@ Block DistinctBlockInputStream::readImpl()
         if (data.getTotalRowCount() == old_set_size)
             continue;
 
-        if (!set_size_limits.check(data.getTotalRowCount(), data.getTotalByteCount(), "DISTINCT", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
+        if (!set_size_limits.check(
+                data.getTotalRowCount(),
+                data.getTotalByteCount(),
+                "DISTINCT",
+                ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
             return {};
 
         for (auto & elem : block)
@@ -124,9 +132,8 @@ ColumnRawPtrs DistinctBlockInputStream::getKeyColumns(const Block & block) const
 
     for (size_t i = 0; i < columns; ++i)
     {
-        const auto & column = columns_names.empty()
-            ? block.safeGetByPosition(i).column
-            : block.getByName(columns_names[i]).column;
+        const auto & column
+            = columns_names.empty() ? block.safeGetByPosition(i).column : block.getByName(columns_names[i]).column;
 
         /// Ignore all constant columns.
         if (!column->isColumnConst())

@@ -38,4 +38,4 @@ protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 
-}
+} // namespace DB

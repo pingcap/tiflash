@@ -174,11 +174,9 @@ int main(int argc, char ** argv)
             }
         }
 
-        std::cerr << std::fixed << std::setprecision(2)
-                  << "Vector:    Elapsed: " << watch.elapsedSeconds()
-                  << " (" << map_size / watch.elapsedSeconds() << " rows/sec., "
-                  << "sizeof(Map::value_type) = " << sizeof(Map::value_type)
-                  << std::endl;
+        std::cerr << std::fixed << std::setprecision(2) << "Vector:    Elapsed: " << watch.elapsedSeconds() << " ("
+                  << map_size / watch.elapsedSeconds() << " rows/sec., "
+                  << "sizeof(Map::value_type) = " << sizeof(Map::value_type) << std::endl;
     }
 
     {
@@ -196,10 +194,9 @@ int main(int argc, char ** argv)
         arr2 = std::move(arr1);
         arr1.resize(n);
 
-        std::cerr
-            << "arr1.size(): " << arr1.size() << ", arr2.size(): " << arr2.size() << std::endl
-            << "&arr1[0]: " << &arr1[0] << ", &arr2[0]: " << &arr2[0] << std::endl
-            << "arr1[0]: " << arr1[0] << ", arr2[0]: " << arr2[0] << std::endl;
+        std::cerr << "arr1.size(): " << arr1.size() << ", arr2.size(): " << arr2.size() << std::endl
+                  << "&arr1[0]: " << &arr1[0] << ", &arr2[0]: " << &arr2[0] << std::endl
+                  << "arr1[0]: " << arr1[0] << ", arr2[0]: " << arr2[0] << std::endl;
     }
 
     return 0;

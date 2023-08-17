@@ -43,10 +43,7 @@ protected:
         return createColumn<Nullable<String>>(v);
     }
 
-    ColumnWithTypeAndName toConst(const String & s)
-    {
-        return createConstColumn<Nullable<String>>(1, s);
-    }
+    ColumnWithTypeAndName toConst(const String & s) { return createConstColumn<Nullable<String>>(1, s); }
 };
 
 TEST_F(StringReplace, string_replace_all_unit_Test)
@@ -63,27 +60,15 @@ try
 
     ASSERT_COLUMN_EQ(
         toVec({"", "ww", "wwww", " wwwwww ", "ww ww ww"}),
-        executeFunction(
-            "replaceAll",
-            toVec({"", "w", "ww", " www ", "w w w"}),
-            toConst("w"),
-            toConst("ww")));
+        executeFunction("replaceAll", toVec({"", "w", "ww", " www ", "w w w"}), toConst("w"), toConst("ww")));
 
     ASSERT_COLUMN_EQ(
         toVec({"", "w", "w", " ww ", "w w w"}),
-        executeFunction(
-            "replaceAll",
-            toVec({"", "w", "ww", " www ", "w w w"}),
-            toConst("ww"),
-            toConst("w")));
+        executeFunction("replaceAll", toVec({"", "w", "ww", " www ", "w w w"}), toConst("ww"), toConst("w")));
 
     ASSERT_COLUMN_EQ(
         toVec({"", "w", "ww", " www ", "w w w"}),
-        executeFunction(
-            "replaceAll",
-            toVec({"", "w", "ww", " www ", "w w w"}),
-            toConst(""),
-            toConst(" ")));
+        executeFunction("replaceAll", toVec({"", "w", "ww", " www ", "w w w"}), toConst(""), toConst(" ")));
 
     /// non-const needle and const replacement
     ASSERT_COLUMN_EQ(

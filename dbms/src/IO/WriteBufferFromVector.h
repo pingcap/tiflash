@@ -52,7 +52,9 @@ private:
         /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
         size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
         vector.resize(old_size * size_multiplier);
-        internal_buffer = Buffer(reinterpret_cast<Position>(vector.data() + pos_offset), reinterpret_cast<Position>(vector.data() + vector.size()));
+        internal_buffer = Buffer(
+            reinterpret_cast<Position>(vector.data() + pos_offset),
+            reinterpret_cast<Position>(vector.data() + vector.size()));
         working_buffer = internal_buffer;
     }
 
@@ -77,11 +79,12 @@ public:
         , vector(vector_)
     {
         size_t old_size = vector.size();
-        size_t size = (old_size < initial_size) ? initial_size
-                                                : ((old_size < vector.capacity()) ? vector.capacity()
-                                                                                  : vector.capacity() * size_multiplier);
+        size_t size = (old_size < initial_size)
+            ? initial_size
+            : ((old_size < vector.capacity()) ? vector.capacity() : vector.capacity() * size_multiplier);
         vector.resize(size);
-        set(reinterpret_cast<Position>(vector.data() + old_size), (size - old_size) * sizeof(typename VectorType::value_type));
+        set(reinterpret_cast<Position>(vector.data() + old_size),
+            (size - old_size) * sizeof(typename VectorType::value_type));
     }
 
     void finalize()
@@ -90,8 +93,8 @@ public:
             return;
         is_finished = true;
         vector.resize(
-            ((position() - reinterpret_cast<Position>(vector.data()))
-             + sizeof(typename VectorType::value_type) - 1) /// Align up.
+            ((position() - reinterpret_cast<Position>(vector.data())) + sizeof(typename VectorType::value_type)
+             - 1) /// Align up.
             / sizeof(typename VectorType::value_type));
         bytes += offset();
         /// Prevent further writes.
@@ -109,10 +112,7 @@ public:
         is_finished = false;
     }
 
-    ~WriteBufferFromVector() override
-    {
-        finalize();
-    }
+    ~WriteBufferFromVector() override { finalize(); }
 };
 
 } // namespace DB

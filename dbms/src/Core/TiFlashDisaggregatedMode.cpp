@@ -25,13 +25,13 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
     if (config.has(config_key))
     {
         std::string mode_str = config.getString(config_key);
-        RUNTIME_ASSERT(mode_str == DISAGGREGATED_MODE_WRITE
-                           || mode_str == DISAGGREGATED_MODE_STORAGE // backward compatibility
-                           || mode_str == DISAGGREGATED_MODE_COMPUTE,
-                       "Expect disaggregated_mode is {} or {}, got: {}",
-                       DISAGGREGATED_MODE_WRITE,
-                       DISAGGREGATED_MODE_COMPUTE,
-                       mode_str);
+        RUNTIME_ASSERT(
+            mode_str == DISAGGREGATED_MODE_WRITE || mode_str == DISAGGREGATED_MODE_STORAGE // backward compatibility
+                || mode_str == DISAGGREGATED_MODE_COMPUTE,
+            "Expect disaggregated_mode is {} or {}, got: {}",
+            DISAGGREGATED_MODE_WRITE,
+            DISAGGREGATED_MODE_COMPUTE,
+            mode_str);
         if (mode_str == DISAGGREGATED_MODE_COMPUTE)
         {
             mode = DisaggregatedMode::Compute;

@@ -54,10 +54,7 @@ public:
         LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
     }
 
-    String getName() const override
-    {
-        return "UnorderedSourceOp";
-    }
+    String getName() const override { return "UnorderedSourceOp"; }
 
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 

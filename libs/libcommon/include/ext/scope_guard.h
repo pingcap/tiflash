@@ -41,7 +41,6 @@ inline ScopeGuard<F> make_scope_guard(F && function)
 
 } // namespace ext
 
-#define SCOPE_EXIT_CONCAT(n, ...) \
-    const auto scope_exit##n = ext::make_scope_guard([&] { __VA_ARGS__; })
+#define SCOPE_EXIT_CONCAT(n, ...) const auto scope_exit##n = ext::make_scope_guard([&] { __VA_ARGS__; })
 #define SCOPE_EXIT_FWD(n, ...) SCOPE_EXIT_CONCAT(n, __VA_ARGS__)
 #define SCOPE_EXIT(...) SCOPE_EXIT_FWD(__LINE__, __VA_ARGS__)

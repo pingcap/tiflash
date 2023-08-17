@@ -74,10 +74,7 @@ public:
     // Returns false if the probe_exec continues to execute.
     bool onScanHashMapAfterProbeFinish();
 
-    void setCancellationHook(CancellationHook cancellation_hook)
-    {
-        is_cancelled = std::move(cancellation_hook);
-    }
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = std::move(cancellation_hook); }
 
 private:
     PartitionBlock getProbeBlock();

@@ -81,7 +81,9 @@ public:
         }
         else
         {
-            throw Exception(fmt::format("Illegal column {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", arg->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
         block.getByPosition(result).column = std::move(col_res);
     }
@@ -186,7 +188,11 @@ struct ConvImpl
     }
 
     template <typename T1, typename T2, typename Column>
-    static void execute(const Column * arg_col0, const std::unique_ptr<IGetVecHelper<T1>> & arg_col1, const std::unique_ptr<IGetVecHelper<T2>> & arg_col2, ColumnString & res_col)
+    static void execute(
+        const Column * arg_col0,
+        const std::unique_ptr<IGetVecHelper<T1>> & arg_col1,
+        const std::unique_ptr<IGetVecHelper<T2>> & arg_col2,
+        ColumnString & res_col)
     {
         for (size_t i = 0; i < arg_col0->size(); ++i)
         {
@@ -236,12 +242,23 @@ class FunctionConv : public IFunction
     {
         if (const auto * second_int_arg_typed = checkAndGetColumn<ColumnVector<SecondIntType>>(second_int_arg))
         {
-            executeWithIntTypes<FirstIntType, SecondIntType>(block, arguments, result, first_int_arg_typed, second_int_arg_typed);
+            executeWithIntTypes<FirstIntType, SecondIntType>(
+                block,
+                arguments,
+                result,
+                first_int_arg_typed,
+                second_int_arg_typed);
             return true;
         }
-        else if (const auto * second_int_arg_typed = checkAndGetColumnConst<ColumnVector<SecondIntType>>(second_int_arg))
+        else if (
+            const auto * second_int_arg_typed = checkAndGetColumnConst<ColumnVector<SecondIntType>>(second_int_arg))
         {
-            executeWithIntTypes<FirstIntType, SecondIntType>(block, arguments, result, first_int_arg_typed, second_int_arg_typed);
+            executeWithIntTypes<FirstIntType, SecondIntType>(
+                block,
+                arguments,
+                result,
+                first_int_arg_typed,
+                second_int_arg_typed);
             return true;
         }
 
@@ -249,7 +266,11 @@ class FunctionConv : public IFunction
     }
 
     template <typename FirstIntType>
-    bool executeIntLeft(Block & block, const ColumnNumbers & arguments, const size_t result, const IColumn * first_int_arg) const
+    bool executeIntLeft(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result,
+        const IColumn * first_int_arg) const
     {
         if (const auto first_int_arg_typed = checkAndGetColumn<ColumnVector<FirstIntType>>(first_int_arg))
         {
@@ -269,7 +290,10 @@ class FunctionConv : public IFunction
             else
             {
                 throw Exception(
-                    fmt::format("Illegal column {} of second argument of function {}", block.getByPosition(arguments[1]).column->getName(), getName()),
+                    fmt::format(
+                        "Illegal column {} of second argument of function {}",
+                        block.getByPosition(arguments[1]).column->getName(),
+                        getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
             }
         }
@@ -291,7 +315,10 @@ class FunctionConv : public IFunction
             else
             {
                 throw Exception(
-                    fmt::format("Illegal column {} of second argument of function {}", block.getByPosition(arguments[1]).column->getName(), getName()),
+                    fmt::format(
+                        "Illegal column {} of second argument of function {}",
+                        block.getByPosition(arguments[1]).column->getName(),
+                        getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
             }
         }
@@ -308,15 +335,24 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception(
-                fmt::format("Illegal type {} of first argument of function {} because not string", arguments[0]->getName(), getName()),
+                fmt::format(
+                    "Illegal type {} of first argument of function {} because not string",
+                    arguments[0]->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (!arguments[1]->isInteger())
             throw Exception(
-                fmt::format("Illegal type {} of second argument of function {} because not integer", arguments[1]->getName(), getName()),
+                fmt::format(
+                    "Illegal type {} of second argument of function {} because not integer",
+                    arguments[1]->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (!arguments[2]->isInteger())
             throw Exception(
-                fmt::format("Illegal type {} of third argument of function {} because not integer", arguments[1]->getName(), getName()),
+                fmt::format(
+                    "Illegal type {} of third argument of function {} because not integer",
+                    arguments[1]->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return std::make_shared<DataTypeString>();
     }

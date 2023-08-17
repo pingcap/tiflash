@@ -20,7 +20,8 @@
 
 namespace DB
 {
-class PipelineTask : public EventTask
+class PipelineTask
+    : public EventTask
     , public PipelineTaskBase
 {
 public:
@@ -31,24 +32,14 @@ public:
         PipelineExecPtr && pipeline_exec_)
         : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
         , PipelineTaskBase(std::move(pipeline_exec_))
-    {
-    }
+    {}
 
 protected:
-    ExecTaskStatus executeImpl() override
-    {
-        return runExecute();
-    }
+    ExecTaskStatus executeImpl() override { return runExecute(); }
 
-    ExecTaskStatus executeIOImpl() override
-    {
-        return runExecuteIO();
-    }
+    ExecTaskStatus executeIOImpl() override { return runExecuteIO(); }
 
-    ExecTaskStatus awaitImpl() override
-    {
-        return runAwait();
-    }
+    ExecTaskStatus awaitImpl() override { return runAwait(); }
 
     void doFinalizeImpl() override
     {

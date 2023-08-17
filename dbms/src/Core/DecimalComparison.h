@@ -62,7 +62,13 @@ struct DecCompareInt
 };
 
 ///
-template <typename A, typename B, template <typename, typename> typename Operation, bool _check_overflow = true, bool _actual = IsDecimal<A> || IsDecimal<B>>
+template <
+    typename A,
+    typename B,
+    template <typename, typename>
+    typename Operation,
+    bool _check_overflow = true,
+    bool _actual = IsDecimal<A> || IsDecimal<B>>
 class DecimalComparison
 {
 public:
@@ -75,16 +81,28 @@ public:
     static constexpr bool cast_float_a = std::is_floating_point_v<B>;
     static constexpr bool cast_float_b = std::is_floating_point_v<A>;
 
-    using Op = std::conditional_t<cast_float_a, Operation<B, B>, std::conditional_t<cast_float_b, Operation<A, A>, Operation<CompareInt, CompareInt>>>;
+    using Op = std::conditional_t<
+        cast_float_a,
+        Operation<B, B>,
+        std::conditional_t<cast_float_b, Operation<A, A>, Operation<CompareInt, CompareInt>>>;
 
-    DecimalComparison(Block & block, size_t result, const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right)
+    DecimalComparison(
+        Block & block,
+        size_t result,
+        const ColumnWithTypeAndName & col_left,
+        const ColumnWithTypeAndName & col_right)
     {
         if (!apply(block, result, col_left, col_right))
-            throw Exception("Wrong decimal comparison with " + col_left.type->getName() + " and " + col_right.type->getName(),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Wrong decimal comparison with " + col_left.type->getName() + " and " + col_right.type->getName(),
+                ErrorCodes::LOGICAL_ERROR);
     }
 
-    static bool apply(Block & block, size_t result [[maybe_unused]], const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right)
+    static bool apply(
+        Block & block,
+        size_t result [[maybe_unused]],
+        const ColumnWithTypeAndName & col_left,
+        const ColumnWithTypeAndName & col_right)
     {
         if constexpr (_actual)
         {
@@ -146,7 +164,9 @@ public:
         }
 
         if constexpr (scale_left && scale_right)
-            throw DB::Exception("Assumption broken: there should only one side need to be multiplied in decimal comparison.", ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception(
+                "Assumption broken: there should only one side need to be multiplied in decimal comparison.",
+                ErrorCodes::LOGICAL_ERROR);
         if constexpr (!scale_left && !scale_right)
             return Op::apply(x, y);
 
@@ -191,8 +211,9 @@ private:
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<IsDecimal<T> && IsDecimal<U>, Shift>
-    getScales(const DataTypePtr & left_type, const DataTypePtr & right_type)
+    static std::enable_if_t<IsDecimal<T> && IsDecimal<U>, Shift> getScales(
+        const DataTypePtr & left_type,
+        const DataTypePtr & right_type)
     {
         const DataTypeDecimal<T> * decimal0 = checkDecimal<T>(*left_type);
         const DataTypeDecimal<U> * decimal1 = checkDecimal<U>(*right_type);
@@ -213,8 +234,9 @@ private:
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<IsDecimal<T> && !IsDecimal<U>, Shift>
-    getScales(const DataTypePtr & left_type, const DataTypePtr &)
+    static std::enable_if_t<IsDecimal<T> && !IsDecimal<U>, Shift> getScales(
+        const DataTypePtr & left_type,
+        const DataTypePtr &)
     {
         Shift shift;
         const DataTypeDecimal<T> * decimal0 = checkDecimal<T>(*left_type);
@@ -224,8 +246,9 @@ private:
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<!IsDecimal<T> && IsDecimal<U>, Shift>
-    getScales(const DataTypePtr &, const DataTypePtr & right_type)
+    static std::enable_if_t<!IsDecimal<T> && IsDecimal<U>, Shift> getScales(
+        const DataTypePtr &,
+        const DataTypePtr & right_type)
     {
         Shift shift;
         const DataTypeDecimal<U> * decimal1 = checkDecimal<U>(*right_type);
@@ -254,13 +277,15 @@ private:
                 Int8 res;
                 if constexpr (cast_float_a)
                 {
-                    ScaleType target_scale = c0_const->getField().safeGet<typename NearestFieldType<A>::Type>().getScale();
+                    ScaleType target_scale
+                        = c0_const->getField().safeGet<typename NearestFieldType<A>::Type>().getScale();
                     B x = a.template toFloat<B>(target_scale);
                     res = Op::apply(x, b);
                 }
                 else if constexpr (cast_float_b)
                 {
-                    ScaleType target_scale = c1_const->getField().safeGet<typename NearestFieldType<B>::Type>().getScale();
+                    ScaleType target_scale
+                        = c1_const->getField().safeGet<typename NearestFieldType<B>::Type>().getScale();
                     A y = b.template toFloat<A>(target_scale);
                     res = Op::apply(a, y);
                 }
@@ -280,7 +305,8 @@ private:
                 {
                     if constexpr (cast_float_a)
                     {
-                        ScaleType target_scale = c0_const->getField().safeGet<typename NearestFieldType<A>::Type>().getScale();
+                        ScaleType target_scale
+                            = c0_const->getField().safeGet<typename NearestFieldType<A>::Type>().getScale();
                         B x = a.template toFloat<B>(target_scale);
                         constantVector<scale_left, scale_right>(x, c1_vec->getData(), vec_res, scale);
                     }
@@ -298,7 +324,8 @@ private:
                 {
                     if constexpr (cast_float_b)
                     {
-                        ScaleType target_scale = c1_const->getField().safeGet<typename NearestFieldType<B>::Type>().getScale();
+                        ScaleType target_scale
+                            = c1_const->getField().safeGet<typename NearestFieldType<B>::Type>().getScale();
                         A y = b.template toFloat<A>(target_scale);
                         vectorConstant<scale_left, scale_right>(c0_vec->getData(), y, vec_res, scale);
                     }
@@ -326,7 +353,8 @@ private:
     }
 
     template <bool scale_left, bool scale_right>
-    static void NO_INLINE vectorVector(const ArrayA & a, const ArrayB & b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
+    static void NO_INLINE
+    vectorVector(const ArrayA & a, const ArrayB & b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
     {
         size_t size = a.size();
         const A * a_pos = a.data();
@@ -355,7 +383,8 @@ private:
     }
 
     template <bool scale_left, bool scale_right, typename Y>
-    static void NO_INLINE vectorConstant(const ArrayA & a, Y b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
+    static void NO_INLINE
+    vectorConstant(const ArrayA & a, Y b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
     {
         size_t size = a.size();
         const A * a_pos = a.data();
@@ -381,7 +410,8 @@ private:
     }
 
     template <bool scale_left, bool scale_right, typename X>
-    static void NO_INLINE constantVector(X a, const ArrayB & b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
+    static void NO_INLINE
+    constantVector(X a, const ArrayB & b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
     {
         size_t size = b.size();
         const B * b_pos = b.data();

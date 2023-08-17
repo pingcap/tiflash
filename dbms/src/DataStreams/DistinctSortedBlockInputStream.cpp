@@ -79,7 +79,11 @@ Block DistinctSortedBlockInputStream::readImpl()
         if (!has_new_data)
             continue;
 
-        if (!set_size_limits.check(data.getTotalRowCount(), data.getTotalByteCount(), "DISTINCT", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
+        if (!set_size_limits.check(
+                data.getTotalRowCount(),
+                data.getTotalByteCount(),
+                "DISTINCT",
+                ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
             return {};
 
         prev_block.block = block;
@@ -122,7 +126,8 @@ bool DistinctSortedBlockInputStream::buildFilter(
         /// Compare i-th row and i-1-th row,
         /// If rows are not equal, we can clear HashSet,
         /// If clearing_hint_columns is empty, we CAN'T clear HashSet.
-        if (i > 0 && !clearing_hint_columns.empty() && !rowsEqual(clearing_hint_columns, i, clearing_hint_columns, i - 1))
+        if (i > 0 && !clearing_hint_columns.empty()
+            && !rowsEqual(clearing_hint_columns, i, clearing_hint_columns, i - 1))
             method.data.clear();
 
         auto emplace_result = state.emplaceKey(method.data, i, variants.string_pool, sort_key_containers);
@@ -146,9 +151,8 @@ ColumnRawPtrs DistinctSortedBlockInputStream::getKeyColumns(const Block & block)
 
     for (size_t i = 0; i < columns; ++i)
     {
-        const auto & column = columns_names.empty()
-            ? block.safeGetByPosition(i).column
-            : block.getByName(columns_names[i]).column;
+        const auto & column
+            = columns_names.empty() ? block.safeGetByPosition(i).column : block.getByName(columns_names[i]).column;
 
         /// Ignore all constant columns.
         if (!column->isColumnConst())
@@ -158,13 +162,15 @@ ColumnRawPtrs DistinctSortedBlockInputStream::getKeyColumns(const Block & block)
     return column_ptrs;
 }
 
-ColumnRawPtrs DistinctSortedBlockInputStream::getClearingColumns(const Block & block, const ColumnRawPtrs & key_columns) const
+ColumnRawPtrs DistinctSortedBlockInputStream::getClearingColumns(const Block & block, const ColumnRawPtrs & key_columns)
+    const
 {
     ColumnRawPtrs clearing_hint_columns;
     clearing_hint_columns.reserve(description.size());
     for (const auto & sort_column_description : description)
     {
-        const auto * const sort_column_ptr = block.safeGetByPosition(sort_column_description.column_number).column.get();
+        const auto * const sort_column_ptr
+            = block.safeGetByPosition(sort_column_description.column_number).column.get();
         const auto it = std::find(key_columns.cbegin(), key_columns.cend(), sort_column_ptr);
         if (it != key_columns.cend()) /// if found in key_columns
             clearing_hint_columns.emplace_back(sort_column_ptr);

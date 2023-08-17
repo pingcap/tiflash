@@ -32,23 +32,40 @@ public:
     static constexpr Version CURRENT_VERSION = 1;
 
 public:
-    DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, Version version_, Timestamp tombstone_, const Context & context);
+    DatabaseTiFlash(
+        String name_,
+        const String & metadata_path_,
+        const TiDB::DBInfo & db_info_,
+        Version version_,
+        Timestamp tombstone_,
+        const Context & context);
 
     String getEngineName() const override { return "TiFlash"; }
 
 
     void loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag) override;
 
-    void createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query) override;
+    void createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
+        override;
 
     void removeTable(const Context & context, const String & table_name) override;
 
     // Rename action synced from TiDB should use this method.
     // We need display database / table name for updating TiDB::TableInfo
-    void renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name, const String & display_database, const String & display_table);
+    void renameTable(
+        const Context & context,
+        const String & table_name,
+        IDatabase & to_database,
+        const String & to_table_name,
+        const String & display_database,
+        const String & display_table);
 
     // This method should never called.
-    void renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name) override;
+    void renameTable(
+        const Context & context,
+        const String & table_name,
+        IDatabase & to_database,
+        const String & to_table_name) override;
 
 
     void alterTable(

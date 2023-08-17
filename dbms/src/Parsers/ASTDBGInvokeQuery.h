@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Core/Field.h>
 #include <Common/FieldVisitors.h>
+#include <Core/Field.h>
 #include <Parsers/IAST.h>
 
 
@@ -43,13 +43,13 @@ public:
 
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "DBGInvoke "
-            << (settings.hilite ? hilite_none : "") << func.name << "(";
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "DBGInvoke " << (settings.hilite ? hilite_none : "")
+                      << func.name << "(";
 
         for (auto it = func.args.begin(); it != func.args.end(); ++it)
         {
             if (it != func.args.begin())
-            settings.ostr << ", ";
+                settings.ostr << ", ";
             settings.ostr << (*it)->getColumnName();
         }
 
@@ -57,4 +57,4 @@ public:
     }
 };
 
-}
+} // namespace DB

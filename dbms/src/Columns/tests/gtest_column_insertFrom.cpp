@@ -28,8 +28,9 @@ namespace tests
 class TestColumnInsertFrom : public ::testing::Test
 {
 public:
-    void compareColumn(const ColumnWithTypeAndName & expected_col_with_type_name,
-                       const ColumnWithTypeAndName & actual_col_with_type_name)
+    void compareColumn(
+        const ColumnWithTypeAndName & expected_col_with_type_name,
+        const ColumnWithTypeAndName & actual_col_with_type_name)
     {
         const ColumnPtr expected = expected_col_with_type_name.column;
         const ColumnPtr actual = actual_col_with_type_name.column;
@@ -153,10 +154,8 @@ try
     col->insertData("d", 1);
     col->insertData("e", 1);
     col->insertData("f", 1);
-    auto col_with_type_and_name = ColumnWithTypeAndName{
-        std::move(col),
-        std::make_shared<DataTypeString>(),
-        String("col")};
+    auto col_with_type_and_name
+        = ColumnWithTypeAndName{std::move(col), std::make_shared<DataTypeString>(), String("col")};
     doTestWork(col_with_type_and_name);
 }
 CATCH
@@ -178,7 +177,9 @@ CATCH
 TEST_F(TestColumnInsertFrom, TestColumnConst)
 try
 {
-    auto col_with_type_and_name = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(6, {MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt()});
+    auto col_with_type_and_name = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(
+        6,
+        {MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt()});
     doTestWork(col_with_type_and_name);
 
     /// Const Null
@@ -191,10 +192,8 @@ TEST_F(TestColumnInsertFrom, TestColumnNothing)
 try
 {
     auto col = ColumnNothing::create(6);
-    auto col_with_type_and_name = ColumnWithTypeAndName{
-        std::move(col),
-        std::make_shared<DataTypeString>(),
-        String("col")};
+    auto col_with_type_and_name
+        = ColumnWithTypeAndName{std::move(col), std::make_shared<DataTypeString>(), String("col")};
     doTestWork(col_with_type_and_name);
 }
 CATCH
@@ -204,10 +203,8 @@ try
 {
     const SetPtr & set = nullptr;
     auto col = ColumnSet::create(6, set);
-    auto col_with_type_and_name = ColumnWithTypeAndName{
-        std::move(col),
-        std::make_shared<DataTypeString>(),
-        String("col")};
+    auto col_with_type_and_name
+        = ColumnWithTypeAndName{std::move(col), std::make_shared<DataTypeString>(), String("col")};
     doTestWork(col_with_type_and_name);
 }
 CATCH
@@ -224,10 +221,8 @@ try
     offsets->insert(10);
     offsets->insert(12);
     auto col = ColumnArray::create(nested_col, std::move(offsets));
-    auto col_with_type_and_name = ColumnWithTypeAndName{
-        std::move(col),
-        std::make_shared<DataTypeString>(),
-        String("col")};
+    auto col_with_type_and_name
+        = ColumnWithTypeAndName{std::move(col), std::make_shared<DataTypeString>(), String("col")};
     doTestWork(col_with_type_and_name);
 }
 CATCH
@@ -241,10 +236,8 @@ try
     mutableColumns.push_back(string_col->assumeMutable());
     mutableColumns.push_back(int_col->assumeMutable());
     auto col = ColumnTuple::create(std::move(mutableColumns));
-    auto col_with_type_and_name = ColumnWithTypeAndName{
-        std::move(col),
-        std::make_shared<DataTypeString>(),
-        String("col")};
+    auto col_with_type_and_name
+        = ColumnWithTypeAndName{std::move(col), std::make_shared<DataTypeString>(), String("col")};
     doTestWork(col_with_type_and_name);
 }
 CATCH

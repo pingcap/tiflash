@@ -25,10 +25,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-ColumnFunction::ColumnFunction(
-    size_t size,
-    FunctionBasePtr function,
-    const ColumnsWithTypeAndName & columns_to_capture)
+ColumnFunction::ColumnFunction(size_t size, FunctionBasePtr function, const ColumnsWithTypeAndName & columns_to_capture)
     : column_size(size)
     , function(function)
 {
@@ -144,7 +141,8 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     return columns;
 }
 
-void ColumnFunction::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const
+void ColumnFunction::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]])
+    const
 {
     throw TiFlashException("ColumnFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }

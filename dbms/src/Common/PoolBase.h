@@ -50,8 +50,7 @@ private:
         PooledObject(ObjectPtr object_, PoolBase & pool_)
             : object(object_)
             , pool(pool_)
-        {
-        }
+        {}
 
         ObjectPtr object;
         bool in_use = false;

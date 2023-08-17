@@ -37,8 +37,7 @@
 namespace DB::S3::tests
 {
 
-class S3LockServiceTest
-    : public DB::base::TiFlashStorageTestBasic
+class S3LockServiceTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     void SetUp() override
@@ -65,8 +64,11 @@ public:
         // create 5 data files
         for (size_t i = 1; i <= 5; ++i)
         {
-            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
-            DB::S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFile::metav2FileName()));
+            auto data_filename = S3Filename::fromDMFileOID(
+                DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
+            DB::S3::uploadEmptyFile(
+                *s3_client,
+                fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFile::metav2FileName()));
             ++dm_file_id;
         }
     }
@@ -77,7 +79,8 @@ public:
         while (dm_file_id > 0)
         {
             --dm_file_id;
-            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
+            auto data_filename = S3Filename::fromDMFileOID(
+                DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
             DB::S3::deleteObject(*s3_client, data_filename.toFullKey());
         }
     }
@@ -85,7 +88,8 @@ public:
     S3Filename getDataFilename(std::optional<UInt64> get_fid = std::nullopt)
     {
         auto file_id = get_fid.has_value() ? get_fid.value() : dm_file_id - 1; // the last uploaded dmfile id
-        return S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = file_id});
+        return S3Filename::fromDMFileOID(
+            DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = file_id});
     }
 
 protected:
@@ -103,16 +107,12 @@ protected:
     LoggerPtr log;
 };
 
-#define CHECK_S3_ENABLED                                                          \
-    if (!is_s3_test_enabled)                                                      \
-    {                                                                             \
-        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info(); \
-        LOG_INFO(                                                                 \
-            log,                                                                  \
-            "{}.{} is skipped because S3ClientFactory is not inited.",            \
-            t->test_case_name(),                                                  \
-            t->name());                                                           \
-        return;                                                                   \
+#define CHECK_S3_ENABLED                                                                                          \
+    if (!is_s3_test_enabled)                                                                                      \
+    {                                                                                                             \
+        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();                                 \
+        LOG_INFO(log, "{}.{} is skipped because S3ClientFactory is not inited.", t->test_case_name(), t->name()); \
+        return;                                                                                                   \
     }
 
 
@@ -400,7 +400,11 @@ try
         }
         else
         {
-            ASSERT_TRUE(false) << fmt::format("none of delmark or lock exist! data_key={} delmark={} lock={}", data_file_key, delmark_key, lock_key);
+            ASSERT_TRUE(false) << fmt::format(
+                "none of delmark or lock exist! data_key={} delmark={} lock={}",
+                data_file_key,
+                delmark_key,
+                lock_key);
         }
     }
 }

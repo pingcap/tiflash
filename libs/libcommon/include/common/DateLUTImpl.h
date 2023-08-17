@@ -24,7 +24,8 @@
 #include "types.h"
 
 
-#define DATE_LUT_MIN_YEAR 1925 /// 1925 since wast majority of timezones changed to 15-minute aligned offsets somewhere in 1924 or earlier.
+#define DATE_LUT_MIN_YEAR \
+    1925 /// 1925 since wast majority of timezones changed to 15-minute aligned offsets somewhere in 1924 or earlier.
 #define DATE_LUT_MAX_YEAR 2283 /// Last supported year (complete)
 #define DATE_LUT_YEARS (1 + DATE_LUT_MAX_YEAR - DATE_LUT_MIN_YEAR) /// Number of years in lookup table
 
@@ -153,7 +154,8 @@ public:
 
         /// For days, when offset from UTC was changed due to daylight saving time or permanent change, following values could be non zero.
         /// All in OffsetChangeFactor (15 minute) intervals.
-        Int8 amount_of_offset_change_value; /// Usually -4 or 4, but look at Lord Howe Island. Multiply by OffsetChangeFactor
+        Int8
+            amount_of_offset_change_value; /// Usually -4 or 4, but look at Lord Howe Island. Multiply by OffsetChangeFactor
         UInt8 time_at_offset_change_value; /// In seconds from beginning of the day. Multiply by OffsetChangeFactor
 
         inline Int32 amount_of_offset_change() const
@@ -232,25 +234,16 @@ private:
         return LUTIndex(guess ? guess - 1 : 0);
     }
 
-    inline LUTIndex toLUTIndex(DayNum d) const
-    {
-        return LUTIndex{(d + daynum_offset_epoch) & date_lut_mask};
-    }
+    inline LUTIndex toLUTIndex(DayNum d) const { return LUTIndex{(d + daynum_offset_epoch) & date_lut_mask}; }
 
     inline LUTIndex toLUTIndex(ExtendedDayNum d) const
     {
         return LUTIndex{static_cast<UInt32>(d + daynum_offset_epoch) & date_lut_mask};
     }
 
-    inline LUTIndex toLUTIndex(time_t t) const
-    {
-        return findIndex(t);
-    }
+    inline LUTIndex toLUTIndex(time_t t) const { return findIndex(t); }
 
-    inline LUTIndex toLUTIndex(LUTIndex i) const
-    {
-        return i;
-    }
+    inline LUTIndex toLUTIndex(LUTIndex i) const { return i; }
 
     template <typename DateOrTime>
     inline const Values & find(DateOrTime v) const
@@ -282,15 +275,13 @@ public:
 
     /// All functions below are thread-safe; arguments are not checked.
 
-    inline ExtendedDayNum toDayNum(ExtendedDayNum d) const
-    {
-        return d;
-    }
+    inline ExtendedDayNum toDayNum(ExtendedDayNum d) const { return d; }
 
     template <typename DateOrTime>
     inline ExtendedDayNum toDayNum(DateOrTime v) const
     {
-        return ExtendedDayNum{static_cast<ExtendedDayNum::UnderlyingType>(toLUTIndex(v).toUnderType() - daynum_offset_epoch)};
+        return ExtendedDayNum{
+            static_cast<ExtendedDayNum::UnderlyingType>(toLUTIndex(v).toUnderType() - daynum_offset_epoch)};
     }
 
     /// Round down to start of monday.
@@ -404,10 +395,7 @@ public:
 
     /** Round to start of day, then shift for specified amount of days.
       */
-    inline time_t toDateAndShift(time_t t, Int32 days) const
-    {
-        return lut[findIndex(t) + days].date;
-    }
+    inline time_t toDateAndShift(time_t t, Int32 days) const { return lut[findIndex(t) + days].date; }
 
     inline time_t toTime(time_t t) const
     {
@@ -599,9 +587,9 @@ public:
         const auto first_day_of_year = years_lut[iso_year - DATE_LUT_MIN_YEAR];
         auto first_day_of_week_of_year = lut[first_day_of_year].day_of_week;
 
-        return LUTIndex{first_day_of_week_of_year <= 4
-                            ? first_day_of_year + 1 - first_day_of_week_of_year
-                            : first_day_of_year + 8 - first_day_of_week_of_year};
+        return LUTIndex{
+            first_day_of_week_of_year <= 4 ? first_day_of_year + 1 - first_day_of_week_of_year
+                                           : first_day_of_year + 8 - first_day_of_week_of_year};
     }
 
     template <typename DateOrTime>
@@ -610,10 +598,7 @@ public:
         return toDayNum(toFirstDayNumOfISOYearIndex(v));
     }
 
-    inline time_t toFirstDayOfISOYear(time_t t) const
-    {
-        return lut[toFirstDayNumOfISOYearIndex(t)].date;
-    }
+    inline time_t toFirstDayOfISOYear(time_t t) const { return lut[toFirstDayNumOfISOYearIndex(t)].date; }
 
     /// ISO 8601 week number. Week begins at monday.
     /// The week number 1 is the first week in year that contains 4 or more days (that's more than half).
@@ -821,10 +806,7 @@ public:
         return toRelativeHourNum(lut[toLUTIndex(v)].date);
     }
 
-    inline time_t toRelativeMinuteNum(time_t t) const
-    {
-        return (t + DATE_LUT_ADD) / 60 - (DATE_LUT_ADD / 60);
-    }
+    inline time_t toRelativeMinuteNum(time_t t) const { return (t + DATE_LUT_ADD) / 60 - (DATE_LUT_ADD / 60); }
 
     template <typename DateOrTime>
     inline time_t toRelativeMinuteNum(DateOrTime v) const
@@ -951,7 +933,9 @@ public:
 
     inline LUTIndex makeLUTIndex(Int16 year, UInt8 month, UInt8 day_of_month) const
     {
-        if (unlikely(year < DATE_LUT_MIN_YEAR || year > DATE_LUT_MAX_YEAR || month < 1 || month > 12 || day_of_month < 1 || day_of_month > 31))
+        if (unlikely(
+                year < DATE_LUT_MIN_YEAR || year > DATE_LUT_MAX_YEAR || month < 1 || month > 12 || day_of_month < 1
+                || day_of_month > 31))
             return LUTIndex(0);
 
         return LUTIndex{years_months_lut[(year - DATE_LUT_MIN_YEAR) * 12 + month - 1] + day_of_month - 1};
@@ -960,7 +944,9 @@ public:
     /// Create DayNum from year, month, day of month.
     inline ExtendedDayNum makeDayNum(Int16 year, UInt8 month, UInt8 day_of_month) const
     {
-        if (unlikely(year < DATE_LUT_MIN_YEAR || year > DATE_LUT_MAX_YEAR || month < 1 || month > 12 || day_of_month < 1 || day_of_month > 31))
+        if (unlikely(
+                year < DATE_LUT_MIN_YEAR || year > DATE_LUT_MAX_YEAR || month < 1 || month > 12 || day_of_month < 1
+                || day_of_month > 31))
             return ExtendedDayNum(0);
 
         return toDayNum(makeLUTIndex(year, month, day_of_month));
@@ -973,7 +959,8 @@ public:
 
     /** Does not accept daylight saving time as argument: in case of ambiguity, it choose greater timestamp.
       */
-    inline time_t makeDateTime(Int16 year, UInt8 month, UInt8 day_of_month, UInt8 hour, UInt8 minute, UInt8 second) const
+    inline time_t makeDateTime(Int16 year, UInt8 month, UInt8 day_of_month, UInt8 hour, UInt8 minute, UInt8 second)
+        const
     {
         size_t index = makeLUTIndex(year, month, day_of_month);
         UInt32 time_offset = hour * 3600 + minute * 60 + second;
@@ -982,7 +969,8 @@ public:
         /// for time_offset between [lut[index].time_at_offset_change(), lut[index].time_at_offset_change() + lut[index].amount_of_offset_change())
         /// if lut[index].amount_of_offset_change() > 0, it should not happen
         /// if lut[index].amount_of_offset_change() < 0, the time_offset is ambiguous, return the greater timestamp by `time_offset -= lut[index].amount_of_offset_change();`
-        if (static_cast<Int64>(time_offset) >= static_cast<Int64>(lut[index].time_at_offset_change()) + static_cast<Int64>(lut[index].amount_of_offset_change()))
+        if (static_cast<Int64>(time_offset) >= static_cast<Int64>(lut[index].time_at_offset_change())
+                + static_cast<Int64>(lut[index].amount_of_offset_change()))
             time_offset -= lut[index].amount_of_offset_change();
 
         return lut[index].date + time_offset;
@@ -1008,10 +996,7 @@ public:
         return values.year * 10000 + values.month * 100 + values.day_of_month;
     }
 
-    inline time_t YYYYMMDDToDate(UInt32 num) const
-    {
-        return makeDate(num / 10000, num / 100 % 100, num % 100);
-    }
+    inline time_t YYYYMMDDToDate(UInt32 num) const { return makeDate(num / 10000, num / 100 % 100, num % 100); }
 
     inline ExtendedDayNum YYYYMMDDToDayNum(UInt32 num) const
     {
@@ -1085,11 +1070,8 @@ public:
     {
         DateTimeComponents components = toDateTimeComponents(t);
 
-        return components.time.second
-            + components.time.minute * 100
-            + components.time.hour * 10000
-            + UInt64(components.date.day) * 1000000
-            + UInt64(components.date.month) * 100000000
+        return components.time.second + components.time.minute * 100 + components.time.hour * 10000
+            + UInt64(components.date.day) * 1000000 + UInt64(components.date.month) * 100000000
             + UInt64(components.date.year) * 10000000000;
     }
 
@@ -1124,10 +1106,7 @@ public:
         return lut[new_index].date + time;
     }
 
-    inline NO_SANITIZE_UNDEFINED time_t addWeeks(time_t t, Int64 delta) const
-    {
-        return addDays(t, delta * 7);
-    }
+    inline NO_SANITIZE_UNDEFINED time_t addWeeks(time_t t, Int64 delta) const { return addDays(t, delta * 7); }
 
     inline UInt8 saturateDayOfMonth(Int16 year, UInt8 month, UInt8 day_of_month) const
     {
@@ -1191,15 +1170,9 @@ public:
         return toDayNum(addMonthsIndex(d, delta));
     }
 
-    inline time_t NO_SANITIZE_UNDEFINED addQuarters(time_t t, Int64 delta) const
-    {
-        return addMonths(t, delta * 3);
-    }
+    inline time_t NO_SANITIZE_UNDEFINED addQuarters(time_t t, Int64 delta) const { return addMonths(t, delta * 3); }
 
-    inline ExtendedDayNum addQuarters(ExtendedDayNum d, Int64 delta) const
-    {
-        return addMonths(d, delta * 3);
-    }
+    inline ExtendedDayNum addQuarters(ExtendedDayNum d, Int64 delta) const { return addMonths(d, delta * 3); }
 
     template <typename DateOrTime>
     inline LUTIndex NO_SANITIZE_UNDEFINED addYearsIndex(DateOrTime v, Int64 delta) const
@@ -1235,10 +1208,7 @@ public:
         return lut[result_day].date + time;
     }
 
-    inline ExtendedDayNum addYears(ExtendedDayNum d, Int64 delta) const
-    {
-        return toDayNum(addYearsIndex(d, delta));
-    }
+    inline ExtendedDayNum addYears(ExtendedDayNum d, Int64 delta) const { return toDayNum(addYearsIndex(d, delta)); }
 
 
     inline std::string timeToString(time_t t) const

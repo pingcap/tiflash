@@ -35,8 +35,7 @@ public:
         , block_pos(0)
         , block_size(block_size_)
         , state(0, 0)
-    {
-    }
+    {}
 
     uint128 getHash()
     {
@@ -82,9 +81,7 @@ private:
     }
 
 public:
-    HashingWriteBuffer(
-        WriteBuffer & out_,
-        size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
+    HashingWriteBuffer(WriteBuffer & out_, size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
         : IHashingBuffer<DB::WriteBuffer>(block_size_)
         , out(out_)
     {

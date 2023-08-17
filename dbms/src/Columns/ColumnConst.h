@@ -44,118 +44,59 @@ private:
 public:
     ColumnPtr convertToFullColumn() const;
 
-    ColumnPtr convertToFullColumnIfConst() const override
-    {
-        return convertToFullColumn();
-    }
+    ColumnPtr convertToFullColumnIfConst() const override { return convertToFullColumn(); }
 
-    std::string getName() const override
-    {
-        return "Const(" + data->getName() + ")";
-    }
+    std::string getName() const override { return "Const(" + data->getName() + ")"; }
 
-    const char * getFamilyName() const override
-    {
-        return "Const";
-    }
+    const char * getFamilyName() const override { return "Const"; }
 
-    MutableColumnPtr cloneResized(size_t new_size) const override
-    {
-        return ColumnConst::create(data, new_size);
-    }
+    MutableColumnPtr cloneResized(size_t new_size) const override { return ColumnConst::create(data, new_size); }
 
-    size_t size() const override
-    {
-        return s;
-    }
+    size_t size() const override { return s; }
 
-    Field operator[](size_t) const override
-    {
-        return (*data)[0];
-    }
+    Field operator[](size_t) const override { return (*data)[0]; }
 
-    void get(size_t, Field & res) const override
-    {
-        data->get(0, res);
-    }
+    void get(size_t, Field & res) const override { data->get(0, res); }
 
-    StringRef getDataAt(size_t) const override
-    {
-        return data->getDataAt(0);
-    }
+    StringRef getDataAt(size_t) const override { return data->getDataAt(0); }
 
-    StringRef getDataAtWithTerminatingZero(size_t) const override
-    {
-        return data->getDataAtWithTerminatingZero(0);
-    }
+    StringRef getDataAtWithTerminatingZero(size_t) const override { return data->getDataAtWithTerminatingZero(0); }
 
-    UInt64 get64(size_t) const override
-    {
-        return data->get64(0);
-    }
+    UInt64 get64(size_t) const override { return data->get64(0); }
 
-    UInt64 getUInt(size_t) const override
-    {
-        return data->getUInt(0);
-    }
+    UInt64 getUInt(size_t) const override { return data->getUInt(0); }
 
-    Int64 getInt(size_t) const override
-    {
-        return data->getInt(0);
-    }
+    Int64 getInt(size_t) const override { return data->getInt(0); }
 
-    bool isNullAt(size_t) const override
-    {
-        return data->isNullAt(0);
-    }
+    bool isNullAt(size_t) const override { return data->isNullAt(0); }
 
-    void insertRangeFrom(const IColumn &, size_t /*start*/, size_t length) override
-    {
-        s += length;
-    }
+    void insertRangeFrom(const IColumn &, size_t /*start*/, size_t length) override { s += length; }
 
-    void insert(const Field &) override
-    {
-        ++s;
-    }
+    void insert(const Field &) override { ++s; }
 
-    void insertData(const char *, size_t) override
-    {
-        ++s;
-    }
+    void insertData(const char *, size_t) override { ++s; }
 
-    void insertFrom(const IColumn &, size_t)
-        override
-    {
-        ++s;
-    }
+    void insertFrom(const IColumn &, size_t) override { ++s; }
 
-    void insertManyFrom(const IColumn &, size_t, size_t length) override
-    {
-        s += length;
-    }
+    void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
     void insertDisjunctFrom(const IColumn &, const std::vector<size_t> & position_vec) override
     {
         s += position_vec.size();
     }
 
-    void insertDefault() override
-    {
-        ++s;
-    }
+    void insertDefault() override { ++s; }
 
-    void insertManyDefaults(size_t length) override
-    {
-        s += length;
-    }
+    void insertManyDefaults(size_t length) override { s += length; }
 
-    void popBack(size_t n) override
-    {
-        s -= n;
-    }
+    void popBack(size_t n) override { s -= n; }
 
-    StringRef serializeValueIntoArena(size_t, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
+    StringRef serializeValueIntoArena(
+        size_t,
+        Arena & arena,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override
     {
         return data->serializeValueIntoArena(0, arena, begin, collator, sort_key_container);
     }
@@ -169,12 +110,19 @@ public:
         return res;
     }
 
-    void updateHashWithValue(size_t, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
+    void updateHashWithValue(
+        size_t,
+        SipHash & hash,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override
     {
         data->updateHashWithValue(0, hash, collator, sort_key_container);
     }
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
+    void updateHashWithValues(
+        IColumn::HashValues & hash_values,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override
     {
         for (size_t i = 0; i < s; ++i)
         {
@@ -189,20 +137,11 @@ public:
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
-    size_t byteSize() const override
-    {
-        return data->byteSize() + sizeof(s);
-    }
+    size_t byteSize() const override { return data->byteSize() + sizeof(s); }
 
-    size_t byteSize(size_t /*offset*/, size_t /*limit*/) const override
-    {
-        return byteSize();
-    }
+    size_t byteSize(size_t /*offset*/, size_t /*limit*/) const override { return byteSize(); }
 
-    size_t allocatedBytes() const override
-    {
-        return data->allocatedBytes() + sizeof(s);
-    }
+    size_t allocatedBytes() const override { return data->allocatedBytes() + sizeof(s); }
 
     int compareAt(size_t, size_t, const IColumn & rhs, int nan_direction_hint) const override
     {
@@ -217,15 +156,9 @@ public:
         throw Exception("Cannot gather into constant column " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void getExtremes(Field & min, Field & max) const override
-    {
-        data->getExtremes(min, max);
-    }
+    void getExtremes(Field & min, Field & max) const override { data->getExtremes(min, max); }
 
-    void forEachSubcolumn(ColumnCallback callback) override
-    {
-        callback(data);
-    }
+    void forEachSubcolumn(ColumnCallback callback) override { callback(data); }
 
     bool onlyNull() const override { return data->isNullAt(0); }
     bool isColumnConst() const override { return true; }

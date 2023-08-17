@@ -40,7 +40,8 @@ void ExchangeReceiverStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.append("]");
 }
 
-void ExchangeReceiverStatistics::updateExchangeReceiveDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos)
+void ExchangeReceiverStatistics::updateExchangeReceiveDetail(
+    const std::vector<ConnectionProfileInfo> & connection_profile_infos)
 {
     RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
     for (size_t i = 0; i < partition_num; ++i)
@@ -59,7 +60,8 @@ void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
     case ExecutionMode::Stream:
         transformInBoundIOProfileForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
-            if (const auto * exchange_receiver_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream); exchange_receiver_stream)
+            if (const auto * exchange_receiver_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream);
+                exchange_receiver_stream)
                 updateExchangeReceiveDetail(exchange_receiver_stream->getConnectionProfileInfos());
         });
         break;

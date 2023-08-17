@@ -137,7 +137,9 @@ Block MergingSortedBlockInputStream::readImpl()
 
 
 template <typename TSortCursor>
-void MergingSortedBlockInputStream::fetchNextBlock(const TSortCursor & current, std::priority_queue<TSortCursor> & queue)
+void MergingSortedBlockInputStream::fetchNextBlock(
+    const TSortCursor & current,
+    std::priority_queue<TSortCursor> & queue)
 {
     size_t order = current.impl->order;
     size_t size = cursors.size();
@@ -155,9 +157,13 @@ void MergingSortedBlockInputStream::fetchNextBlock(const TSortCursor & current, 
     }
 }
 
-template void MergingSortedBlockInputStream::fetchNextBlock<SortCursor>(const SortCursor & current, std::priority_queue<SortCursor> & queue);
+template void MergingSortedBlockInputStream::fetchNextBlock<SortCursor>(
+    const SortCursor & current,
+    std::priority_queue<SortCursor> & queue);
 
-template void MergingSortedBlockInputStream::fetchNextBlock<SortCursorWithCollation>(const SortCursorWithCollation & current, std::priority_queue<SortCursorWithCollation> & queue);
+template void MergingSortedBlockInputStream::fetchNextBlock<SortCursorWithCollation>(
+    const SortCursorWithCollation & current,
+    std::priority_queue<SortCursorWithCollation> & queue);
 
 template <typename TSortCursor>
 void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::priority_queue<TSortCursor> & queue)
@@ -291,7 +297,14 @@ void MergingSortedBlockInputStream::readSuffixImpl()
 
     const BlockStreamProfileInfo & profile_info = getProfileInfo();
     double seconds = profile_info.total_stopwatch.elapsedSeconds();
-    LOG_DEBUG(log, "Merge sorted {} blocks, {} rows, {} bytes, {:.2f} rows/sec, {:.2f} MB/sec", profile_info.blocks, profile_info.rows, profile_info.bytes, profile_info.rows / seconds, profile_info.bytes / 1000000.0 / seconds);
+    LOG_DEBUG(
+        log,
+        "Merge sorted {} blocks, {} rows, {} bytes, {:.2f} rows/sec, {:.2f} MB/sec",
+        profile_info.blocks,
+        profile_info.rows,
+        profile_info.bytes,
+        profile_info.rows / seconds,
+        profile_info.bytes / 1000000.0 / seconds);
 }
 
 } // namespace DB

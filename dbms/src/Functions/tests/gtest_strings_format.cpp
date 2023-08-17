@@ -33,7 +33,21 @@ public:
         using FieldType = DecimalField<Decimal>;
         using NullableDecimal = Nullable<Decimal>;
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({"0.0000", "-0.0120", "0.0120", "12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}, "99,999.9999000000", "100,000.000", "100,000"}),
+            createColumn<Nullable<String>>(
+                {"0.0000",
+                 "-0.0120",
+                 "0.0120",
+                 "12,332.1000",
+                 "12,332",
+                 "12,332",
+                 "12,332.300000000000000000000000000000",
+                 "-12,332.30000",
+                 "-1,000.0",
+                 "-333.33",
+                 {},
+                 "99,999.9999000000",
+                 "100,000.000",
+                 "100,000"}),
             executeFunction(
                 func_name,
                 createColumn<NullableDecimal>(
@@ -65,7 +79,14 @@ public:
                      FieldType(static_cast<Native>(-3333330), 4)}),
                 createConstColumn<Nullable<Int16>>(4, 3)));
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({"-999.9999", "-1,000", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
+            createColumn<Nullable<String>>(
+                {"-999.9999",
+                 "-1,000",
+                 "-1,000",
+                 "-999.999900000000000000000000000000",
+                 "-999.99990",
+                 "-1,000.0",
+                 "-1,000.00"}),
             executeFunction(
                 func_name,
                 createConstColumn<NullableDecimal>(
@@ -83,7 +104,14 @@ public:
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createConstColumn<Nullable<Int8>>(1, 3)));
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
+            createColumn<Nullable<String>>(
+                {"12,332.1000",
+                 "12,332",
+                 "12,332.300000000000000000000000000000",
+                 "-12,332.30000",
+                 "-1,000.0",
+                 "-333.33",
+                 {}}),
             executeFunction(
                 func_name,
                 createColumn<NullableDecimal>(
@@ -108,7 +136,8 @@ public:
                      FieldType(static_cast<Native>(-3333330), 4)}),
                 createConstColumn<Nullable<UInt16>>(4, 3)));
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
+            createColumn<Nullable<String>>(
+                {"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
             executeFunction(
                 func_name,
                 createConstColumn<NullableDecimal>(
@@ -176,17 +205,45 @@ try
 {
     const std::string func_name = "formatWithLocale";
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"0.0000", "-0.0120", "0.0120", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", {}, {}, {}}),
+        createColumn<Nullable<String>>(
+            {"0.0000",
+             "-0.0120",
+             "0.0120",
+             "12,332.1235",
+             "12,332.1235",
+             "12,332.1235",
+             "12,332.1235",
+             "12,332.1235",
+             {},
+             {},
+             {}}),
         executeFunction(
             func_name,
-            createColumn<Nullable<Float64>>({0, -.012, .012, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, {}, {}}),
+            createColumn<Nullable<Float64>>(
+                {0,
+                 -.012,
+                 .012,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 {},
+                 {}}),
             createColumn<Nullable<Int64>>({4, 4, 4, 4, 4, 4, 4, 4, {}, 4, {}}),
-            createColumn<Nullable<String>>({"en_US", "en_US", "en_US", "en_US", "en_us", "EN_US", "xxx", {}, "xx1", "xx2", "xx3"})));
+            createColumn<Nullable<String>>(
+                {"en_US", "en_US", "en_US", "en_US", "en_us", "EN_US", "xxx", {}, "xx1", "xx2", "xx3"})));
 
     auto gen_warning_str = [](const std::string & value) -> std::string {
         return fmt::format("Unknown locale: \'{}\'", value);
     };
-    std::vector<std::string> expected_warnings{gen_warning_str("xxx"), gen_warning_str("NULL"), gen_warning_str("xx1"), gen_warning_str("xx2"), gen_warning_str("xx3")};
+    std::vector<std::string> expected_warnings{
+        gen_warning_str("xxx"),
+        gen_warning_str("NULL"),
+        gen_warning_str("xx1"),
+        gen_warning_str("xx2"),
+        gen_warning_str("xx3")};
     std::vector<tipb::Error> actual_warnings;
     getDAGContext().consumeWarnings(actual_warnings);
     ASSERT_TRUE(expected_warnings.size() == actual_warnings.size());
@@ -207,10 +264,20 @@ try
     /// float64, int
     /// vector, vector
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"12,332.1235", "12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
+        createColumn<Nullable<String>>(
+            {"12,332.1235",
+             "12,332.1000",
+             "12,332",
+             "12,332",
+             "12,332.300000000000000000000000000000",
+             "-12,332.30000",
+             "-1,000.0",
+             "-333.33",
+             {}}),
         executeFunction(
             func_name,
-            createColumn<Nullable<Float64>>({12332.123456, 12332.1, 12332.2, 12332.3, 12332.3, -12332.3, -999.9999, -333.333, 0}),
+            createColumn<Nullable<Float64>>(
+                {12332.123456, 12332.1, 12332.2, 12332.3, 12332.3, -12332.3, -999.9999, -333.333, 0}),
             createColumn<Nullable<Int64>>({4, 4, 0, -1, 31, 5, 1, 2, {}})));
     /// vector, const
     ASSERT_COLUMN_EQ(
@@ -221,7 +288,14 @@ try
             createConstColumn<Nullable<Int16>>(5, 3)));
     /// const, vector
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"-999.9999", "-1,000", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
+        createColumn<Nullable<String>>(
+            {"-999.9999",
+             "-1,000",
+             "-1,000",
+             "-999.999900000000000000000000000000",
+             "-999.99990",
+             "-1,000.0",
+             "-1,000.00"}),
         executeFunction(
             func_name,
             createConstColumn<Nullable<Float64>>(7, -999.9999),
@@ -237,7 +311,14 @@ try
     /// float64, uint
     /// vector, vector
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"12,332.1235", "12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33"}),
+        createColumn<Nullable<String>>(
+            {"12,332.1235",
+             "12,332.1000",
+             "12,332",
+             "12,332.300000000000000000000000000000",
+             "-12,332.30000",
+             "-1,000.0",
+             "-333.33"}),
         executeFunction(
             func_name,
             createColumn<Nullable<Float64>>({12332.123456, 12332.1, 12332.2, 12332.3, -12332.3, -999.9999, -333.333}),
@@ -251,7 +332,8 @@ try
             createConstColumn<Nullable<UInt16>>(8, 3)));
     /// const, vector
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
+        createColumn<Nullable<String>>(
+            {"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
         executeFunction(
             func_name,
             createConstColumn<Nullable<Float64>>(6, -999.9999),

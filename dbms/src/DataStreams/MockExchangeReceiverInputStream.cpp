@@ -17,7 +17,10 @@
 
 namespace DB
 {
-MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_)
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(
+    const tipb::ExchangeReceiver & receiver,
+    size_t max_block_size,
+    size_t rows_)
     : max_block_size(max_block_size)
     , rows(rows_)
     , source_num(static_cast<size_t>(receiver.encoded_task_meta_size()))
@@ -51,7 +54,9 @@ void MockExchangeReceiverInputStream::initTotalRows()
     }
 }
 
-MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const ColumnsWithTypeAndName & columns, size_t max_block_size)
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(
+    const ColumnsWithTypeAndName & columns,
+    size_t max_block_size)
     : max_block_size(max_block_size)
 {
     assert(!columns.empty());
@@ -59,7 +64,9 @@ MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const ColumnsWi
     initTotalRows();
 }
 
-MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const std::vector<ColumnsWithTypeAndName> & columns_vector_, size_t max_block_size)
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(
+    const std::vector<ColumnsWithTypeAndName> & columns_vector_,
+    size_t max_block_size)
     : columns_vector(columns_vector_)
     , max_block_size(max_block_size)
 {
@@ -72,7 +79,9 @@ ColumnPtr MockExchangeReceiverInputStream::makeColumn(ColumnWithTypeAndName elem
     auto column = elem.type->createColumn();
     size_t row_count = 0;
     size_t current_output_rows = output_rows;
-    for (size_t i = output_index_in_current_columns; current_output_rows < rows && i < elem.column->size() && row_count < max_block_size; ++i, ++current_output_rows)
+    for (size_t i = output_index_in_current_columns;
+         current_output_rows < rows && i < elem.column->size() && row_count < max_block_size;
+         ++i, ++current_output_rows)
     {
         column->insert((*elem.column)[i]);
         ++row_count;

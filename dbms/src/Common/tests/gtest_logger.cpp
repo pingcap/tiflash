@@ -54,7 +54,11 @@ protected:
 TEST_F(LogMacroTest, Poco)
 {
     auto * log = &Poco::Logger::get("LoggerTest");
-    LOG_INFO(log, "float-number: {0:.4f}, {0:.5f}, size: {1}", 3.1415926, formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
+    LOG_INFO(
+        log,
+        "float-number: {0:.4f}, {0:.5f}, size: {1}",
+        3.1415926,
+        formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
@@ -64,7 +68,11 @@ TEST_F(LogMacroTest, Poco)
 TEST_F(LogMacroTest, PropsLogger)
 {
     auto log = Logger::get("props=foo");
-    LOG_INFO(log, "float-number: {0:.4f}, {0:.5f}, size: {1}", 3.1415926, formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
+    LOG_INFO(
+        log,
+        "float-number: {0:.4f}, {0:.5f}, size: {1}",
+        3.1415926,
+        formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
@@ -118,14 +126,15 @@ TEST(LogIdTest, GetChild)
 TEST(LogFormatTest, SourceSection)
 {
     std::pair<int, int> beg{90, 0}, end{1024, 3}, min{1000, 0};
-    auto text = fmt::format("GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}",
-                            1.2,
-                            beg.first,
-                            beg.second,
-                            end.first,
-                            end.second,
-                            min.first,
-                            min.second);
+    auto text = fmt::format(
+        "GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}",
+        1.2,
+        beg.first,
+        beg.second,
+        end.first,
+        end.second,
+        min.first,
+        min.second);
     Poco::Message msg(
         /*source*/ "log_name",
         /*text*/ text,

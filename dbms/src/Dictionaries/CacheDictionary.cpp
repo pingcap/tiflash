@@ -52,7 +52,12 @@ inline size_t CacheDictionary::getCellIdx(const Key id) const
 }
 
 
-CacheDictionary::CacheDictionary(const std::string & name, const DictionaryStructure & dict_struct, DictionarySourcePtr source_ptr, const DictionaryLifetime dict_lifetime, const size_t size)
+CacheDictionary::CacheDictionary(
+    const std::string & name,
+    const DictionaryStructure & dict_struct,
+    DictionarySourcePtr source_ptr,
+    const DictionaryLifetime dict_lifetime,
+    const size_t size)
     : name{name}
     , dict_struct(dict_struct)
     , source_ptr{std::move(source_ptr)}
@@ -63,9 +68,7 @@ CacheDictionary::CacheDictionary(const std::string & name, const DictionaryStruc
     , rnd_engine(randomSeed())
 {
     if (!this->source_ptr->supportsSelectiveLoad())
-        throw Exception{
-            name + ": source cannot be used with CacheDictionary",
-            ErrorCodes::UNSUPPORTED_METHOD};
+        throw Exception{name + ": source cannot be used with CacheDictionary", ErrorCodes::UNSUPPORTED_METHOD};
 
     createAttributes();
 }
@@ -209,18 +212,21 @@ void CacheDictionary::isInConstantVector(
 }
 
 
-#define DECLARE(TYPE)                                                                                                                      \
-    void CacheDictionary::get##TYPE(const std::string & attribute_name, const PaddedPODArray<Key> & ids, PaddedPODArray<TYPE> & out) const \
-    {                                                                                                                                      \
-        auto & attribute = getAttribute(attribute_name);                                                                                   \
-        if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))                                                  \
-            throw Exception{                                                                                                               \
-                name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),                           \
-                ErrorCodes::TYPE_MISMATCH};                                                                                                \
-                                                                                                                                           \
-        const auto null_value = std::get<TYPE>(attribute.null_values);                                                                     \
-                                                                                                                                           \
-        getItemsNumber<TYPE>(attribute, ids, out, [&](const size_t) { return null_value; });                                               \
+#define DECLARE(TYPE)                                                                                            \
+    void CacheDictionary::get##TYPE(                                                                             \
+        const std::string & attribute_name,                                                                      \
+        const PaddedPODArray<Key> & ids,                                                                         \
+        PaddedPODArray<TYPE> & out) const                                                                        \
+    {                                                                                                            \
+        auto & attribute = getAttribute(attribute_name);                                                         \
+        if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))                        \
+            throw Exception{                                                                                     \
+                name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type), \
+                ErrorCodes::TYPE_MISMATCH};                                                                      \
+                                                                                                                 \
+        const auto null_value = std::get<TYPE>(attribute.null_values);                                           \
+                                                                                                                 \
+        getItemsNumber<TYPE>(attribute, ids, out, [&](const size_t) { return null_value; });                     \
     }
 DECLARE(UInt8)
 DECLARE(UInt16)
@@ -235,7 +241,8 @@ DECLARE(Float32)
 DECLARE(Float64)
 #undef DECLARE
 
-void CacheDictionary::getString(const std::string & attribute_name, const PaddedPODArray<Key> & ids, ColumnString * out) const
+void CacheDictionary::getString(const std::string & attribute_name, const PaddedPODArray<Key> & ids, ColumnString * out)
+    const
 {
     auto & attribute = getAttribute(attribute_name);
     if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::String))
@@ -408,7 +415,9 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
         return;
 
     std::vector<Key> required_ids(outdated_ids.size());
-    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) { return pair.first; });
+    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) {
+        return pair.first;
+    });
 
     /// request new values
     update(
@@ -442,14 +451,14 @@ void CacheDictionary::createAttributes()
             hierarchical_attribute = &attributes.back();
 
             if (hierarchical_attribute->type != AttributeUnderlyingType::UInt64)
-                throw Exception{
-                    name + ": hierarchical attribute must be UInt64.",
-                    ErrorCodes::TYPE_MISMATCH};
+                throw Exception{name + ": hierarchical attribute must be UInt64.", ErrorCodes::TYPE_MISMATCH};
         }
     }
 }
 
-CacheDictionary::Attribute CacheDictionary::createAttributeWithType(const AttributeUnderlyingType type, const Field & null_value)
+CacheDictionary::Attribute CacheDictionary::createAttributeWithType(
+    const AttributeUnderlyingType type,
+    const Field & null_value)
 {
     Attribute attr{type, {}, {}};
 
@@ -594,7 +603,9 @@ void CacheDictionary::getItemsNumberImpl(
         return;
 
     std::vector<Key> required_ids(outdated_ids.size());
-    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) { return pair.first; });
+    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) {
+        return pair.first;
+    });
 
     /// request new values
     update(
@@ -701,7 +712,9 @@ void CacheDictionary::getItemsString(
     if (!outdated_ids.empty())
     {
         std::vector<Key> required_ids(outdated_ids.size());
-        std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) { return pair.first; });
+        std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) {
+            return pair.first;
+        });
 
         update(
             required_ids,
@@ -739,9 +752,7 @@ void CacheDictionary::update(
     for (const auto id : requested_ids)
         remaining_ids.insert({id, 0});
 
-    std::uniform_int_distribution<UInt64> distribution{
-        dict_lifetime.min_sec,
-        dict_lifetime.max_sec};
+    std::uniform_int_distribution<UInt64> distribution{dict_lifetime.min_sec, dict_lifetime.max_sec};
 
     {
         Stopwatch watch;
@@ -754,9 +765,7 @@ void CacheDictionary::update(
         {
             const auto * id_column = typeid_cast<const ColumnUInt64 *>(block.safeGetByPosition(0).column.get());
             if (!id_column)
-                throw Exception{
-                    name + ": id column has type different from UInt64.",
-                    ErrorCodes::TYPE_MISMATCH};
+                throw Exception{name + ": id column has type different from UInt64.", ErrorCodes::TYPE_MISMATCH};
 
             const auto & ids = id_column->getData();
 
@@ -788,7 +797,8 @@ void CacheDictionary::update(
 
                 cell.id = id;
                 if (dict_lifetime.min_sec != 0 && dict_lifetime.max_sec != 0)
-                    cell.setExpiresAt(std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)});
+                    cell.setExpiresAt(
+                        std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)});
                 else
                     cell.setExpiresAt(std::chrono::time_point<std::chrono::system_clock>::max());
 
@@ -961,16 +971,15 @@ CacheDictionary::Attribute & CacheDictionary::getAttribute(const std::string & a
 {
     const auto it = attribute_index_by_name.find(attribute_name);
     if (it == std::end(attribute_index_by_name))
-        throw Exception{
-            name + ": no such attribute '" + attribute_name + "'",
-            ErrorCodes::BAD_ARGUMENTS};
+        throw Exception{name + ": no such attribute '" + attribute_name + "'", ErrorCodes::BAD_ARGUMENTS};
 
     return attributes[it->second];
 }
 
 bool CacheDictionary::isEmptyCell(const UInt64 idx) const
 {
-    return (idx != zero_cell_idx && cells[idx].id == 0) || (cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t()));
+    return (idx != zero_cell_idx && cells[idx].id == 0)
+        || (cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t()));
 }
 
 PaddedPODArray<CacheDictionary::Key> CacheDictionary::getCachedIds() const

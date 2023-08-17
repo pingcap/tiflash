@@ -41,7 +41,8 @@ try
         // case 2: original issue case, 1*10^64 <= 0.1 ?
         using A = Decimal256;
         using B = Decimal32;
-        boost::multiprecision::checked_int256_t origin_a{"12345678911234567891123456789112345678911234567891123456789112345"};
+        boost::multiprecision::checked_int256_t origin_a{
+            "12345678911234567891123456789112345678911234567891123456789112345"};
         A a(origin_a);
         B b(1);
         int res = DecimalComparison<A, B, LessOrEqualsOp, true>::apply<true, false>(a, b, 10);
@@ -150,7 +151,8 @@ try
         using A = Decimal256;
         using B = Decimal256;
         using Type = DecimalComparison<A, B, LessOp, true>;
-        boost::multiprecision::checked_int256_t origin_a{"-12345678911234567891123456789112345678911234567891123456789112345"};
+        boost::multiprecision::checked_int256_t origin_a{
+            "-12345678911234567891123456789112345678911234567891123456789112345"};
         boost::multiprecision::checked_int256_t origin_b{"114514"};
         boost::multiprecision::checked_int256_t origin_scale{"1000000000000000000000000000000000000000000000000"};
         A a(origin_a);

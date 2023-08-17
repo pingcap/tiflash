@@ -146,11 +146,12 @@ protected:
 
 
 template <typename LogElement>
-SystemLog<LogElement>::SystemLog(Context & context_,
-                                 const String & database_name_,
-                                 const String & table_name_,
-                                 const String & storage_def_,
-                                 size_t flush_interval_milliseconds_)
+SystemLog<LogElement>::SystemLog(
+    Context & context_,
+    const String & database_name_,
+    const String & table_name_,
+    const String & storage_def_,
+    size_t flush_interval_milliseconds_)
     : context(context_)
     , database_name(database_name_)
     , table_name(table_name_)

@@ -27,13 +27,10 @@ SharedQueuePtr SharedQueue::build(size_t producer, size_t consumer, Int64 max_bu
     return std::make_shared<SharedQueue>(queue_limits, producer);
 }
 
-SharedQueue::SharedQueue(
-    CapacityLimits queue_limits,
-    size_t init_producer)
+SharedQueue::SharedQueue(CapacityLimits queue_limits, size_t init_producer)
     : queue(queue_limits, [](const Block & block) { return block.allocatedBytes(); })
     , active_producer(init_producer)
-{
-}
+{}
 
 MPMCQueueResult SharedQueue::tryPush(Block && block)
 {
@@ -83,7 +80,10 @@ OperatorStatus SharedQueueSinkOp::awaitImpl()
         return OperatorStatus::NEED_INPUT;
     default:
         // queue result can not be finish/cancelled/empty here.
-        RUNTIME_CHECK_MSG(false, "Unexpected queue result for SharedQueueSinkOp: {}", magic_enum::enum_name(queue_result));
+        RUNTIME_CHECK_MSG(
+            false,
+            "Unexpected queue result for SharedQueueSinkOp: {}",
+            magic_enum::enum_name(queue_result));
     }
 }
 
@@ -117,7 +117,10 @@ OperatorStatus SharedQueueSourceOp::awaitImpl()
         return OperatorStatus::HAS_OUTPUT;
     default:
         // queue result can not be cancelled/full here.
-        RUNTIME_CHECK_MSG(false, "Unexpected queue result for SharedQueueSourceOp: {}", magic_enum::enum_name(queue_result));
+        RUNTIME_CHECK_MSG(
+            false,
+            "Unexpected queue result for SharedQueueSourceOp: {}",
+            magic_enum::enum_name(queue_result));
     }
 }
 } // namespace DB

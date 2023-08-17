@@ -21,30 +21,19 @@ namespace DB
 struct AddExtraTableIDColumnTransformAction
 {
 public:
-    static Block buildHeader(
-        const Block & inner_header_,
-        int extra_table_id_index_);
+    static Block buildHeader(const Block & inner_header_, int extra_table_id_index_);
 
-    static Block buildHeader(
-        const DM::ColumnDefines & columns_to_read_,
-        int extra_table_id_index_);
+    static Block buildHeader(const DM::ColumnDefines & columns_to_read_, int extra_table_id_index_);
 
-    AddExtraTableIDColumnTransformAction(
-        const Block & inner_header_,
-        int extra_table_id_index_);
+    AddExtraTableIDColumnTransformAction(const Block & inner_header_, int extra_table_id_index_);
 
-    AddExtraTableIDColumnTransformAction(
-        const DM::ColumnDefines & columns_to_read_,
-        int extra_table_id_index_);
+    AddExtraTableIDColumnTransformAction(const DM::ColumnDefines & columns_to_read_, int extra_table_id_index_);
 
     bool transform(Block & block, TableID physical_table_id);
 
     Block getHeader() const;
 
-    size_t totalRows() const
-    {
-        return total_rows;
-    }
+    size_t totalRows() const { return total_rows; }
 
 private:
     Block header;

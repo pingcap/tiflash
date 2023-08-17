@@ -146,7 +146,11 @@ std::string parmToName(const ::testing::TestParamInfo<Parm> & info)
     return fmt::format("avx_{}_avx512_{}", info.param.first, info.param.second);
 }
 
-INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest, testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
+INSTANTIATE_TEST_CASE_P(
+    Parm,
+    MemUtilsTest,
+    testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)),
+    parmToName);
 
 #endif
 
@@ -191,8 +195,7 @@ TEST(MemUtilsTest, MemoryIsZeroAVX2)
 TEST(MemUtilsTest, MemoryIsZeroAVX512)
 {
     using namespace simd_option;
-    if (!common::cpu_feature_flags.avx512vl
-        || !common::cpu_feature_flags.avx512bw)
+    if (!common::cpu_feature_flags.avx512vl || !common::cpu_feature_flags.avx512bw)
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }

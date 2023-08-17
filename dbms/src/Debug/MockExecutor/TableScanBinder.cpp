@@ -41,7 +41,8 @@ void TableScanBinder::columnPrune(std::unordered_set<String> & used_columns)
     {
         for (const auto & used_col : used_columns)
         {
-            if (splitQualifiedName(used_col).column_name == splitQualifiedName(col.first).column_name && splitQualifiedName(used_col).table_name == splitQualifiedName(col.first).table_name)
+            if (splitQualifiedName(used_col).column_name == splitQualifiedName(col.first).column_name
+                && splitQualifiedName(used_col).table_name == splitQualifiedName(col.first).table_name)
             {
                 new_schema.push_back({used_col, col.second});
             }
@@ -111,7 +112,13 @@ void TableScanBinder::buildTable(tipb::Executor * tipb_executor)
     }
 }
 
-ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column, bool keep_order)
+ExecutorBinderPtr compileTableScan(
+    size_t & executor_index,
+    TableInfo & table_info,
+    const String & db,
+    const String & table_name,
+    bool append_pk_column,
+    bool keep_order)
 {
     DAGSchema ts_output;
     for (const auto & column_info : table_info.columns)

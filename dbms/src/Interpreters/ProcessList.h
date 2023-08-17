@@ -131,31 +131,16 @@ public:
             memory_tracker->setFaultProbability(memory_tracker_fault_probability);
     }
 
-    ~ProcessListElement()
-    {
-        current_memory_tracker = nullptr;
-    }
+    ~ProcessListElement() { current_memory_tracker = nullptr; }
 
-    const ClientInfo & getClientInfo() const
-    {
-        return client_info;
-    }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
-    ProgressValues getProgressIn() const
-    {
-        return progress_in.getValues();
-    }
+    ProgressValues getProgressIn() const { return progress_in.getValues(); }
 
-    ProgressValues getProgressOut() const
-    {
-        return progress_out.getValues();
-    }
+    ProgressValues getProgressOut() const { return progress_out.getValues(); }
 
     ThrottlerPtr getUserNetworkThrottler();
-    MemoryTrackerPtr getMemoryTrackerPtr()
-    {
-        return memory_tracker;
-    }
+    MemoryTrackerPtr getMemoryTrackerPtr() { return memory_tracker; }
 
     bool updateProgressIn(const Progress & value)
     {
@@ -316,7 +301,13 @@ public:
       * If timeout is passed - throw an exception.
       * Don't count KILL QUERY queries.
       */
-    EntryPtr insert(const String & query_, const IAST * ast, const ClientInfo & client_info, const Settings & settings, const UInt64 total_memory, bool is_dag_task);
+    EntryPtr insert(
+        const String & query_,
+        const IAST * ast,
+        const ClientInfo & client_info,
+        const Settings & settings,
+        const UInt64 total_memory,
+        bool is_dag_task);
 
     /// Number of currently executing queries.
     size_t size() const { return cur_size; }

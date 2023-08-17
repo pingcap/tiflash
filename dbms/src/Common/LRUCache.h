@@ -39,10 +39,11 @@ struct TrivialWeightFunction
 /// of that value.
 /// Cache starts to evict entries when their total weight exceeds max_size.
 /// Value weight should not change after insertion.
-template <typename TKey,
-          typename TMapped,
-          typename HashFunction = std::hash<TKey>,
-          typename WeightFunction = TrivialWeightFunction<TMapped>>
+template <
+    typename TKey,
+    typename TMapped,
+    typename HashFunction = std::hash<TKey>,
+    typename WeightFunction = TrivialWeightFunction<TMapped>>
 class LRUCache
 {
 public:
@@ -226,7 +227,9 @@ private:
             ++token->refcount;
         }
 
-        void cleanup([[maybe_unused]] std::lock_guard<std::mutex> & token_lock, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+        void cleanup(
+            [[maybe_unused]] std::lock_guard<std::mutex> & token_lock,
+            [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
         {
             token->cache.insert_tokens.erase(*key);
             token->cleaned_up = true;
@@ -302,7 +305,8 @@ private:
 
     void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
-        auto [it, inserted] = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
+        auto [it, inserted]
+            = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
 
         Cell & cell = it->second;
         if (inserted)
@@ -337,7 +341,8 @@ private:
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
 
-        while ((current_weight > max_weight || (max_elements_size != 0 && queue_size > max_elements_size)) && (queue_size > 1))
+        while ((current_weight > max_weight || (max_elements_size != 0 && queue_size > max_elements_size))
+               && (queue_size > 1))
         {
             const Key & key = queue.front();
 

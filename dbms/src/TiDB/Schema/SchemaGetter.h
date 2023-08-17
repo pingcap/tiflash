@@ -141,8 +141,7 @@ struct SchemaGetter
         : snap(keyspace_id_, cluster_, tso_)
         , keyspace_id(keyspace_id_)
         , log(Logger::get())
-    {
-    }
+    {}
 
     Int64 getVersion();
 

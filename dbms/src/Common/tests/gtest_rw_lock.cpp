@@ -107,8 +107,9 @@ TEST(Common, RWLock1)
                 thread.join();
 
             auto total_time = watch.elapsedSeconds();
-            std::cout << "Threads " << pool_size << ", round " << round << ", total_time " << DB::toString(total_time, 3)
-                      << ", r:" << std::setw(4) << total_readers << ", w:" << std::setw(4) << total_writers << "\n";
+            std::cout << "Threads " << pool_size << ", round " << round << ", total_time "
+                      << DB::toString(total_time, 3) << ", r:" << std::setw(4) << total_readers
+                      << ", w:" << std::setw(4) << total_writers << "\n";
         }
     }
 }
@@ -179,7 +180,9 @@ TEST(Common, RWLockDeadlock)
             auto holder2 = lock2->getLock(RWLock::Read, "q1", std::chrono::milliseconds(100));
             if (!holder2)
             {
-                throw Exception("Locking attempt timed out! Possible deadlock avoided. Client should retry.", ErrorCodes::DEADLOCK_AVOIDED);
+                throw Exception(
+                    "Locking attempt timed out! Possible deadlock avoided. Client should retry.",
+                    ErrorCodes::DEADLOCK_AVOIDED);
             }
         }
         catch (const Exception & e)
@@ -206,7 +209,9 @@ TEST(Common, RWLockDeadlock)
             auto holder1 = lock1->getLock(RWLock::Read, "q3", std::chrono::milliseconds(100));
             if (!holder1)
             {
-                throw Exception("Locking attempt timed out! Possible deadlock avoided. Client should retry.", ErrorCodes::DEADLOCK_AVOIDED);
+                throw Exception(
+                    "Locking attempt timed out! Possible deadlock avoided. Client should retry.",
+                    ErrorCodes::DEADLOCK_AVOIDED);
             }
         }
         catch (const Exception & e)

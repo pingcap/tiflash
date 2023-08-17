@@ -40,14 +40,8 @@ public:
 
 protected:
     Block readImpl() override;
-    void readPrefixImpl() override
-    {
-        writer->prepare(getHeader());
-    }
-    void readSuffixImpl() override
-    {
-        LOG_DEBUG(log, "finish write with {} rows", total_rows);
-    }
+    void readPrefixImpl() override { writer->prepare(getHeader()); }
+    void readSuffixImpl() override { LOG_DEBUG(log, "finish write with {} rows", total_rows); }
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;

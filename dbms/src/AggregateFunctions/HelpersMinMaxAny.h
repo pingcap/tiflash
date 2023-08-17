@@ -29,7 +29,10 @@ namespace DB
 {
 /// min, max, any, anyLast
 template <template <typename> class AggregateFunctionTemplate, template <typename> class Data>
-static IAggregateFunction * createAggregateFunctionSingleValue(const String & name, const DataTypes & argument_types, const Array & parameters)
+static IAggregateFunction * createAggregateFunctionSingleValue(
+    const String & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -61,26 +64,41 @@ static IAggregateFunction * createAggregateFunctionSingleValue(const String & na
 
 /// argMin, argMax
 template <template <typename> class MinMaxData, typename ResData>
-static IAggregateFunction * createAggregateFunctionArgMinMaxSecond(const DataTypePtr & res_type, const DataTypePtr & val_type)
+static IAggregateFunction * createAggregateFunctionArgMinMaxSecond(
+    const DataTypePtr & res_type,
+    const DataTypePtr & val_type)
 {
 #define DISPATCH(TYPE)                                       \
     if (typeid_cast<const DataType##TYPE *>(val_type.get())) \
-        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<TYPE>>>>(res_type, val_type);
+        return new AggregateFunctionArgMinMax<               \
+            AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<TYPE>>>>(res_type, val_type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
     if (typeid_cast<const DataTypeDate *>(val_type.get()))
-        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<DataTypeDate::FieldType>>>>(res_type, val_type);
+        return new AggregateFunctionArgMinMax<
+            AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<DataTypeDate::FieldType>>>>(
+            res_type,
+            val_type);
     if (typeid_cast<const DataTypeDateTime *>(val_type.get()))
-        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<DataTypeDateTime::FieldType>>>>(res_type, val_type);
+        return new AggregateFunctionArgMinMax<
+            AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<DataTypeDateTime::FieldType>>>>(
+            res_type,
+            val_type);
     if (typeid_cast<const DataTypeString *>(val_type.get()))
-        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataString>>>(res_type, val_type);
+        return new AggregateFunctionArgMinMax<
+            AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataString>>>(res_type, val_type);
 
-    return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataGeneric>>>(res_type, val_type);
+    return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataGeneric>>>(
+        res_type,
+        val_type);
 }
 
 template <template <typename> class MinMaxData>
-static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name, const DataTypes & argument_types, const Array & parameters)
+static IAggregateFunction * createAggregateFunctionArgMinMax(
+    const String & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
 {
     assertNoParameters(name, parameters);
     assertBinary(name, argument_types);
@@ -95,9 +113,13 @@ static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name
 #undef DISPATCH
 
     if (typeid_cast<const DataTypeDate *>(res_type.get()))
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDate::FieldType>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDate::FieldType>>(
+            res_type,
+            val_type);
     if (typeid_cast<const DataTypeDateTime *>(res_type.get()))
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDateTime::FieldType>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDateTime::FieldType>>(
+            res_type,
+            val_type);
     if (typeid_cast<const DataTypeString *>(res_type.get()))
         return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataString>(res_type, val_type);
 

@@ -47,8 +47,9 @@ namespace
 template <typename T>
 constexpr auto getBitmapSize()
 {
-    return (sizeof(T) == 32) ? 4 : (sizeof(T) == 16) ? 2
-                                                     : ((sizeof(T) == 8) ? 1 : ((sizeof(T) == 4) ? 1 : ((sizeof(T) == 2) ? 1 : 0)));
+    return (sizeof(T) == 32) ? 4
+        : (sizeof(T) == 16)  ? 2
+                             : ((sizeof(T) == 8) ? 1 : ((sizeof(T) == 4) ? 1 : ((sizeof(T) == 2) ? 1 : 0)));
 }
 
 } // namespace
@@ -59,11 +60,8 @@ using KeysNullMap = std::array<UInt8, getBitmapSize<T>()>;
 /// Pack into a binary blob of type T a set of fixed-size keys. Granted that all the keys fit into the
 /// binary blob, they are disposed in it consecutively.
 template <typename T>
-static inline T ALWAYS_INLINE packFixed(
-    size_t i,
-    size_t keys_size,
-    const ColumnRawPtrs & key_columns,
-    const Sizes & key_sizes)
+static inline T ALWAYS_INLINE
+packFixed(size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes)
 {
     union
     {
@@ -94,7 +92,10 @@ static inline T ALWAYS_INLINE packFixed(
             offset += 8;
             break;
         default:
-            memcpy(bytes + offset, &static_cast<const ColumnFixedString *>(key_columns[j])->getChars()[i * key_sizes[j]], key_sizes[j]);
+            memcpy(
+                bytes + offset,
+                &static_cast<const ColumnFixedString *>(key_columns[j])->getChars()[i * key_sizes[j]],
+                key_sizes[j]);
             offset += key_sizes[j];
         }
     }
@@ -163,7 +164,10 @@ static inline T ALWAYS_INLINE packFixed(
             offset += 8;
             break;
         default:
-            memcpy(bytes + offset, &static_cast<const ColumnFixedString *>(key_columns[j])->getChars()[i * key_sizes[j]], key_sizes[j]);
+            memcpy(
+                bytes + offset,
+                &static_cast<const ColumnFixedString *>(key_columns[j])->getChars()[i * key_sizes[j]],
+                key_sizes[j]);
             offset += key_sizes[j];
         }
     }
@@ -233,10 +237,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
 
 
 /// Copy keys to the pool. Then put into pool StringRefs to them and return the pointer to the first.
-static inline StringRef * ALWAYS_INLINE placeKeysInPool(
-    size_t keys_size,
-    StringRefs & keys,
-    Arena & pool)
+static inline StringRef * ALWAYS_INLINE placeKeysInPool(size_t keys_size, StringRefs & keys, Arena & pool)
 {
     for (size_t j = 0; j < keys_size; ++j)
     {
@@ -344,12 +345,14 @@ static inline StringRef ALWAYS_INLINE serializeKeysToPoolContiguous(
     if (!collators.empty())
     {
         for (size_t j = 0; j < keys_size; ++j)
-            sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin, collators[j], sort_key_containers[j]).size;
+            sum_size
+                += key_columns[j]->serializeValueIntoArena(i, pool, begin, collators[j], sort_key_containers[j]).size;
     }
     else
     {
         for (size_t j = 0; j < keys_size; ++j)
-            sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin, nullptr, TiDB::dummy_sort_key_contaner).size;
+            sum_size
+                += key_columns[j]->serializeValueIntoArena(i, pool, begin, nullptr, TiDB::dummy_sort_key_contaner).size;
     }
 
     return {begin, sum_size};
@@ -375,10 +378,11 @@ static T inline packFixedShuffle(
 
     for (size_t i = 1; i < num_srcs; ++i)
     {
-        res = _mm_xor_si128(res,
-                            _mm_shuffle_epi8(
-                                _mm_loadu_si128(reinterpret_cast<const __m128i *>(srcs[i] + elem_sizes[i] * idx)),
-                                _mm_loadu_si128(reinterpret_cast<const __m128i *>(&masks[i * sizeof(T)]))));
+        res = _mm_xor_si128(
+            res,
+            _mm_shuffle_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(srcs[i] + elem_sizes[i] * idx)),
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(&masks[i * sizeof(T)]))));
     }
 
     T out;
@@ -406,7 +410,12 @@ void fillFixedBatch(size_t num_rows, const T * source, T * dest)
 /// out[1] : [--------****----]
 /// ...
 template <typename T, typename Key>
-void fillFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes, PaddedPODArray<Key> & out, size_t & offset)
+void fillFixedBatch(
+    size_t keys_size,
+    const ColumnRawPtrs & key_columns,
+    const Sizes & key_sizes,
+    PaddedPODArray<Key> & out,
+    size_t & offset)
 {
     for (size_t i = 0; i < keys_size; ++i)
     {
@@ -429,7 +438,11 @@ void fillFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const S
 /// Pack into a binary blob of type T a set of fixed-size keys. Granted that all the keys fit into the
 /// binary blob. Keys are placed starting from the longest one.
 template <typename T>
-void packFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes, PaddedPODArray<T> & out)
+void packFixedBatch(
+    size_t keys_size,
+    const ColumnRawPtrs & key_columns,
+    const Sizes & key_sizes,
+    PaddedPODArray<T> & out)
 {
     size_t offset = 0;
     fillFixedBatch<UInt128>(keys_size, key_columns, key_sizes, out, offset);

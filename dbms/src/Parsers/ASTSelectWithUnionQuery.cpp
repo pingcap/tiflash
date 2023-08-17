@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTSelectQuery.h>
 #include <Common/typeid_cast.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 
 
 namespace DB
@@ -33,17 +33,18 @@ ASTPtr ASTSelectWithUnionQuery::clone() const
 }
 
 
-void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTSelectWithUnionQuery::formatQueryImpl(
+    const FormatSettings & settings,
+    FormatState & state,
+    FormatStateStacked frame) const
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 
     for (ASTs::const_iterator it = list_of_selects->children.begin(); it != list_of_selects->children.end(); ++it)
     {
         if (it != list_of_selects->children.begin())
-            settings.ostr
-                << settings.nl_or_ws << indent_str << (settings.hilite ? hilite_keyword : "")
-                << "UNION ALL" << (settings.hilite ? hilite_keyword : "")
-                << settings.nl_or_ws;
+            settings.ostr << settings.nl_or_ws << indent_str << (settings.hilite ? hilite_keyword : "") << "UNION ALL"
+                          << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws;
 
         (*it)->formatImpl(settings, state, frame);
     }
@@ -56,4 +57,4 @@ void ASTSelectWithUnionQuery::setDatabaseIfNeeded(const String & database_name)
         typeid_cast<ASTSelectQuery &>(*child).setDatabaseIfNeeded(database_name);
 }
 
-}
+} // namespace DB

@@ -17,7 +17,8 @@
 
 namespace DB::GatherUtils
 {
-struct SliceDynamicOffsetUnboundedSelectArraySource : public ArraySinkSourceSelector<SliceDynamicOffsetUnboundedSelectArraySource>
+struct SliceDynamicOffsetUnboundedSelectArraySource
+    : public ArraySinkSourceSelector<SliceDynamicOffsetUnboundedSelectArraySource>
 {
     template <typename Source, typename Sink>
     static void selectSourceSink(Source && source, Sink && sink, const IColumn & offset_column)

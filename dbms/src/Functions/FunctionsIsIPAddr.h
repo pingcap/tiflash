@@ -120,8 +120,7 @@ struct CheckIsIPv6Impl
     {
         if (nullptr == src)
             return 0;
-        static const char xdigits_l[] = "0123456789abcdef",
-                          xdigits_u[] = "0123456789ABCDEF";
+        static const char xdigits_l[] = "0123456789abcdef", xdigits_u[] = "0123456789ABCDEF";
         unsigned char tmp[16], *tp, *endp, *colonp;
         const char *xdigits, *curtok;
         int ch, saw_xdigit;
@@ -220,14 +219,20 @@ public:
     {
         if (arguments.size() != 1)
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->onlyNull())
         {
             DataTypePtr data_type = removeNullable(arguments[0]);
             if (!data_type->isString())
                 throw Exception(
-                    fmt::format("Illegal argument type {} of function {}, should be integer", arguments[0]->getName(), getName()),
+                    fmt::format(
+                        "Illegal argument type {} of function {}, should be integer",
+                        arguments[0]->getName(),
+                        getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         return std::make_shared<DataTypeUInt8>();
@@ -274,7 +279,10 @@ public:
         }
         else
             throw Exception(
-                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                fmt::format(
+                    "Illegal column {} of argument of function {}",
+                    block.getByPosition(arguments[0]).column->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };

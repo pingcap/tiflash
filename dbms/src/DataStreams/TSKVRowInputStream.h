@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/HashTable/HashMap.h>
 #include <Core/Block.h>
 #include <DataStreams/IRowInputStream.h>
-#include <Common/HashTable/HashMap.h>
 
 
 namespace DB
@@ -56,4 +56,4 @@ private:
     NameMap name_map;
 };
 
-}
+} // namespace DB

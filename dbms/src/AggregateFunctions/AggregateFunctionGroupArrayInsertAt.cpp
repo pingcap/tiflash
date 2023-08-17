@@ -22,7 +22,10 @@ namespace DB
 {
 namespace
 {
-AggregateFunctionPtr createAggregateFunctionGroupArrayInsertAt(const std::string & name, const DataTypes & argument_types, const Array & parameters)
+AggregateFunctionPtr createAggregateFunctionGroupArrayInsertAt(
+    const std::string & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
 {
     assertBinary(name, argument_types);
     return std::make_shared<AggregateFunctionGroupArrayInsertAtGeneric>(argument_types, parameters);

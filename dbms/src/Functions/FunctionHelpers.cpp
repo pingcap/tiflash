@@ -83,9 +83,9 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
             }
             else if (col.column->isColumnConst())
             {
-                const auto & nested_col = static_cast<const ColumnNullable &>(
-                                              static_cast<const ColumnConst &>(*col.column).getDataColumn())
-                                              .getNestedColumnPtr();
+                const auto & nested_col
+                    = static_cast<const ColumnNullable &>(static_cast<const ColumnConst &>(*col.column).getDataColumn())
+                          .getNestedColumnPtr();
 
                 res.insert({ColumnConst::create(nested_col, rows), nested_type, col.name});
             }
@@ -125,7 +125,8 @@ bool functionIsInOperator(const String & name)
 
 bool functionIsInOrGlobalInOperator(const String & name)
 {
-    return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn" || name == "tidbIn" || name == "tidbNotIn";
+    return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn" || name == "tidbIn"
+        || name == "tidbNotIn";
 }
 
 

@@ -118,7 +118,9 @@ struct AggregateFunctionGroupUniqArrayGenericData
  */
 template <bool is_plain_column = false>
 class AggregateFunctionGroupUniqArrayGeneric
-    : public IAggregateFunctionDataHelper<AggregateFunctionGroupUniqArrayGenericData, AggregateFunctionGroupUniqArrayGeneric<is_plain_column>>
+    : public IAggregateFunctionDataHelper<
+          AggregateFunctionGroupUniqArrayGenericData,
+          AggregateFunctionGroupUniqArrayGeneric<is_plain_column>>
 {
     DataTypePtr input_data_type;
 
@@ -131,15 +133,9 @@ public:
 
     String getName() const override { return "groupUniqArray"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(input_data_type);
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(input_data_type); }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {

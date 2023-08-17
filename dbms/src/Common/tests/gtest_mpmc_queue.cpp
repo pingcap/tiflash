@@ -84,7 +84,13 @@ protected:
     }
 
     template <typename T>
-    void ensureOpFail(MPMCQueueResult op_ret, const MPMCQueue<T> & queue, size_t old_size, bool push, bool try_op, bool timed_op)
+    void ensureOpFail(
+        MPMCQueueResult op_ret,
+        const MPMCQueue<T> & queue,
+        size_t old_size,
+        bool push,
+        bool try_op,
+        bool timed_op)
     {
         auto op = push ? "push" : "pop";
         auto throw_exp = [op] {
@@ -114,26 +120,14 @@ protected:
     void testCannotPush(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        ensureOpFail(
-            queue.push(ValueHelper<T>::make(-1)),
-            queue,
-            old_size,
-            true,
-            false,
-            false);
+        ensureOpFail(queue.push(ValueHelper<T>::make(-1)), queue, old_size, true, false, false);
     }
 
     template <typename T>
     void testCannotTryPush(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        ensureOpFail(
-            queue.tryPush(ValueHelper<T>::make(-1)),
-            queue,
-            old_size,
-            true,
-            true,
-            false);
+        ensureOpFail(queue.tryPush(ValueHelper<T>::make(-1)), queue, old_size, true, true, false);
         ensureOpFail(
             queue.pushTimeout(ValueHelper<T>::make(-1), std::chrono::microseconds(1)),
             queue,
@@ -148,13 +142,7 @@ protected:
     {
         auto old_size = queue.size();
         T res;
-        ensureOpFail(
-            queue.pop(res),
-            queue,
-            old_size,
-            false,
-            false,
-            false);
+        ensureOpFail(queue.pop(res), queue, old_size, false, false, false);
     }
 
     template <typename T>
@@ -162,20 +150,8 @@ protected:
     {
         auto old_size = queue.size();
         T res;
-        ensureOpFail(
-            queue.tryPop(res),
-            queue,
-            old_size,
-            false,
-            true,
-            false);
-        ensureOpFail(
-            queue.popTimeout(res, std::chrono::microseconds(1)),
-            queue,
-            old_size,
-            false,
-            false,
-            true);
+        ensureOpFail(queue.tryPop(res), queue, old_size, false, true, false);
+        ensureOpFail(queue.popTimeout(res, std::chrono::microseconds(1)), queue, old_size, false, false, true);
     }
 
     template <typename T>
@@ -514,10 +490,7 @@ protected:
 
         DISALLOW_COPY(ThrowInjectable);
 
-        ThrowInjectable(ThrowInjectable && rhs)
-        {
-            throwOrMove(std::move(rhs));
-        }
+        ThrowInjectable(ThrowInjectable && rhs) { throwOrMove(std::move(rhs)); }
 
         ThrowInjectable & operator=(ThrowInjectable && rhs)
         {
@@ -534,8 +507,7 @@ protected:
 
         explicit ThrowInjectable(std::atomic<bool> * throw_when_move_)
             : throw_when_move(throw_when_move_)
-        {
-        }
+        {}
 
         void throwOrMove(ThrowInjectable && rhs)
         {
@@ -608,8 +580,7 @@ try
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
-    {
-    }
+    {}
 
     ASSERT_EQ(queue.size(), 0);
 
@@ -625,8 +596,7 @@ try
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
-    {
-    }
+    {}
     ASSERT_EQ(queue.size(), 1);
 
     throw_when_move.store(false);
@@ -641,8 +611,7 @@ try
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
-    {
-    }
+    {}
     ASSERT_EQ(queue.size(), 0);
 
     queue.emplace(0, false);
@@ -653,15 +622,9 @@ CATCH
 struct Counter
 {
     static int count;
-    Counter()
-    {
-        ++count;
-    }
+    Counter() { ++count; }
 
-    ~Counter()
-    {
-        --count;
-    }
+    ~Counter() { --count; }
 };
 int Counter::count = 0;
 
@@ -705,7 +668,9 @@ try
         /// case 2: less auxiliary memory bound than the capacity bound
         size_t actual_max_size = 5;
         auxiliary_memory_bound = sizeof(Int64) * actual_max_size;
-        MPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) { return sizeof(Int64); });
+        MPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) {
+            return sizeof(Int64);
+        });
         for (size_t i = 0; i < actual_max_size; i++)
             ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(actual_max_size) == MPMCQueueResult::FULL);
@@ -717,7 +682,9 @@ try
     {
         /// case 3: less capacity bound than the auxiliary memory bound
         auxiliary_memory_bound = sizeof(Int64) * (max_size * 10);
-        MPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) { return sizeof(Int64); });
+        MPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) {
+            return sizeof(Int64);
+        });
         for (size_t i = 0; i < max_size; i++)
             ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
@@ -751,12 +718,8 @@ try
         ASSERT_TRUE(queue.tryPush(100) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(5) == MPMCQueueResult::FULL);
         auto thread_manager = newThreadManager();
-        thread_manager->schedule(false, "thread_1", [&]() {
-            queue.push(5);
-        });
-        thread_manager->schedule(false, "thread_2", [&]() {
-            queue.push(6);
-        });
+        thread_manager->schedule(false, "thread_1", [&]() { queue.push(5); });
+        thread_manager->schedule(false, "thread_2", [&]() { queue.push(6); });
         std::exception_ptr current_exception = nullptr;
         try
         {

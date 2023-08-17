@@ -51,10 +51,7 @@ std::pair<ExpressionActionsPtr, std::vector<String>> buildLiteralProjection(
 class ProjectionTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        initializeDAGContext();
-    }
+    void SetUp() override { initializeDAGContext(); }
 
 public:
     static void SetUpTestCase()

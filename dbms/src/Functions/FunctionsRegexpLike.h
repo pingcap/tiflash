@@ -34,10 +34,14 @@ extern template class Param<ParamInt<true>, true>;
 extern template class Param<ParamInt<false>, false>;
 
 // regexp and regexp_like functions are executed in this macro
-#define EXECUTE_REGEXP_LIKE()                                                                                                                       \
-    do                                                                                                                                              \
-    {                                                                                                                                               \
-        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
+#define EXECUTE_REGEXP_LIKE()                  \
+    do                                         \
+    {                                          \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(       \
+            RES_ARG_VAR_NAME,                  \
+            *(EXPR_PARAM_PTR_VAR_NAME),        \
+            *(PAT_PARAM_PTR_VAR_NAME),         \
+            *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
 // Method to get actual match type param
@@ -70,7 +74,8 @@ extern template class Param<ParamInt<false>, false>;
 
 // Implementation of regexp and regexp_like functions
 template <typename Name>
-class FunctionStringRegexp : public FunctionStringRegexpBase
+class FunctionStringRegexp
+    : public FunctionStringRegexpBase
     , public IFunction
 {
 public:
@@ -116,7 +121,11 @@ public:
     }
 
     template <typename ExprT, typename PatT, typename MatchTypeT>
-    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(
+        ColumnWithTypeAndName & res_arg,
+        const ExprT & expr_param,
+        const PatT & pat_param,
+        const MatchTypeT & match_type_param) const
     {
         size_t col_size = expr_param.getDataNum();
 
@@ -149,7 +158,8 @@ public:
         ResultType default_val = 0;
         vec_res.assign(col_size, default_val);
 
-        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
+        constexpr bool has_nullable_col
+            = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
 
         // Start to match
         if constexpr (canMemorize<PatT, MatchTypeT>())
@@ -272,7 +282,8 @@ public:
 
         if (null_presence.has_null_constant)
         {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            block.getByPosition(result).column
+                = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }
 

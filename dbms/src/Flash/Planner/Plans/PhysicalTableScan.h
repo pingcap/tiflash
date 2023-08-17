@@ -48,10 +48,7 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    void buildPipeline(
-        PipelineBuilder & builder,
-        Context & context,
-        PipelineExecutorContext & exec_context) override;
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;

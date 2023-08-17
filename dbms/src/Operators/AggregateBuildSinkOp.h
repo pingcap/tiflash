@@ -32,13 +32,9 @@ public:
         : SinkOp(exec_context_, req_id)
         , index(index_)
         , agg_context(agg_context_)
-    {
-    }
+    {}
 
-    String getName() const override
-    {
-        return "AggregateBuildSinkOp";
-    }
+    String getName() const override { return "AggregateBuildSinkOp"; }
 
 protected:
     void operateSuffixImpl() override;

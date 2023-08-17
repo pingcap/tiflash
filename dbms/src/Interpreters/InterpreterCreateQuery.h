@@ -42,20 +42,14 @@ public:
     static ASTPtr formatColumns(const NamesAndTypesList & columns);
     static ASTPtr formatColumns(const ColumnsDescription & columns);
 
-    void setDatabaseLoadingThreadpool(ThreadPool & thread_pool_)
-    {
-        thread_pool = &thread_pool_;
-    }
+    void setDatabaseLoadingThreadpool(ThreadPool & thread_pool_) { thread_pool = &thread_pool_; }
 
     void setForceRestoreData(bool has_force_restore_data_flag_)
     {
         has_force_restore_data_flag = has_force_restore_data_flag_;
     }
 
-    void setInternal(bool internal_)
-    {
-        internal = internal_;
-    }
+    void setInternal(bool internal_) { internal = internal_; }
 
     /// Obtain information about columns, their types and default values, for case when columns in CREATE query is specified explicitly.
     static ColumnsDescription getColumnsDescription(const ASTExpressionList & columns, const Context & context);
@@ -65,7 +59,10 @@ private:
     BlockIO createTable(ASTCreateQuery & create);
 
     /// Calculate list of columns of table and return it.
-    ColumnsDescription setColumns(ASTCreateQuery & create, const Block & as_select_sample, const StoragePtr & as_storage) const;
+    ColumnsDescription setColumns(
+        ASTCreateQuery & create,
+        const Block & as_select_sample,
+        const StoragePtr & as_storage) const;
     void setEngine(ASTCreateQuery & create) const;
     void checkAccess(const ASTCreateQuery & create);
 

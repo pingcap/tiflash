@@ -33,6 +33,9 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Wait until no active threads in dynamic thread pool finish, if timeout, return 1, else return 0
-void dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/);
+void dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool(
+    Context & context,
+    const ASTs & /*args*/,
+    DBGInvoker::Printer /*output*/);
 
 } // namespace DB

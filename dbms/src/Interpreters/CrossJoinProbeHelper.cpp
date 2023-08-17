@@ -302,9 +302,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
 };
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-Block crossProbeBlockDeepCopyRightBlockImpl(
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks)
+Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_info, const Blocks & right_blocks)
 {
     size_t num_existing_columns = probe_process_info.block.columns();
     size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - num_existing_columns;
@@ -322,7 +320,9 @@ Block crossProbeBlockDeepCopyRightBlockImpl(
     size_t current_row = probe_process_info.start_row;
     size_t block_rows = probe_process_info.block.rows();
     MutableColumns dst_columns(probe_process_info.result_block_schema.columns());
-    size_t reserved_rows = std::min((block_rows - current_row) * probe_process_info.right_rows_to_be_added_when_matched, probe_process_info.max_block_size);
+    size_t reserved_rows = std::min(
+        (block_rows - current_row) * probe_process_info.right_rows_to_be_added_when_matched,
+        probe_process_info.max_block_size);
     for (size_t i = 0; i < probe_process_info.result_block_schema.columns(); ++i)
     {
         dst_columns[i] = probe_process_info.result_block_schema.getByPosition(i).column->cloneEmpty();
@@ -467,7 +467,8 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     if constexpr (has_null_map)
     {
         /// skip filtered rows, the filtered rows will be handled at the end of this block
-        while (probe_process_info.start_row < probe_process_info.block.rows() && (*probe_process_info.null_map)[probe_process_info.start_row])
+        while (probe_process_info.start_row < probe_process_info.block.rows()
+               && (*probe_process_info.null_map)[probe_process_info.start_row])
         {
             ++probe_process_info.start_row;
         }
@@ -476,7 +477,8 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     if (probe_process_info.start_row == probe_process_info.block.rows())
     {
         /// current probe block is done, collect un-matched rows
-        return crossProbeBlockShallowCopyRightBlockAddNotMatchedRows<KIND, STRICTNESS, has_null_map>(probe_process_info);
+        return crossProbeBlockShallowCopyRightBlockAddNotMatchedRows<KIND, STRICTNESS, has_null_map>(
+            probe_process_info);
     }
     assert(probe_process_info.next_right_block_index < right_blocks.size());
 
@@ -502,7 +504,8 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     {
         /// extra match_helper column for LeftOuterSemi join
         auto helper_index = block.columns() - 1;
-        block.getByPosition(helper_index).column = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1);
+        block.getByPosition(helper_index).column
+            = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1);
     }
     /// construct filter and offset column
     if (probe_process_info.filter != nullptr)
@@ -524,28 +527,40 @@ Block crossProbeBlockDeepCopyRightBlock(
 {
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
-#define DISPATCH(HAS_NULL_MAP)                                                                                                  \
-    if (kind == Cross && strictness == All)                                                                                     \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross && strictness == Any)                                                                                \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross_LeftOuter && strictness == All)                                                                      \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_LeftOuter && strictness == Any)                                                                      \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_Anti && strictness == All)                                                                           \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_Anti && strictness == Any)                                                                           \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                                  \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                                  \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                                  \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                                  \
-        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else                                                                                                                        \
+#define DISPATCH(HAS_NULL_MAP)                                                                                         \
+    if (kind == Cross && strictness == All)                                                                            \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);      \
+    else if (kind == Cross && strictness == Any)                                                                       \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);      \
+    else if (kind == Cross_LeftOuter && strictness == All)                                                             \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(                              \
+            probe_process_info,                                                                                        \
+            right_blocks);                                                                                             \
+    else if (kind == Cross_LeftOuter && strictness == Any)                                                             \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(                              \
+            probe_process_info,                                                                                        \
+            right_blocks);                                                                                             \
+    else if (kind == Cross_Anti && strictness == All)                                                                  \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_Anti && strictness == Any)                                                                  \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                         \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(                          \
+            probe_process_info,                                                                                        \
+            right_blocks);                                                                                             \
+    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                         \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(                          \
+            probe_process_info,                                                                                        \
+            right_blocks);                                                                                             \
+    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                         \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(                          \
+            probe_process_info,                                                                                        \
+            right_blocks);                                                                                             \
+    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                         \
+        return crossProbeBlockDeepCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(                          \
+            probe_process_info,                                                                                        \
+            right_blocks);                                                                                             \
+    else                                                                                                               \
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     if (probe_process_info.null_map)
@@ -567,28 +582,44 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlock(
 {
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
-#define DISPATCH(HAS_NULL_MAP)                                                                                                     \
-    if (kind == Cross && strictness == All)                                                                                        \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross && strictness == Any)                                                                                   \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross_LeftOuter && strictness == All)                                                                         \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_LeftOuter && strictness == Any)                                                                         \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_Anti && strictness == All)                                                                              \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_Anti && strictness == Any)                                                                              \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                                     \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                                     \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                                     \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                                     \
-        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else                                                                                                                           \
+#define DISPATCH(HAS_NULL_MAP)                                                                                       \
+    if (kind == Cross && strictness == All)                                                                          \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross && strictness == Any)                                                                     \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuter && strictness == All)                                                           \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(                         \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_LeftOuter && strictness == Any)                                                           \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(                         \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_Anti && strictness == All)                                                                \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(                              \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_Anti && strictness == Any)                                                                \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(                              \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                       \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(                     \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                       \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(                     \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                       \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(                     \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                       \
+        return crossProbeBlockShallowCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(                     \
+            probe_process_info,                                                                                      \
+            right_blocks);                                                                                           \
+    else                                                                                                             \
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     if (probe_process_info.null_map)

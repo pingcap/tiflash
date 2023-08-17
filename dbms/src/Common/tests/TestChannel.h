@@ -36,15 +36,9 @@ public:
         _lastMessage = msg;
     }
 
-    MsgList & list()
-    {
-        return _msgList;
-    }
+    MsgList & list() { return _msgList; }
 
-    void clear()
-    {
-        _msgList.clear();
-    }
+    void clear() { _msgList.clear(); }
 
     const Poco::Message & getLastMessage() const { return _lastMessage; }
 

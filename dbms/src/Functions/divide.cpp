@@ -194,7 +194,8 @@ struct DivideIntegralOrZeroImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(unlikely(divisionLeadsToFPE(a, b)) ? 0 : static_cast<Result>(a) / static_cast<Result>(b));
+        return static_cast<Result>(
+            unlikely(divisionLeadsToFPE(a, b)) ? 0 : static_cast<Result>(a) / static_cast<Result>(b));
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -280,8 +281,9 @@ struct DivideIntegralByConstantImpl : BinaryOperationImplBase<A, B, DivideIntegr
 
         while (a_pos < a_end_sse)
         {
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(c_pos),
-                             _mm_loadu_si128(reinterpret_cast<const __m128i *>(a_pos)) / divider);
+            _mm_storeu_si128(
+                reinterpret_cast<__m128i *>(c_pos),
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(a_pos)) / divider);
 
             a_pos += values_per_sse_register;
             c_pos += values_per_sse_register;

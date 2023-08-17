@@ -76,15 +76,9 @@ private:
     using Large = HyperLogLogCounter<K, Hash, HashValueType, DenominatorType, BiasEstimator, mode>;
 
 public:
-    CombinedCardinalityEstimator()
-    {
-        setContainerType(details::ContainerType::SMALL);
-    }
+    CombinedCardinalityEstimator() { setContainerType(details::ContainerType::SMALL); }
 
-    ~CombinedCardinalityEstimator()
-    {
-        destroy();
-    }
+    ~CombinedCardinalityEstimator() { destroy(); }
 
     void insert(Key value)
     {
@@ -323,10 +317,7 @@ private:
         return static_cast<details::ContainerType>(address & ~mask);
     }
 
-    void clearContainerType()
-    {
-        address &= mask;
-    }
+    void clearContainerType() { address &= mask; }
 
 private:
     Small small;

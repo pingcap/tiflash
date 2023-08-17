@@ -25,11 +25,15 @@ namespace
 bool canAsColumnString(const IColumn * column)
 {
     return typeid_cast<const ColumnString *>(column)
-        || (column->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
+        || (column->isColumnConst()
+            && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
 }
 } // namespace
 
-JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators)
+JoinMapMethod chooseJoinMapMethod(
+    const ColumnRawPtrs & key_columns,
+    Sizes & key_sizes,
+    const TiDB::TiDBCollators & collators)
 {
     const size_t keys_size = key_columns.size();
 
@@ -64,7 +68,9 @@ JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key
             return JoinMapMethod::key64;
         if (size_of_field == 16)
             return JoinMapMethod::keys128;
-        throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.",
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     /// If the keys fit in N bits, we will use a hash table for N-bit-packed keys

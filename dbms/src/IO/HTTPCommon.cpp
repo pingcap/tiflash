@@ -82,7 +82,12 @@ bool isHTTPS(const Poco::URI & uri)
         throw Exception(ErrorCodes::UNSUPPORTED_URI_SCHEME, "Unsupported scheme in URI '{}'", uri.toString());
 }
 
-HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool https, bool keep_alive, bool resolve_host = true)
+HTTPSessionPtr makeHTTPSessionImpl(
+    const std::string & host,
+    UInt16 port,
+    bool https,
+    bool keep_alive,
+    bool resolve_host = true)
 {
     HTTPSessionPtr session;
 
@@ -166,8 +171,7 @@ public:
         , proxy_port(proxy_port_)
         , proxy_https(proxy_https_)
         , resolve_host(resolve_host_)
-    {
-    }
+    {}
 };
 
 class HTTPSessionPool : private boost::noncopyable
@@ -185,7 +189,13 @@ public:
         bool operator==(const Key & rhs) const
         {
             return std::tie(target_host, target_port, is_target_https, proxy_host, proxy_port, is_proxy_https)
-                == std::tie(rhs.target_host, rhs.target_port, rhs.is_target_https, rhs.proxy_host, rhs.proxy_port, rhs.is_proxy_https);
+                == std::tie(
+                       rhs.target_host,
+                       rhs.target_port,
+                       rhs.is_target_https,
+                       rhs.proxy_host,
+                       rhs.proxy_port,
+                       rhs.is_proxy_https);
         }
     };
 
@@ -251,7 +261,15 @@ public:
         if (pool_ptr == endpoints_pool.end())
             std::tie(pool_ptr, std::ignore) = endpoints_pool.emplace(
                 key,
-                std::make_shared<SingleEndpointHTTPSessionPool>(host, port, https, proxy_host, proxy_port, proxy_https, max_connections_per_endpoint, resolve_host));
+                std::make_shared<SingleEndpointHTTPSessionPool>(
+                    host,
+                    port,
+                    https,
+                    proxy_host,
+                    proxy_port,
+                    proxy_https,
+                    max_connections_per_endpoint,
+                    resolve_host));
 
         CurrentMetrics::set(CurrentMetrics::ConnectionPoolSize, pool_ptr->second->getPoolSize());
 
@@ -266,7 +284,11 @@ public:
             auto msg = Poco::AnyCast<std::string>(session_data);
             if (!msg.empty())
             {
-                LOG_TRACE((&Poco::Logger::get("HTTPCommon")), "Failed communicating with {} with error '{}' will try to reconnect session", host, msg);
+                LOG_TRACE(
+                    (&Poco::Logger::get("HTTPCommon")),
+                    "Failed communicating with {} with error '{}' will try to reconnect session",
+                    host,
+                    msg);
 
                 if (resolve_host)
                 {
@@ -313,19 +335,30 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
     return session;
 }
 
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host)
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host)
 {
     return makePooledHTTPSession(uri, {}, timeouts, per_endpoint_pool_size, resolve_host);
 }
 
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host)
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const Poco::URI & proxy_uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host)
 {
     return HTTPSessionPool::instance().getSession(uri, proxy_uri, timeouts, per_endpoint_pool_size, resolve_host);
 }
 
 bool isRedirect(const Poco::Net::HTTPResponse::HTTPStatus status)
 {
-    return status == Poco::Net::HTTPResponse::HTTP_MOVED_PERMANENTLY || status == Poco::Net::HTTPResponse::HTTP_FOUND || status == Poco::Net::HTTPResponse::HTTP_SEE_OTHER || status == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT;
+    return status == Poco::Net::HTTPResponse::HTTP_MOVED_PERMANENTLY || status == Poco::Net::HTTPResponse::HTTP_FOUND
+        || status == Poco::Net::HTTPResponse::HTTP_SEE_OTHER
+        || status == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT;
 }
 
 std::istream * receiveResponse(
@@ -339,12 +372,15 @@ std::istream * receiveResponse(
     return &istr;
 }
 
-void assertResponseIsOk(const Poco::Net::HTTPRequest & request, Poco::Net::HTTPResponse & response, std::istream & istr, const bool allow_redirects)
+void assertResponseIsOk(
+    const Poco::Net::HTTPRequest & request,
+    Poco::Net::HTTPResponse & response,
+    std::istream & istr,
+    const bool allow_redirects)
 {
     auto status = response.getStatus();
 
-    if (!(status == Poco::Net::HTTPResponse::HTTP_OK
-          || status == Poco::Net::HTTPResponse::HTTP_CREATED
+    if (!(status == Poco::Net::HTTPResponse::HTTP_OK || status == Poco::Net::HTTPResponse::HTTP_CREATED
           || status == Poco::Net::HTTPResponse::HTTP_ACCEPTED
           || status == Poco::Net::HTTPResponse::HTTP_PARTIAL_CONTENT /// Reading with Range header was successful.
           || (isRedirect(status) && allow_redirects)))
@@ -368,14 +404,15 @@ Exception HTTPException::makeExceptionMessage(
     const std::string & reason,
     const std::string & body)
 {
-    return Exception(code,
-                     "Received error from remote server {}. "
-                     "HTTP status code: {} {}, "
-                     "body: {}",
-                     uri,
-                     static_cast<int>(http_status),
-                     reason,
-                     body);
+    return Exception(
+        code,
+        "Received error from remote server {}. "
+        "HTTP status code: {} {}, "
+        "body: {}",
+        uri,
+        static_cast<int>(http_status),
+        reason,
+        body);
 }
 
 } // namespace DB

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadHelpers.h>
 #include <DataStreams/TSKVRowInputStream.h>
+#include <IO/ReadHelpers.h>
 
 
 namespace DB
@@ -21,15 +21,18 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INCORRECT_DATA;
-    extern const int CANNOT_PARSE_ESCAPE_SEQUENCE;
-    extern const int CANNOT_READ_ALL_DATA;
-    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
-}
+extern const int INCORRECT_DATA;
+extern const int CANNOT_PARSE_ESCAPE_SEQUENCE;
+extern const int CANNOT_READ_ALL_DATA;
+extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+} // namespace ErrorCodes
 
 
 TSKVRowInputStream::TSKVRowInputStream(ReadBuffer & istr_, const Block & header_, bool skip_unknown_)
-    : istr(istr_), header(header_), skip_unknown(skip_unknown_), name_map(header.columns())
+    : istr(istr_)
+    , header(header_)
+    , skip_unknown(skip_unknown_)
+    , name_map(header.columns())
 {
     /// In this format, we assume that column name cannot contain BOM,
     ///  so BOM at beginning of stream cannot be confused with name of field, and it is safe to skip it.
@@ -37,7 +40,7 @@ TSKVRowInputStream::TSKVRowInputStream(ReadBuffer & istr_, const Block & header_
 
     size_t num_columns = header.columns();
     for (size_t i = 0; i < num_columns; ++i)
-        name_map[header.safeGetByPosition(i).name] = i;        /// NOTE You could place names more cache-locally.
+        name_map[header.safeGetByPosition(i).name] = i; /// NOTE You could place names more cache-locally.
 }
 
 
@@ -96,7 +99,9 @@ static bool readName(ReadBuffer & buf, StringRef & ref, String & tmp)
         }
     }
 
-    throw Exception("Unexpected end of stream while reading key name from TSKV format", ErrorCodes::CANNOT_READ_ALL_DATA);
+    throw Exception(
+        "Unexpected end of stream while reading key name from TSKV format",
+        ErrorCodes::CANNOT_READ_ALL_DATA);
 }
 
 
@@ -134,7 +139,9 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
                 if (name_map.end() == it)
                 {
                     if (!skip_unknown)
-                        throw Exception("Unknown field found while parsing TSKV format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
+                        throw Exception(
+                            "Unknown field found while parsing TSKV format: " + name_ref.toString(),
+                            ErrorCodes::INCORRECT_DATA);
 
                     /// If the key is not found, skip the value.
                     NullSink sink;
@@ -145,7 +152,9 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
                     index = it->getMapped();
 
                     if (read_columns[index])
-                        throw Exception("Duplicate field found while parsing TSKV format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
+                        throw Exception(
+                            "Duplicate field found while parsing TSKV format: " + name_ref.toString(),
+                            ErrorCodes::INCORRECT_DATA);
 
                     read_columns[index] = true;
 
@@ -156,12 +165,16 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
             {
                 /// The only thing that can go without value is `tskv` fragment that is ignored.
                 if (!(name_ref.size == 4 && 0 == memcmp(name_ref.data, "tskv", 4)))
-                    throw Exception("Found field without value while parsing TSKV format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
+                    throw Exception(
+                        "Found field without value while parsing TSKV format: " + name_ref.toString(),
+                        ErrorCodes::INCORRECT_DATA);
             }
 
             if (istr.eof())
             {
-                throw Exception("Unexpected end of stream after field in TSKV format: " + name_ref.toString(), ErrorCodes::CANNOT_READ_ALL_DATA);
+                throw Exception(
+                    "Unexpected end of stream after field in TSKV format: " + name_ref.toString(),
+                    ErrorCodes::CANNOT_READ_ALL_DATA);
             }
             else if (*istr.position() == '\t')
             {
@@ -182,7 +195,9 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
                     read_columns[index] = false;
                 }
 
-                throw Exception("Found garbage after field in TSKV format: " + name_ref.toString(), ErrorCodes::CANNOT_PARSE_INPUT_ASSERTION_FAILED);
+                throw Exception(
+                    "Found garbage after field in TSKV format: " + name_ref.toString(),
+                    ErrorCodes::CANNOT_PARSE_INPUT_ASSERTION_FAILED);
             }
         }
     }
@@ -201,4 +216,4 @@ void TSKVRowInputStream::syncAfterError()
     skipToUnescapedNextLineOrEOF(istr);
 }
 
-}
+} // namespace DB

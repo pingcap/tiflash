@@ -122,9 +122,7 @@ void WriteBufferFromFileDescriptor::sync()
     /// Request OS to sync data with storage medium.
     ProfileEvents::increment(ProfileEvents::FileFSync);
     Stopwatch sw;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds()); });
     int res = fsync(fd);
     if (-1 == res)
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);

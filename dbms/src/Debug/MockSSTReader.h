@@ -49,24 +49,20 @@ struct MockSSTReader
         , end(data_.end())
         , remained(iter != end)
         , kind(kind_)
-    {
-    }
+    {}
 
-    static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_, SSTFormatKind kind_) { return SSTReaderPtr{new MockSSTReader(data_, kind_), kind_}; }
+    static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_, SSTFormatKind kind_)
+    {
+        return SSTReaderPtr{new MockSSTReader(data_, kind_), kind_};
+    }
 
     bool ffi_remained() const { return iter != end; }
 
-    BaseBuffView ffi_key() const
-    {
-        return {iter->first.data(), iter->first.length()};
-    }
+    BaseBuffView ffi_key() const { return {iter->first.data(), iter->first.length()}; }
 
     BaseBuffView ffi_val() const { return {iter->second.data(), iter->second.length()}; }
 
-    void ffi_next()
-    {
-        ++iter;
-    }
+    void ffi_next() { ++iter; }
 
     SSTFormatKind ffi_kind() { return kind; }
 

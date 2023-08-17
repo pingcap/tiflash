@@ -31,18 +31,22 @@ extern const int UNACCEPTABLE_URL;
 void RemoteHostFilter::checkURL(const Poco::URI & uri) const
 {
     if (!checkForDirectEntry(uri.getHost()) && !checkForDirectEntry(uri.getHost() + ":" + toString(uri.getPort())))
-        throw Exception(ErrorCodes::UNACCEPTABLE_URL, "URL \"{}\" is not allowed in configuration file, "
-                                                      "see <remote_url_allow_hosts>",
-                        uri.toString());
+        throw Exception(
+            ErrorCodes::UNACCEPTABLE_URL,
+            "URL \"{}\" is not allowed in configuration file, "
+            "see <remote_url_allow_hosts>",
+            uri.toString());
 }
 
 void RemoteHostFilter::checkHostAndPort(const std::string & host, const std::string & port) const
 {
     if (!checkForDirectEntry(host) && !checkForDirectEntry(host + ":" + port))
-        throw Exception(ErrorCodes::UNACCEPTABLE_URL, "URL \"{}:{}\" is not allowed in configuration file, "
-                                                      "see <remote_url_allow_hosts>",
-                        host,
-                        port);
+        throw Exception(
+            ErrorCodes::UNACCEPTABLE_URL,
+            "URL \"{}:{}\" is not allowed in configuration file, "
+            "see <remote_url_allow_hosts>",
+            host,
+            port);
 }
 
 void RemoteHostFilter::setValuesFromConfig(const Poco::Util::AbstractConfiguration & config)

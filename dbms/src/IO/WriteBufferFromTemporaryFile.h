@@ -24,7 +24,8 @@ namespace DB
 {
 /// Rereadable WriteBuffer, could be used as disk buffer
 /// Creates unique temporary in directory (and directory itself)
-class WriteBufferFromTemporaryFile : public WriteBufferFromFile
+class WriteBufferFromTemporaryFile
+    : public WriteBufferFromFile
     , public IReadableWriteBuffer
 {
 public:

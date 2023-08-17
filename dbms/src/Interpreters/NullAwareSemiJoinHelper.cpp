@@ -34,17 +34,28 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , pos_in_columns(0)
     , map_it(map_it_)
 {
-    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti
-                  || KIND == NullAware_LeftOuterSemi);
+    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<RowsNotInsertToMap *> & null_rows, size_t & current_offset, size_t min_pace)
+void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
+    MutableColumns & added_columns,
+    size_t left_columns,
+    size_t right_columns,
+    const std::vector<RowsNotInsertToMap *> & null_rows,
+    size_t & current_offset,
+    size_t min_pace)
 {
-    static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
+    static_assert(
+        STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
+        || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
-    RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type<NASemiJoinStep>::type>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
+    RUNTIME_CHECK_MSG(
+        step == STEP,
+        "current step {} != caller's step {}",
+        static_cast<std::underlying_type<NASemiJoinStep>::type>(step),
+        static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
     static constexpr size_t MAX_PACE = 8192;
     pace = std::min(MAX_PACE, std::max(pace, min_pace));
@@ -66,7 +77,8 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
         if (map_it == nullptr)
             step_end = true;
     }
-    else if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
+    else if constexpr (
+        STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
         size_t count = pace;
         while (pos_in_null_rows < null_rows.size() && count > 0)
@@ -108,7 +120,10 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end)
+void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
+    ConstNullMapPtr eq_null_map,
+    size_t offset_begin,
+    size_t offset_end)
 {
     static_assert(STRICTNESS == Any);
     static_assert(STEP != NASemiJoinStep::DONE);
@@ -131,7 +146,12 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(ConstNullMapPtr eq_null
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map, size_t offset_begin, size_t offset_end)
+void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
+    ConstNullMapPtr eq_null_map,
+    const PaddedPODArray<UInt8> & other_column,
+    ConstNullMapPtr other_null_map,
+    size_t offset_begin,
+    size_t offset_end)
 {
     static_assert(STRICTNESS == All);
     static_assert(STEP != NASemiJoinStep::DONE);
@@ -168,7 +188,11 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkStepEnd()
     if (!step_end)
         return;
 
-    RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type_t<NASemiJoinStep>>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
+    RUNTIME_CHECK_MSG(
+        step == STEP,
+        "current step {} != caller's step {}",
+        static_cast<std::underlying_type_t<NASemiJoinStep>>(step),
+        static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
     if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
@@ -215,8 +239,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     , max_block_size(max_block_size_)
     , non_equal_conditions(non_equal_conditions_)
 {
-    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti
-                  || KIND == NullAware_LeftOuterSemi);
+    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi);
     static_assert(STRICTNESS == Any || STRICTNESS == All);
 
     RUNTIME_CHECK(block.columns() == left_columns + right_columns);
@@ -260,9 +283,13 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 template <NASemiJoinStep STEP>
-void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
+void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
+    std::list<NASemiJoinHelper::Result *> & res_list,
+    std::list<NASemiJoinHelper::Result *> & next_res_list)
 {
-    static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
+    static_assert(
+        STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
+        || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
     auto it = res_list.begin();
     while (it != res_list.end())
@@ -300,13 +327,22 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
         for (auto & res : res_list)
         {
             size_t prev_offset = current_offset;
-            res->template fillRightColumns<Mapped, STEP>(columns, left_columns, right_columns, null_rows, current_offset, min_pace);
+            res->template fillRightColumns<Mapped, STEP>(
+                columns,
+                left_columns,
+                right_columns,
+                null_rows,
+                current_offset,
+                min_pace);
 
             /// Note that current_offset - prev_offset may be zero.
             if (current_offset > prev_offset)
             {
                 for (size_t i = 0; i < left_columns; ++i)
-                    columns[i]->insertManyFrom(*block.getByPosition(i).column.get(), res->getRowNum(), current_offset - prev_offset);
+                    columns[i]->insertManyFrom(
+                        *block.getByPosition(i).column.get(),
+                        res->getRowNum(),
+                        current_offset - prev_offset);
             }
 
             offsets.push_back(current_offset);
@@ -319,11 +355,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
         /// from equal and other condition expressions.
         exec_block = block.cloneWithColumns(std::move(columns));
 
-        runAndCheckExprResult<STEP>(
-            exec_block,
-            offsets,
-            res_list,
-            next_res_list);
+        runAndCheckExprResult<STEP>(exec_block, offsets, res_list, next_res_list);
     }
 }
 
@@ -376,7 +408,11 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 template <NASemiJoinStep STEP>
-void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
+void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(
+    Block & exec_block,
+    const std::vector<size_t> & offsets,
+    std::list<NASemiJoinHelper::Result *> & res_list,
+    std::list<NASemiJoinHelper::Result *> & next_res_list)
 {
     /// Attention: other_cond_expr must be executed first then null_aware_eq_cond_expr can be executed.
     /// Because the execution order must be the same as the construction order in compiling(in TiFlashJoin::genJoinOtherConditionsAction).
@@ -408,7 +444,10 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
             exec_block.getByName(non_equal_conditions.null_aware_eq_cond_name).column = eq_column;
         }
 
-        RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The null-aware equal condition column should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
+        RUNTIME_CHECK_MSG(
+            eq_column->isColumnNullable(),
+            "The null-aware equal condition column should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used "
+            "instead");
 
         const auto * nullable_eq_column = typeid_cast<const ColumnNullable *>(eq_column.get());
         eq_null_map = &nullable_eq_column->getNullMapData();
@@ -453,7 +492,9 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         if (other_column->isColumnNullable())
         {
             const auto * nullable_other_column = typeid_cast<const ColumnNullable *>(other_column.get());
-            other_column_data = &typeid_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())->getData();
+            other_column_data
+                = &typeid_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())
+                       ->getData();
             other_null_map = &nullable_other_column->getNullMapData();
         }
         else
@@ -465,7 +506,12 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         auto it = res_list.begin();
         for (size_t i = 0, size = offsets.size(); i < size && it != res_list.end(); ++i)
         {
-            (*it)->template checkExprResult<STEP>(eq_null_map, *other_column_data, other_null_map, prev_offset, offsets[i]);
+            (*it)->template checkExprResult<STEP>(
+                eq_null_map,
+                *other_column_data,
+                other_null_map,
+                prev_offset,
+                offsets[i]);
 
             if ((*it)->getStep() == NASemiJoinStep::DONE)
                 it = res_list.erase(it);
@@ -482,13 +528,11 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     }
 }
 
-#define M(KIND, STRICTNESS, MAPTYPE) \
-    template class NASemiJoinResult<KIND, STRICTNESS>;
+#define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinResult<KIND, STRICTNESS>;
 APPLY_FOR_NULL_AWARE_JOIN(M)
 #undef M
 
-#define M(KIND, STRICTNESS, MAPTYPE) \
-    template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType::Base_t>;
+#define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType::Base_t>;
 APPLY_FOR_NULL_AWARE_JOIN(M)
 #undef M
 } // namespace DB

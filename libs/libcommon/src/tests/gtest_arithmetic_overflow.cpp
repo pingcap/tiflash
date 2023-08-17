@@ -45,7 +45,9 @@ TEST(OVERFLOW_Suite, SimpleTest)
 
     /// 2^254 << 1 = 2^255
     is_overflow = common::mulOverflow(int_254, Int256(2), res256);
-    ASSERT_EQ(is_overflow, false); /// because the sign flag is processed by an extra bit, excluding from 256 bits of Int256.
+    ASSERT_EQ(
+        is_overflow,
+        false); /// because the sign flag is processed by an extra bit, excluding from 256 bits of Int256.
 
     /// 2^254 << 2 = 2^256
     is_overflow = common::mulOverflow(int_254, Int256(4), res256);

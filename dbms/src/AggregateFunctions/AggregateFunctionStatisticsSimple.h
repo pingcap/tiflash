@@ -71,15 +71,9 @@ struct VarMoments
         m2 += rhs.m2;
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writePODBinary(*this, buf);
-    }
+    void write(WriteBuffer & buf) const { writePODBinary(*this, buf); }
 
-    void read(ReadBuffer & buf)
-    {
-        readPODBinary(*this, buf);
-    }
+    void read(ReadBuffer & buf) { readPODBinary(*this, buf); }
 
     template <VarianceMode mode, VariancePower power>
     T get() const
@@ -116,15 +110,9 @@ struct CovarMoments
         xy += rhs.xy;
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writePODBinary(*this, buf);
-    }
+    void write(WriteBuffer & buf) const { writePODBinary(*this, buf); }
 
-    void read(ReadBuffer & buf)
-    {
-        readPODBinary(*this, buf);
-    }
+    void read(ReadBuffer & buf) { readPODBinary(*this, buf); }
 
     template <VarianceMode mode>
     T get() const
@@ -166,20 +154,11 @@ struct CorrMoments
         y2 += rhs.y2;
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writePODBinary(*this, buf);
-    }
+    void write(WriteBuffer & buf) const { writePODBinary(*this, buf); }
 
-    void read(ReadBuffer & buf)
-    {
-        readPODBinary(*this, buf);
-    }
+    void read(ReadBuffer & buf) { readPODBinary(*this, buf); }
 
-    T get() const
-    {
-        return (m0 * xy - x1 * y1) / sqrt((m0 * x2 - x1 * x1) * (m0 * y2 - y1 * y1));
-    }
+    T get() const { return (m0 * xy - x1 * y1) / sqrt((m0 * x2 - x1 * x1) * (m0 * y2 - y1 * y1)); }
 };
 
 
@@ -196,7 +175,8 @@ enum class StatisticsFunctionKind
 
 
 template <typename T1, typename T2>
-using VarianceCalcType = std::conditional_t<std::is_same_v<T1, Float32> && std::is_same_v<T2, Float32>, Float32, Float64>;
+using VarianceCalcType
+    = std::conditional_t<std::is_same_v<T1, Float32> && std::is_same_v<T2, Float32>, Float32, Float64>;
 
 
 template <typename T1, typename T2, typename Data, StatisticsFunctionKind Kind>
@@ -227,20 +207,18 @@ public:
         }
     }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeNumber<ResultType>>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeNumber<ResultType>>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        if constexpr (Kind == StatisticsFunctionKind::covarPop || Kind == StatisticsFunctionKind::covarSamp || Kind == StatisticsFunctionKind::corr)
+        if constexpr (
+            Kind == StatisticsFunctionKind::covarPop || Kind == StatisticsFunctionKind::covarSamp
+            || Kind == StatisticsFunctionKind::corr)
             this->data(place).add(
                 static_cast<const ColumnVector<T1> &>(*columns[0]).getData()[row_num],
                 static_cast<const ColumnVector<T2> &>(*columns[1]).getData()[row_num]);
         else
-            this->data(place).add(
-                static_cast<const ColumnVector<T1> &>(*columns[0]).getData()[row_num]);
+            this->data(place).add(static_cast<const ColumnVector<T1> &>(*columns[0]).getData()[row_num]);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -284,18 +262,28 @@ public:
 
 
 template <typename T>
-using AggregateFunctionVarPopSimple = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::varPop>;
+using AggregateFunctionVarPopSimple
+    = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::varPop>;
 template <typename T>
-using AggregateFunctionVarSampSimple = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::varSamp>;
+using AggregateFunctionVarSampSimple
+    = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::varSamp>;
 template <typename T>
-using AggregateFunctionStddevPopSimple = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::stddevPop>;
+using AggregateFunctionStddevPopSimple
+    = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::stddevPop>;
 template <typename T>
-using AggregateFunctionStddevSampSimple = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::stddevSamp>;
+using AggregateFunctionStddevSampSimple
+    = AggregateFunctionVarianceSimple<T, T, VarMoments<VarianceCalcType<T, T>>, StatisticsFunctionKind::stddevSamp>;
 template <typename T1, typename T2>
-using AggregateFunctionCovarPopSimple = AggregateFunctionVarianceSimple<T1, T2, CovarMoments<VarianceCalcType<T1, T2>>, StatisticsFunctionKind::covarPop>;
+using AggregateFunctionCovarPopSimple
+    = AggregateFunctionVarianceSimple<T1, T2, CovarMoments<VarianceCalcType<T1, T2>>, StatisticsFunctionKind::covarPop>;
 template <typename T1, typename T2>
-using AggregateFunctionCovarSampSimple = AggregateFunctionVarianceSimple<T1, T2, CovarMoments<VarianceCalcType<T1, T2>>, StatisticsFunctionKind::covarSamp>;
+using AggregateFunctionCovarSampSimple = AggregateFunctionVarianceSimple<
+    T1,
+    T2,
+    CovarMoments<VarianceCalcType<T1, T2>>,
+    StatisticsFunctionKind::covarSamp>;
 template <typename T1, typename T2>
-using AggregateFunctionCorrSimple = AggregateFunctionVarianceSimple<T1, T2, CorrMoments<VarianceCalcType<T1, T2>>, StatisticsFunctionKind::corr>;
+using AggregateFunctionCorrSimple
+    = AggregateFunctionVarianceSimple<T1, T2, CorrMoments<VarianceCalcType<T1, T2>>, StatisticsFunctionKind::corr>;
 
 } // namespace DB

@@ -58,7 +58,11 @@ public:
     explicit ThreadPoolImpl(size_t max_threads_);
 
     /// queue_size - maximum number of running plus scheduled jobs. It can be greater than max_threads. Zero means unlimited.
-    ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_ = true);
+    ThreadPoolImpl(
+        size_t max_threads_,
+        size_t max_free_threads_,
+        size_t queue_size_,
+        bool shutdown_on_exception_ = true);
 
     /// Add new job. Locks until number of scheduled jobs is less than maximum or exception in one of threads was thrown.
     /// If any thread was throw an exception, first exception will be rethrown from this method,
@@ -74,7 +78,11 @@ public:
     bool trySchedule(Job job, ssize_t priority = 0, uint64_t wait_microseconds = 0) noexcept;
 
     /// Similar to scheduleOrThrowOnError(...). Wait for specified amount of time and schedule a job or throw an exception.
-    void scheduleOrThrow(Job job, ssize_t priority = 0, uint64_t wait_microseconds = 0, bool propagate_opentelemetry_tracing_context = true);
+    void scheduleOrThrow(
+        Job job,
+        ssize_t priority = 0,
+        uint64_t wait_microseconds = 0,
+        bool propagate_opentelemetry_tracing_context = true);
 
     /// Wait for all currently active jobs to be done.
     /// You may call schedule and wait many times in arbitrary order.
@@ -126,10 +134,7 @@ private:
             , priority(priority_)
         {}
 
-        bool operator<(const JobWithPriority & rhs) const
-        {
-            return priority < rhs.priority;
-        }
+        bool operator<(const JobWithPriority & rhs) const { return priority < rhs.priority; }
     };
 
     boost::heap::priority_queue<JobWithPriority> jobs;
@@ -137,7 +142,11 @@ private:
     std::exception_ptr first_exception;
 
     template <typename ReturnType>
-    ReturnType scheduleImpl(Job job, ssize_t priority, std::optional<uint64_t> wait_microseconds, bool propagate_opentelemetry_tracing_context = true);
+    ReturnType scheduleImpl(
+        Job job,
+        ssize_t priority,
+        std::optional<uint64_t> wait_microseconds,
+        bool propagate_opentelemetry_tracing_context = true);
 
     void worker(typename std::list<Thread>::iterator thread_it);
 
@@ -162,12 +171,17 @@ using FreeThreadPool = ThreadPoolImpl<std::thread>;
   * - address sanitizer and thread sanitizer will not fail due to global limit on number of created threads.
   * - program will work faster in gdb;
   */
-class GlobalThreadPool : public FreeThreadPool
+class GlobalThreadPool
+    : public FreeThreadPool
     , private boost::noncopyable
 {
     static std::unique_ptr<GlobalThreadPool> the_instance;
 
-    GlobalThreadPool(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, const bool shutdown_on_exception_)
+    GlobalThreadPool(
+        size_t max_threads_,
+        size_t max_free_threads_,
+        size_t queue_size_,
+        const bool shutdown_on_exception_)
         : FreeThreadPool(max_threads_, max_free_threads_, queue_size_, shutdown_on_exception_)
     {}
 
@@ -207,9 +221,7 @@ public:
              func = std::forward<Function>(func),
              args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
             {
-                SCOPE_EXIT(
-                    state->thread_id = std::thread::id();
-                    state->event.set(););
+                SCOPE_EXIT(state->thread_id = std::thread::id(); state->event.set(););
 
                 state->thread_id = std::this_thread::get_id();
 
@@ -228,10 +240,7 @@ public:
             propagate_opentelemetry_context);
     }
 
-    ThreadFromGlobalPoolImpl(ThreadFromGlobalPoolImpl && rhs) noexcept
-    {
-        *this = std::move(rhs);
-    }
+    ThreadFromGlobalPoolImpl(ThreadFromGlobalPoolImpl && rhs) noexcept { *this = std::move(rhs); }
 
     ThreadFromGlobalPoolImpl & operator=(ThreadFromGlobalPoolImpl && rhs) noexcept
     {
@@ -288,10 +297,7 @@ protected:
     /// Internally initialized() should be used over joinable(),
     /// since it is enough to know that the thread is initialized,
     /// and ignore that fact that thread cannot join itself.
-    bool initialized() const
-    {
-        return static_cast<bool>(state);
-    }
+    bool initialized() const { return static_cast<bool>(state); }
 };
 
 /// ThreadPoolWaitGroup is used to wait all the task launched here to finish

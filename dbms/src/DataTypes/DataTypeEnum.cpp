@@ -88,21 +88,25 @@ void DataTypeEnum<Type>::fillMaps()
 {
     for (const auto & name_and_value : values)
     {
-        const auto name_to_value_pair = name_to_value_map.insert(
-            {StringRef{name_and_value.first}, name_and_value.second});
+        const auto name_to_value_pair
+            = name_to_value_map.insert({StringRef{name_and_value.first}, name_and_value.second});
 
         if (!name_to_value_pair.second)
-            throw Exception{"Duplicate names in enum: '" + name_and_value.first + "' = " + toString(name_and_value.second)
-                                + " and '" + name_to_value_pair.first->getKey().toString() + "' = " + toString(name_to_value_pair.first->getMapped()),
-                            ErrorCodes::SYNTAX_ERROR};
+            throw Exception{
+                "Duplicate names in enum: '" + name_and_value.first + "' = " + toString(name_and_value.second)
+                    + " and '" + name_to_value_pair.first->getKey().toString()
+                    + "' = " + toString(name_to_value_pair.first->getMapped()),
+                ErrorCodes::SYNTAX_ERROR};
 
-        const auto value_to_name_pair = value_to_name_map.insert(
-            {name_and_value.second, StringRef{name_and_value.first}});
+        const auto value_to_name_pair
+            = value_to_name_map.insert({name_and_value.second, StringRef{name_and_value.first}});
 
         if (!value_to_name_pair.second)
-            throw Exception{"Duplicate values in enum: '" + name_and_value.first + "' = " + toString(name_and_value.second)
-                                + " and '" + value_to_name_pair.first->second.toString() + "' = " + toString(value_to_name_pair.first->first),
-                            ErrorCodes::SYNTAX_ERROR};
+            throw Exception{
+                "Duplicate values in enum: '" + name_and_value.first + "' = " + toString(name_and_value.second)
+                    + " and '" + value_to_name_pair.first->second.toString()
+                    + "' = " + toString(value_to_name_pair.first->first),
+                ErrorCodes::SYNTAX_ERROR};
     }
 }
 
@@ -186,7 +190,11 @@ void DataTypeEnum<Type>::deserializeTextQuoted(IColumn & column, ReadBuffer & is
 }
 
 template <typename Type>
-void DataTypeEnum<Type>::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
+void DataTypeEnum<Type>::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON &) const
 {
     writeJSONString(getNameForValue(static_cast<const ColumnType &>(column).getData()[row_num]), ostr);
 }
@@ -312,7 +320,9 @@ Field DataTypeEnum<Type>::castToName(const Field & value_or_name) const
         return getNameForValue(static_cast<Type>(value)).toString();
     }
     else
-        throw Exception(String("DataTypeEnum: Unsupported type of field ") + value_or_name.getTypeName(), ErrorCodes::BAD_TYPE_OF_FIELD);
+        throw Exception(
+            String("DataTypeEnum: Unsupported type of field ") + value_or_name.getTypeName(),
+            ErrorCodes::BAD_TYPE_OF_FIELD);
 }
 
 template <typename Type>
@@ -322,8 +332,7 @@ Field DataTypeEnum<Type>::castToValue(const Field & value_or_name) const
     {
         return static_cast<Int64>(getValue(value_or_name.get<String>()));
     }
-    else if (value_or_name.getType() == Field::Types::Int64
-             || value_or_name.getType() == Field::Types::UInt64)
+    else if (value_or_name.getType() == Field::Types::Int64 || value_or_name.getType() == Field::Types::UInt64)
     {
         Int64 value = value_or_name.get<Int64>();
         checkOverflow<Type>(value);
@@ -331,7 +340,9 @@ Field DataTypeEnum<Type>::castToValue(const Field & value_or_name) const
         return value;
     }
     else
-        throw Exception(String("DataTypeEnum: Unsupported type of field ") + value_or_name.getTypeName(), ErrorCodes::BAD_TYPE_OF_FIELD);
+        throw Exception(
+            String("DataTypeEnum: Unsupported type of field ") + value_or_name.getTypeName(),
+            ErrorCodes::BAD_TYPE_OF_FIELD);
 }
 
 
@@ -355,30 +366,32 @@ static DataTypePtr create(const ASTPtr & arguments)
     for (const ASTPtr & child : arguments->children)
     {
         const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
-        if (!func
-            || func->name != "equals"
-            || func->parameters
-            || !func->arguments
+        if (!func || func->name != "equals" || func->parameters || !func->arguments
             || func->arguments->children.size() != 2)
-            throw Exception("Elements of Enum data type must be of form: 'name' = number, where name is string literal and number is an integer",
-                            ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+            throw Exception(
+                "Elements of Enum data type must be of form: 'name' = number, where name is string literal and number "
+                "is an integer",
+                ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
         const ASTLiteral * name_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[0].get());
         const ASTLiteral * value_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[1].get());
 
-        if (!name_literal
-            || !value_literal
-            || name_literal->value.getType() != Field::Types::String
-            || (value_literal->value.getType() != Field::Types::UInt64 && value_literal->value.getType() != Field::Types::Int64))
-            throw Exception("Elements of Enum data type must be of form: 'name' = number, where name is string literal and number is an integer",
-                            ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+        if (!name_literal || !value_literal || name_literal->value.getType() != Field::Types::String
+            || (value_literal->value.getType() != Field::Types::UInt64
+                && value_literal->value.getType() != Field::Types::Int64))
+            throw Exception(
+                "Elements of Enum data type must be of form: 'name' = number, where name is string literal and number "
+                "is an integer",
+                ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
         const String & name = name_literal->value.get<String>();
         const auto value = value_literal->value.get<typename NearestFieldType<FieldType>::Type>();
 
         if (value > std::numeric_limits<FieldType>::max() || value < std::numeric_limits<FieldType>::min())
-            throw Exception{"Value " + toString(value) + " for element '" + name + "' exceeds range of " + EnumName<FieldType>::value,
-                            ErrorCodes::ARGUMENT_OUT_OF_BOUND};
+            throw Exception{
+                "Value " + toString(value) + " for element '" + name + "' exceeds range of "
+                    + EnumName<FieldType>::value,
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND};
 
         values.emplace_back(name, value);
     }

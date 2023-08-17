@@ -35,7 +35,11 @@ ConnectionPoolWithFailover::ConnectionPoolWithFailover(
     LoadBalancing load_balancing,
     size_t max_tries_,
     time_t decrease_error_period_)
-    : Base(std::move(nested_pools_), max_tries_, decrease_error_period_, &Poco::Logger::get("ConnectionPoolWithFailover"))
+    : Base(
+        std::move(nested_pools_),
+        max_tries_,
+        decrease_error_period_,
+        &Poco::Logger::get("ConnectionPoolWithFailover"))
     , default_load_balancing(load_balancing)
 {
     const std::string & local_hostname = getFQDNOrHostName();
@@ -48,7 +52,9 @@ ConnectionPoolWithFailover::ConnectionPoolWithFailover(
     }
 }
 
-IConnectionPool::Entry ConnectionPoolWithFailover::getImpl(const Settings * settings, bool /*force_connected*/) // NOLINT
+IConnectionPool::Entry ConnectionPoolWithFailover::getImpl(
+    const Settings * settings,
+    bool /*force_connected*/) // NOLINT
 {
     TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message) {
         return tryGetEntry(pool, fail_message, settings);
@@ -142,8 +148,7 @@ std::vector<ConnectionPoolWithFailover::TryResult> ConnectionPoolWithFailover::g
     return Base::getMany(min_entries, max_entries, try_get_entry, get_priority, fallback_to_stale_replicas);
 }
 
-ConnectionPoolWithFailover::TryResult
-ConnectionPoolWithFailover::tryGetEntry(
+ConnectionPoolWithFailover::TryResult ConnectionPoolWithFailover::tryGetEntry(
     IConnectionPool & pool,
     std::string & fail_message,
     const Settings * settings,

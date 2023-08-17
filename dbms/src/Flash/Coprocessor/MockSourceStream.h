@@ -27,7 +27,11 @@
 namespace DB
 {
 template <typename SourceType>
-std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> cutStreams(Context & context, ColumnsWithTypeAndName & columns_with_type_and_name, size_t max_streams, DB::LoggerPtr log)
+std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> cutStreams(
+    Context & context,
+    ColumnsWithTypeAndName & columns_with_type_and_name,
+    size_t max_streams,
+    DB::LoggerPtr log)
 {
     NamesAndTypes names_and_types;
     size_t rows = 0;
@@ -48,28 +52,41 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> cutStreams(Co
         size_t row_for_current_stream = row_for_each_stream + (i < rows_left ? 1 : 0);
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
-            columns_for_stream.push_back(
-                ColumnWithTypeAndName(
-                    column_with_type_and_name.column->cut(start, row_for_current_stream),
-                    column_with_type_and_name.type,
-                    column_with_type_and_name.name));
+            columns_for_stream.push_back(ColumnWithTypeAndName(
+                column_with_type_and_name.column->cut(start, row_for_current_stream),
+                column_with_type_and_name.type,
+                column_with_type_and_name.name));
         }
         start += row_for_current_stream;
         if constexpr (std::is_same_v<SourceType, MockTableScanBlockInputStream>)
-            mock_source_streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size, context.isCancelTest()));
+            mock_source_streams.emplace_back(std::make_shared<SourceType>(
+                columns_for_stream,
+                context.getSettingsRef().max_block_size,
+                context.isCancelTest()));
         else
-            mock_source_streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size));
+            mock_source_streams.emplace_back(
+                std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size));
     }
     RUNTIME_ASSERT(start == rows, log, "mock source streams' total size must same as user input");
     return {names_and_types, mock_source_streams};
 }
 
-std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(Context & context, size_t max_streams, DB::LoggerPtr log, const TiDBTableScan & table_scan);
+std::pair<NamesAndTypes, std::vector<std::shared_ptr<MockTableScanBlockInputStream>>> mockSourceStreamForMpp(
+    Context & context,
+    size_t max_streams,
+    DB::LoggerPtr log,
+    const TiDBTableScan & table_scan);
 
 size_t getMockSourceStreamConcurrency(size_t max_streams, size_t scan_concurrency_hint);
 
 template <typename SourceType>
-std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id, Int64 table_id = 0, const ColumnInfos & used_columns = {})
+std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(
+    Context & context,
+    size_t max_streams,
+    DB::LoggerPtr log,
+    String executor_id,
+    Int64 table_id = 0,
+    const ColumnInfos & used_columns = {})
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
     if constexpr (std::is_same_v<SourceType, MockExchangeReceiverInputStream>)

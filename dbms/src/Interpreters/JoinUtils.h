@@ -25,7 +25,8 @@ namespace DB
 /// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined and fill left columns if not joined
 inline bool getFullness(ASTTableJoin::Kind kind)
 {
-    return kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Cross_RightOuter || kind == ASTTableJoin::Kind::Full;
+    return kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Cross_RightOuter
+        || kind == ASTTableJoin::Kind::Full;
 }
 /// For semi and anti join: A semi/anti join B, that uses A as build table
 inline bool isRightSemiFamily(ASTTableJoin::Kind kind)
@@ -100,12 +101,13 @@ struct JoinBuildInfo
         return enable_fine_grained_shuffle || (enable_spill && !is_spilled);
     }
 };
-void computeDispatchHash(size_t rows,
-                         const ColumnRawPtrs & key_columns,
-                         const TiDB::TiDBCollators & collators,
-                         std::vector<String> & partition_key_containers,
-                         size_t join_restore_round,
-                         WeakHash32 & hash);
+void computeDispatchHash(
+    size_t rows,
+    const ColumnRawPtrs & key_columns,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    size_t join_restore_round,
+    WeakHash32 & hash);
 
 template <int>
 struct PointerTypeColumnHelper;
@@ -126,6 +128,13 @@ struct PointerTypeColumnHelper<8>
     using ArrayType = PaddedPODArray<Int64>;
 };
 
-ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names);
-void recordFilteredRows(const Block & block, const String & filter_column, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map);
+ColumnRawPtrs extractAndMaterializeKeyColumns(
+    const Block & block,
+    Columns & materialized_columns,
+    const Strings & key_columns_names);
+void recordFilteredRows(
+    const Block & block,
+    const String & filter_column,
+    ColumnPtr & null_map_holder,
+    ConstNullMapPtr & null_map);
 } // namespace DB

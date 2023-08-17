@@ -17,16 +17,17 @@
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
 
-#include <stdexcept>
-#include <Poco/File.h>
+#include <Common/typeid_cast.h>
 #include <IO/CascadeWriteBuffer.h>
+#include <IO/ConcatReadBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
-#include <IO/WriteBufferFromTemporaryFile.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
-#include <IO/ConcatReadBuffer.h>
+#include <IO/WriteBufferFromTemporaryFile.h>
 #include <IO/copyData.h>
-#include <Common/typeid_cast.h>
+#include <Poco/File.h>
+
+#include <stdexcept>
 
 using namespace DB;
 
@@ -86,52 +87,45 @@ try
     size_t max_s = 32;
     for (size_t s = 0; s < max_s; ++s)
     {
-        testCascadeBufferRedability(makeTestArray(s),
-            {
-                std::make_shared<MemoryWriteBuffer>(s/2, 1, 2.0),
-                std::make_shared<MemoryWriteBuffer>(s - s/2, 1, 2.0)
-            },
-            {}
-        );
+        testCascadeBufferRedability(
+            makeTestArray(s),
+            {std::make_shared<MemoryWriteBuffer>(s / 2, 1, 2.0),
+             std::make_shared<MemoryWriteBuffer>(s - s / 2, 1, 2.0)},
+            {});
 
-        testCascadeBufferRedability(makeTestArray(s),
+        testCascadeBufferRedability(
+            makeTestArray(s),
             {
                 std::make_shared<MemoryWriteBuffer>(s, 2, 1.5),
             },
-            {}
-        );
+            {});
 
-        testCascadeBufferRedability(makeTestArray(s),
+        testCascadeBufferRedability(
+            makeTestArray(s),
             {
                 std::make_shared<MemoryWriteBuffer>(0, 1, 1.0),
             },
-            {}
-        );
+            {});
 
-        testCascadeBufferRedability(makeTestArray(s),
+        testCascadeBufferRedability(
+            makeTestArray(s),
             {
-                std::make_shared<MemoryWriteBuffer>(std::max(1ul, s/2), std::max(2ul, s/4), 0.5),
+                std::make_shared<MemoryWriteBuffer>(std::max(1ul, s / 2), std::max(2ul, s / 4), 0.5),
                 std::make_shared<MemoryWriteBuffer>(0, 4, 1.0),
             },
-            {}
-        );
+            {});
 
-        testCascadeBufferRedability(makeTestArray(max_s),
-            {
-                std::make_shared<MemoryWriteBuffer>(s, 1, 2.0)
-            },
-            {
-                [=] (auto) { return std::make_shared<MemoryWriteBuffer>(max_s - s, 1, 2.0); }
-            }
-        );
+        testCascadeBufferRedability(makeTestArray(max_s), {std::make_shared<MemoryWriteBuffer>(s, 1, 2.0)}, {[=](auto) {
+                                        return std::make_shared<MemoryWriteBuffer>(max_s - s, 1, 2.0);
+                                    }});
 
-        testCascadeBufferRedability(makeTestArray(max_s),
+        testCascadeBufferRedability(
+            makeTestArray(max_s),
             {},
-            {
-                [=] (auto) { return std::make_shared<MemoryWriteBuffer>(max_s - s, 1, 2.0); },
-                [=] (auto) { return std::make_shared<MemoryWriteBuffer>(s, 1, 2.0); }
-            }
-        );
+            {[=](auto) { return std::make_shared<MemoryWriteBuffer>(max_s - s, 1, 2.0); },
+             [=](auto) {
+                 return std::make_shared<MemoryWriteBuffer>(s, 1, 2.0);
+             }});
     }
 }
 catch (...)
@@ -150,18 +144,13 @@ static void checkHTTPHandlerCase(size_t input_size, size_t memory_buffer_size)
         auto res_buf = std::make_shared<WriteBufferFromString>(res_str);
 
         CascadeWriteBuffer cascade(
-            {
-                std::make_shared<MemoryWriteBuffer>(memory_buffer_size)
-            },
-            {
-                [res_buf] (const WriteBufferPtr & prev_buf)
-                {
-                    auto prev_memory_buffer = typeid_cast<MemoryWriteBuffer *>(prev_buf.get());
-                    auto rdbuf = prev_memory_buffer->tryGetReadBuffer();
-                    copyData(*rdbuf , *res_buf);
-                    return res_buf;
-                }
-            });
+            {std::make_shared<MemoryWriteBuffer>(memory_buffer_size)},
+            {[res_buf](const WriteBufferPtr & prev_buf) {
+                auto prev_memory_buffer = typeid_cast<MemoryWriteBuffer *>(prev_buf.get());
+                auto rdbuf = prev_memory_buffer->tryGetReadBuffer();
+                copyData(*rdbuf, *res_buf);
+                return res_buf;
+            }});
 
         cascade.write(&src[0], src.size());
         EXPECT_EQ(cascade.count(), src.size());
@@ -270,21 +259,18 @@ try
 
     for (size_t s = 0; s < 4000000; s += 1000000)
     {
-        testCascadeBufferRedability(makeTestArray(s),
-            {},
-            {
-                [=] (auto) { return WriteBufferFromTemporaryFile::create(tmp_template); }
-            }
-        );
+        testCascadeBufferRedability(makeTestArray(s), {}, {[=](auto) {
+                                        return WriteBufferFromTemporaryFile::create(tmp_template);
+                                    }});
 
-        testCascadeBufferRedability(makeTestArray(s),
+        testCascadeBufferRedability(
+            makeTestArray(s),
             {
-                std::make_shared<MemoryWriteBuffer>(std::max(1ul, s/3ul), 2, 1.5),
+                std::make_shared<MemoryWriteBuffer>(std::max(1ul, s / 3ul), 2, 1.5),
             },
-            {
-                [=] (auto) { return WriteBufferFromTemporaryFile::create(tmp_template); }
-            }
-        );
+            {[=](auto) {
+                return WriteBufferFromTemporaryFile::create(tmp_template);
+            }});
     }
 }
 catch (...)

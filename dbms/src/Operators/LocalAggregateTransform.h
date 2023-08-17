@@ -28,10 +28,7 @@ public:
         const String & req_id,
         const Aggregator::Params & params_);
 
-    String getName() const override
-    {
-        return "LocalAggregateTransform";
-    }
+    String getName() const override { return "LocalAggregateTransform"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

@@ -28,10 +28,7 @@ public:
     MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_);
     MockExchangeReceiverInputStream(const ColumnsWithTypeAndName & columns, size_t max_block_size);
     MockExchangeReceiverInputStream(const std::vector<ColumnsWithTypeAndName> & columns_vector, size_t max_block_size);
-    Block getHeader() const override
-    {
-        return Block(columns_vector[0]).cloneEmpty();
-    }
+    Block getHeader() const override { return Block(columns_vector[0]).cloneEmpty(); }
     String getName() const override { return "MockExchangeReceiver"; }
     size_t getSourceNum() const { return source_num; }
     std::vector<ColumnsWithTypeAndName> columns_vector;

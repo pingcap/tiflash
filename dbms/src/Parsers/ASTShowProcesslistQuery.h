@@ -28,4 +28,4 @@ struct ASTShowProcesslistIDAndQueryNames
 
 using ASTShowProcesslistQuery = ASTQueryWithOutputImpl<ASTShowProcesslistIDAndQueryNames>;
 
-}
+} // namespace DB

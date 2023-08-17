@@ -103,14 +103,15 @@ void WNFetchPagesStreamWriter::pipeTo(SyncPagePacketWriter * sync_writer)
     //       We could improve it to respond in the FetchPages stage, so that the parallel FetchPages could start
     //       as soon as possible.
 
-    LOG_DEBUG(log,
-              "Send FetchPagesStream, pages={} pages_size={} blocks={} packets={} read_page_ms={} send_page_ms={}",
-              read_page_ids.size(),
-              total_pages_data_size,
-              packet.chunks_size(),
-              packet_count,
-              read_page_ns / 1000000,
-              send_page_ns / 1000000);
+    LOG_DEBUG(
+        log,
+        "Send FetchPagesStream, pages={} pages_size={} blocks={} packets={} read_page_ms={} send_page_ms={}",
+        read_page_ids.size(),
+        total_pages_data_size,
+        packet.chunks_size(),
+        packet_count,
+        read_page_ns / 1000000,
+        send_page_ns / 1000000);
 }
 
 

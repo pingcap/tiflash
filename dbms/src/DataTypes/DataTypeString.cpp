@@ -95,9 +95,7 @@ void DataTypeString::serializeBinaryBulk(const IColumn & column, WriteBuffer & o
     if (!size)
         return;
 
-    size_t end = limit && offset + limit < size
-        ? offset + limit
-        : size;
+    size_t end = limit && offset + limit < size ? offset + limit : size;
 
     if (offset == 0)
     {
@@ -118,7 +116,11 @@ void DataTypeString::serializeBinaryBulk(const IColumn & column, WriteBuffer & o
 
 
 template <int UNROLL_TIMES>
-static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit)
+static NO_INLINE void deserializeBinarySSE2(
+    ColumnString::Chars_t & data,
+    ColumnString::Offsets & offsets,
+    ReadBuffer & istr,
+    size_t limit)
 {
     size_t offset = data.size();
     for (size_t i = 0; i < limit; ++i)
@@ -138,10 +140,12 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
         {
 #ifdef __SSE2__
             /// An optimistic branch in which more efficient copying is possible.
-            if (offset + 16 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
+            if (offset + 16 * UNROLL_TIMES <= data.capacity()
+                && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
             {
                 const auto * sse_src_pos = reinterpret_cast<const __m128i *>(istr.position());
-                const __m128i * sse_src_end = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
+                const __m128i * sse_src_end
+                    = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
                 auto * sse_dst_pos = reinterpret_cast<__m128i *>(&data[offset - size - 1]);
 
                 while (sse_src_pos < sse_src_end)
@@ -167,7 +171,11 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
 }
 
 
-void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+void DataTypeString::deserializeBinaryBulk(
+    IColumn & column,
+    ReadBuffer & istr,
+    size_t limit,
+    double avg_value_size_hint) const
 {
     ColumnString & column_string = typeid_cast<ColumnString &>(column);
     ColumnString::Chars_t & data = column_string.getChars();
@@ -254,7 +262,11 @@ void DataTypeString::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) 
 }
 
 
-void DataTypeString::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
+void DataTypeString::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON &) const
 {
     writeJSONString(static_cast<const ColumnString &>(column).getDataAt(row_num), ostr);
 }

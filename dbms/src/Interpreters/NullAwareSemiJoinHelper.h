@@ -50,7 +50,11 @@ enum class NASemiJoinResultType : UInt8
 
 struct NARightSideInfo
 {
-    NARightSideInfo(bool has_all_key_null_row_, bool is_empty_, bool null_key_check_all_blocks_directly_, std::vector<RowsNotInsertToMap *> & null_rows_)
+    NARightSideInfo(
+        bool has_all_key_null_row_,
+        bool is_empty_,
+        bool null_key_check_all_blocks_directly_,
+        std::vector<RowsNotInsertToMap *> & null_rows_)
         : has_all_key_null_row(has_all_key_null_row_)
         , is_empty(is_empty_)
         , null_key_check_all_blocks_directly(null_key_check_all_blocks_directly_)
@@ -64,7 +68,10 @@ struct NARightSideInfo
 
 struct NALeftSideInfo
 {
-    NALeftSideInfo(const ConstNullMapPtr & null_map_, const ConstNullMapPtr & filter_map_, const ConstNullMapPtr & all_key_null_map_)
+    NALeftSideInfo(
+        const ConstNullMapPtr & null_map_,
+        const ConstNullMapPtr & filter_map_,
+        const ConstNullMapPtr & all_key_null_map_)
         : null_map(null_map_)
         , filter_map(filter_map_)
         , all_key_null_map(all_key_null_map_)
@@ -107,24 +114,29 @@ public:
         return result;
     }
 
-    inline NASemiJoinStep getStep() const
-    {
-        return step;
-    }
+    inline NASemiJoinStep getStep() const { return step; }
 
-    inline size_t getRowNum() const
-    {
-        return row_num;
-    }
+    inline size_t getRowNum() const { return row_num; }
 
     template <typename Mapped, NASemiJoinStep STEP>
-    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<RowsNotInsertToMap *> & null_rows, size_t & current_offset, size_t min_pace);
+    void fillRightColumns(
+        MutableColumns & added_columns,
+        size_t left_columns,
+        size_t right_columns,
+        const std::vector<RowsNotInsertToMap *> & null_rows,
+        size_t & current_offset,
+        size_t min_pace);
 
     template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
 
     template <NASemiJoinStep STEP>
-    void checkExprResult(ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map, size_t offset_begin, size_t offset_end);
+    void checkExprResult(
+        ConstNullMapPtr eq_null_map,
+        const PaddedPODArray<UInt8> & other_column,
+        ConstNullMapPtr other_null_map,
+        size_t offset_begin,
+        size_t offset_end);
 
     template <NASemiJoinStep STEP>
     void checkStepEnd();
@@ -172,7 +184,11 @@ private:
     void runStepAllBlocks(std::list<Result *> & res_list);
 
     template <NASemiJoinStep STEP>
-    void runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<Result *> & res_list, std::list<Result *> & next_res_list);
+    void runAndCheckExprResult(
+        Block & exec_block,
+        const std::vector<size_t> & offsets,
+        std::list<Result *> & res_list,
+        std::list<Result *> & next_res_list);
 
 private:
     Block & block;

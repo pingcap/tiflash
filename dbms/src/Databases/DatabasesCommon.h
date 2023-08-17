@@ -59,20 +59,25 @@ namespace DatabaseLoading
 {
 ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_path, bool throw_on_error = true);
 
-ASTPtr getCreateQueryFromMetadata(const Context & context, const String & metadata_path, const String & database, bool throw_on_error);
+ASTPtr getCreateQueryFromMetadata(
+    const Context & context,
+    const String & metadata_path,
+    const String & database,
+    bool throw_on_error);
 
 std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log);
 
 void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log);
 
-std::tuple<String, StoragePtr> loadTable(Context & context,
-                                         IDatabase & database,
-                                         const String & database_metadata_path,
-                                         const String & database_name,
-                                         const String & database_data_path,
-                                         const String & database_engine,
-                                         const String & file_name,
-                                         bool has_force_restore_data_flag);
+std::tuple<String, StoragePtr> loadTable(
+    Context & context,
+    IDatabase & database,
+    const String & database_metadata_path,
+    const String & database_name,
+    const String & database_data_path,
+    const String & database_engine,
+    const String & file_name,
+    bool has_force_restore_data_flag);
 } // namespace DatabaseLoading
 
 
@@ -94,38 +99,22 @@ public:
         , it(tables.begin())
     {}
 
-    void next() override
-    {
-        ++it;
-    }
+    void next() override { ++it; }
 
-    bool isValid() const override
-    {
-        return it != tables.end();
-    }
+    bool isValid() const override { return it != tables.end(); }
 
-    const String & name() const override
-    {
-        return it->first;
-    }
+    const String & name() const override { return it->first; }
 
-    StoragePtr & table() const override
-    {
-        return it->second;
-    }
+    StoragePtr & table() const override { return it->second; }
 };
 
 /// A base class for databases that manage their own list of tables.
 class DatabaseWithOwnTablesBase : public IDatabase
 {
 public:
-    bool isTableExist(
-        const Context & context,
-        const String & table_name) const override;
+    bool isTableExist(const Context & context, const String & table_name) const override;
 
-    StoragePtr tryGetTable(
-        const Context & context,
-        const String & table_name) const override;
+    StoragePtr tryGetTable(const Context & context, const String & table_name) const override;
 
     bool empty(const Context & context) const override;
 

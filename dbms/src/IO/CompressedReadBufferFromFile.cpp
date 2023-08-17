@@ -55,7 +55,9 @@ CompressedReadBufferFromFile<has_checksum>::CompressedReadBufferFromFile(
 }
 
 template <bool has_checksum>
-void CompressedReadBufferFromFile<has_checksum>::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
+void CompressedReadBufferFromFile<has_checksum>::seek(
+    size_t offset_in_compressed_file,
+    size_t offset_in_decompressed_block)
 {
     if (size_compressed && offset_in_compressed_file == file_in.getPositionInFile() - size_compressed
         && offset_in_decompressed_block <= working_buffer.size())
@@ -73,10 +75,11 @@ void CompressedReadBufferFromFile<has_checksum>::seek(size_t offset_in_compresse
         nextImpl();
 
         if (offset_in_decompressed_block > working_buffer.size())
-            throw Exception("Seek position is beyond the decompressed block"
-                            " (pos: "
-                                + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
-                            ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+            throw Exception(
+                "Seek position is beyond the decompressed block"
+                " (pos: "
+                    + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
+                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
 
         pos = working_buffer.begin() + offset_in_decompressed_block;
         bytes -= offset();

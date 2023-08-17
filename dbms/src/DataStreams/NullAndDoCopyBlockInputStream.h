@@ -35,7 +35,8 @@ class NullAndDoCopyBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     NullAndDoCopyBlockInputStream(const BlockInputStreamPtr & input_, BlockOutputStreamPtr output_)
-        : input(input_), output(output_)
+        : input(input_)
+        , output(output_)
     {
         children.push_back(input_);
     }
@@ -56,4 +57,4 @@ private:
     BlockOutputStreamPtr output;
 };
 
-}
+} // namespace DB

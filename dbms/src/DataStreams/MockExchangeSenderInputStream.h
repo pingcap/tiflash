@@ -28,9 +28,7 @@ private:
     static constexpr auto NAME = "MockExchangeSender";
 
 public:
-    MockExchangeSenderInputStream(
-        const BlockInputStreamPtr & input,
-        const String & req_id);
+    MockExchangeSenderInputStream(const BlockInputStreamPtr & input, const String & req_id);
 
     String getName() const override { return NAME; }
     Block getHeader() const override;

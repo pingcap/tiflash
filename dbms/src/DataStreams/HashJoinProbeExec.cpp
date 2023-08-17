@@ -29,7 +29,11 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
     bool need_scan_hash_map_after_probe = needScanHashMapAfterProbe(join->getKind());
     BlockInputStreamPtr scan_hash_map_stream = nullptr;
     if (need_scan_hash_map_after_probe)
-        scan_hash_map_stream = join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), stream_index, join->getProbeConcurrency(), max_block_size);
+        scan_hash_map_stream = join->createScanHashMapAfterProbeStream(
+            probe_stream->getHeader(),
+            stream_index,
+            join->getProbeConcurrency(),
+            max_block_size);
 
     return std::make_shared<HashJoinProbeExec>(
         req_id,
@@ -161,7 +165,11 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
         /// get a restore join
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
         {
-            auto hash_join_build_stream = std::make_shared<HashJoinBuildBlockInputStream>(restore_info->build_stream, restore_info->join, restore_info->stream_index, log->identifier());
+            auto hash_join_build_stream = std::make_shared<HashJoinBuildBlockInputStream>(
+                restore_info->build_stream,
+                restore_info->join,
+                restore_info->stream_index,
+                log->identifier());
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
                 log->identifier(),
                 restore_info->join,
@@ -201,7 +209,8 @@ void HashJoinProbeExec::cancel()
     join->wakeUpAllWaitingThreads();
     if (scan_hash_map_after_probe_stream != nullptr)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(scan_hash_map_after_probe_stream.get()); p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(scan_hash_map_after_probe_stream.get());
+            p_stream != nullptr)
             p_stream->cancel(false);
     }
     if (probe_stream != nullptr)
@@ -211,7 +220,8 @@ void HashJoinProbeExec::cancel()
     }
     if (restore_build_stream != nullptr)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_build_stream.get()); p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_build_stream.get());
+            p_stream != nullptr)
             p_stream->cancel(false);
     }
 }

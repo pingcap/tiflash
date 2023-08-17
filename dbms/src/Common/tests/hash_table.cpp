@@ -48,9 +48,7 @@ int main(int, char **)
     }
 
     {
-        using Cont = HashSet<
-            DB::UInt128,
-            DB::TrivialHash>;
+        using Cont = HashSet<DB::UInt128, DB::TrivialHash>;
         Cont cont;
 
         DB::WriteBufferFromOwnString wb;

@@ -44,24 +44,33 @@ public:
     void deserializeTextEscaped(IColumn &, ReadBuffer &) const override { throwNoSerialization(); }
     void serializeTextQuoted(const IColumn &, size_t, WriteBuffer &) const override { throwNoSerialization(); }
     void deserializeTextQuoted(IColumn &, ReadBuffer &) const override { throwNoSerialization(); }
-    void serializeTextJSON(const IColumn &, size_t, WriteBuffer &, const FormatSettingsJSON &) const override { throwNoSerialization(); }
+    void serializeTextJSON(const IColumn &, size_t, WriteBuffer &, const FormatSettingsJSON &) const override
+    {
+        throwNoSerialization();
+    }
     void deserializeTextJSON(IColumn &, ReadBuffer &) const override { throwNoSerialization(); }
     void serializeTextCSV(const IColumn &, size_t, WriteBuffer &) const override { throwNoSerialization(); }
     void deserializeTextCSV(IColumn &, ReadBuffer &, const char) const override { throwNoSerialization(); }
 
     MutableColumnPtr createColumn() const override
     {
-        throw Exception("Method createColumn() is not implemented for data type " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method createColumn() is not implemented for data type " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     Field getDefault() const override
     {
-        throw Exception("Method getDefault() is not implemented for data type " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method getDefault() is not implemented for data type " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void insertDefaultInto(IColumn &) const override
     {
-        throw Exception("Method insertDefaultInto() is not implemented for data type " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method insertDefaultInto() is not implemented for data type " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     bool haveSubtypes() const override { return false; }

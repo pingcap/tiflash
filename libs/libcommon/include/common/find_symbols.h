@@ -18,10 +18,10 @@
 #include <string>
 
 #if defined(__SSE2__)
-    #include <emmintrin.h>
+#include <emmintrin.h>
 #endif
 #if defined(__SSE4_2__)
-    #include <nmmintrin.h>
+#include <nmmintrin.h>
 #endif
 
 
@@ -137,7 +137,8 @@ inline const char * find_last_symbols_sse2(const char * const begin, const char 
     const char * pos = end;
 
 #if defined(__SSE2__)
-    for (; pos - 16 >= begin; pos -= 16)     /// Assuming the pointer cannot overflow. Assuming we can compare these pointers.
+    for (; pos - 16 >= begin;
+         pos -= 16) /// Assuming the pointer cannot overflow. Assuming we can compare these pointers.
     {
         __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos - 16));
 
@@ -145,7 +146,7 @@ inline const char * find_last_symbols_sse2(const char * const begin, const char 
 
         uint16_t bit_mask = maybe_negate<positive>(uint16_t(_mm_movemask_epi8(eq)));
         if (bit_mask)
-            return pos - 1 - (__builtin_clz(bit_mask) - 16);    /// because __builtin_clz works with mask as uint32.
+            return pos - 1 - (__builtin_clz(bit_mask) - 16); /// because __builtin_clz works with mask as uint32.
     }
 #endif
 
@@ -158,11 +159,26 @@ inline const char * find_last_symbols_sse2(const char * const begin, const char 
 }
 
 
-template <bool positive, ReturnMode return_mode, size_t num_chars,
-    char c01,     char c02 = 0, char c03 = 0, char c04 = 0,
-    char c05 = 0, char c06 = 0, char c07 = 0, char c08 = 0,
-    char c09 = 0, char c10 = 0, char c11 = 0, char c12 = 0,
-    char c13 = 0, char c14 = 0, char c15 = 0, char c16 = 0>
+template <
+    bool positive,
+    ReturnMode return_mode,
+    size_t num_chars,
+    char c01,
+    char c02 = 0,
+    char c03 = 0,
+    char c04 = 0,
+    char c05 = 0,
+    char c06 = 0,
+    char c07 = 0,
+    char c08 = 0,
+    char c09 = 0,
+    char c10 = 0,
+    char c11 = 0,
+    char c12 = 0,
+    char c13 = 0,
+    char c14 = 0,
+    char c15 = 0,
+    char c16 = 0>
 inline const char * find_first_symbols_sse42_impl(const char * const begin, const char * const end)
 {
     const char * pos = begin;
@@ -190,7 +206,7 @@ inline const char * find_first_symbols_sse42_impl(const char * const begin, cons
 #endif
 
     for (; pos < end; ++pos)
-        if (   (num_chars >= 1 && maybe_negate<positive>(*pos == c01))
+        if ((num_chars >= 1 && maybe_negate<positive>(*pos == c01))
             || (num_chars >= 2 && maybe_negate<positive>(*pos == c02))
             || (num_chars >= 3 && maybe_negate<positive>(*pos == c03))
             || (num_chars >= 4 && maybe_negate<positive>(*pos == c04))
@@ -230,7 +246,7 @@ inline const char * find_first_symbols_dispatch(const char * begin, const char *
         return find_first_symbols_sse2<positive, return_mode, symbols...>(begin, end);
 }
 
-}
+} // namespace detail
 
 
 template <char... symbols>
@@ -244,7 +260,8 @@ inline const char * find_first_symbols(const char * begin, const char * end)
 template <char... symbols>
 inline char * find_first_symbols(char * begin, char * end)
 {
-    return const_cast<char *>(detail::find_first_symbols_dispatch<true, detail::ReturnMode::End, symbols...>(begin, end));
+    return const_cast<char *>(
+        detail::find_first_symbols_dispatch<true, detail::ReturnMode::End, symbols...>(begin, end));
 }
 
 template <char... symbols>
@@ -256,7 +273,8 @@ inline const char * find_first_not_symbols(const char * begin, const char * end)
 template <char... symbols>
 inline char * find_first_not_symbols(char * begin, char * end)
 {
-    return const_cast<char *>(detail::find_first_symbols_dispatch<false, detail::ReturnMode::End, symbols...>(begin, end));
+    return const_cast<char *>(
+        detail::find_first_symbols_dispatch<false, detail::ReturnMode::End, symbols...>(begin, end));
 }
 
 template <char... symbols>
@@ -268,7 +286,8 @@ inline const char * find_first_symbols_or_null(const char * begin, const char * 
 template <char... symbols>
 inline char * find_first_symbols_or_null(char * begin, char * end)
 {
-    return const_cast<char *>(detail::find_first_symbols_dispatch<true, detail::ReturnMode::Nullptr, symbols...>(begin, end));
+    return const_cast<char *>(
+        detail::find_first_symbols_dispatch<true, detail::ReturnMode::Nullptr, symbols...>(begin, end));
 }
 
 template <char... symbols>
@@ -280,7 +299,8 @@ inline const char * find_first_not_symbols_or_null(const char * begin, const cha
 template <char... symbols>
 inline char * find_first_not_symbols_or_null(char * begin, char * end)
 {
-    return const_cast<char *>(detail::find_first_symbols_dispatch<false, detail::ReturnMode::Nullptr, symbols...>(begin, end));
+    return const_cast<char *>(
+        detail::find_first_symbols_dispatch<false, detail::ReturnMode::Nullptr, symbols...>(begin, end));
 }
 
 
@@ -293,7 +313,8 @@ inline const char * find_last_symbols_or_null(const char * begin, const char * e
 template <char... symbols>
 inline char * find_last_symbols_or_null(char * begin, char * end)
 {
-    return const_cast<char *>(detail::find_last_symbols_sse2<true, detail::ReturnMode::Nullptr, symbols...>(begin, end));
+    return const_cast<char *>(
+        detail::find_last_symbols_sse2<true, detail::ReturnMode::Nullptr, symbols...>(begin, end));
 }
 
 template <char... symbols>
@@ -305,7 +326,8 @@ inline const char * find_last_not_symbols_or_null(const char * begin, const char
 template <char... symbols>
 inline char * find_last_not_symbols_or_null(char * begin, char * end)
 {
-    return const_cast<char *>(detail::find_last_symbols_sse2<false, detail::ReturnMode::Nullptr, symbols...>(begin, end));
+    return const_cast<char *>(
+        detail::find_last_symbols_sse2<false, detail::ReturnMode::Nullptr, symbols...>(begin, end));
 }
 
 

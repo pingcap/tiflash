@@ -75,8 +75,14 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
     : CompressedSeekableReaderBuffer()
-    , p_file_in(
-          createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, read_limiter_, checksum_algorithm, checksum_frame_size))
+    , p_file_in(createReadBufferFromFileBaseByFileProvider(
+          file_provider,
+          path,
+          encryption_path,
+          estimated_size,
+          read_limiter_,
+          checksum_algorithm,
+          checksum_frame_size))
     , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;
@@ -90,14 +96,21 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
     : CompressedSeekableReaderBuffer()
-    , p_file_in(createReadBufferFromData(std::forward<String>(data), file_name, estimated_size, checksum_algorithm, checksum_frame_size))
+    , p_file_in(createReadBufferFromData(
+          std::forward<String>(data),
+          file_name,
+          estimated_size,
+          checksum_algorithm,
+          checksum_frame_size))
     , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;
 }
 
 template <bool has_checksum>
-void CompressedReadBufferFromFileProvider<has_checksum>::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
+void CompressedReadBufferFromFileProvider<has_checksum>::seek(
+    size_t offset_in_compressed_file,
+    size_t offset_in_decompressed_block)
 {
     if (size_compressed && offset_in_compressed_file == file_in.getPositionInFile() - size_compressed
         && offset_in_decompressed_block <= working_buffer.size())
@@ -115,10 +128,11 @@ void CompressedReadBufferFromFileProvider<has_checksum>::seek(size_t offset_in_c
         nextImpl();
 
         if (offset_in_decompressed_block > working_buffer.size())
-            throw Exception("Seek position is beyond the decompressed block"
-                            " (pos: "
-                                + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
-                            ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+            throw Exception(
+                "Seek position is beyond the decompressed block"
+                " (pos: "
+                    + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
+                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
 
         pos = working_buffer.begin() + offset_in_decompressed_block;
         bytes -= offset();

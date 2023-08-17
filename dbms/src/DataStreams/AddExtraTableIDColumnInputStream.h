@@ -29,10 +29,7 @@ class AddExtraTableIDColumnInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "AddExtraTableIDColumn";
 
 public:
-    AddExtraTableIDColumnInputStream(
-        BlockInputStreamPtr input,
-        int extra_table_id_index,
-        TableID physical_table_id);
+    AddExtraTableIDColumnInputStream(BlockInputStreamPtr input, int extra_table_id_index, TableID physical_table_id);
 
     String getName() const override { return NAME; }
 

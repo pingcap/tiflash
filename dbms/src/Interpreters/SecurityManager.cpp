@@ -57,7 +57,10 @@ void SecurityManager::loadFromConfig(Poco::Util::AbstractConfiguration & config)
     users = std::move(new_users);
 }
 
-UserPtr SecurityManager::authorizeAndGetUser(const String & user_name, const String & password, const Poco::Net::IPAddress & address) const
+UserPtr SecurityManager::authorizeAndGetUser(
+    const String & user_name,
+    const String & password,
+    const Poco::Net::IPAddress & address) const
 {
     auto user = getUser(user_name);
 

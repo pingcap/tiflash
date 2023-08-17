@@ -29,13 +29,9 @@ public:
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_context_, req_id)
         , writer(std::move(writer))
-    {
-    }
+    {}
 
-    String getName() const override
-    {
-        return "ExchangeSenderSinkOp";
-    }
+    String getName() const override { return "ExchangeSenderSinkOp"; }
 
 protected:
     void operatePrefixImpl() override;

@@ -34,4 +34,4 @@ protected:
     }
 };
 
-}
+} // namespace DB

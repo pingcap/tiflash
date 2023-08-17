@@ -15,9 +15,9 @@
 #pragma once
 
 
+#include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/IParserBase.h>
 #include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/ExpressionElementParsers.h>
 
 
 namespace DB
@@ -32,4 +32,4 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
 };
 
-}
+} // namespace DB

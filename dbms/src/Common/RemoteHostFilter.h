@@ -47,7 +47,8 @@ public:
 
     void setValuesFromConfig(const Poco::Util::AbstractConfiguration & config);
 
-    void checkHostAndPort(const std::string & host, const std::string & port) const; /// Does the same as checkURL, but for host and port.
+    void checkHostAndPort(const std::string & host, const std::string & port)
+        const; /// Does the same as checkURL, but for host and port.
 
 private:
     std::atomic_bool is_initialized = false;

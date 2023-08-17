@@ -30,8 +30,7 @@ public:
         SpilledBucketInput & input_)
         : IOEventTask(exec_context_, req_id, event_)
         , input(input_)
-    {
-    }
+    {}
 
 private:
     ExecTaskStatus executeIOImpl() override;

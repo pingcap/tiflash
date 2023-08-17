@@ -48,31 +48,36 @@ public:
     size_t size() const override { return s; }
     void insertDefault() override { ++s; }
 
-    void insertManyDefaults(size_t length) override
-    {
-        s += length;
-    }
+    void insertManyDefaults(size_t length) override { s += length; }
 
     void popBack(size_t n) override { s -= n; }
     size_t byteSize() const override { return 0; }
     size_t allocatedBytes() const override { return 0; }
     int compareAt(size_t, size_t, const IColumn &, int) const override { return 0; }
 
-    Field operator[](size_t) const override { throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED); }
-    void get(size_t, Field &) const override { throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED); };
-    void insert(const Field &) override { throw Exception("Cannot insert element into " + getName(), ErrorCodes::NOT_IMPLEMENTED); }
-
-    StringRef getDataAt(size_t) const override
+    Field operator[](size_t) const override
     {
-        return {};
+        throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+    void get(size_t, Field &) const override
+    {
+        throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    };
+    void insert(const Field &) override
+    {
+        throw Exception("Cannot insert element into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertData(const char *, size_t) override
-    {
-        ++s;
-    }
+    StringRef getDataAt(size_t) const override { return {}; }
 
-    StringRef serializeValueIntoArena(size_t /*n*/, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override
+    void insertData(const char *, size_t) override { ++s; }
+
+    StringRef serializeValueIntoArena(
+        size_t /*n*/,
+        Arena & arena,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr &,
+        String &) const override
     {
         return {arena.allocContinue(0, begin), 0};
     }
@@ -84,37 +89,22 @@ public:
     }
 
     void updateHashWithValue(size_t /*n*/, SipHash & /*hash*/, const TiDB::TiDBCollatorPtr &, String &) const override
-    {
-    }
+    {}
 
-    void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override
-    {
-    }
+    void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override {}
 
-    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override
-    {
-    }
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override {}
 
-    void insertFrom(const IColumn &, size_t)
-        override
-    {
-        ++s;
-    }
+    void insertFrom(const IColumn &, size_t) override { ++s; }
 
-    void insertManyFrom(const IColumn &, size_t, size_t length) override
-    {
-        s += length;
-    }
+    void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
     void insertDisjunctFrom(const IColumn &, const std::vector<size_t> & position_vec) override
     {
         s += position_vec.size();
     }
 
-    void insertRangeFrom(const IColumn & /*src*/, size_t /*start*/, size_t length) override
-    {
-        s += length;
-    }
+    void insertRangeFrom(const IColumn & /*src*/, size_t /*start*/, size_t length) override { s += length; }
 
     ColumnPtr filter(const Filter & filt, ssize_t /*result_size_hint*/) const override
     {
@@ -124,12 +114,15 @@ public:
     ColumnPtr permute(const Permutation & perm, size_t limit) const override
     {
         if (s != perm.size())
-            throw Exception("Size of permutation doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+            throw Exception(
+                "Size of permutation doesn't match size of column.",
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
         return cloneDummy(limit ? std::min(s, limit) : s);
     }
 
-    void getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res) const override
+    void getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res)
+        const override
     {
         res.resize(s);
         for (size_t i = 0; i < s; ++i)
@@ -148,7 +141,9 @@ public:
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         if (s != selector.size())
-            throw Exception("Size of selector doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+            throw Exception(
+                "Size of selector doesn't match size of column.",
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
         std::vector<size_t> counts(num_columns);
         for (auto idx : selector)
@@ -164,7 +159,9 @@ public:
     void scatterTo(ScatterColumns & columns, const Selector & selector) const override
     {
         if (s != selector.size())
-            throw Exception("Size of selector doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+            throw Exception(
+                "Size of selector doesn't match size of column.",
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
         IColumn::ColumnIndex num_columns = columns.size();
         std::vector<size_t> counts(num_columns);
@@ -180,19 +177,11 @@ public:
         throw Exception("Method gather is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void getExtremes(Field &, Field &) const override
-    {
-    }
+    void getExtremes(Field &, Field &) const override {}
 
-    void addSize(size_t delta)
-    {
-        s += delta;
-    }
+    void addSize(size_t delta) { s += delta; }
 
-    bool isDummy() const override
-    {
-        return true;
-    }
+    bool isDummy() const override { return true; }
 
 protected:
     size_t s;

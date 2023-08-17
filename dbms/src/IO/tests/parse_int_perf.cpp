@@ -12,28 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <iomanip>
-
-#include <common/types.h>
-
+#include <Common/Stopwatch.h>
+#include <IO/AsynchronousWriteBuffer.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedWriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 #include <IO/WriteIntText.h>
-#include <IO/WriteBufferFromVector.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/AsynchronousWriteBuffer.h>
+#include <common/types.h>
 
-#include <Common/Stopwatch.h>
+#include <iomanip>
+#include <iostream>
 
 
 UInt64 rdtsc()
 {
 #if __x86_64__
     UInt64 val;
-    __asm__ __volatile__("rdtsc" : "=A" (val) : );
+    __asm__ __volatile__("rdtsc" : "=A"(val) :);
     return val;
 #else
     // TODO: make for arm
@@ -62,13 +60,12 @@ int main(int argc, char ** argv)
             Stopwatch watch;
 
             for (size_t i = 0; i < n; ++i)
-                data[i] = lrand48();// / lrand48();// ^ (lrand48() << 24) ^ (lrand48() << 48);
+                data[i] = lrand48(); // / lrand48();// ^ (lrand48() << 24) ^ (lrand48() << 48);
 
             watch.stop();
-            std::cerr << std::fixed << std::setprecision(2)
-                << "Generated " << n << " numbers (" << data.size() * sizeof(data[0]) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-                << data.size() * sizeof(data[0]) / watch.elapsedSeconds() / 1000000 << " MB/s."
-                << std::endl;
+            std::cerr << std::fixed << std::setprecision(2) << "Generated " << n << " numbers ("
+                      << data.size() * sizeof(data[0]) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
+                      << data.size() * sizeof(data[0]) / watch.elapsedSeconds() / 1000000 << " MB/s." << std::endl;
         }
 
         std::vector<char> formatted;
@@ -76,8 +73,8 @@ int main(int argc, char ** argv)
 
         {
             DB::WriteBufferFromVector<> wb(formatted);
-        //    DB::CompressedWriteBuffer wb2(wb1);
-        //    DB::AsynchronousWriteBuffer wb(wb2);
+            //    DB::CompressedWriteBuffer wb2(wb1);
+            //    DB::AsynchronousWriteBuffer wb(wb2);
             Stopwatch watch;
 
             UInt64 tsc = rdtsc();
@@ -93,20 +90,16 @@ int main(int argc, char ** argv)
             tsc = rdtsc() - tsc;
 
             watch.stop();
-            std::cerr << std::fixed << std::setprecision(2)
-                << "Written " << n << " numbers (" << wb.count() / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-                << n / watch.elapsedSeconds() << " num/s., "
-                << wb.count() / watch.elapsedSeconds() / 1000000 << " MB/s., "
-                << watch.elapsed() / n << " ns/num., "
-                << tsc / n  << " ticks/num., "
-                << watch.elapsed() / wb.count() << " ns/byte., "
-                << tsc / wb.count()  << " ticks/byte."
-                << std::endl;
+            std::cerr << std::fixed << std::setprecision(2) << "Written " << n << " numbers (" << wb.count() / 1000000.0
+                      << " MB) in " << watch.elapsedSeconds() << " sec., " << n / watch.elapsedSeconds() << " num/s., "
+                      << wb.count() / watch.elapsedSeconds() / 1000000 << " MB/s., " << watch.elapsed() / n
+                      << " ns/num., " << tsc / n << " ticks/num., " << watch.elapsed() / wb.count() << " ns/byte., "
+                      << tsc / wb.count() << " ticks/byte." << std::endl;
         }
 
         {
             DB::ReadBuffer rb(&formatted[0], formatted.size(), 0);
-        //    DB::CompressedReadBuffer rb(rb_);
+            //    DB::CompressedReadBuffer rb(rb_);
             Stopwatch watch;
 
             for (size_t i = 0; i < n; ++i)
@@ -116,10 +109,9 @@ int main(int argc, char ** argv)
             }
 
             watch.stop();
-            std::cerr << std::fixed << std::setprecision(2)
-                << "Read " << n << " numbers (" << rb.count() / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-                << rb.count() / watch.elapsedSeconds() / 1000000 << " MB/s."
-                << std::endl;
+            std::cerr << std::fixed << std::setprecision(2) << "Read " << n << " numbers (" << rb.count() / 1000000.0
+                      << " MB) in " << watch.elapsedSeconds() << " sec., "
+                      << rb.count() / watch.elapsedSeconds() / 1000000 << " MB/s." << std::endl;
         }
 
         std::cerr << (0 == memcmp(&data[0], &data2[0], data.size()) ? "Ok." : "Fail.") << std::endl;

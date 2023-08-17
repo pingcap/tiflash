@@ -52,8 +52,8 @@ TEST(DataTypeDecimal_test, A)
     const ScaleType scale_max = std::max(
         typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale(),
         (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale());
-    const ScaleType scale_sum
-        = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale() + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
+    const ScaleType scale_sum = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale()
+        + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
 
     auto context = TiFlashTestEnv::getContext();
     DataTypes args{lhs, rhs};

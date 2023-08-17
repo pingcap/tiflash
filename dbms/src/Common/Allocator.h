@@ -50,10 +50,7 @@ public:
     void * realloc(void * buf, size_t old_size, size_t new_size, size_t alignment = 0);
 
 protected:
-    static constexpr size_t getStackThreshold()
-    {
-        return 0;
-    }
+    static constexpr size_t getStackThreshold() { return 0; }
 };
 
 
@@ -110,10 +107,7 @@ public:
     }
 
 protected:
-    static constexpr size_t getStackThreshold()
-    {
-        return N;
-    }
+    static constexpr size_t getStackThreshold() { return N; }
 };
 
 

@@ -113,18 +113,25 @@ void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector)
         columns[i]->insertRangeFrom(*this, 0, counts[i]);
 }
 
-void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res) const
+void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res)
+    const
 {
     res.resize(s);
     for (size_t i = 0; i < s; ++i)
         res[i] = i;
 }
 
-void ColumnConst::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnConst::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     if (hash.getData().size() != s)
         throw Exception(
-            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            fmt::format(
+                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+                s,
+                hash.getData().size()),
             ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 element_hash(1);

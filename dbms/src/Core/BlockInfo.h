@@ -32,11 +32,9 @@ struct BlockInfo
       * Otherwise -1.
       */
 
-#define APPLY_FOR_BLOCK_INFO_FIELDS(M) \
-    M(Int32, bucket_num, -1, 2)
+#define APPLY_FOR_BLOCK_INFO_FIELDS(M) M(Int32, bucket_num, -1, 2)
 
-#define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) \
-    TYPE NAME = DEFAULT;
+#define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) TYPE NAME = DEFAULT;
 
     APPLY_FOR_BLOCK_INFO_FIELDS(DECLARE_FIELD)
 

@@ -26,19 +26,12 @@ namespace DB
 class SetBlockSinkOp : public SinkOp
 {
 public:
-    SetBlockSinkOp(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        Block & res_)
+    SetBlockSinkOp(PipelineExecutorContext & exec_context_, const String & req_id, Block & res_)
         : SinkOp(exec_context_, req_id)
         , res(res_)
-    {
-    }
+    {}
 
-    String getName() const override
-    {
-        return "SetBlockSinkOp";
-    }
+    String getName() const override { return "SetBlockSinkOp"; }
 
 protected:
     OperatorStatus writeImpl(Block && block) override
@@ -74,10 +67,7 @@ public:
         }
     }
 
-    String getName() const override
-    {
-        return "ConcatSourceOp";
-    }
+    String getName() const override { return "ConcatSourceOp"; }
 
     // ConcatSourceOp is used to merge multiple partitioned tables of storage layer, so override `getIOProfileInfo` is needed here.
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
@@ -202,7 +192,10 @@ public:
         }
     }
 
-    void generate(PipelineExecGroupBuilder & result_builder, PipelineExecutorContext & exec_context, const String & req_id)
+    void generate(
+        PipelineExecGroupBuilder & result_builder,
+        PipelineExecutorContext & exec_context,
+        const String & req_id)
     {
         RUNTIME_CHECK(result_builder.empty());
         for (auto & builders : pool)

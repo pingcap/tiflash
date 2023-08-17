@@ -128,8 +128,10 @@ void Expand::replicateAndFillNull(Block & block) const
         {
             assert(block.getByName(grouping_col).column->isColumnNullable());
 
-            const auto * nullable_column = typeid_cast<const ColumnNullable *>(block.getByName(grouping_col).column.get());
-            auto cloned = ColumnNullable::create(nullable_column->getNestedColumnPtr(), nullable_column->getNullMapColumnPtr());
+            const auto * nullable_column
+                = typeid_cast<const ColumnNullable *>(block.getByName(grouping_col).column.get());
+            auto cloned
+                = ColumnNullable::create(nullable_column->getNestedColumnPtr(), nullable_column->getNullMapColumnPtr());
             auto * cloned_one = typeid_cast<ColumnNullable *>(cloned->assumeMutable().get());
 
             /// travel total rows, and set null values for current grouping set column.
@@ -173,7 +175,10 @@ void Expand::replicateAndFillNull(Block & block) const
         }
         // finish of adjustment for one grouping set columns. (by now one column for one grouping set).
     }
-    block.insert(ColumnWithTypeAndName(std::move(grouping_id_column), grouping_identifier_column_type, grouping_identifier_column_name));
+    block.insert(ColumnWithTypeAndName(
+        std::move(grouping_id_column),
+        grouping_identifier_column_type,
+        grouping_identifier_column_name));
     // return input from block.
 }
 

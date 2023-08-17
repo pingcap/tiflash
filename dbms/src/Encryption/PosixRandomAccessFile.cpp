@@ -45,7 +45,11 @@ RandomAccessFilePtr PosixRandomAccessFile::create(const String & file_name_)
     return std::make_shared<PosixRandomAccessFile>(file_name_, /*flags*/ -1, /*read_limiter_*/ nullptr);
 }
 
-PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_, const FileSegmentPtr & file_seg_)
+PosixRandomAccessFile::PosixRandomAccessFile(
+    const std::string & file_name_,
+    int flags,
+    const ReadLimiterPtr & read_limiter_,
+    const FileSegmentPtr & file_seg_)
     : file_name{file_name_}
     , read_limiter(read_limiter_)
     , file_seg(file_seg_)
@@ -62,7 +66,9 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        throwFromErrno("Cannot open file " + file_name, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        throwFromErrno(
+            "Cannot open file " + file_name,
+            errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 #ifdef __APPLE__
     if (o_direct)

@@ -30,8 +30,12 @@ struct LCMImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
-        throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<B>::Type(b), typename NumberTraits::ToInteger<A>::Type(a));
+        throwIfDivisionLeadsToFPE(
+            typename NumberTraits::ToInteger<A>::Type(a),
+            typename NumberTraits::ToInteger<B>::Type(b));
+        throwIfDivisionLeadsToFPE(
+            typename NumberTraits::ToInteger<B>::Type(b),
+            typename NumberTraits::ToInteger<A>::Type(a));
         return boost::integer::lcm(
             typename NumberTraits::ToInteger<Result>::Type(a),
             typename NumberTraits::ToInteger<Result>::Type(b));

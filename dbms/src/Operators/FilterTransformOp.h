@@ -33,10 +33,7 @@ public:
         , filter_transform_action(input_header, expression, filter_column_name)
     {}
 
-    String getName() const override
-    {
-        return "FilterTransformOp";
-    }
+    String getName() const override { return "FilterTransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

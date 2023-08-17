@@ -32,13 +32,9 @@ public:
         : SinkOp(exec_context_, req_id)
         , join_ptr(join_ptr_)
         , op_index(op_index_)
-    {
-    }
+    {}
 
-    String getName() const override
-    {
-        return "HashJoinBuildSink";
-    }
+    String getName() const override { return "HashJoinBuildSink"; }
 
 protected:
     OperatorStatus writeImpl(Block && block) override;

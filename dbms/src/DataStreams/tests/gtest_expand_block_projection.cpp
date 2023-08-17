@@ -29,10 +29,7 @@ class ExpandBlockInputStreamTest : public DB::tests::ProjectionTest
 {
 public:
     void SetUp() override {}
-    static ColumnWithTypeAndName toVec(const std::vector<UInt64> & v)
-    {
-        return createColumn<UInt64>(v);
-    }
+    static ColumnWithTypeAndName toVec(const std::vector<UInt64> & v) { return createColumn<UInt64>(v); }
     static ColumnWithTypeAndName toNullVec(const std::vector<std::optional<Int64>> & v)
     {
         return createColumn<Nullable<Int64>>(v);
@@ -55,13 +52,23 @@ try
     auto one_block_input_stream = std::make_shared<OneBlockInputStream>(source_block);
 
     // level-1 projection: nullable<int64><col1> as literal(null), colref-col2
-    auto [level_1_actions, level_1_names] = buildProjection(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{0}, std::vector<Field>{Field(Null())}, ColumnNumbers{1});
+    auto [level_1_actions, level_1_names] = buildProjection(
+        *context,
+        source_block.getColumnsWithTypeAndName(),
+        ColumnNumbers{0},
+        std::vector<Field>{Field(Null())},
+        ColumnNumbers{1});
     NamesWithAliases level_1_project_cols;
     level_1_project_cols.emplace_back(level_1_names[0], "test_int_col_1");
     level_1_project_cols.emplace_back(level_1_names[1], "test_int_col_2");
 
     // level-2 projection: colref-col1, <UInt64><col2> as literal(9)
-    auto [level_2_actions, level_2_names] = buildProjection(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{1}, std::vector<Field>{Field(static_cast<UInt64>(9))}, ColumnNumbers{0});
+    auto [level_2_actions, level_2_names] = buildProjection(
+        *context,
+        source_block.getColumnsWithTypeAndName(),
+        ColumnNumbers{1},
+        std::vector<Field>{Field(static_cast<UInt64>(9))},
+        ColumnNumbers{0});
     NamesWithAliases level_2_project_cols;
     level_2_project_cols.emplace_back(level_2_names[1], "test_int_col_1");
     level_2_project_cols.emplace_back(level_2_names[0], "test_int_col_2");
@@ -75,7 +82,8 @@ try
     level_alias.emplace_back(level_2_project_cols);
 
     // construct before-expand-actions.
-    ExpressionActionsPtr before_expand_actions = buildChangeNullable(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{0});
+    ExpressionActionsPtr before_expand_actions
+        = buildChangeNullable(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{0});
 
     auto expand2 = std::make_shared<Expand2>(level_projections, before_expand_actions, level_alias);
 

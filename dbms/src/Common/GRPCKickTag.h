@@ -59,36 +59,29 @@ public:
             // If a call to `grpc_call_start_batch` with an empty batch returns
             // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
             // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-            error = grpc_call_start_batch(call, nullptr, 0, static_cast<grpc::internal::CompletionQueueTag *>(this), nullptr);
+            error = grpc_call_start_batch(
+                call,
+                nullptr,
+                0,
+                static_cast<grpc::internal::CompletionQueueTag *>(this),
+                nullptr);
         }
         // If an error occur, there must be something wrong about shutdown process.
-        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
+        RUNTIME_ASSERT(
+            error == grpc_call_error::GRPC_CALL_OK,
+            "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak",
+            error);
     }
 
-    grpc_call * getCall() const
-    {
-        return call;
-    }
+    grpc_call * getCall() const { return call; }
 
-    void setCall(grpc_call * call_)
-    {
-        call = call_;
-    }
+    void setCall(grpc_call * call_) { call = call_; }
 
-    void setStatus(bool status_)
-    {
-        status = status_;
-    }
+    void setStatus(bool status_) { status = status_; }
 
-    bool getStatus() const
-    {
-        return status;
-    }
+    bool getStatus() const { return status; }
 
-    GRPCKickTag * asGRPCKickTag()
-    {
-        return this;
-    }
+    GRPCKickTag * asGRPCKickTag() { return this; }
 
 private:
     grpc_call * call;

@@ -65,13 +65,15 @@ ASTPtr ASTAlterQuery::clone() const
     return res;
 }
 
-void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     frame.need_parens = false;
 
     std::string indent_str = settings.one_line ? "" : std::string(4u * frame.indent, ' ');
 
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ALTER TABLE " << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ALTER TABLE "
+                  << (settings.hilite ? hilite_none : "");
 
     if (!table.empty())
     {
@@ -90,13 +92,15 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
 
         if (p.type == ASTAlterQuery::ADD_COLUMN)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ADD COLUMN " << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ADD COLUMN "
+                          << (settings.hilite ? hilite_none : "");
             p.col_decl->formatImpl(settings, state, frame);
 
             /// AFTER
             if (p.column)
             {
-                settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " AFTER " << (settings.hilite ? hilite_none : "");
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " AFTER "
+                              << (settings.hilite ? hilite_none : "");
                 p.column->formatImpl(settings, state, frame);
             }
         }
@@ -107,26 +111,29 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
             p.column->formatImpl(settings, state, frame);
             if (p.partition)
             {
-                settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " IN PARTITION " << (settings.hilite ? hilite_none : "");
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " IN PARTITION "
+                              << (settings.hilite ? hilite_none : "");
                 p.partition->formatImpl(settings, state, frame);
             }
         }
         else if (p.type == ASTAlterQuery::MODIFY_COLUMN)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY COLUMN " << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY COLUMN "
+                          << (settings.hilite ? hilite_none : "");
             p.col_decl->formatImpl(settings, state, frame);
         }
         else if (p.type == ASTAlterQuery::MODIFY_PRIMARY_KEY)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY PRIMARY KEY " << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY PRIMARY KEY "
+                          << (settings.hilite ? hilite_none : "");
             settings.ostr << "(";
             p.primary_key->formatImpl(settings, state, frame);
             settings.ostr << ")";
         }
         else if (p.type == ASTAlterQuery::DROP_PARTITION)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (p.detach ? "DETACH" : "DROP") << " PARTITION "
-                          << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (p.detach ? "DETACH" : "DROP")
+                          << " PARTITION " << (settings.hilite ? hilite_none : "");
             p.partition->formatImpl(settings, state, frame);
         }
         else if (p.type == ASTAlterQuery::ATTACH_PARTITION)
@@ -140,25 +147,27 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
             settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FETCH "
                           << "PARTITION " << (settings.hilite ? hilite_none : "");
             p.partition->formatImpl(settings, state, frame);
-            settings.ostr << (settings.hilite ? hilite_keyword : "")
-                          << " FROM " << (settings.hilite ? hilite_none : "") << std::quoted(p.from, '\'');
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "")
+                          << std::quoted(p.from, '\'');
         }
         else if (p.type == ASTAlterQuery::FREEZE_PARTITION)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FREEZE PARTITION " << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FREEZE PARTITION "
+                          << (settings.hilite ? hilite_none : "");
             p.partition->formatImpl(settings, state, frame);
 
             if (!p.with_name.empty())
             {
-                settings.ostr << " " << (settings.hilite ? hilite_keyword : "") << "WITH NAME" << (settings.hilite ? hilite_none : "")
-                              << " " << std::quoted(p.with_name, '\'');
+                settings.ostr << " " << (settings.hilite ? hilite_keyword : "") << "WITH NAME"
+                              << (settings.hilite ? hilite_none : "") << " " << std::quoted(p.with_name, '\'');
             }
         }
         else
             throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
         std::string comma = (i < (parameters.size() - 1)) ? "," : "";
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << comma << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << comma
+                      << (settings.hilite ? hilite_none : "");
 
         settings.ostr << settings.nl_or_ws;
     }

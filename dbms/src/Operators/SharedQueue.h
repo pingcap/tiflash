@@ -54,18 +54,11 @@ public:
         const SharedQueuePtr & shared_queue_)
         : SinkOp(exec_context_, req_id)
         , shared_queue(shared_queue_)
-    {
-    }
+    {}
 
-    ~SharedQueueSinkOp() override
-    {
-        shared_queue->producerFinish();
-    }
+    ~SharedQueueSinkOp() override { shared_queue->producerFinish(); }
 
-    String getName() const override
-    {
-        return "SharedQueueSinkOp";
-    }
+    String getName() const override { return "SharedQueueSinkOp"; }
 
     OperatorStatus prepareImpl() override;
 
@@ -92,10 +85,7 @@ public:
         setHeader(header_);
     }
 
-    String getName() const override
-    {
-        return "SharedQueueSourceOp";
-    }
+    String getName() const override { return "SharedQueueSourceOp"; }
 
     OperatorStatus readImpl(Block & block) override;
 

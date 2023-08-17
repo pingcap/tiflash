@@ -90,8 +90,7 @@ void InterpreterTestUtils::appendExpectResults()
         const auto & suite_key = suite_entry.first;
         for (size_t i = 0; i < suite_entry.second.size(); ++i)
         {
-            fos << suite_key << "\n~result_index: " << i << '\n'
-                << suite_entry.second[i] << "\n@\n";
+            fos << suite_key << "\n~result_index: " << i << '\n' << suite_entry.second[i] << "\n@\n";
         }
     }
 }
@@ -108,9 +107,7 @@ void InterpreterTestUtils::TearDown()
     ExecutorTest::TearDown();
 }
 
-void InterpreterTestUtils::runAndAssert(
-    const std::shared_ptr<tipb::DAGRequest> & request,
-    size_t concurrency)
+void InterpreterTestUtils::runAndAssert(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
     assert(test_info);
@@ -133,10 +130,7 @@ void InterpreterTestUtils::runAndAssert(
     };
     auto suite_key = fmt::format("~test_suite_name: {}", test_suite_name);
 
-    DAGContext dag_context(
-        *request,
-        "interpreter_test",
-        concurrency);
+    DAGContext dag_context(*request, "interpreter_test", concurrency);
     TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
     // Don't care regions information in interpreter tests.
     auto query_executor = queryExecute(*context.context, /*internal=*/true);
@@ -152,8 +146,7 @@ void InterpreterTestUtils::runAndAssert(
 
     auto it = case_expect_results.find(suite_key);
     if (it == case_expect_results.end())
-        FAIL() << "can not find expect result\n"
-               << test_info_msg();
+        FAIL() << "can not find expect result\n" << test_info_msg();
 
     const auto & func_expect_results = it->second;
     assert(func_expect_results.size() > cur_result_index);

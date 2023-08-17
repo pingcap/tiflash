@@ -29,7 +29,11 @@ bool isAtomicSet(std::atomic<bool> * val)
 } // namespace
 
 template <typename TCancelCallback, typename TProgressCallback>
-void copyDataImpl(IBlockInputStream & from, IBlockOutputStream & to, TCancelCallback && is_cancelled, TProgressCallback && progress)
+void copyDataImpl(
+    IBlockInputStream & from,
+    IBlockOutputStream & to,
+    TCancelCallback && is_cancelled,
+    TProgressCallback && progress)
 {
     from.readPrefix();
     to.writePrefix();
@@ -79,7 +83,11 @@ void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::func
     copyDataImpl(from, to, is_cancelled, doNothing);
 }
 
-void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled, const std::function<void(const Block & block)> & progress)
+void copyData(
+    IBlockInputStream & from,
+    IBlockOutputStream & to,
+    const std::function<bool()> & is_cancelled,
+    const std::function<void(const Block & block)> & progress)
 {
     copyDataImpl(from, to, is_cancelled, progress);
 }

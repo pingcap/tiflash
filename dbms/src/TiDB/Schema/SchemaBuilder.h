@@ -109,7 +109,9 @@ struct TableIDMap
     bool tableIDInTwoMaps(TableID table_id)
     {
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
-        return !(table_id_to_database_id.find(table_id) == table_id_to_database_id.end() && partition_id_to_logical_id.find(table_id) == partition_id_to_logical_id.end());
+        return !(
+            table_id_to_database_id.find(table_id) == table_id_to_database_id.end()
+            && partition_id_to_logical_id.find(table_id) == partition_id_to_logical_id.end());
     }
 
     bool tableIDInDatabaseIdMap(TableID table_id)
@@ -160,7 +162,12 @@ struct SchemaBuilder
 
     LoggerPtr log;
 
-    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, TableIDMap & table_id_map_, std::shared_mutex & shared_mutex_for_databases_)
+    SchemaBuilder(
+        Getter & getter_,
+        Context & context_,
+        std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_,
+        TableIDMap & table_id_map_,
+        std::shared_mutex & shared_mutex_for_databases_)
         : getter(getter_)
         , context(context_)
         , shared_mutex_for_databases(shared_mutex_for_databases_)
@@ -201,13 +208,22 @@ private:
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
 
-    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
+    void applyPartitionDiff(
+        const TiDB::DBInfoPtr & db_info,
+        const TiDB::TableInfoPtr & table_info,
+        const ManageableStoragePtr & storage);
 
     void applyRenameTable(DatabaseID database_id, TiDB::TableID table_id);
 
-    void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage);
+    void applyRenameLogicalTable(
+        const TiDB::DBInfoPtr & new_db_info,
+        const TiDB::TableInfoPtr & new_table_info,
+        const ManageableStoragePtr & storage);
 
-    void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
+    void applyRenamePhysicalTable(
+        const TiDB::DBInfoPtr & new_db_info,
+        const TiDB::TableInfo & new_table_info,
+        const ManageableStoragePtr & storage);
 
     void applySetTiFlashReplica(DatabaseID database_id, TableID table_id);
 

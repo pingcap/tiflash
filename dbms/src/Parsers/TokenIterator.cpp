@@ -37,8 +37,10 @@ UnmatchedParentheses checkUnmatchedParentheses(TokenIterator begin, Token * last
                 stack.push_back(*it);
                 return stack;
             }
-            else if ((stack.back().type == TokenType::OpeningRoundBracket && it->type == TokenType::ClosingRoundBracket)
-                || (stack.back().type == TokenType::OpeningSquareBracket && it->type == TokenType::ClosingSquareBracket))
+            else if (
+                (stack.back().type == TokenType::OpeningRoundBracket && it->type == TokenType::ClosingRoundBracket)
+                || (stack.back().type == TokenType::OpeningSquareBracket
+                    && it->type == TokenType::ClosingSquareBracket))
             {
                 /// Valid match.
                 stack.pop_back();
@@ -56,4 +58,4 @@ UnmatchedParentheses checkUnmatchedParentheses(TokenIterator begin, Token * last
     return stack;
 }
 
-}
+} // namespace DB

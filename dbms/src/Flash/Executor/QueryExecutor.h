@@ -32,10 +32,7 @@ class DAGContext;
 class QueryExecutor
 {
 public:
-    QueryExecutor(
-        const MemoryTrackerPtr & memory_tracker_,
-        Context & context_,
-        const String & req_id)
+    QueryExecutor(const MemoryTrackerPtr & memory_tracker_, Context & context_, const String & req_id)
         : memory_tracker(memory_tracker_)
         , context(context_)
         , log(Logger::get(req_id))

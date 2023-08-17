@@ -55,10 +55,7 @@ struct hash<DB::QualifiedTableName>
     using argument_type = DB::QualifiedTableName;
     using result_type = size_t;
 
-    result_type operator()(const argument_type & qualified_table) const
-    {
-        return qualified_table.hash();
-    }
+    result_type operator()(const argument_type & qualified_table) const { return qualified_table.hash(); }
 };
 
 } // namespace std

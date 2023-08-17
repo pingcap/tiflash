@@ -34,10 +34,7 @@ public:
         , physical_table_id(physical_table_id_)
     {}
 
-    String getName() const override
-    {
-        return "AddExtraTableIDColumnTransformOp";
-    }
+    String getName() const override { return "AddExtraTableIDColumnTransformOp"; }
 
     // `AddExtraTableIDColumnTransformOp` will be appended to `DMSegmentThreadSourceOp` and returned to the computing layer.
     // [`AddExtraTableIDColumnTransformOp` --> `DMSegmentThreadSourceOp`]

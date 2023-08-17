@@ -55,10 +55,7 @@ public:
 
     /// Register a function by its name.
     /// No locking, you must register all functions before usage of get.
-    void registerFunction(
-        const String & name,
-        Creator creator,
-        CaseSensitiveness case_sensitiveness = CaseSensitive);
+    void registerFunction(const String & name, Creator creator, CaseSensitiveness case_sensitiveness = CaseSensitive);
 
     /// Throws an exception if not found.
     AggregateFunctionPtr get(
@@ -69,10 +66,8 @@ public:
         bool empty_input_as_null = false) const;
 
     /// Returns nullptr if not found.
-    AggregateFunctionPtr tryGet(
-        const String & name,
-        const DataTypes & argument_types,
-        const Array & parameters = {}) const;
+    AggregateFunctionPtr tryGet(const String & name, const DataTypes & argument_types, const Array & parameters = {})
+        const;
 
     bool isAggregateFunctionName(const String & name, int recursion_level = 0) const;
 

@@ -210,5 +210,8 @@ private:
     clockid_t clock_type;
 
     /// Most significant bit is a lock. When it is set, compareAndRestartDeferred method will return false.
-    UInt64 nanoseconds(UInt64 prev_time) const { return clock_gettime_ns_adjusted(prev_time, clock_type) & 0x7FFFFFFFFFFFFFFFULL; }
+    UInt64 nanoseconds(UInt64 prev_time) const
+    {
+        return clock_gettime_ns_adjusted(prev_time, clock_type) & 0x7FFFFFFFFFFFFFFFULL;
+    }
 };

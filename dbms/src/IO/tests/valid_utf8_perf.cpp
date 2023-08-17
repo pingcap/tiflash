@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteBufferValidUTF8.h>
-#include <IO/WriteBufferFromString.h>
 #include <Common/Stopwatch.h>
-#include <string>
-#include <streambuf>
-#include <iostream>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferValidUTF8.h>
+
 #include <cstdio>
+#include <iostream>
+#include <streambuf>
+#include <string>
 
 int main(int argc, char ** argv)
 {
@@ -28,8 +29,7 @@ int main(int argc, char ** argv)
         if (argc >= 2)
             repeats = atoi(argv[1]);
 
-        std::string text((std::istreambuf_iterator<char>(std::cin)),
-                          std::istreambuf_iterator<char>());
+        std::string text((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
 
         std::cout << "Text length: " << text.size() << std::endl;
 
@@ -44,7 +44,8 @@ int main(int argc, char ** argv)
         }
         double t = timer.elapsedSeconds();
         std::cout << "Wrote to string in " << t << "s at " << text.size() / 1e6 * repeats / t << "MB/s." << std::endl;
-        std::cout << "String length: " << str1.size() << "(" << (str1.size() == text.size() * repeats ? "as " : "un") << "expected)" << std::endl;
+        std::cout << "String length: " << str1.size() << "(" << (str1.size() == text.size() * repeats ? "as " : "un")
+                  << "expected)" << std::endl;
 
         timer.restart();
 
@@ -59,7 +60,8 @@ int main(int argc, char ** argv)
         }
         t = timer.elapsedSeconds();
         std::cout << "Wrote to UTF8 in " << t << "s at " << text.size() / 1e6 * repeats / t << "MB/s." << std::endl;
-        std::cout << "String length: " << str2.size() << "(" << (str2.size() == text.size() * repeats ? "as " : "un") << "expected)" << std::endl;
+        std::cout << "String length: " << str2.size() << "(" << (str2.size() == text.size() * repeats ? "as " : "un")
+                  << "expected)" << std::endl;
     }
     catch (const DB::Exception & e)
     {

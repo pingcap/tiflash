@@ -23,10 +23,7 @@ struct IntExp10Impl
 {
     using ResultType = UInt64;
 
-    static ResultType apply(A a)
-    {
-        return intExp10(a);
-    }
+    static ResultType apply(A a) { return intExp10(a); }
 };
 
 template <typename A>
@@ -34,10 +31,7 @@ struct IntExp10Impl<Decimal<A>>
 {
     using ResultType = UInt64;
 
-    static ResultType apply(Decimal<A> a)
-    {
-        return intExp10(a);
-    }
+    static ResultType apply(Decimal<A> a) { return intExp10(a); }
 };
 
 // clang-format off
@@ -54,12 +48,10 @@ struct FunctionUnaryArithmeticMonotonicity<NameIntExp10>
     static bool has() { return true; }
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
-        Float64 left_float = left.isNull()
-            ? -std::numeric_limits<Float64>::infinity()
-            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull()
-            ? std::numeric_limits<Float64>::infinity()
-            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
+        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity()
+                                           : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
+        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity()
+                                             : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
 
         if (left_float < 0 || right_float > 19)
             return {};

@@ -29,11 +29,7 @@ class Context;
 class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
 
-void restoreConcurrency(
-    DAGPipeline & pipeline,
-    size_t concurrency,
-    Int64 max_buffered_bytes,
-    const LoggerPtr & log);
+void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, Int64 max_buffered_bytes, const LoggerPtr & log);
 
 void executeUnion(
     DAGPipeline & pipeline,
@@ -97,11 +93,7 @@ void executeFinalSort(
     const Context & context,
     const LoggerPtr & log);
 
-void executeCreatingSets(
-    DAGPipeline & pipeline,
-    const Context & context,
-    size_t max_streams,
-    const LoggerPtr & log);
+void executeCreatingSets(DAGPipeline & pipeline, const Context & context, size_t max_streams, const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,

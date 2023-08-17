@@ -212,7 +212,8 @@ TEST_F(StringTrim, stringTrimwsConstUnitTest)
     Block test_block;
 
     ColumnWithTypeAndName ctn = ColumnWithTypeAndName(csp, std::make_shared<DataTypeString>(), "test_trim_const");
-    ColumnWithTypeAndName exctn = ColumnWithTypeAndName(excsp, std::make_shared<DataTypeString>(), "test_ex_trim_const");
+    ColumnWithTypeAndName exctn
+        = ColumnWithTypeAndName(excsp, std::make_shared<DataTypeString>(), "test_ex_trim_const");
 
     ColumnsWithTypeAndName ctns{ctn, exctn};
     test_block.insert(ctn);
@@ -605,35 +606,40 @@ try
     // trim(const from const)
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, "a"),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xax"),
-                        createConstColumn<Nullable<String>>(5, "x")));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xax"),
+            createConstColumn<Nullable<String>>(5, "x")));
 
     // trim(leading|trailing|both const from const)
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, "a"),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xax"),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xax"),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, "a"),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xax"),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xax"),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, "ax"),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xax"),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xax"),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, "xa"),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xax"),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xax"),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
 
     // trim(column)
@@ -647,247 +653,287 @@ try
     // trim(column from column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", " x", " x", " x", " x"})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa ", "aa xx ", "a \tx", "axx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-                        createColumn<String>({"x", "x", "x", "x", "x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+            createColumn<String>({"x", "x", "x", "x", "x"})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<String>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<String>({"x", "x", "x", "x", "x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<String>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<String>({"x", "x", "x", "x", "x"})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<String>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<String>({"xx", "xx", "xx", "xx", "xx"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<String>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<String>({"xx", "xx", "xx", "xx", "xx"})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<String>({" x", " x", " x", " x", " x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<String>({" x", " x", " x", " x", " x"})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({" aa ", "aa xx ", "a \tx", "axx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<String>({" x", "x", "xx", "xxa", " x"})));
+        executeFunction(
+            "tidbTrim",
+            createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<String>({" x", "x", "xx", "xxa", " x"})));
 
     // trim(both|leading|trailing column from column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \txxx", "aaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \t", "xxaa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \txxx", "aaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \tx", "xxaa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" x x aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa ", "aa xx ", "a \tx", "axx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa ", "aa xx ", "a \tx", "axx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa  x", "aa xx ", "a \txxx", "axx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" x x aa ", "xaa xx ", "xxa \tx", "xxaaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
-                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+            createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     // trim(const from column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createConstColumn<Nullable<String>>(5, "x")));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createConstColumn<Nullable<String>>(5, "x")));
 
     // trim(column from const)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"ax ", "ax x", "x x", "xxax", {}}),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xxax x"),
-                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}})));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xxax x"),
+            createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}})));
 
     // trim(both|leading|trailing const from column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \txxx", "aaxx", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \t", "xxaa", {}}),
-        executeFunction("tidbTrim",
-                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
-                        createConstColumn<Nullable<String>>(5, "x"),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+            createConstColumn<Nullable<String>>(5, "x"),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     // trim(both|leading|trailing column from const)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"ax ", "ax x", "x x", "xxax", {}}),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xxax x"),
-                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
-                        createConstColumn<Nullable<Int8>>(5, 0)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xxax x"),
+            createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+            createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"ax ", "ax x", "x x", "xxax", {}}),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xxax x"),
-                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
-                        createConstColumn<Nullable<Int8>>(5, 1)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xxax x"),
+            createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+            createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"ax x", "ax x", "x x", "xxax x", {}}),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xxax x"),
-                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
-                        createConstColumn<Nullable<Int8>>(5, 2)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xxax x"),
+            createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+            createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xxax ", "xxax x", "xxax x", "xxax", {}}),
-        executeFunction("tidbTrim",
-                        createConstColumn<Nullable<String>>(5, "xxax x"),
-                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
-                        createConstColumn<Nullable<Int8>>(5, 3)));
+        executeFunction(
+            "tidbTrim",
+            createConstColumn<Nullable<String>>(5, "xxax x"),
+            createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+            createConstColumn<Nullable<Int8>>(5, 3)));
 
     //different trim policy
     for (int i = 0; i < 3; i++)
@@ -895,32 +941,36 @@ try
         //test NULL and "" case
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "", "", {}, "", "", ""}),
-            executeFunction("tidbTrim",
-                            createColumn<Nullable<String>>({"", "", "", "", "", "", ""}),
-                            createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
-                            createConstColumn<Nullable<Int8>>(7, i)));
+            executeFunction(
+                "tidbTrim",
+                createColumn<Nullable<String>>({"", "", "", "", "", "", ""}),
+                createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
+                createConstColumn<Nullable<Int8>>(7, i)));
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}, {}}),
-            executeFunction("tidbTrim",
-                            createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}, {}}),
-                            createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
-                            createConstColumn<Nullable<Int8>>(7, i)));
+            executeFunction(
+                "tidbTrim",
+                createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}, {}}),
+                createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
+                createConstColumn<Nullable<Int8>>(7, i)));
 
         //test repeated pattern: ASCII & non-ASCII
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "x", "", "x", "", "x", {}}),
-            executeFunction("tidbTrim",
-                            createColumn<Nullable<String>>({"", "x", "xx", "xxx", "xxxx", "xxxxx", {}}),
-                            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx", "xx", "xx"}),
-                            createConstColumn<Nullable<Int8>>(7, i)));
+            executeFunction(
+                "tidbTrim",
+                createColumn<Nullable<String>>({"", "x", "xx", "xxx", "xxxx", "xxxxx", {}}),
+                createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx", "xx", "xx"}),
+                createConstColumn<Nullable<Int8>>(7, i)));
 
 
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "啊", "", "啊", "", "啊"}),
-            executeFunction("tidbTrim",
-                            createColumn<Nullable<String>>({"", "啊", "啊啊", "啊啊啊", "啊啊啊啊", "啊啊啊啊啊"}),
-                            createColumn<Nullable<String>>({"啊啊", "啊啊", "啊啊", "啊啊", "啊啊", "啊啊"}),
-                            createConstColumn<Nullable<Int8>>(6, i)));
+            executeFunction(
+                "tidbTrim",
+                createColumn<Nullable<String>>({"", "啊", "啊啊", "啊啊啊", "啊啊啊啊", "啊啊啊啊啊"}),
+                createColumn<Nullable<String>>({"啊啊", "啊啊", "啊啊", "啊啊", "啊啊", "啊啊"}),
+                createConstColumn<Nullable<Int8>>(6, i)));
     }
 
     //test non-ASCII cases
@@ -931,7 +981,8 @@ try
         {" 波 波 ", "啊 波 波 啊", "啊啊 波 波 ", "啊啊啊 波 波 啊", "啊啊啊啊 波 波 "} //right
     };
 
-    InferredDataInitializerList<Nullable<String>> input_columns_ws_with_core_text = {" 波 波 ", "啊 波 波 啊", "啊啊 波 波 啊啊", "啊啊啊 波 波 啊啊啊", "啊啊啊啊 波 波 啊啊啊啊"};
+    InferredDataInitializerList<Nullable<String>> input_columns_ws_with_core_text
+        = {" 波 波 ", "啊 波 波 啊", "啊啊 波 波 啊啊", "啊啊啊 波 波 啊啊啊", "啊啊啊啊 波 波 啊啊啊啊"};
 
     //different trim policy
     for (int i = 0; i < 3; i++)
@@ -939,10 +990,11 @@ try
         //non-const
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>(results_columns_ws_with_core_text[i]),
-            executeFunction("tidbTrim",
-                            createColumn<Nullable<String>>(input_columns_ws_with_core_text),
-                            createColumn<Nullable<String>>({"啊啊", "啊啊", "啊啊", "啊啊", "啊啊", "啊啊"}),
-                            createConstColumn<Nullable<Int8>>(6, i)));
+            executeFunction(
+                "tidbTrim",
+                createColumn<Nullable<String>>(input_columns_ws_with_core_text),
+                createColumn<Nullable<String>>({"啊啊", "啊啊", "啊啊", "啊啊", "啊啊", "啊啊"}),
+                createConstColumn<Nullable<Int8>>(6, i)));
 
         //const
         for (size_t j = 0; j < results_columns_ws_with_core_text[i].size(); j++)
@@ -950,15 +1002,18 @@ try
             const auto * input_itr = input_columns_ws_with_core_text.begin();
             size_t cnt = 0;
             for (const auto * res_itr = results_columns_ws_with_core_text[i].begin();
-                 res_itr != results_columns_ws_with_core_text[i].end() && input_itr != input_columns_ws_with_core_text.end();
+                 res_itr != results_columns_ws_with_core_text[i].end()
+                 && input_itr != input_columns_ws_with_core_text.end();
                  res_itr++, input_itr++)
             {
                 ASSERT_COLUMN_EQ(
-                    input_itr->has_value() ? createConstColumn<String>(5, res_itr->value()) : createConstColumn<Nullable<String>>(5, *res_itr),
-                    executeFunction("tidbTrim",
-                                    createConstColumn<Nullable<String>>(5, *input_itr),
-                                    createConstColumn<Nullable<String>>(5, "啊啊"),
-                                    createConstColumn<Nullable<Int8>>(5, i)));
+                    input_itr->has_value() ? createConstColumn<String>(5, res_itr->value())
+                                           : createConstColumn<Nullable<String>>(5, *res_itr),
+                    executeFunction(
+                        "tidbTrim",
+                        createConstColumn<Nullable<String>>(5, *input_itr),
+                        createConstColumn<Nullable<String>>(5, "啊啊"),
+                        createConstColumn<Nullable<Int8>>(5, i)));
                 cnt++;
             }
             ASSERT_EQ(cnt, input_columns_ws_with_core_text.size());

@@ -34,10 +34,7 @@ public:
 
     Block filterAndTransform(const Block & in_block, const IColumn::Filter & filter, ssize_t result_size_hint);
 
-    Block getHeader() const
-    {
-        return out_header;
-    }
+    Block getHeader() const { return out_header; }
 
 private:
     Block out_header;

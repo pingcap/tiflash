@@ -24,7 +24,18 @@ class ExchangeReceiverBinder;
 class JoinBinder : public ExecutorBinder
 {
 public:
-    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds, uint64_t fine_grained_shuffle_stream_count_, bool is_null_aware_semi_join, int64_t inner_index_ = 1)
+    JoinBinder(
+        size_t & index_,
+        const DAGSchema & output_schema_,
+        tipb::JoinType tp_,
+        const ASTs & join_cols_,
+        const ASTs & l_conds,
+        const ASTs & r_conds,
+        const ASTs & o_conds,
+        const ASTs & o_eq_conds,
+        uint64_t fine_grained_shuffle_stream_count_,
+        bool is_null_aware_semi_join,
+        int64_t inner_index_ = 1)
         : ExecutorBinder(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
         , join_cols(join_cols_)
@@ -35,8 +46,7 @@ public:
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
         , is_null_aware_semi_join(is_null_aware_semi_join)
         , inner_index(inner_index_)
-    {
-    }
+    {}
 
     void addRuntimeFilter(MockRuntimeFilter & rf);
 
@@ -49,9 +59,19 @@ public:
         tipb::FieldType * tipb_field_type,
         int32_t collator_id);
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context) override;
 
-    void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map) override;
+    void toMPPSubPlan(
+        size_t & executor_index,
+        const DAGProperties & properties,
+        std::unordered_map<
+            String,
+            std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+        override;
 
 protected:
     tipb::JoinType tp;

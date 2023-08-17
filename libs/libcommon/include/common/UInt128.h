@@ -194,10 +194,7 @@ namespace std
 template <>
 struct hash<DB::UInt128> // NOLINT(readability-identifier-naming)
 {
-    size_t operator()(const DB::UInt128 & u) const
-    {
-        return CityHash_v1_0_2::Hash128to64({u.low, u.high});
-    }
+    size_t operator()(const DB::UInt128 & u) const { return CityHash_v1_0_2::Hash128to64({u.low, u.high}); }
 };
 
 } // namespace std

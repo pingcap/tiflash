@@ -32,10 +32,7 @@ public:
         , expand_transform_action(input_header, expand)
     {}
 
-    String getName() const override
-    {
-        return "Expand2TransformOp";
-    }
+    String getName() const override { return "Expand2TransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

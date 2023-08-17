@@ -23,11 +23,12 @@ String ASTQualifiedAsterisk::getColumnName() const
     return qualifier->getColumnName() + ".*";
 }
 
-void ASTQualifiedAsterisk::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTQualifiedAsterisk::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     const auto & qualifier = children.at(0);
     qualifier->formatImpl(settings, state, frame);
     settings.ostr << ".*";
 }
 
-}
+} // namespace DB

@@ -50,7 +50,8 @@ protected:
         if (table.empty() && !database.empty())
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << (detach ? "DETACH DATABASE " : "DROP DATABASE ")
-                          << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "") << backQuoteIfNeed(database);
+                          << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "")
+                          << backQuoteIfNeed(database);
         }
         else
         {

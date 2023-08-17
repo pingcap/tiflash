@@ -83,13 +83,11 @@ uint64_t getMemoryAmount()
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
     /* FreeBSD, Linux, OpenBSD, and Solaris. -------------------- */
-    return static_cast<uint64_t>(sysconf(_SC_PHYS_PAGES))
-        * static_cast<uint64_t>(sysconf(_SC_PAGESIZE));
+    return static_cast<uint64_t>(sysconf(_SC_PHYS_PAGES)) * static_cast<uint64_t>(sysconf(_SC_PAGESIZE));
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGE_SIZE)
     /* Legacy. -------------------------------------------------- */
-    return (uint64_t)sysconf(_SC_PHYS_PAGES)
-        * (uint64_t)sysconf(_SC_PAGE_SIZE);
+    return (uint64_t)sysconf(_SC_PHYS_PAGES) * (uint64_t)sysconf(_SC_PAGE_SIZE);
 
 #elif defined(CTL_HW) && (defined(HW_PHYSMEM) || defined(HW_REALMEM))
     /* DragonFly BSD, FreeBSD, NetBSD, OpenBSD, and OSX. -------- */

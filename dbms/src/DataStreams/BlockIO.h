@@ -36,8 +36,8 @@ struct BlockIO
     BlockOutputStreamPtr out;
 
     /// Callbacks for query logging could be set here.
-    std::function<void(IBlockInputStream *, IBlockOutputStream *)>    finish_callback;
-    std::function<void()>                                             exception_callback;
+    std::function<void(IBlockInputStream *, IBlockOutputStream *)> finish_callback;
+    std::function<void()> exception_callback;
 
     /// Call these functions if you want to log the request.
     void onFinish()
@@ -52,30 +52,31 @@ struct BlockIO
             exception_callback();
     }
 
-    BlockIO & operator= (const BlockIO & rhs)
+    BlockIO & operator=(const BlockIO & rhs)
     {
-        if (this == std::addressof(rhs)) {
+        if (this == std::addressof(rhs))
+        {
             return *this;
         }
 
         /// We provide the correct order of destruction.
-        out                     = nullptr;
-        in                      = nullptr;
-        process_list_entry      = nullptr;
+        out = nullptr;
+        in = nullptr;
+        process_list_entry = nullptr;
 
-        process_list_entry      = rhs.process_list_entry;
-        in                      = rhs.in;
-        out                     = rhs.out;
+        process_list_entry = rhs.process_list_entry;
+        in = rhs.in;
+        out = rhs.out;
 
-        finish_callback         = rhs.finish_callback;
-        exception_callback      = rhs.exception_callback;
+        finish_callback = rhs.finish_callback;
+        exception_callback = rhs.exception_callback;
 
         return *this;
     }
 
     BlockIO() = default;
-    BlockIO(const BlockIO& that) = default;
+    BlockIO(const BlockIO & that) = default;
     ~BlockIO() = default;
 };
 
-}
+} // namespace DB

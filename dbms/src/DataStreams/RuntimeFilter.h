@@ -38,10 +38,12 @@ public:
     {
         if (rf_pb.source_expr_list().size() != 1 || rf_pb.target_expr_list().size() != 1)
         {
-            throw TiFlashException(Errors::Coprocessor::BadRequest,
-                                   "for Runtime Filter, the size of source_expr_list and target_expr_list should both be 1 while source_expr_list size:{} target_expr_list size:{}",
-                                   rf_pb.source_expr_list().size(),
-                                   rf_pb.target_expr_list().size());
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "for Runtime Filter, the size of source_expr_list and target_expr_list should both be 1 while "
+                "source_expr_list size:{} target_expr_list size:{}",
+                rf_pb.source_expr_list().size(),
+                rf_pb.target_expr_list().size());
         }
         source_expr = rf_pb.source_expr_list().Get(0);
         target_expr = rf_pb.target_expr_list().Get(0);

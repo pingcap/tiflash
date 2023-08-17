@@ -27,19 +27,14 @@ namespace
 class MockSourceOp : public SourceOp
 {
 public:
-    MockSourceOp(
-        PipelineExecutorContext & exec_context_,
-        const Block & output_)
+    MockSourceOp(PipelineExecutorContext & exec_context_, const Block & output_)
         : SourceOp(exec_context_, "mock")
         , output(output_)
     {
         setHeader(output.cloneEmpty());
     }
 
-    String getName() const override
-    {
-        return "MockSourceOp";
-    }
+    String getName() const override { return "MockSourceOp"; }
 
 protected:
     OperatorStatus readImpl(Block & block) override

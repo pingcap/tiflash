@@ -29,4 +29,4 @@ namespace DB
   */
 BlockInputStreams narrowBlockInputStreams(BlockInputStreams & inputs, size_t width);
 
-}
+} // namespace DB

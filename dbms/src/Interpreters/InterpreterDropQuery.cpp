@@ -71,7 +71,8 @@ BlockIO InterpreterDropQuery::execute()
     /// Drop temporary table.
     if (drop.database.empty() || drop.temporary)
     {
-        StoragePtr table = (context.hasSessionContext() ? context.getSessionContext() : context).tryRemoveExternalTable(drop.table);
+        StoragePtr table
+            = (context.hasSessionContext() ? context.getSessionContext() : context).tryRemoveExternalTable(drop.table);
         if (table)
         {
             if (drop.database.empty() && !drop.temporary)
@@ -109,9 +110,11 @@ BlockIO InterpreterDropQuery::execute()
             table = context.getTable(database_name, drop.table);
 
         if (table)
-            tables_to_drop.emplace_back(table,
-                                        context.getDDLGuard(drop.table,
-                                                            fmt::format("Table {}.{} is dropping or detaching right now", database_name, drop.table)));
+            tables_to_drop.emplace_back(
+                table,
+                context.getDDLGuard(
+                    drop.table,
+                    fmt::format("Table {}.{} is dropping or detaching right now", database_name, drop.table)));
         else
             return {};
     }
@@ -125,9 +128,11 @@ BlockIO InterpreterDropQuery::execute()
         }
 
         for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
-            tables_to_drop.emplace_back(iterator->table(),
-                                        context.getDDLGuard(iterator->name(),
-                                                            fmt::format("Table {}.{} is dropping or detaching right now", database_name, iterator->name())));
+            tables_to_drop.emplace_back(
+                iterator->table(),
+                context.getDDLGuard(
+                    iterator->name(),
+                    fmt::format("Table {}.{} is dropping or detaching right now", database_name, iterator->name())));
     }
 
     for (auto & table : tables_to_drop)
@@ -136,7 +141,8 @@ BlockIO InterpreterDropQuery::execute()
         {
             if (!table.first->checkTableCanBeDropped())
                 throw Exception(
-                    "Table " + database_name + "." + table.first->getTableName() + " couldn't be dropped due to failed pre-drop check",
+                    "Table " + database_name + "." + table.first->getTableName()
+                        + " couldn't be dropped due to failed pre-drop check",
                     ErrorCodes::TABLE_WAS_NOT_DROPPED);
         }
 
@@ -180,8 +186,8 @@ BlockIO InterpreterDropQuery::execute()
             const String database_data_path = database->getDataPath();
             if (!database_data_path.empty())
             {
-                String table_data_path
-                    = database_data_path + (endsWith(database_data_path, "/") ? "" : "/") + escapeForFileName(current_table_name);
+                String table_data_path = database_data_path + (endsWith(database_data_path, "/") ? "" : "/")
+                    + escapeForFileName(current_table_name);
 
                 if (Poco::File(table_data_path).exists())
                 {
@@ -202,7 +208,9 @@ BlockIO InterpreterDropQuery::execute()
 
         /// Someone could have time to create a table in the database to be deleted while we deleted the tables without the context lock.
         if (!context.getDatabase(database_name)->empty(context))
-            throw Exception("New table appeared in database being dropped. Try dropping it again.", ErrorCodes::DATABASE_NOT_EMPTY);
+            throw Exception(
+                "New table appeared in database being dropped. Try dropping it again.",
+                ErrorCodes::DATABASE_NOT_EMPTY);
 
         /// Delete database information from the RAM
         auto database = context.detachDatabase(database_name);

@@ -30,13 +30,12 @@ extern const int LOGICAL_ERROR;
 void TableFunctionFactory::registerFunction(const std::string & name, Creator creator)
 {
     if (!functions.emplace(name, std::move(creator)).second)
-        throw Exception("TableFunctionFactory: the table function name '" + name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "TableFunctionFactory: the table function name '" + name + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
-TableFunctionPtr TableFunctionFactory::get(
-    const std::string & name,
-    const Context & context) const
+TableFunctionPtr TableFunctionFactory::get(const std::string & name, const Context & context) const
 {
     if (context.getSettingsRef().readonly == 1) /** For example, for readonly = 2 - allowed. */
         throw Exception("Table functions are forbidden in readonly mode", ErrorCodes::READONLY);

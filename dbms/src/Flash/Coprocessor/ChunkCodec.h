@@ -44,7 +44,8 @@ public:
     ChunkCodec() = default;
     virtual Block decode(const String & str, const DAGSchema & schema) = 0;
 
-    virtual std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & result_field_types) = 0;
+    virtual std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & result_field_types)
+        = 0;
 
     virtual ~ChunkCodec() = default;
 };

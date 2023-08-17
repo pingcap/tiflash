@@ -36,7 +36,14 @@ DAGProperties getDAGProperties(const String & prop_string);
 void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks);
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 // Just for test usage, dag_response should not contain result more than 128M
-Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
-bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
+Block getMergedBigBlockFromDagRsp(
+    Context & context,
+    const DAGSchema & schema,
+    const tipb::SelectResponse & dag_response);
+bool dagRspEqual(
+    Context & context,
+    const tipb::SelectResponse & expected,
+    const tipb::SelectResponse & actual,
+    String & unequal_msg);
 
 } // namespace DB

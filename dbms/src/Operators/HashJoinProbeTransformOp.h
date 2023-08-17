@@ -31,10 +31,7 @@ public:
         size_t max_block_size,
         const Block & input_header);
 
-    String getName() const override
-    {
-        return "HashJoinProbeTransformOp";
-    }
+    String getName() const override { return "HashJoinProbeTransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

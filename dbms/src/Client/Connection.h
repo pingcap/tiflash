@@ -129,10 +129,7 @@ public:
     ;
 
     /// Set throttler of network traffic. One throttler could be used for multiple connections to limit total traffic.
-    void setThrottler(const ThrottlerPtr & throttler_)
-    {
-        throttler = throttler_;
-    }
+    void setThrottler(const ThrottlerPtr & throttler_) { throttler = throttler_; }
 
 
     /// Packet that could be received from server.
@@ -272,8 +269,7 @@ private:
         explicit LoggerWrapper(Connection & parent_)
             : log(nullptr)
             , parent(parent_)
-        {
-        }
+        {}
 
         Poco::Logger * get()
         {

@@ -247,8 +247,7 @@ __attribute__((always_inline, pure)) inline bool memoryIsByte(const void * data,
         return true;
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && cpu_feature_flags.avx512vl
-        && cpu_feature_flags.avx512bw)
+    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && cpu_feature_flags.avx512vl && cpu_feature_flags.avx512bw)
     {
         return _detail::memoryIsByteAVX512(data, size, target);
     }

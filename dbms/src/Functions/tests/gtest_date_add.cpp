@@ -29,147 +29,353 @@ protected:
         return createColumn<Nullable<String>>(v);
     }
 
-    static ColumnWithTypeAndName toStringVec(const std::vector<String> & v)
-    {
-        return createColumn<String>(v);
-    }
+    static ColumnWithTypeAndName toStringVec(const std::vector<String> & v) { return createColumn<String>(v); }
 
-    static ColumnWithTypeAndName toIntVec(const std::vector<Int64> & v)
-    {
-        return createColumn<Int64>(v);
-    }
+    static ColumnWithTypeAndName toIntVec(const std::vector<Int64> & v) { return createColumn<Int64>(v); }
 
-    static ColumnWithTypeAndName toFloatVec(const std::vector<Float64> & v)
-    {
-        return createColumn<Float64>(v);
-    }
+    static ColumnWithTypeAndName toFloatVec(const std::vector<Float64> & v) { return createColumn<Float64>(v); }
 
-    static ColumnWithTypeAndName toConst(const int s)
-    {
-        return createConstColumn<int>(1, s);
-    }
+    static ColumnWithTypeAndName toConst(const int s) { return createConstColumn<int>(1, s); }
 
-    static ColumnWithTypeAndName toConst(const Float64 s)
-    {
-        return createConstColumn<Float64>(1, s);
-    }
+    static ColumnWithTypeAndName toConst(const Float64 s) { return createConstColumn<Float64>(1, s); }
 
-    static ColumnWithTypeAndName toConst(const String & s)
-    {
-        return createConstColumn<String>(1, s);
-    }
+    static ColumnWithTypeAndName toConst(const String & s) { return createConstColumn<String>(1, s); }
 };
 
 TEST_F(Dateadd, dateAddStringIntUnitTest)
 {
     ASSERT_COLUMN_EQ(
-        toNullableVec({"2020-12-13 12:12:12", "2020-12-13 12:12:12", "2020-12-13 12:12:12", "2020-12-13 12:12:12", "2012-12-13 12:12:00", "2020-12-13 12:12:09", "2020-12-13 12:12:09", "2012-12-13 12:09:00", "2020-12-13 12:12:00", "2020-12-13 12:12:00", "2012-12-13 12:00:00", "2020-12-13 12:09:00", "2020-12-13 12:09:00", "2012-12-13", "2020-12-13 12:00:00", "2012-12-13", "2020-12-13 09:00:00", "2020-12-13 09:00:00", "2012-12-10", "2020-12-13", "2020-12-13", "2020-12-10", "2020-12-13 12:12:12.123456", "2020-12-13", "2020-12-13 00:00:00"}),
-        executeFunction("addDays", toNullableVec({"20201212121212", "2020-12-12 12:12:12", "201212121212", "20-12-12 12-12-12", "2012-12-12 12-12", "20121212129", "20-12-12 12-12-9", "2012-12-12 12-9", "2012121212", "20-12-12 12-12", "2012-12-12 12", "201212129", "20-12-12 12-9", "20121212", "20-12-12 12", "2012-12-12", "2012129", "20-12-12 9", "2012-12-9", "201212", "20-12-12", "20-12-9", "2020-12-12 12:12:12..123456", "20-12-12.", "201212.0"}), toConst(1)));
+        toNullableVec(
+            {"2020-12-13 12:12:12",
+             "2020-12-13 12:12:12",
+             "2020-12-13 12:12:12",
+             "2020-12-13 12:12:12",
+             "2012-12-13 12:12:00",
+             "2020-12-13 12:12:09",
+             "2020-12-13 12:12:09",
+             "2012-12-13 12:09:00",
+             "2020-12-13 12:12:00",
+             "2020-12-13 12:12:00",
+             "2012-12-13 12:00:00",
+             "2020-12-13 12:09:00",
+             "2020-12-13 12:09:00",
+             "2012-12-13",
+             "2020-12-13 12:00:00",
+             "2012-12-13",
+             "2020-12-13 09:00:00",
+             "2020-12-13 09:00:00",
+             "2012-12-10",
+             "2020-12-13",
+             "2020-12-13",
+             "2020-12-10",
+             "2020-12-13 12:12:12.123456",
+             "2020-12-13",
+             "2020-12-13 00:00:00"}),
+        executeFunction(
+            "addDays",
+            toNullableVec(
+                {"20201212121212",
+                 "2020-12-12 12:12:12",
+                 "201212121212",
+                 "20-12-12 12-12-12",
+                 "2012-12-12 12-12",
+                 "20121212129",
+                 "20-12-12 12-12-9",
+                 "2012-12-12 12-9",
+                 "2012121212",
+                 "20-12-12 12-12",
+                 "2012-12-12 12",
+                 "201212129",
+                 "20-12-12 12-9",
+                 "20121212",
+                 "20-12-12 12",
+                 "2012-12-12",
+                 "2012129",
+                 "20-12-12 9",
+                 "2012-12-9",
+                 "201212",
+                 "20-12-12",
+                 "20-12-9",
+                 "2020-12-12 12:12:12..123456",
+                 "20-12-12.",
+                 "201212.0"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
-        toNullableVec({"2020-12-13 12:12:12", "2020-12-13 12:12:12", "2020-12-13 12:12:12", "2020-12-13 12:12:12", "2012-12-13 12:12:00", "2020-12-13 12:12:09", "2020-12-13 12:12:09", "2012-12-13 12:09:00", "2020-12-13 12:12:00", "2020-12-13 12:12:00", "2012-12-13 12:00:00", "2020-12-13 12:09:00", "2020-12-13 12:09:00", "2012-12-13", "2020-12-13 12:00:00", "2012-12-13", "2020-12-13 09:00:00", "2020-12-13 09:00:00", "2012-12-10", "2020-12-13", "2020-12-13", "2020-12-10", "2020-12-13 12:12:12.123456", "2020-12-13", "2020-12-13 00:00:00"}),
-        executeFunction("addDays", toStringVec({"20201212121212", "2020-12-12 12:12:12", "201212121212", "20-12-12 12-12-12", "2012-12-12 12-12", "20121212129", "20-12-12 12-12-9", "2012-12-12 12-9", "2012121212", "20-12-12 12-12", "2012-12-12 12", "201212129", "20-12-12 12-9", "20121212", "20-12-12 12", "2012-12-12", "2012129", "20-12-12 9", "2012-12-9", "201212", "20-12-12", "20-12-9", "2020-12-12 12:12:12..123456", "20-12-12.", "201212.0"}), toConst(1)));
+        toNullableVec(
+            {"2020-12-13 12:12:12",
+             "2020-12-13 12:12:12",
+             "2020-12-13 12:12:12",
+             "2020-12-13 12:12:12",
+             "2012-12-13 12:12:00",
+             "2020-12-13 12:12:09",
+             "2020-12-13 12:12:09",
+             "2012-12-13 12:09:00",
+             "2020-12-13 12:12:00",
+             "2020-12-13 12:12:00",
+             "2012-12-13 12:00:00",
+             "2020-12-13 12:09:00",
+             "2020-12-13 12:09:00",
+             "2012-12-13",
+             "2020-12-13 12:00:00",
+             "2012-12-13",
+             "2020-12-13 09:00:00",
+             "2020-12-13 09:00:00",
+             "2012-12-10",
+             "2020-12-13",
+             "2020-12-13",
+             "2020-12-10",
+             "2020-12-13 12:12:12.123456",
+             "2020-12-13",
+             "2020-12-13 00:00:00"}),
+        executeFunction(
+            "addDays",
+            toStringVec(
+                {"20201212121212",
+                 "2020-12-12 12:12:12",
+                 "201212121212",
+                 "20-12-12 12-12-12",
+                 "2012-12-12 12-12",
+                 "20121212129",
+                 "20-12-12 12-12-9",
+                 "2012-12-12 12-9",
+                 "2012121212",
+                 "20-12-12 12-12",
+                 "2012-12-12 12",
+                 "201212129",
+                 "20-12-12 12-9",
+                 "20121212",
+                 "20-12-12 12",
+                 "2012-12-12",
+                 "2012129",
+                 "20-12-12 9",
+                 "2012-12-9",
+                 "201212",
+                 "20-12-12",
+                 "20-12-9",
+                 "2020-12-12 12:12:12..123456",
+                 "20-12-12.",
+                 "201212.0"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
-        toNullableVec({"2020-12-13 12:12:12.000100", "2020-12-13 12:12:12", "2020-12-13 12:12:12.000001", "2012-12-13 12:12:01", "2020-12-02 00:00:01", "2020-12-02 12:12:12"}),
-        executeFunction("addDays", toNullableVec({"20201212121212.0001", "20201212121212.0000001", "20201212121212.000001", "2012-12-12 12:12.01", "20121.000001", "20121.121212"}), toConst(1)));
+        toNullableVec(
+            {"2020-12-13 12:12:12.000100",
+             "2020-12-13 12:12:12",
+             "2020-12-13 12:12:12.000001",
+             "2012-12-13 12:12:01",
+             "2020-12-02 00:00:01",
+             "2020-12-02 12:12:12"}),
+        executeFunction(
+            "addDays",
+            toNullableVec(
+                {"20201212121212.0001",
+                 "20201212121212.0000001",
+                 "20201212121212.000001",
+                 "2012-12-12 12:12.01",
+                 "20121.000001",
+                 "20121.121212"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({{}, {}, {}, {}, {}, {}, {}, {}}),
-        executeFunction("addDays", toNullableVec({"20130229", "20121312", "20120012", "20121200", "20121232", "20121212241212", "20121212126012", "20121212121260"}), toConst(1)));
+        executeFunction(
+            "addDays",
+            toNullableVec(
+                {"20130229",
+                 "20121312",
+                 "20120012",
+                 "20121200",
+                 "20121232",
+                 "20121212241212",
+                 "20121212126012",
+                 "20121212121260"}),
+            toConst(1)));
     ASSERT_COLUMN_EQ(
         toNullableVec({{}, {}, {}, {}, {}, {}, {}, {}}),
-        executeFunction("addDays", toNullableVec({"2013-02-29", "2012-13-12", "2012-00-12", "2012-12-00", "2012-12-32", "2012-12-12- 24:12:12", "2012-12-12-12:60:12", "2012-12-12 12:12:60"}), toConst(1)));
+        executeFunction(
+            "addDays",
+            toNullableVec(
+                {"2013-02-29",
+                 "2012-13-12",
+                 "2012-00-12",
+                 "2012-12-00",
+                 "2012-12-32",
+                 "2012-12-12- 24:12:12",
+                 "2012-12-12-12:60:12",
+                 "2012-12-12 12:12:60"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-13", "2020-12-14", {}, "9992-01-01 12:12:00", "0007-11-26 12:12:12", {}}),
-        executeFunction("addDays", toNullableVec({"20121212", "20201212", "20201212", "2012-12-12 12-12", "20201212121212", "2012-12-12 12-12"}), toIntVec({1, 2, 2914289, 2914289, -735250, -735250})));
+        executeFunction(
+            "addDays",
+            toNullableVec(
+                {"20121212", "20201212", "20201212", "2012-12-12 12-12", "20201212121212", "2012-12-12 12-12"}),
+            toIntVec({1, 2, 2914289, 2914289, -735250, -735250})));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-19", "2012-12-19 12:12:12", "2012-12-19", "2012-12-19 12:12:12"}),
-        executeFunction("addWeeks", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(1)));
+        executeFunction(
+            "addWeeks",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2013-01-12", "2013-01-12 12:12:12", "2013-01-12", "2013-01-12 12:12:12"}),
-        executeFunction("addMonths", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(1)));
+        executeFunction(
+            "addMonths",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2013-12-12", "2013-12-12 12:12:12", "2013-12-12", "2013-12-12 12:12:12"}),
-        executeFunction("addYears", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(1)));
+        executeFunction(
+            "addYears",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 01:00:00", "2012-12-12 13:12:12", "2012-12-12 01:00:00", "2012-12-12 13:12:12"}),
-        executeFunction("addHours", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(1)));
+        executeFunction(
+            "addHours",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:01:00", "2012-12-12 12:13:12", "2012-12-12 00:01:00", "2012-12-12 12:13:12"}),
-        executeFunction("addMinutes", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(1)));
+        executeFunction(
+            "addMinutes",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:00:01", "2012-12-12 12:12:13", "2012-12-12 00:00:01", "2012-12-12 12:12:13"}),
-        executeFunction("addSeconds", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(1)));
+        executeFunction(
+            "addSeconds",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            toConst(1)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({{}, {}, {}, {}, {}, {}, {}, {}}),
-        executeFunction("addSeconds", toNullableVec({"20130229", "20121312", "20120012", "20121200", "20121232", "20121212241212", "20121212126012", "20121212121260"}), toConst(1)));
+        executeFunction(
+            "addSeconds",
+            toNullableVec(
+                {"20130229",
+                 "20121312",
+                 "20120012",
+                 "20121200",
+                 "20121232",
+                 "20121212241212",
+                 "20121212126012",
+                 "20121212121260"}),
+            toConst(1)));
 }
 
 TEST_F(Dateadd, dateAddStringRealUnitTest)
 {
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-14", "2012-12-14 12:12:12", "2012-12-14", "2012-12-14 12:12:12"}),
-        executeFunction("addDays", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addDays",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-13", "2012-12-13 12:12:12", "2012-12-13", "2012-12-13 12:12:12"}),
-        executeFunction("addDays", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addDays",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-14", "2012-12-14 12:12:12", "2012-12-14", "2012-12-14 12:12:12"}),
-        executeFunction("addDays", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toFloatVec({1.6, 1.6, 1.6, 1.6}))));
+        executeFunction(
+            "addDays",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toFloatVec({1.6, 1.6, 1.6, 1.6}))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-13", "2012-12-13 12:12:12", "2012-12-13", "2012-12-13 12:12:12"}),
-        executeFunction("addDays", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toFloatVec({1.4, 1.4, 1.4, 1.4}))));
+        executeFunction(
+            "addDays",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toFloatVec({1.4, 1.4, 1.4, 1.4}))));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-26", "2012-12-26 12:12:12", "2012-12-26", "2012-12-26 12:12:12"}),
-        executeFunction("addWeeks", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addWeeks",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-19", "2012-12-19 12:12:12", "2012-12-19", "2012-12-19 12:12:12"}),
-        executeFunction("addWeeks", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addWeeks",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2013-02-12", "2013-02-12 12:12:12", "2013-02-12", "2013-02-12 12:12:12"}),
-        executeFunction("addMonths", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addMonths",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2013-01-12", "2013-01-12 12:12:12", "2013-01-12", "2013-01-12 12:12:12"}),
-        executeFunction("addMonths", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addMonths",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2014-12-12", "2014-12-12 12:12:12", "2014-12-12", "2014-12-12 12:12:12"}),
-        executeFunction("addYears", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addYears",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2013-12-12", "2013-12-12 12:12:12", "2013-12-12", "2013-12-12 12:12:12"}),
-        executeFunction("addYears", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addYears",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 02:00:00", "2012-12-12 14:12:12", "2012-12-12 02:00:00", "2012-12-12 14:12:12"}),
-        executeFunction("addHours", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addHours",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 01:00:00", "2012-12-12 13:12:12", "2012-12-12 01:00:00", "2012-12-12 13:12:12"}),
-        executeFunction("addHours", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addHours",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:02:00", "2012-12-12 12:14:12", "2012-12-12 00:02:00", "2012-12-12 12:14:12"}),
-        executeFunction("addMinutes", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addMinutes",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:01:00", "2012-12-12 12:13:12", "2012-12-12 00:01:00", "2012-12-12 12:13:12"}),
-        executeFunction("addMinutes", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addMinutes",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:00:02", "2012-12-12 12:12:14", "2012-12-12 00:00:02", "2012-12-12 12:12:14"}),
-        executeFunction("addSeconds", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.6))));
+        executeFunction(
+            "addSeconds",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.6))));
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:00:01", "2012-12-12 12:12:13", "2012-12-12 00:00:01", "2012-12-12 12:12:13"}),
-        executeFunction("addSeconds", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), executeFunction("tidbRound", toConst(1.4))));
+        executeFunction(
+            "addSeconds",
+            toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}),
+            executeFunction("tidbRound", toConst(1.4))));
 }
 
 } // namespace DB::tests

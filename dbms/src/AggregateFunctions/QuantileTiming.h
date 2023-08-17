@@ -99,17 +99,9 @@ struct QuantileTimingTiny
     }
 
     /** This function must be called before get-functions. */
-    void prepare() const
-    {
-        std::sort(elems, elems + count);
-    }
+    void prepare() const { std::sort(elems, elems + count); }
 
-    UInt16 get(double level) const
-    {
-        return level != 1
-            ? elems[static_cast<size_t>(count * level)]
-            : elems[count - 1];
-    }
+    UInt16 get(double level) const { return level != 1 ? elems[static_cast<size_t>(count * level)] : elems[count - 1]; }
 
     template <typename ResultType>
     void getMany(const double * levels, size_t size, ResultType * result) const
@@ -125,12 +117,7 @@ struct QuantileTimingTiny
     }
 
     /// The same, but in the case of an empty state NaN is returned.
-    float getFloat(double level) const
-    {
-        return count
-            ? get(level)
-            : std::numeric_limits<float>::quiet_NaN();
-    }
+    float getFloat(double level) const { return count ? get(level) : std::numeric_limits<float>::quiet_NaN(); }
 
     void getManyFloat(const double * levels, size_t size, float * result) const
     {
@@ -165,10 +152,7 @@ struct QuantileTimingMedium
         elems.emplace_back(x);
     }
 
-    void merge(const QuantileTimingMedium & rhs)
-    {
-        elems.insert(rhs.elems.begin(), rhs.elems.end());
-    }
+    void merge(const QuantileTimingMedium & rhs) { elems.insert(rhs.elems.begin(), rhs.elems.end()); }
 
     void serialize(WriteBuffer & buf) const
     {
@@ -190,9 +174,7 @@ struct QuantileTimingMedium
 
         if (!elems.empty())
         {
-            size_t n = level < 1
-                ? level * elems.size()
-                : (elems.size() - 1);
+            size_t n = level < 1 ? level * elems.size() : (elems.size() - 1);
 
             /// Sorting an array will not be considered a violation of constancy.
             auto & array = const_cast<Array &>(elems);
@@ -213,9 +195,7 @@ struct QuantileTimingMedium
             auto level_index = levels_permutation[i];
             auto level = levels[level_index];
 
-            size_t n = level < 1
-                ? level * elems.size()
-                : (elems.size() - 1);
+            size_t n = level < 1 ? level * elems.size() : (elems.size() - 1);
 
             std::nth_element(array.begin() + prev_n, array.begin() + n, array.end());
 
@@ -225,12 +205,7 @@ struct QuantileTimingMedium
     }
 
     /// Same, but in the case of an empty state, NaN is returned.
-    float getFloat(double level) const
-    {
-        return !elems.empty()
-            ? get(level)
-            : std::numeric_limits<float>::quiet_NaN();
-    }
+    float getFloat(double level) const { return !elems.empty() ? get(level) : std::numeric_limits<float>::quiet_NaN(); }
 
     void getManyFloat(const double * levels, const size_t * levels_permutation, size_t size, float * result) const
     {
@@ -270,7 +245,9 @@ private:
     static inline UInt16 indexInBigToValue(size_t i)
     {
         return (i * BIG_PRECISION) + SMALL_THRESHOLD
-            + (intHash32<0>(i) % BIG_PRECISION - (BIG_PRECISION / 2)); /// A small randomization so that it is not noticeable that all the values are even.
+            + (intHash32<0>(i) % BIG_PRECISION
+               - (BIG_PRECISION
+                  / 2)); /// A small randomization so that it is not noticeable that all the values are even.
     }
 
     /// Lets you scroll through the histogram values, skipping zeros.
@@ -308,22 +285,14 @@ private:
 
         UInt16 key() const
         {
-            return pos - begin < SMALL_THRESHOLD
-                ? pos - begin
-                : indexInBigToValue(pos - begin - SMALL_THRESHOLD);
+            return pos - begin < SMALL_THRESHOLD ? pos - begin : indexInBigToValue(pos - begin - SMALL_THRESHOLD);
         }
     };
 
 public:
-    QuantileTimingLarge()
-    {
-        memset(this, 0, sizeof(*this));
-    }
+    QuantileTimingLarge() { memset(this, 0, sizeof(*this)); }
 
-    void insert(UInt64 x) noexcept
-    {
-        insertWeighted(x, 1);
-    }
+    void insert(UInt64 x) noexcept { insertWeighted(x, 1); }
 
     void insertWeighted(UInt64 x, size_t weight) noexcept
     {
@@ -473,12 +442,7 @@ public:
     }
 
     /// The same, but in the case of an empty state, NaN is returned.
-    float getFloat(double level) const
-    {
-        return count
-            ? get(level)
-            : std::numeric_limits<float>::quiet_NaN();
-    }
+    float getFloat(double level) const { return count ? get(level) : std::numeric_limits<float>::quiet_NaN(); }
 
     void getManyFloat(const double * levels, const size_t * levels_permutation, size_t size, float * result) const
     {
@@ -564,10 +528,7 @@ private:
     }
 
 public:
-    QuantileTiming()
-    {
-        tiny.count = 0;
-    }
+    QuantileTiming() { tiny.count = 0; }
 
     ~QuantileTiming()
     {
@@ -686,7 +647,9 @@ public:
                     large->insert(elem);
             }
             else
-                throw Exception("Logical error in QuantileTiming::merge function: not all cases are covered", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    "Logical error in QuantileTiming::merge function: not all cases are covered",
+                    ErrorCodes::LOGICAL_ERROR);
 
             /// For determinism, we should always convert to `large` when size condition is reached
             ///  - regardless of merge order.
@@ -774,12 +737,7 @@ public:
     }
 
     /// The same, but in the case of an empty state, NaN is returned.
-    float getFloat(double level) const
-    {
-        return tiny.count
-            ? get(level)
-            : std::numeric_limits<float>::quiet_NaN();
-    }
+    float getFloat(double level) const { return tiny.count ? get(level) : std::numeric_limits<float>::quiet_NaN(); }
 
     void getManyFloat(const double * levels, const size_t * levels_permutation, size_t size, float * result) const
     {

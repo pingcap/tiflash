@@ -114,7 +114,11 @@ struct ProbeProcessInfo
         }
     }
 
-    void prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+    void prepareForHashProbe(
+        const Names & key_names,
+        const String & filter_column,
+        ASTTableJoin::Kind kind,
+        ASTTableJoin::Strictness strictness);
     void prepareForCrossProbe(
         const String & filter_column,
         ASTTableJoin::Kind kind,

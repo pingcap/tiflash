@@ -155,10 +155,7 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeVarUInt(is_auto ? 0 : value, buf);
-    }
+    void write(WriteBuffer & buf) const { writeVarUInt(is_auto ? 0 : value, buf); }
 
     void setAuto()
     {
@@ -172,10 +169,7 @@ public:
         return res;
     }
 
-    UInt64 get() const
-    {
-        return value;
-    }
+    UInt64 get() const { return value; }
 
 private:
     UInt64 value;
@@ -200,10 +194,7 @@ public:
 
     Poco::Timespan::TimeDiff totalSeconds() const { return value.totalSeconds(); }
 
-    String toString() const
-    {
-        return DB::toString(totalSeconds());
-    }
+    String toString() const { return DB::toString(totalSeconds()); }
 
     void set(const Poco::Timespan & x)
     {
@@ -211,20 +202,11 @@ public:
         changed = true;
     }
 
-    void set(UInt64 x)
-    {
-        set(Poco::Timespan(x, 0));
-    }
+    void set(UInt64 x) { set(Poco::Timespan(x, 0)); }
 
-    void set(const Field & x)
-    {
-        set(safeGet<UInt64>(x));
-    }
+    void set(const Field & x) { set(safeGet<UInt64>(x)); }
 
-    void set(const String & x)
-    {
-        set(parse<UInt64>(x));
-    }
+    void set(const String & x) { set(parse<UInt64>(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -233,15 +215,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeVarUInt(value.totalSeconds(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeVarUInt(value.totalSeconds(), buf); }
 
-    Poco::Timespan get() const
-    {
-        return value;
-    }
+    Poco::Timespan get() const { return value; }
 
 private:
     Poco::Timespan value;
@@ -266,10 +242,7 @@ public:
 
     Poco::Timespan::TimeDiff totalMilliseconds() const { return value.totalMilliseconds(); }
 
-    String toString() const
-    {
-        return DB::toString(totalMilliseconds());
-    }
+    String toString() const { return DB::toString(totalMilliseconds()); }
 
     void set(const Poco::Timespan & x)
     {
@@ -277,20 +250,11 @@ public:
         changed = true;
     }
 
-    void set(UInt64 x)
-    {
-        set(Poco::Timespan(x * 1000));
-    }
+    void set(UInt64 x) { set(Poco::Timespan(x * 1000)); }
 
-    void set(const Field & x)
-    {
-        set(safeGet<UInt64>(x));
-    }
+    void set(const Field & x) { set(safeGet<UInt64>(x)); }
 
-    void set(const String & x)
-    {
-        set(parse<UInt64>(x));
-    }
+    void set(const String & x) { set(parse<UInt64>(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -299,15 +263,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeVarUInt(value.totalMilliseconds(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeVarUInt(value.totalMilliseconds(), buf); }
 
-    Poco::Timespan get() const
-    {
-        return value;
-    }
+    Poco::Timespan get() const { return value; }
 
 private:
     Poco::Timespan value;
@@ -335,10 +293,7 @@ public:
         return *this;
     }
 
-    String toString() const
-    {
-        return DB::toString(value.load());
-    }
+    String toString() const { return DB::toString(value.load()); }
 
     void set(float x)
     {
@@ -361,13 +316,12 @@ public:
             set(safeGet<Float64>(x));
         }
         else
-            throw Exception(std::string("Bad type of setting. Expected UInt64, Int64 or Float64, got ") + x.getTypeName(), ErrorCodes::TYPE_MISMATCH);
+            throw Exception(
+                std::string("Bad type of setting. Expected UInt64, Int64 or Float64, got ") + x.getTypeName(),
+                ErrorCodes::TYPE_MISMATCH);
     }
 
-    void set(const String & x)
-    {
-        set(parse<float>(x));
-    }
+    void set(const String & x) { set(parse<float>(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -376,15 +330,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    float get() const
-    {
-        return value.load();
-    }
+    float get() const { return value.load(); }
 
 private:
     std::atomic<float> value;
@@ -446,10 +394,7 @@ public:
         return *this;
     }
 
-    String toString() const
-    {
-        return DB::toString(value.load());
-    }
+    String toString() const { return DB::toString(value.load()); }
 
     void set(double x)
     {
@@ -472,13 +417,12 @@ public:
             set(safeGet<Float64>(x));
         }
         else
-            throw Exception(std::string("Bad type of setting. Expected UInt64, Int64 or Float64, got ") + x.getTypeName(), ErrorCodes::TYPE_MISMATCH);
+            throw Exception(
+                std::string("Bad type of setting. Expected UInt64, Int64 or Float64, got ") + x.getTypeName(),
+                ErrorCodes::TYPE_MISMATCH);
     }
 
-    void set(const String & x)
-    {
-        set(parse<double>(x));
-    }
+    void set(const String & x) { set(parse<double>(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -487,15 +431,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    double get() const
-    {
-        return value.load();
-    }
+    double get() const { return value.load(); }
 
 private:
     std::atomic<double> value;
@@ -537,8 +475,9 @@ public:
         if (s == "in_order")
             return LoadBalancing::IN_ORDER;
 
-        throw Exception("Unknown load balancing mode: '" + s + "', must be one of 'random', 'nearest_hostname', 'in_order'",
-                        ErrorCodes::UNKNOWN_LOAD_BALANCING);
+        throw Exception(
+            "Unknown load balancing mode: '" + s + "', must be one of 'random', 'nearest_hostname', 'in_order'",
+            ErrorCodes::UNKNOWN_LOAD_BALANCING);
     }
 
     String toString() const
@@ -555,15 +494,9 @@ public:
         changed = true;
     }
 
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
+    void set(const Field & x) { set(safeGet<const String &>(x)); }
 
-    void set(const String & x)
-    {
-        set(getLoadBalancing(x));
-    }
+    void set(const String & x) { set(getLoadBalancing(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -572,15 +505,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    LoadBalancing get() const
-    {
-        return value;
-    }
+    LoadBalancing get() const { return value; }
 
 private:
     LoadBalancing value;
@@ -610,13 +537,12 @@ public:
         if (s == "break")
             return OverflowMode::BREAK;
 
-        throw Exception("Unknown overflow mode: '" + s + "', must be one of 'throw', 'break', 'any'", ErrorCodes::UNKNOWN_OVERFLOW_MODE);
+        throw Exception(
+            "Unknown overflow mode: '" + s + "', must be one of 'throw', 'break', 'any'",
+            ErrorCodes::UNKNOWN_OVERFLOW_MODE);
     }
 
-    static OverflowMode getOverflowMode(const String & s)
-    {
-        return getOverflowModeForGroupBy(s);
-    }
+    static OverflowMode getOverflowMode(const String & s) { return getOverflowModeForGroupBy(s); }
 
     String toString() const
     {
@@ -634,15 +560,9 @@ public:
         changed = true;
     }
 
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
+    void set(const Field & x) { set(safeGet<const String &>(x)); }
 
-    void set(const String & x)
-    {
-        set(getOverflowMode(x));
-    }
+    void set(const String & x) { set(getOverflowMode(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -651,15 +571,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    OverflowMode get() const
-    {
-        return value;
-    }
+    OverflowMode get() const { return value; }
 
 private:
     OverflowMode value;
@@ -687,15 +601,9 @@ public:
         changed = true;
     }
 
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
+    void set(const Field & x) { set(safeGet<const String &>(x)); }
 
-    void set(const String & x)
-    {
-        set(getChecksumAlgorithm(x));
-    }
+    void set(const String & x) { set(getChecksumAlgorithm(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -704,15 +612,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    ChecksumAlgo get() const
-    {
-        return value;
-    }
+    ChecksumAlgo get() const { return value; }
 
     String toString() const
     {
@@ -727,7 +629,9 @@ public:
         if (value == ChecksumAlgo::None)
             return "none";
 
-        throw Exception("invalid checksum algorithm value: " + ::DB::toString(static_cast<size_t>(value)), ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(
+            "invalid checksum algorithm value: " + ::DB::toString(static_cast<size_t>(value)),
+            ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
 
 private:
@@ -744,7 +648,9 @@ private:
         if (s == "none")
             return ChecksumAlgo::None;
 
-        throw Exception("Unknown checksum algorithm: '" + s + "', must be one of 'xxh3', 'city128', 'crc32', 'crc64', 'none'", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(
+            "Unknown checksum algorithm: '" + s + "', must be one of 'xxh3', 'city128', 'crc32', 'crc64', 'none'",
+            ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     ChecksumAlgo value;
 };
@@ -777,9 +683,13 @@ public:
 #if USE_QPL
         if (lower_str == "qpl")
             return CompressionMethod::QPL;
-        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+        throw Exception(
+            "Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'",
+            ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 #else
-        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+        throw Exception(
+            "Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'",
+            ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 #endif
     }
 
@@ -805,15 +715,9 @@ public:
         changed = true;
     }
 
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
+    void set(const Field & x) { set(safeGet<const String &>(x)); }
 
-    void set(const String & x)
-    {
-        set(getCompressionMethod(x));
-    }
+    void set(const String & x) { set(getCompressionMethod(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -822,15 +726,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    CompressionMethod get() const
-    {
-        return value;
-    }
+    CompressionMethod get() const { return value; }
 
 private:
     CompressionMethod value;
@@ -862,15 +760,9 @@ public:
         changed = true;
     }
 
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
+    void set(const Field & x) { set(safeGet<const String &>(x)); }
 
-    void set(const String & x)
-    {
-        set(getTaskQueueType(x));
-    }
+    void set(const String & x) { set(getTaskQueueType(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -879,15 +771,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(toString(), buf); }
 
-    TaskQueueType get() const
-    {
-        return value;
-    }
+    TaskQueueType get() const { return value; }
 
 private:
     TaskQueueType value;
@@ -918,10 +804,7 @@ public:
         return *this;
     }
 
-    String toString() const
-    {
-        return value;
-    }
+    String toString() const { return value; }
 
     void set(const String & x)
     {
@@ -929,10 +812,7 @@ public:
         changed = true;
     }
 
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
+    void set(const Field & x) { set(safeGet<const String &>(x)); }
 
     void set(ReadBuffer & buf)
     {
@@ -941,15 +821,9 @@ public:
         set(x);
     }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(value, buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(value, buf); }
 
-    String get() const
-    {
-        return value;
-    }
+    String get() const { return value; }
 
 private:
     String value;

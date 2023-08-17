@@ -85,9 +85,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
         }
     }
 
-    if (force
-        || (new_files.valid() && new_files.isDifferOrNewerThan(files))
-        || config_object_updated)
+    if (force || (new_files.valid() && new_files.isDifferOrNewerThan(files)) || config_object_updated)
     {
         ConfigProcessor config_processor(path);
         ConfigProcessor::LoadedConfig loaded_config;

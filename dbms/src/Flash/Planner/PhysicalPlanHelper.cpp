@@ -64,9 +64,7 @@ NamesAndTypes addSchemaProjectAction(
     return after_schema;
 }
 
-void addParentRequireProjectAction(
-    const ExpressionActionsPtr & expr_actions,
-    const Names & parent_require)
+void addParentRequireProjectAction(const ExpressionActionsPtr & expr_actions, const Names & parent_require)
 {
     RUNTIME_CHECK(expr_actions);
     NamesWithAliases project_aliases;

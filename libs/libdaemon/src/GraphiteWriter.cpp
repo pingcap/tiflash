@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <daemon/GraphiteWriter.h>
-#include <daemon/BaseDaemon.h>
-#include <Poco/Util/LayeredConfiguration.h>
-#include <Poco/Util/Application.h>
 #include <Common/getFQDNOrHostName.h>
+#include <Poco/Util/Application.h>
+#include <Poco/Util/LayeredConfiguration.h>
+#include <daemon/BaseDaemon.h>
+#include <daemon/GraphiteWriter.h>
 
-#include <mutex>
 #include <iomanip>
+#include <mutex>
 
 
 GraphiteWriter::GraphiteWriter(const std::string & config_name, const std::string & sub_path)

@@ -75,8 +75,10 @@ TEST_F(StringPosition, strAndStrTest)
         }
 
         Block test_block;
-        ColumnWithTypeAndName ctn0 = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
-        ColumnWithTypeAndName ctn1 = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
+        ColumnWithTypeAndName ctn0
+            = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
+        ColumnWithTypeAndName ctn1
+            = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
         ColumnsWithTypeAndName ctns{ctn0, ctn1};
         test_block.insert(ctn0);
         test_block.insert(ctn1);
@@ -142,8 +144,10 @@ TEST_F(StringPosition, utf8StrAndStrTest)
         }
 
         Block test_block;
-        ColumnWithTypeAndName ctn0 = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
-        ColumnWithTypeAndName ctn1 = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
+        ColumnWithTypeAndName ctn0
+            = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_position_0");
+        ColumnWithTypeAndName ctn1
+            = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_position_1");
         ColumnsWithTypeAndName ctns{ctn0, ctn1};
         test_block.insert(ctn0);
         test_block.insert(ctn1);

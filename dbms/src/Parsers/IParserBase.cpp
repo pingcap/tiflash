@@ -20,7 +20,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -42,4 +42,4 @@ bool IParserBase::parse(Pos & pos, ASTPtr & node, Expected & expected)
     return res;
 }
 
-}
+} // namespace DB

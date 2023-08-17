@@ -54,16 +54,10 @@ public:
         , send_queue(std::forward<Args>(args)...)
     {}
 
-    ~GRPCSendQueue()
-    {
-        RUNTIME_ASSERT(tag == nullptr, log, "tag is not nullptr");
-    }
+    ~GRPCSendQueue() { RUNTIME_ASSERT(tag == nullptr, log, "tag is not nullptr"); }
 
     /// For test usage only.
-    void setKickFuncForTest(GRPCKickFunc && func)
-    {
-        test_kick_func = std::move(func);
-    }
+    void setKickFuncForTest(GRPCKickFunc && func) { test_kick_func = std::move(func); }
 
     /// Blocking push the data from the local node and kick the grpc completion queue.
     MPMCQueueResult push(T && data)
@@ -117,10 +111,7 @@ public:
         return res;
     }
 
-    MPMCQueueStatus getStatus() const
-    {
-        return send_queue.getStatus();
-    }
+    MPMCQueueStatus getStatus() const { return send_queue.getStatus(); }
 
     /// Cancel the send queue, and set the cancel reason.
     bool cancelWith(const String & reason)
@@ -132,10 +123,7 @@ public:
         return ret;
     }
 
-    const String & getCancelReason() const
-    {
-        return send_queue.getCancelReason();
-    }
+    const String & getCancelReason() const { return send_queue.getCancelReason(); }
 
     /// Finish the queue and kick the grpc completion queue.
     ///
@@ -149,10 +137,7 @@ public:
         return ret;
     }
 
-    bool isWritable() const
-    {
-        return send_queue.isWritable();
-    }
+    bool isWritable() const { return send_queue.isWritable(); }
 
 private:
     friend class tests::TestGRPCSendQueue;
@@ -216,16 +201,10 @@ public:
         , recv_queue(std::forward<Args>(args)...)
     {}
 
-    ~GRPCRecvQueue()
-    {
-        RUNTIME_ASSERT(data_tags.empty(), log, "data_tags is not empty");
-    }
+    ~GRPCRecvQueue() { RUNTIME_ASSERT(data_tags.empty(), log, "data_tags is not empty"); }
 
     /// For test usage only.
-    void setKickFuncForTest(GRPCKickFunc && func)
-    {
-        test_kick_func = std::move(func);
-    }
+    void setKickFuncForTest(GRPCKickFunc && func) { test_kick_func = std::move(func); }
 
     /// Blocking pop the data from the queue.
     MPMCQueueResult pop(T & data)
@@ -284,26 +263,14 @@ public:
     }
 
     /// Blocking push the data from the local node.
-    MPMCQueueResult push(T && data)
-    {
-        return recv_queue.push(std::move(data));
-    }
+    MPMCQueueResult push(T && data) { return recv_queue.push(std::move(data)); }
 
     /// Non-blocking force to push the data from the local node.
-    MPMCQueueResult forcePush(T && data)
-    {
-        return recv_queue.forcePush(std::move(data));
-    }
+    MPMCQueueResult forcePush(T && data) { return recv_queue.forcePush(std::move(data)); }
 
-    MPMCQueueStatus getStatus() const
-    {
-        return recv_queue.getStatus();
-    }
+    MPMCQueueStatus getStatus() const { return recv_queue.getStatus(); }
 
-    bool cancel()
-    {
-        return cancelWith("");
-    }
+    bool cancel() { return cancelWith(""); }
 
     /// Cancel the recv queue and set the cancel reason.
     /// Then kick all tags with false status.
@@ -316,10 +283,7 @@ public:
         return ret;
     }
 
-    const String & getCancelReason() const
-    {
-        return recv_queue.getCancelReason();
-    }
+    const String & getCancelReason() const { return recv_queue.getCancelReason(); }
 
     /// Finish the recv queue.
     /// Then kick all tags with false status.
@@ -331,10 +295,7 @@ public:
         return ret;
     }
 
-    bool isWritable() const
-    {
-        return recv_queue.isWritable();
-    }
+    bool isWritable() const { return recv_queue.isWritable(); }
 
 private:
     friend class tests::TestGRPCRecvQueue;

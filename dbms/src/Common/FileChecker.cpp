@@ -76,7 +76,12 @@ bool FileChecker::check() const
         size_t real_size = file.getSize();
         if (real_size != name_size.second)
         {
-            LOG_ERROR(log, "Size of {} is wrong. Size is {} but should be {}", file.path(), real_size, name_size.second);
+            LOG_ERROR(
+                log,
+                "Size of {} is wrong. Size is {} but should be {}",
+                file.path(),
+                real_size,
+                name_size.second);
             return false;
         }
     }

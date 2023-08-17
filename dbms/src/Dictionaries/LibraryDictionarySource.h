@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <Common/SharedLibrary.h>
 #include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/ExternalResultDescription.h>
 #include <Dictionaries/IDictionarySource.h>
-#include <Common/SharedLibrary.h>
 #include <common/LocalDateTime.h>
 
 
@@ -27,9 +27,9 @@ class Logger;
 
 namespace Util
 {
-    class AbstractConfiguration;
+class AbstractConfiguration;
 }
-}
+} // namespace Poco
 
 
 namespace DB
@@ -42,7 +42,8 @@ class CStringsHolder;
 class LibraryDictionarySource final : public IDictionarySource
 {
 public:
-    LibraryDictionarySource(const DictionaryStructure & dict_struct_,
+    LibraryDictionarySource(
+        const DictionaryStructure & dict_struct_,
         const Poco::Util::AbstractConfiguration & config,
         const std::string & config_prefix,
         Block & sample_block,
@@ -56,7 +57,9 @@ public:
 
     BlockInputStreamPtr loadUpdatedAll() override
     {
-        throw Exception{"Method loadUpdatedAll is unsupported for LibraryDictionarySource", ErrorCodes::NOT_IMPLEMENTED};
+        throw Exception{
+            "Method loadUpdatedAll is unsupported for LibraryDictionarySource",
+            ErrorCodes::NOT_IMPLEMENTED};
     }
 
     BlockInputStreamPtr loadIds(const std::vector<UInt64> & ids) override;
@@ -68,10 +71,7 @@ public:
     bool supportsSelectiveLoad() const override;
 
     ///Not yet supported
-    bool hasUpdateField() const override
-    {
-        return false;
-    }
+    bool hasUpdateField() const override { return false; }
 
     DictionarySourcePtr clone() const override;
 
@@ -92,4 +92,4 @@ private:
     std::shared_ptr<CStringsHolder> settings;
     void * lib_data = nullptr;
 };
-}
+} // namespace DB

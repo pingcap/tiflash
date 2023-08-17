@@ -41,43 +41,68 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.addMockTable({db_name, table_name},
-                             {{col_name, TiDB::TP::TypeString}},
-                             {toNullableVec<String>(col_name, col)});
+        context.addMockTable(
+            {db_name, table_name},
+            {{col_name, TiDB::TP::TypeString}},
+            {toNullableVec<String>(col_name, col)});
 
-        context.addMockTable({db_name, chinese_table},
-                             {{chinese_col_name, TiDB::TP::TypeString}},
-                             {toNullableVec<String>(chinese_col_name, chinese_col)});
+        context.addMockTable(
+            {db_name, chinese_table},
+            {{chinese_col_name, TiDB::TP::TypeString}},
+            {toNullableVec<String>(chinese_col_name, chinese_col)});
 
-        context.addMockTable(join_table, "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
+        context.addMockTable(
+            join_table,
+            "t1",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+            {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
 
-        context.addMockTable(join_table, "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
+        context.addMockTable(
+            join_table,
+            "t2",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+            {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
 
         /// For topn
-        context.addMockTable({db_name, topn_table},
-                             {{topn_col, TiDB::TP::TypeString}},
-                             {toNullableVec<String>(topn_col, ColumnWithString{"col0-0", "col0-1", "col0-2", {}, "col0-4", {}, "col0-6", "col0-7"})});
+        context.addMockTable(
+            {db_name, topn_table},
+            {{topn_col, TiDB::TP::TypeString}},
+            {toNullableVec<String>(
+                topn_col,
+                ColumnWithString{"col0-0", "col0-1", "col0-2", {}, "col0-4", {}, "col0-6", "col0-7"})});
 
         /// For projection
-        context.addMockTable({db_name, proj_table},
-                             {{proj_col[0], TiDB::TP::TypeString},
-                              {proj_col[1], TiDB::TP::TypeString}},
-                             {toNullableVec<String>(proj_col[0], ColumnWithString{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""}),
-                              toNullableVec<String>(proj_col[1], ColumnWithString{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"})});
+        context.addMockTable(
+            {db_name, proj_table},
+            {{proj_col[0], TiDB::TP::TypeString}, {proj_col[1], TiDB::TP::TypeString}},
+            {toNullableVec<String>(proj_col[0], ColumnWithString{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""}),
+             toNullableVec<String>(proj_col[1], ColumnWithString{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"})});
 
         /// For limit
-        context.addMockTable({db_name, limit_table},
-                             {{limit_col, TiDB::TP::TypeString}},
-                             {toNullableVec<String>(limit_col, ColumnWithString{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"})});
+        context.addMockTable(
+            {db_name, limit_table},
+            {{limit_col, TiDB::TP::TypeString}},
+            {toNullableVec<String>(
+                limit_col,
+                ColumnWithString{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"})});
 
         /// For ExchangeSender
-        context.addExchangeReceiver(sender_name, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addExchangeReceiver(
+            sender_name,
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
     }
 
-    void setAndCheck(const String & table_name, const String & col_name, Int32 collation, const ColumnsWithTypeAndName & expect)
+    void setAndCheck(
+        const String & table_name,
+        const String & col_name,
+        Int32 collation,
+        const ColumnsWithTypeAndName & expect)
     {
         context.setCollation(collation);
-        auto request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
+        auto request = context.scan(db_name, table_name)
+                           .aggregation(MockAstVec{}, {col(col_name)})
+                           .project({col_name})
+                           .build(context);
         ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request));
     }
 
@@ -89,11 +114,22 @@ public:
     const String db_name{"test_db"};
     const String table_name{"collation_table"};
     const String col_name{"col"};
-    const ColumnWithNullableString col{"china", "china", "china  ", "CHINA", "cHiNa ", "usa", "usa", "usa  ", "USA", "USA "};
+    const ColumnWithNullableString
+        col{"china", "china", "china  ", "CHINA", "cHiNa ", "usa", "usa", "usa  ", "USA", "USA "};
 
     const String chinese_table{"chinese"};
     const String chinese_col_name{"col"};
-    const ColumnWithNullableString chinese_col{"北京", "北京  ", "北bei京", "北Bei京", "北bei京  ", "上海", "上海  ", "shanghai  ", "ShangHai", "ShangHai  "};
+    const ColumnWithNullableString chinese_col{
+        "北京",
+        "北京  ",
+        "北bei京",
+        "北Bei京",
+        "北bei京  ",
+        "上海",
+        "上海  ",
+        "shanghai  ",
+        "ShangHai",
+        "ShangHai  "};
 
     const String join_table{"join_table"};
     const String topn_table{"topn_table"};
@@ -105,7 +141,11 @@ public:
     const String sender_name{"sender"};
 
     /// scalar functions whose collation must be set(Some more scalar functions may be added in the future)
-    std::set<int> scalar_func_need_collation{tipb::ScalarFuncSig::EQInt, tipb::ScalarFuncSig::NEInt, tipb::ScalarFuncSig::GTInt, tipb::ScalarFuncSig::LTInt};
+    std::set<int> scalar_func_need_collation{
+        tipb::ScalarFuncSig::EQInt,
+        tipb::ScalarFuncSig::NEInt,
+        tipb::ScalarFuncSig::GTInt,
+        tipb::ScalarFuncSig::LTInt};
 };
 
 /// Collect scalar functions
@@ -120,7 +160,8 @@ void ExecutorCollation::addExpr(std::queue<const tipb::Expr *> & exprs, const ti
         addExpr(exprs, &(expr->children(i)));
 }
 
-std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const
+std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(
+    std::shared_ptr<tipb::DAGRequest> dag_request) const
 {
     std::queue<tipb::ExecType> exec_collation_absent;
 
@@ -303,18 +344,48 @@ TEST_F(ExecutorCollation, Verification)
 try
 {
     /// Test utf8mb4_bin
-    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8MB4_BIN, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "CHINA", "USA", "china", "cHiNa "})});
-    setAndCheck(chinese_table, chinese_col_name, TiDB::ITiDBCollator::UTF8MB4_BIN, ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"ShangHai", "北京", "北Bei京", "shanghai  ", "北bei京", "上海"})});
+    setAndCheck(
+        table_name,
+        col_name,
+        TiDB::ITiDBCollator::UTF8MB4_BIN,
+        ColumnsWithTypeAndName{
+            toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "CHINA", "USA", "china", "cHiNa "})});
+    setAndCheck(
+        chinese_table,
+        chinese_col_name,
+        TiDB::ITiDBCollator::UTF8MB4_BIN,
+        ColumnsWithTypeAndName{toNullableVec<String>(
+            chinese_col_name,
+            ColumnWithNullableString{"ShangHai", "北京", "北Bei京", "shanghai  ", "北bei京", "上海"})});
 
     /// Test utf8mb4_general_ci
-    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8_GENERAL_CI, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "china"})});
-    setAndCheck(chinese_table, chinese_col_name, TiDB::ITiDBCollator::UTF8_GENERAL_CI, ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"北京", "shanghai  ", "北bei京", "上海"})});
+    setAndCheck(
+        table_name,
+        col_name,
+        TiDB::ITiDBCollator::UTF8_GENERAL_CI,
+        ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "china"})});
+    setAndCheck(
+        chinese_table,
+        chinese_col_name,
+        TiDB::ITiDBCollator::UTF8_GENERAL_CI,
+        ColumnsWithTypeAndName{toNullableVec<String>(
+            chinese_col_name,
+            ColumnWithNullableString{"北京", "shanghai  ", "北bei京", "上海"})});
 
     /// Test utf8_bin
-    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8_BIN, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"USA", "CHINA", "usa", "china", "cHiNa "})});
+    setAndCheck(
+        table_name,
+        col_name,
+        TiDB::ITiDBCollator::UTF8_BIN,
+        ColumnsWithTypeAndName{
+            toNullableVec<String>(col_name, ColumnWithNullableString{"USA", "CHINA", "usa", "china", "cHiNa "})});
 
     /// Test utf8_unicode_CI
-    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8_UNICODE_CI, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"china", "usa"})});
+    setAndCheck(
+        table_name,
+        col_name,
+        TiDB::ITiDBCollator::UTF8_UNICODE_CI,
+        ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"china", "usa"})});
 }
 CATCH
 
@@ -339,7 +410,8 @@ try
         request = context.scan(db_name, limit_table).limit(100).build(context);
         ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
-        request = context.receive(sender_name).project({"s1", "s2", "s3"}).exchangeSender(tipb::Broadcast).build(context);
+        request
+            = context.receive(sender_name).project({"s1", "s2", "s3"}).exchangeSender(tipb::Broadcast).build(context);
         ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
         /// TODO some collation fields may not be set for some executors, set them and test it!
@@ -347,7 +419,10 @@ try
 
     {
         /// Check collation for expressions
-        auto request = context.scan(db_name, proj_table).project(MockAstVec{eq(col(proj_col[0]), col(proj_col[0])), gt(col(proj_col[0]), col(proj_col[1]))}).build(context);
+        auto request
+            = context.scan(db_name, proj_table)
+                  .project(MockAstVec{eq(col(proj_col[0]), col(proj_col[0])), gt(col(proj_col[0]), col(proj_col[1]))})
+                  .build(context);
         checkScalarFunctionCollation(request);
 
         /// TODO test more scalar functions...

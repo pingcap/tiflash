@@ -61,7 +61,11 @@ std::pair<ExpressionActionsPtr, std::vector<String>> buildProjection(
     {
         tipb::Expr literal_expr;
         const auto & val_field = val_fields[i];
-        ColumnInfo ci = reverseGetColumnInfo({columns[column_literal_numbers[i]].name, columns[column_literal_numbers[i]].type}, 0, Field(), true);
+        ColumnInfo ci = reverseGetColumnInfo(
+            {columns[column_literal_numbers[i]].name, columns[column_literal_numbers[i]].type},
+            0,
+            Field(),
+            true);
         literalFieldToTiPBExpr(ci, val_field, &literal_expr, 0);
         tipb_exprs.push_back(literal_expr);
     }
@@ -127,9 +131,10 @@ ColumnsWithTypeAndName toColumnsWithUniqueNames(const ColumnsWithTypeAndName & c
     return columns_with_distinct_name;
 }
 
-ColumnsWithTypeAndName executeLiteralProjection(Context & context,
-                                                const std::vector<String> literals,
-                                                const ColumnsWithTypeAndName & columns)
+ColumnsWithTypeAndName executeLiteralProjection(
+    Context & context,
+    const std::vector<String> literals,
+    const ColumnsWithTypeAndName & columns)
 {
     auto columns_with_unique_name = toColumnsWithUniqueNames(columns);
     std::vector<Field> vals;
@@ -165,7 +170,9 @@ void ProjectionTest::initializeDAGContext()
     context->setDAGContext(dag_context_ptr.get());
 }
 
-ColumnsWithTypeAndName ProjectionTest::executeProjection(const std::vector<String> literals, const ColumnsWithTypeAndName & columns)
+ColumnsWithTypeAndName ProjectionTest::executeProjection(
+    const std::vector<String> literals,
+    const ColumnsWithTypeAndName & columns)
 {
     return DB::tests::executeLiteralProjection(*context, literals, columns);
 }

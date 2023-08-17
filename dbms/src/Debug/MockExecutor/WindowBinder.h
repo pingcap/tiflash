@@ -96,10 +96,7 @@ public:
     tipb::RangeCmpDataType getCmpDataType() const { return cmp_data_type; }
 
     // This is a range frame type when range_frame_helper.range_aux_func is set.
-    bool isRangeFrame() const
-    {
-        return static_cast<bool>(range_frame_helper.range_aux_func);
-    }
+    bool isRangeFrame() const { return static_cast<bool>(range_frame_helper.range_aux_func); }
 
     void buildRangeFrameAuxFunction(const DAGSchema & input)
     {
@@ -142,7 +139,14 @@ using ASTPartitionByElement = ASTOrderByElement;
 class WindowBinder : public ExecutorBinder
 {
 public:
-    WindowBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && func_descs_, ASTs && partition_by_exprs_, ASTs && order_by_exprs_, MockWindowFrame && frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
+    WindowBinder(
+        size_t & index_,
+        const DAGSchema & output_schema_,
+        ASTs && func_descs_,
+        ASTs && partition_by_exprs_,
+        ASTs && order_by_exprs_,
+        MockWindowFrame && frame_,
+        uint64_t fine_grained_shuffle_stream_count_ = 0)
         : ExecutorBinder(index_, "window_" + std::to_string(index_), output_schema_)
         , func_descs(std::move(func_descs_))
         , partition_by_exprs(std::move(partition_by_exprs_))
@@ -155,7 +159,11 @@ public:
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context) override;
 
 private:
     std::vector<ASTPtr> func_descs;
@@ -165,5 +173,12 @@ private:
     uint64_t fine_grained_shuffle_stream_count;
 };
 
-ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count);
+ExecutorBinderPtr compileWindow(
+    ExecutorBinderPtr input,
+    size_t & executor_index,
+    ASTPtr func_desc_list,
+    ASTPtr partition_by_expr_list,
+    ASTPtr order_by_expr_list,
+    mock::MockWindowFrame frame,
+    uint64_t fine_grained_shuffle_stream_count);
 } // namespace DB::mock

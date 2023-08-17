@@ -97,7 +97,8 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
-    using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
+    using FunctionBuilder
+        = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 
     static FunctionBuilderMap function_builder_map;

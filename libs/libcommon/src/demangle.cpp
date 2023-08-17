@@ -29,8 +29,8 @@ std::string demangle(const char * name, int & status)
 
 #else
 
-#include <stdlib.h>
 #include <cxxabi.h>
+#include <stdlib.h>
 
 static DemangleResult tryDemangle(const char * name, int & status)
 {

@@ -113,7 +113,9 @@ inline void writeBoolText(bool x, WriteBuffer & buf)
 template <typename T>
 inline void writeFloatText(T x, WriteBuffer & buf)
 {
-    static_assert(std::is_same_v<T, double> || std::is_same_v<T, float>, "Argument for writeFloatText must be float or double");
+    static_assert(
+        std::is_same_v<T, double> || std::is_same_v<T, float>,
+        "Argument for writeFloatText must be float or double");
 
     using Converter = DoubleConverter<false>;
 
@@ -148,8 +150,7 @@ inline void writeString(const StringRef & ref, WriteBuffer & buf)
 /** Writes a C-string without creating a temporary object. If the string is a literal, then `strlen` is executed at the compilation stage.
   * Use when the string is a literal.
   */
-#define writeCString(s, buf) \
-    (buf).write((s), strlen(s))
+#define writeCString(s, buf) (buf).write((s), strlen(s))
 
 /** Writes a string for use in the JSON format:
  *  - the string is written in double quotes
@@ -495,7 +496,9 @@ inline void writeUUIDText(const UUID & uuid, WriteBuffer & buf)
 {
     char s[36];
 
-    formatUUID(std::reverse_iterator<const UInt8 *>(reinterpret_cast<const UInt8 *>(&uuid) + 16), reinterpret_cast<UInt8 *>(s));
+    formatUUID(
+        std::reverse_iterator<const UInt8 *>(reinterpret_cast<const UInt8 *>(&uuid) + 16),
+        reinterpret_cast<UInt8 *>(s));
     buf.write(s, sizeof(s));
 }
 
@@ -626,7 +629,11 @@ inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
     }
 }
 
-inline void writeMyDateTimeTextWithFormat(UInt64 packed, WriteBuffer & buf, MyDateTimeFormatter & formatter, String & result)
+inline void writeMyDateTimeTextWithFormat(
+    UInt64 packed,
+    WriteBuffer & buf,
+    MyDateTimeFormatter & formatter,
+    String & result)
 {
     result.clear();
     formatter.format(MyDateTime(packed), result);
@@ -658,15 +665,20 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
 
     const auto & values = date_lut.getValues(datetime);
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(
-        LocalDateTime(values.year, values.month, values.day_of_month, date_lut.toHour(datetime), date_lut.toMinute(datetime), date_lut.toSecond(datetime)),
+        LocalDateTime(
+            values.year,
+            values.month,
+            values.day_of_month,
+            date_lut.toHour(datetime),
+            date_lut.toMinute(datetime),
+            date_lut.toSecond(datetime)),
         buf);
 }
 
 
 /// Methods for output in binary format.
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeBinary(const T & x, WriteBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> writeBinary(const T & x, WriteBuffer & buf)
 {
     writePODBinary(x, buf);
 }
@@ -704,15 +716,13 @@ inline void writeBinary(const Decimal<T> & x, WriteBuffer & buf)
 
 /// Methods for outputting the value in text form for a tab-separated format.
 template <typename T>
-inline std::enable_if_t<std::is_integral_v<T>, void>
-writeText(const T & x, WriteBuffer & buf)
+inline std::enable_if_t<std::is_integral_v<T>, void> writeText(const T & x, WriteBuffer & buf)
 {
     writeIntText(x, buf);
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_floating_point_v<T>, void>
-writeText(const T & x, WriteBuffer & buf)
+inline std::enable_if_t<std::is_floating_point_v<T>, void> writeText(const T & x, WriteBuffer & buf)
 {
     writeFloatText(x, buf);
 }
@@ -762,8 +772,7 @@ inline void writeText(const UInt128 &, WriteBuffer &)
 
 /// String, date, datetime are in single quotes with C-style escaping. Numbers - without.
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeQuoted(const T & x, WriteBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> writeQuoted(const T & x, WriteBuffer & buf)
 {
     writeText(x, buf);
 }
@@ -790,8 +799,7 @@ inline void writeQuoted(const LocalDateTime & x, WriteBuffer & buf)
 
 /// String, date, datetime are in double quotes with C-style escaping. Numbers - without.
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeDoubleQuoted(const T & x, WriteBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> writeDoubleQuoted(const T & x, WriteBuffer & buf)
 {
     writeText(x, buf);
 }
@@ -825,8 +833,7 @@ inline void writeDoubleQuoted(const UUID & x, WriteBuffer & buf)
 
 /// String - in double quotes and with CSV-escaping; date, datetime - in double quotes. Numbers - without.
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeCSV(const T & x, WriteBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> writeCSV(const T & x, WriteBuffer & buf)
 {
     writeText(x, buf);
 }
@@ -911,8 +918,7 @@ inline String toString(const T & x)
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_floating_point_v<T>, String>
-toString(const T & x, int precision)
+inline std::enable_if_t<std::is_floating_point_v<T>, String> toString(const T & x, int precision)
 {
     DB::DoubleConverter<false>::BufferType buffer;
     double_conversion::StringBuilder builder{buffer, sizeof(buffer)};

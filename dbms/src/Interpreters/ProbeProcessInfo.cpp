@@ -49,7 +49,11 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     has_row_null = false;
 }
 
-void ProbeProcessInfo::prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+void ProbeProcessInfo::prepareForHashProbe(
+    const Names & key_names,
+    const String & filter_column,
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness)
 {
     if (prepare_for_probe_done)
         return;
@@ -81,7 +85,8 @@ void ProbeProcessInfo::prepareForHashProbe(const Names & key_names, const String
                 convertColumnToNullable(block.getByPosition(i));
         }
     }
-    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::RightOuter) && strictness == ASTTableJoin::Strictness::Any)
+    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::RightOuter)
+         && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
@@ -118,7 +123,10 @@ void ProbeProcessInfo::prepareForCrossProbe(
     for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
     {
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
-        RUNTIME_CHECK_MSG(!result_block_schema.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
+        RUNTIME_CHECK_MSG(
+            !result_block_schema.has(src_column.name),
+            "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add",
+            src_column.name);
         result_block_schema.insert(src_column);
     }
     size_t num_existing_columns = block.columns();

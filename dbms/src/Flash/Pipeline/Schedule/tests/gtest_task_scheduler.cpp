@@ -166,20 +166,11 @@ public:
     {}
 
 protected:
-    ExecTaskStatus executeImpl() override
-    {
-        return ExecTaskStatus::WAITING;
-    }
+    ExecTaskStatus executeImpl() override { return ExecTaskStatus::WAITING; }
 
-    ExecTaskStatus awaitImpl() override
-    {
-        return ExecTaskStatus::IO_IN;
-    }
+    ExecTaskStatus awaitImpl() override { return ExecTaskStatus::IO_IN; }
 
-    ExecTaskStatus executeIOImpl() override
-    {
-        return ExecTaskStatus::RUNNING;
-    }
+    ExecTaskStatus executeIOImpl() override { return ExecTaskStatus::RUNNING; }
 };
 } // namespace
 

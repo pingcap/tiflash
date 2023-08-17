@@ -29,20 +29,14 @@ namespace
 class SimpleGetResultSinkOp : public SinkOp
 {
 public:
-    SimpleGetResultSinkOp(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        ResultHandler result_handler_)
+    SimpleGetResultSinkOp(PipelineExecutorContext & exec_context_, const String & req_id, ResultHandler result_handler_)
         : SinkOp(exec_context_, req_id)
         , result_handler(std::move(result_handler_))
     {
         assert(result_handler);
     }
 
-    String getName() const override
-    {
-        return "SimpleGetResultSinkOp";
-    }
+    String getName() const override { return "SimpleGetResultSinkOp"; }
 
 protected:
     OperatorStatus writeImpl(Block && block) override
@@ -68,20 +62,26 @@ public:
 
         context.context->setExecutorTest();
 
-        context.addMockTable({"test_db", "test_table"},
-                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                             {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                              toNullableVec<String>("s2", {"apple", {}, "banana"})});
-        context.addExchangeReceiver("exchange1",
-                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                                     toNullableVec<String>("s2", {"apple", {}, "banana"})});
-        context.addExchangeReceiver("exchange3",
-                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeLongLong}, {"s4", TiDB::TP::TypeLongLong}},
-                                    {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                                     toNullableVec<String>("s2", {"apple", {}, "banana"}),
-                                     toNullableVec<Int64>("s3", {1, {}, 1}),
-                                     toNullableVec<Int64>("s4", {1, 1, {}})});
+        context.addMockTable(
+            {"test_db", "test_table"},
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+             toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addExchangeReceiver(
+            "exchange1",
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+             toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addExchangeReceiver(
+            "exchange3",
+            {{"s1", TiDB::TP::TypeString},
+             {"s2", TiDB::TP::TypeString},
+             {"s3", TiDB::TP::TypeLongLong},
+             {"s4", TiDB::TP::TypeLongLong}},
+            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+             toNullableVec<String>("s2", {"apple", {}, "banana"}),
+             toNullableVec<Int64>("s3", {1, {}, 1}),
+             toNullableVec<Int64>("s4", {1, 1, {}})});
     }
 
     PipelineExecPtr build(
@@ -121,9 +121,7 @@ public:
         }};
         PipelineExecutorContext exec_context;
         auto op_pipeline = build(request, result_handler, exec_context);
-        while (op_pipeline->execute() != OperatorStatus::FINISHED)
-        {
-        }
+        while (op_pipeline->execute() != OperatorStatus::FINISHED) {}
         ASSERT_COLUMNS_EQ_UR(expect_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     }
 };
@@ -149,44 +147,34 @@ CATCH
 TEST_F(SimpleOperatorTestRunner, Filter)
 try
 {
-    auto request = context.receive("exchange1")
-                       .filter(eq(col("s1"), col("s2")))
-                       .build(context);
+    auto request = context.receive("exchange1").filter(eq(col("s1"), col("s2"))).build(context);
 
-    executeAndAssert(
-        request,
-        {toNullableVec<String>({"banana"}),
-         toNullableVec<String>({"banana"})});
+    executeAndAssert(request, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
 }
 CATCH
 
 TEST_F(SimpleOperatorTestRunner, Limit)
 try
 {
-    auto request = context.receive("exchange1")
-                       .limit(1)
-                       .build(context);
+    auto request = context.receive("exchange1").limit(1).build(context);
 
-    executeAndAssert(
-        request,
-        {toNullableVec<String>({"banana"}),
-         toNullableVec<String>({"apple"})});
+    executeAndAssert(request, {toNullableVec<String>({"banana"}), toNullableVec<String>({"apple"})});
 }
 CATCH
 
 TEST_F(SimpleOperatorTestRunner, Projection)
 try
 {
-    auto request = context.receive("exchange1")
-                       .project({concat(col("s1"), col("s2"))})
-                       .build(context);
+    auto request = context.receive("exchange1").project({concat(col("s1"), col("s2"))}).build(context);
 
-    executeAndAssert(
-        request,
-        {toNullableVec<String>({"bananaapple", {}, "bananabanana"})});
+    executeAndAssert(request, {toNullableVec<String>({"bananaapple", {}, "bananabanana"})});
 
     request = context.receive("exchange3")
-                  .project({concat(col("s1"), col("s2")), concat(col("s1"), col("s2")), And(col("s3"), col("s4")), NOT(col("s3"))})
+                  .project(
+                      {concat(col("s1"), col("s2")),
+                       concat(col("s1"), col("s2")),
+                       And(col("s3"), col("s4")),
+                       NOT(col("s3"))})
                   .build(context);
 
     executeAndAssert(
@@ -201,26 +189,22 @@ CATCH
 TEST_F(SimpleOperatorTestRunner, MockExchangeReceiver)
 try
 {
-    auto request = context.receive("exchange1")
-                       .build(context);
+    auto request = context.receive("exchange1").build(context);
 
     executeAndAssert(
         request,
-        {toNullableVec<String>({"banana", {}, "banana"}),
-         toNullableVec<String>({"apple", {}, "banana"})});
+        {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
 }
 CATCH
 
 TEST_F(SimpleOperatorTestRunner, MockTableScan)
 try
 {
-    auto request = context.scan("test_db", "test_table")
-                       .build(context);
+    auto request = context.scan("test_db", "test_table").build(context);
 
     executeAndAssert(
         request,
-        {toNullableVec<String>({"banana", {}, "banana"}),
-         toNullableVec<String>({"apple", {}, "banana"})});
+        {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
 }
 CATCH
 

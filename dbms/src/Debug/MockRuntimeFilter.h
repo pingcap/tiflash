@@ -23,14 +23,24 @@ namespace DB::mock
 class MockRuntimeFilter
 {
 public:
-    MockRuntimeFilter(int id_, ASTPtr source_expr_, ASTPtr target_expr_, const std::string & source_executor_id_, const std::string & target_executor_id_)
+    MockRuntimeFilter(
+        int id_,
+        ASTPtr source_expr_,
+        ASTPtr target_expr_,
+        const std::string & source_executor_id_,
+        const std::string & target_executor_id_)
         : id(id_)
         , source_expr(source_expr_)
         , target_expr(target_expr_)
         , source_executor_id(source_executor_id_)
         , target_executor_id(target_executor_id_)
     {}
-    void toPB(const DAGSchema & source_schema, const DAGSchema & target_schema, int32_t collator_id, const Context & context, tipb::RuntimeFilter * rf);
+    void toPB(
+        const DAGSchema & source_schema,
+        const DAGSchema & target_schema,
+        int32_t collator_id,
+        const Context & context,
+        tipb::RuntimeFilter * rf);
 
 private:
     int id;

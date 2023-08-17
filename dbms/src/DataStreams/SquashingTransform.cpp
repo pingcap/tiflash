@@ -23,7 +23,11 @@ SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_bl
     , min_block_size_bytes(min_block_size_bytes)
     , log(Logger::get(req_id))
 {
-    LOG_TRACE(log, "Squashing config - min_block_size_rows: {} min_block_size_bytes: {}", min_block_size_rows, min_block_size_bytes);
+    LOG_TRACE(
+        log,
+        "Squashing config - min_block_size_rows: {} min_block_size_bytes: {}",
+        min_block_size_rows,
+        min_block_size_bytes);
 }
 
 
@@ -54,7 +58,11 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
     /// Accumulated block is already enough.
     if (accumulated_block && isEnoughSize(accumulated_block_rows, accumulated_block_bytes))
     {
-        LOG_DEBUG(log, "Accumulated block size enough - rows: {} bytes: {}", accumulated_block_rows, accumulated_block_bytes);
+        LOG_DEBUG(
+            log,
+            "Accumulated block size enough - rows: {} bytes: {}",
+            accumulated_block_rows,
+            accumulated_block_bytes);
         /// Return accumulated data and place new block to accumulated data.
         accumulated_block.swap(block);
         return Result(std::move(block));
@@ -67,7 +75,11 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
 
     if (isEnoughSize(accumulated_block_rows, accumulated_block_bytes))
     {
-        LOG_DEBUG(log, "Combined block size enough - rows: {} bytes: {}", accumulated_block_rows, accumulated_block_bytes);
+        LOG_DEBUG(
+            log,
+            "Combined block size enough - rows: {} bytes: {}",
+            accumulated_block_rows,
+            accumulated_block_bytes);
         Block res;
         res.swap(accumulated_block);
         return Result(std::move(res));
@@ -100,8 +112,7 @@ void SquashingTransform::append(Block && block)
 
 bool SquashingTransform::isEnoughSize(size_t rows, size_t bytes) const
 {
-    return (!min_block_size_rows && !min_block_size_bytes)
-        || (min_block_size_rows && rows >= min_block_size_rows)
+    return (!min_block_size_rows && !min_block_size_bytes) || (min_block_size_rows && rows >= min_block_size_rows)
         || (min_block_size_bytes && bytes >= min_block_size_bytes);
 }
 
