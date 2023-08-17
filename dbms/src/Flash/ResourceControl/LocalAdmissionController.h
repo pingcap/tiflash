@@ -21,10 +21,10 @@
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/MockLocalAdmissionController.h>
 #include <Flash/ResourceControl/TokenBucket.h>
+#include <TiDB/Etcd/Client.h>
 #include <common/logger_useful.h>
 #include <kvproto/resource_manager.pb.h>
 #include <pingcap/kv/Cluster.h>
-#include <TiDB/Etcd/Client.h>
 
 #include <atomic>
 #include <memory>
@@ -177,8 +177,17 @@ private:
             next_n_sec_need_num = base;
 
         auto acquire_num = next_n_sec_need_num - remaining_ru;
-        LOG_TRACE(log, "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, next n sec need: {}, acquire num: {}",
-                name, avg_speed, remaining_ru, base, amplification, next_n_sec_need_num, acquire_num);
+        LOG_TRACE(
+            log,
+            "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, next n sec need: {}, "
+            "acquire num: {}",
+            name,
+            avg_speed,
+            remaining_ru,
+            base,
+            amplification,
+            next_n_sec_need_num,
+            acquire_num);
         return acquire_num;
     }
 
@@ -197,7 +206,12 @@ private:
         auto [ori_tokens, ori_fill_rate, ori_capacity] = bucket->getCurrentConfig();
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(ori_tokens + add_tokens, ori_fill_rate, ori_capacity);
-        LOG_INFO(log, "token bucket of rg {} reconfig to normal mode. from: {}, to: {}", name, ori_bucket_info, bucket->toString());
+        LOG_INFO(
+            log,
+            "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
+            name,
+            ori_bucket_info,
+            bucket->toString());
     }
 
     void toTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
@@ -216,11 +230,21 @@ private:
 
         const double trickle_sec = static_cast<double>(trickle_ms) / 1000;
         const double new_fill_rate = add_tokens / trickle_sec;
-        RUNTIME_CHECK_MSG(new_fill_rate > 0.0, "token bucket of {} transform to trickle mode failed. trickle_ms: {}, trickle_sec: {}", name, trickle_ms, trickle_sec);
+        RUNTIME_CHECK_MSG(
+            new_fill_rate > 0.0,
+            "token bucket of {} transform to trickle mode failed. trickle_ms: {}, trickle_sec: {}",
+            name,
+            trickle_ms,
+            trickle_sec);
 
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(bucket->peek(), new_fill_rate, new_capacity);
-        LOG_INFO(log, "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}", name, ori_bucket_info, bucket->toString());
+        LOG_INFO(
+            log,
+            "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
+            name,
+            ori_bucket_info,
+            bucket->toString());
     }
 
     // If we have network problem with GAC, enter degrade mode.
@@ -235,7 +259,12 @@ private:
         auto [ori_tokens, _, ori_capacity] = bucket->getCurrentConfig();
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(ori_tokens, avg_speed, ori_capacity);
-        LOG_INFO(log, "token bucket of rg {} reconfig to normal mode done: {}", name, ori_bucket_info, bucket->toString());
+        LOG_INFO(
+            log,
+            "token bucket of rg {} reconfig to normal mode done: {}",
+            name,
+            ori_bucket_info,
+            bucket->toString());
     }
 
     double getAndCleanConsumptionDelta()
@@ -287,20 +316,24 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-    explicit LocalAdmissionController(MPPTaskManagerPtr mpp_task_manager_, ::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
+    explicit LocalAdmissionController(
+        MPPTaskManagerPtr mpp_task_manager_,
+        ::pingcap::kv::Cluster * cluster_,
+        Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , mpp_task_manager(mpp_task_manager_)
         , thread_manager(newThreadManager())
         , etcd_client(etcd_client_)
     {
-        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::fetchGAC", [this] { this->startBackgroudJob(); });
-        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::watchResourceGroupDelete", [this] { this->watchResourceGroupDelete(); });
+        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::fetchGAC", [this] {
+            this->startBackgroudJob();
+        });
+        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::watchResourceGroupDelete", [this] {
+            this->watchResourceGroupDelete();
+        });
     }
 
-    ~LocalAdmissionController()
-    {
-        stop();
-    }
+    ~LocalAdmissionController() { stop(); }
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
@@ -450,7 +483,8 @@ private:
     std::function<void()> refill_token_callback;
 
     // gjt todo update this
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
+        = std::chrono::steady_clock::now();
 
     Etcd::ClientPtr etcd_client;
 };

@@ -1544,13 +1544,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     });
 
-        auto & tmt_context = global_context->getTMTContext();
-        // Resource Control.
+    auto & tmt_context = global_context->getTMTContext();
+    // Resource Control.
 #ifdef DBMS_PUBLIC_GTEST
-        static_assert(0, "gjt test");
+    static_assert(0, "gjt test");
 #else
-        LocalAdmissionController::global_instance
-            = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+    LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
+        tmt_context.getMPPTaskManager(),
+        tmt_context.getKVCluster(),
+        tmt_context.getEtcdClient());
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.

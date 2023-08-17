@@ -563,6 +563,7 @@ void MPPTask::runImpl()
         }
         auto cpu_ru = query_executor_holder->collectRequestUnit();
         auto read_ru = dag_context->getReadRU();
+        // gjt todo: LAC also consider read_ru
         LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRU(cpu_ru, read_ru);

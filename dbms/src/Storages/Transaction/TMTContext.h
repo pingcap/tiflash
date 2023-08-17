@@ -143,6 +143,7 @@ public:
     uint64_t readIndexWorkerTick() const;
 
     Etcd::ClientPtr getEtcdClient() const { return etcd_client; }
+
 private:
     Context & context;
     KVStorePtr kvstore;

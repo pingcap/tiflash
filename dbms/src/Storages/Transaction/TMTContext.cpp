@@ -148,10 +148,11 @@ TMTContext::TMTContext(
           raft_config.for_unit_test,
           cluster,
           context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
-    , mpp_task_manager(std::make_shared<MPPTaskManager>(std::make_unique<MinTSOScheduler>(
-          context.getSettingsRef().task_scheduler_thread_soft_limit,
-          context.getSettingsRef().task_scheduler_thread_hard_limit,
-          context.getSettingsRef().task_scheduler_active_set_soft_limit),
+    , mpp_task_manager(std::make_shared<MPPTaskManager>(
+          std::make_unique<MinTSOScheduler>(
+              context.getSettingsRef().task_scheduler_thread_soft_limit,
+              context.getSettingsRef().task_scheduler_thread_hard_limit,
+              context.getSettingsRef().task_scheduler_active_set_soft_limit),
           context.getSettingsRef().resource_control_mpptask_hard_limit))
     , engine(raft_config.engine)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)

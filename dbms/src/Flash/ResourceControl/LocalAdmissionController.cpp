@@ -13,9 +13,8 @@
 // limitations under the License.
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
-#include <pingcap/kv/Cluster.h>
-
 #include <etcd/rpc.pb.h>
+#include <pingcap/kv/Cluster.h>
 
 namespace DB
 {
@@ -201,7 +200,12 @@ void LocalAdmissionController::fetchTokensFromGAC()
         for (const auto & name : not_found)
         {
             auto erase_num = resource_groups.erase(name);
-            LOG_INFO(log, "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete it. erase_num: {}", name, erase_num);
+            LOG_INFO(
+                log,
+                "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
+                "it. erase_num: {}",
+                name,
+                erase_num);
         }
     }
 }
@@ -210,7 +214,8 @@ void LocalAdmissionController::checkDegradeMode()
 {
     std::lock_guard lock(mu);
     auto now = std::chrono::steady_clock::now();
-    if (DEGRADE_MODE_DURATION != 0 && (now - last_fetch_tokens_from_gac_timepoint) >= std::chrono::seconds(DEGRADE_MODE_DURATION))
+    if (DEGRADE_MODE_DURATION != 0
+        && (now - last_fetch_tokens_from_gac_timepoint) >= std::chrono::seconds(DEGRADE_MODE_DURATION))
     {
         for (const auto & ele : resource_groups)
         {
@@ -220,7 +225,8 @@ void LocalAdmissionController::checkDegradeMode()
     }
 }
 
-std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp)
+std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
+    const resource_manager::TokenBucketsResponse & resp)
 {
     LOG_DEBUG(log, "got TokenBucketsResponse: {}", resp.DebugString());
     if unlikely (resp.has_error())
