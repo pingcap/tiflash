@@ -96,17 +96,21 @@ DEFINE_SIMPLE_TASK(SimpleIOTask, ExecTaskStatus::IO_IN);
     CATCH
 
 TASKQUEUE_BENCHMARK(MLFQBench, SimpleCPUTask)
-TASKQUEUE_BENCHMARK(IOPriorityBench, SimpleIOTask)
-
 BENCHMARK_REGISTER_F(MLFQBench, Basic)
     ->Args({10, 1, 1, 10000, 2}) // 10000 * 1 * 2 / 10 = 2s
     ->Args({10, 15, 15, 1000, 2}) // 1000 * 15 * 2 / 10 = 3s
     ->Args({10, 200, 200, 1000, 2}); // 1000 * 200 * 2 / 10 = 40s
 
+TASKQUEUE_BENCHMARK(IOPriorityBench, SimpleIOTask)
 BENCHMARK_REGISTER_F(IOPriorityBench, Basic)
     ->Args({10, 1, 1, 10000, 2}) // 10000 * 1 * 2 / 10 = 2s
     ->Args({10, 15, 15, 1000, 2}) // 1000 * 15 * 2 / 10 = 3s
     ->Args({10, 200, 200, 1000, 2}); // 1000 * 200 * 2 / 10 = 40s
 
+TASKQUEUE_BENCHMARK(ResourceContorlQueue, SimpleIOTask)
+BENCHMARK_REGISTER_F(ResourceContorlQueue, Basic)
+    ->Args({10, 1, 1, 10000, 2}) // 10000 * 1 * 2 / 10 = 2s
+    ->Args({10, 15, 15, 1000, 2}) // 1000 * 15 * 2 / 10 = 3s
+    ->Args({10, 200, 200, 1000, 2}); // 1000 * 200 * 2 / 10 = 40s
 } // namespace tests
 } // namespace DB

@@ -39,6 +39,8 @@ public:
     PipelineExecutorContext()
         : log(Logger::get())
         , mem_tracker(nullptr)
+        , auto_spill_trigger(nullptr)
+        , register_operator_spill_context(nullptr)
     {}
 
     PipelineExecutorContext(
@@ -46,12 +48,14 @@ public:
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
-        const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr)
+        const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
+        const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
+        , resource_group_name(resource_group_name_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -167,6 +171,8 @@ public:
         return register_operator_spill_context;
     }
 
+    const String & getResourceGroupName() const { return resource_group_name; }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -180,11 +186,11 @@ private:
 
     LoggerPtr log;
 
-    MemoryTrackerPtr mem_tracker;
+    MemoryTrackerPtr mem_tracker{nullptr};
 
     std::mutex mu;
     std::condition_variable cv;
-    std::exception_ptr exception_ptr;
+    std::exception_ptr exception_ptr{nullptr};
     UInt32 active_ref_count{0};
 
     std::atomic_bool is_cancelled{false};
@@ -196,8 +202,10 @@ private:
 
     QueryProfileInfo query_profile_info;
 
-    AutoSpillTrigger * auto_spill_trigger = nullptr;
+    AutoSpillTrigger * auto_spill_trigger{nullptr};
 
-    RegisterOperatorSpillContext register_operator_spill_context = nullptr;
+    RegisterOperatorSpillContext register_operator_spill_context{nullptr};
+
+    const String resource_group_name;
 };
 } // namespace DB

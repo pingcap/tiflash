@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 
 #include <magic_enum.hpp>
@@ -25,8 +26,10 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
 {
     switch (type)
     {
-    // the default queue is mlfq queue.
+    // the default queue is RC_MLFQ.
     case TaskQueueType::DEFAULT:
+    case TaskQueueType::RCQ_MLFQ:
+        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
     case TaskQueueType::MLFQ:
         return std::make_unique<CPUMultiLevelFeedbackQueue>();
     default:
