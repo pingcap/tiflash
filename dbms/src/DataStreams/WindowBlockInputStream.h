@@ -141,7 +141,8 @@ private:
     RowNumber stepForRangeImpl();
 
     // We should use this function when the current auxiliary column row is null.
-    RowNumber moveCursorAndFindRangeFrameIfNull(RowNumber cursor, bool is_preceding);
+    template <bool is_begin>
+    RowNumber moveCursorAndFindRangeFrameIfNull(RowNumber cursor);
 
     template <typename AuxColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);

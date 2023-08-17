@@ -365,28 +365,27 @@ public:
         auto val_col = toVec<Int64>(/*value*/ {1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         {
-            // std::vector<Int64> frame_start_range{0, 1, 3, 10};
-            // std::vector<std::vector<std::optional<Int64>>> res{
-            //     {1, 2, 3, 4, 5, 6, 7, 8, 9},
-            //     {1, 2, 3, 3, 5, 6, 6, 8, 8},
-            //     {1, 2, 3, 3, 5, 6, 6, 7, 8},
-            //     {1, 2, 3, 3, 5, 6, 6, 6, 6}};
+            std::vector<Int64> frame_start_range{0, 1, 3, 10};
+            std::vector<std::vector<std::optional<Int64>>> res{
+                {1, 2, 3, 4, 5, 6, 7, 8, 9},
+                {1, 2, 3, 3, 5, 6, 6, 8, 8},
+                {1, 2, 3, 3, 5, 6, 6, 7, 8},
+                {1, 2, 3, 3, 5, 6, 6, 6, 6}};
 
-            // for (size_t i = 0; i < frame_start_range.size(); ++i)
-            // {
-            //     mock_frame.start = buildRangeFrameBound(
-            //         tipb::WindowBoundType::Preceding,
-            //         tipb::RangeCmpDataType::Int,
-            //         ORDER_COL_NAME,
-            //         false,
-            //         frame_start_range[i]);
-            //     executeFunctionAndAssert(
-            //         toNullableVec<Int64>(res[i]),
-            //         FirstValue(value_col),
-            //         {partition_col, order_col, val_col},
-            //         mock_frame,
-            //         false);
-            // }
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.start = buildRangeFrameBound(
+                    tipb::WindowBoundType::Preceding,
+                    tipb::RangeCmpDataType::Int,
+                    ORDER_COL_NAME,
+                    false,
+                    frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toNullableVec<Int64>(res[i]),
+                    FirstValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
         }
 
         {
@@ -408,12 +407,29 @@ public:
                 toNullableVec<Int64>({{}, 2, {}, 3, 5, {}, 6, {}, 8}),
                 FirstValue(value_col),
                 {partition_col, order_col, val_col},
-                mock_frame,
-                false);
+                mock_frame);
         }
 
         {
             // <following, following>
+            mock_frame.start = buildRangeFrameBound(
+                tipb::WindowBoundType::Following,
+                tipb::RangeCmpDataType::Float,
+                ORDER_COL_NAME,
+                true,
+                static_cast<Int64>(1));
+            mock_frame.end = buildRangeFrameBound(
+                tipb::WindowBoundType::Following,
+                tipb::RangeCmpDataType::Float,
+                ORDER_COL_NAME,
+                true,
+                static_cast<Int64>(1));
+
+            executeFunctionAndAssert(
+                toNullableVec<Int64>({{}, 2, 4, {}, 5, 7, {}, 9, {}}),
+                FirstValue(value_col),
+                {partition_col, order_col, val_col},
+                mock_frame);
         }
     }
 };
@@ -523,8 +539,6 @@ try
     // in MockStorage.cpp::mockColumnInfosToTiDBColumnInfos().
     // However, we will test this data type in fullstack tests.
     // testDecimalOrderByColForRangeFrame();
-
-    // TODO <preceding, preceding> <following, following> with nullable order by
 }
 CATCH
 

@@ -156,12 +156,12 @@ bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
 {
     if constexpr (is_begin)
     {
-        if constexpr ((is_preceding && is_desc) || (!is_preceding && !is_desc))
+        if constexpr ((is_preceding && is_desc) || (!is_preceding && is_desc))
             return lessEqual(cursor_value, current_row_aux_value);
-        else if constexpr ((is_preceding && !is_desc) || ((!is_preceding && is_desc)))
+        else if constexpr ((is_preceding && !is_desc) || (!is_preceding && !is_desc))
             return greaterEqual(cursor_value, current_row_aux_value);
         else
-            throw Exception("Unhandled situation happens");
+            throw Exception("Unhandled case happens");
     }
     else
     {
@@ -170,7 +170,7 @@ bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
         else if constexpr ((!is_preceding && is_desc) || (is_preceding && is_desc))
             return greaterEqual(cursor_value, current_row_aux_value);
         else
-            throw Exception("Unhandled situation happens");
+            throw Exception("Unhandled case happens");
     }
 }
 
@@ -183,7 +183,9 @@ bool isInRangeIntImpl(T current_row_aux_value, U cursor_value)
 template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc, bool is_begin>
 bool isInRangeDecimalImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
-    return isInRangeCommonImpl<AuxColType, OrderByColType, is_preceding, is_desc, is_begin>(current_row_aux_value, cursor_value);
+    return isInRangeCommonImpl<AuxColType, OrderByColType, is_preceding, is_desc, is_begin>(
+        current_row_aux_value,
+        cursor_value);
 }
 
 template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc, bool is_begin>
@@ -217,7 +219,9 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
         if constexpr (std::is_integral_v<OrderByColType> && std::is_integral_v<AuxColType>)
         {
             if constexpr (std::is_unsigned_v<OrderByColType> && std::is_unsigned_v<AuxColType>)
-                return isInRangeIntImpl<UInt64, UInt64, is_preceding, is_desc, is_begin>(current_row_aux_value, cursor_value);
+                return isInRangeIntImpl<UInt64, UInt64, is_preceding, is_desc, is_begin>(
+                    current_row_aux_value,
+                    cursor_value);
             return isInRangeIntImpl<Int64, Int64, is_preceding, is_desc, is_begin>(current_row_aux_value, cursor_value);
         }
         else
@@ -821,12 +825,6 @@ RowNumber WindowTransformAction::stepForRangeImpl()
     else
         is_col_nullable = window_description.is_end_aux_col_nullable;
 
-    bool is_preceding;
-    if constexpr (is_begin)
-        is_preceding = window_description.frame.begin_preceding;
-    else
-        is_preceding = window_description.frame.end_preceding;
-
     ColumnPtr cur_row_aux_column = inputAt(current_row)[cur_row_aux_col_idx];
     typename ActualCmpDataType<T>::Type current_row_aux_value = getValue<T>(cur_row_aux_column, current_row.row);
 
@@ -834,23 +832,23 @@ RowNumber WindowTransformAction::stepForRangeImpl()
     {
         ColumnPtr order_by_column = inputAt(current_row)[order_column_indices[0]];
         if (order_by_column->isNullAt(current_row.row))
-            return moveCursorAndFindRangeFrameIfNull(cursor, is_preceding);
+            return moveCursorAndFindRangeFrameIfNull<is_begin>(cursor);
     }
     return moveCursorAndFindRangeFrame<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(
         cursor,
         current_row_aux_value);
 }
 
-RowNumber WindowTransformAction::moveCursorAndFindRangeFrameIfNull(RowNumber cursor, bool is_preceding)
+template <bool is_begin>
+RowNumber WindowTransformAction::moveCursorAndFindRangeFrameIfNull(RowNumber cursor)
 {
-    if (is_preceding)
+    if constexpr (is_begin)
     {
-        while (cursor <= current_row)
+        while (cursor <= partition_end)
         {
             const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
             if (cursor_column->isNullAt(cursor.row))
                 return cursor;
-
             advanceRowNumber(cursor);
         }
     }
@@ -861,11 +859,9 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrameIfNull(RowNumber cur
             const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
             if (!cursor_column->isNullAt(cursor.row))
                 return cursor;
-
             advanceRowNumber(cursor);
         }
     }
-
     return cursor;
 }
 
