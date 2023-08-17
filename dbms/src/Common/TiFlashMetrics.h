@@ -393,8 +393,8 @@ namespace DB
     M(tiflash_raft_raft_log_lag_count,                                                                                              \
       "Bucketed histogram raft index lag",                                                                                          \
       Histogram,                                                                                                                    \
-      F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 100, 10}),                                             \
-      F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 100, 10}))                         \
+      F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 100, 10}),                                            \
+      F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 100, 10}))                        \
     M(tiflash_raft_raft_events_count,                                                                                               \
       "Raft event counter",                                                                                                         \
       Counter,                                                                                                                      \
