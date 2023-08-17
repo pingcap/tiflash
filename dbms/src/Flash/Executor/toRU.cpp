@@ -36,8 +36,6 @@ RU toRU(UInt64 cpu_time_ns)
         return 0;
 
     auto cpu_time_millisecond = toCPUTimeMillisecond(cpu_time_ns);
-    auto ru = static_cast<double>(cpu_time_millisecond) / 3;
-    auto ceil_ru = ceil(ru);
-    return ceil_ru;
+    return static_cast<double>(cpu_time_millisecond) / 3;
 }
 } // namespace DB
