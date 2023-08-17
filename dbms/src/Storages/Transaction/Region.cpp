@@ -426,6 +426,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
 
     RegionData::deserialize(buf, region->data);
     region->setLastCompactLogApplied(region->appliedIndex());
+    region->setLastRestartLogApplied(region->appliedIndex());
     return region;
 }
 
@@ -524,9 +525,19 @@ UInt64 Region::lastCompactLogApplied() const
     return last_compact_log_applied;
 }
 
+UInt64 Region::lastRestartLogApplied() const
+{
+    return last_restart_log_applied;
+}
+
 void Region::setLastCompactLogApplied(UInt64 new_value) const
 {
     last_compact_log_applied = new_value;
+}
+
+void Region::setLastRestartLogApplied(UInt64 new_value) const
+{
+    last_restart_log_applied = new_value;
 }
 
 void Region::updateLastCompactLogApplied() const
