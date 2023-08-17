@@ -149,10 +149,7 @@ public:
         global_context.reset();
     }
 
-    ContextPtr getContext()
-    {
-        return global_context;
-    }
+    ContextPtr getContext() { return global_context; }
 };
 } // namespace detail
 

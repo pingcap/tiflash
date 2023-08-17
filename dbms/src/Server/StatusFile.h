@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <string>
 #include <boost/noncopyable.hpp>
+#include <string>
 
 
 namespace DB
@@ -36,4 +36,4 @@ private:
 };
 
 
-}
+} // namespace DB

@@ -161,7 +161,9 @@ public:
 
     Strings getAllNormalPaths() const;
 
-    static std::tuple<size_t, TiFlashStorageConfig> parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+    static std::tuple<size_t, TiFlashStorageConfig> parseSettings(
+        Poco::Util::LayeredConfiguration & config,
+        const LoggerPtr & log);
 
 private:
     void parseStoragePath(const String & storage_section, const LoggerPtr & log);

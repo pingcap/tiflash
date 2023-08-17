@@ -22,8 +22,9 @@
 namespace DB
 {
 
-std::optional<raft_serverpb::StoreIdent>
-tryGetStoreIdentFromKey(const UniversalPageStoragePtr & wn_ps, const String & key)
+std::optional<raft_serverpb::StoreIdent> tryGetStoreIdentFromKey(
+    const UniversalPageStoragePtr & wn_ps,
+    const String & key)
 {
     raft_serverpb::StoreIdent store_ident;
     auto page = wn_ps->read(key, nullptr, {}, /*throw_on_not_exist*/ false);
@@ -45,8 +46,7 @@ tryGetStoreIdentFromKey(const UniversalPageStoragePtr & wn_ps, const String & ke
     return store_ident;
 }
 
-std::optional<raft_serverpb::StoreIdent>
-tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps)
+std::optional<raft_serverpb::StoreIdent> tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps)
 {
     // First try to get from raft engine
     auto store_ident = tryGetStoreIdentFromKey(wn_ps, UniversalPageIdFormat::getStoreIdentId());
