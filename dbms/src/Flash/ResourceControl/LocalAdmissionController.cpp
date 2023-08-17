@@ -212,6 +212,8 @@ void LocalAdmissionController::fetchTokensFromGAC(const std::vector<AcquireToken
 {
     if (acquire_infos.empty())
     {
+        // In theory last_fetch_tokens_from_gac_timepoint should only be updated when network to GAC is ok,
+        // but we still update here to avoid resource groups that has enough RU goto degrade mode.
         last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
         return;
     }

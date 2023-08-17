@@ -17,6 +17,8 @@
 #include <chrono>
 #include <memory>
 
+#include "Operators/Operator.h"
+
 namespace DB
 {
 
@@ -63,10 +65,17 @@ public:
 
     bool isStatic() const { return fill_rate == 0.0; }
 
-    // gjt todo
-    // dump()
-
-    std::string toString() const { return ""; }
+    std::string toString() const
+    {
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend(
+            "tokens: {}, fill_rate: {}, capacity: {}, avg_speed_per_sec: {}",
+            tokens,
+            fill_rate,
+            capacity,
+            avg_speed_per_sec);
+        return fmt_buf.toString();
+    }
 
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;

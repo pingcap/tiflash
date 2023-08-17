@@ -421,8 +421,6 @@ public:
         clean_tombstone_resource_group_callback = cb;
     }
 
-    // gjt todo: maybe reorder func
-    // gjt todo: split ResourceGroup to another file
     void stop()
     {
         if (stopped)
