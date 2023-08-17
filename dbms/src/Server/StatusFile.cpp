@@ -44,9 +44,16 @@ StatusFile::StatusFile(const std::string & path_)
         }
 
         if (!contents.empty())
-            LOG_INFO(&Poco::Logger::get("StatusFile"), "Status file {} already exists - unclean restart. Contents:\n{}", path, contents);
+            LOG_INFO(
+                &Poco::Logger::get("StatusFile"),
+                "Status file {} already exists - unclean restart. Contents:\n{}",
+                path,
+                contents);
         else
-            LOG_INFO(&Poco::Logger::get("StatusFile"), "Status file {} already exists and is empty - probably unclean hardware restart.", path);
+            LOG_INFO(
+                &Poco::Logger::get("StatusFile"),
+                "Status file {} already exists and is empty - probably unclean hardware restart.",
+                path);
     }
 
     fd = open(path.c_str(), O_WRONLY | O_CREAT, 0666);
@@ -60,7 +67,8 @@ StatusFile::StatusFile(const std::string & path_)
         if (-1 == flock_ret)
         {
             if (errno == EWOULDBLOCK)
-                throw Exception("Cannot lock file " + path + ". Another server instance in same directory is already running.");
+                throw Exception(
+                    "Cannot lock file " + path + ". Another server instance in same directory is already running.");
             else
                 throwFromErrno("Cannot lock file " + path);
         }
@@ -74,8 +82,7 @@ StatusFile::StatusFile(const std::string & path_)
         /// Write information about current server instance to the file.
         {
             WriteBufferFromFileDescriptor out(fd, 1024);
-            out
-                << "PID: " << getpid() << "\n"
+            out << "PID: " << getpid() << "\n"
                 << "Started at: " << LocalDateTime(time(nullptr)) << "\n"
                 << "Revision: " << ClickHouseRevision::get() << "\n";
         }
@@ -93,10 +100,20 @@ StatusFile::~StatusFile()
     char buf[128];
 
     if (0 != close(fd))
-        LOG_ERROR(&Poco::Logger::get("StatusFile"), "Cannot close file {}, errno: {}, strerror: {}", path, errno, strerror_r(errno, buf, sizeof(buf)));
+        LOG_ERROR(
+            &Poco::Logger::get("StatusFile"),
+            "Cannot close file {}, errno: {}, strerror: {}",
+            path,
+            errno,
+            strerror_r(errno, buf, sizeof(buf)));
 
     if (0 != unlink(path.c_str()))
-        LOG_ERROR(&Poco::Logger::get("StatusFile"), "Cannot unlink file {}, errno: {}, strerror: {}", path, errno, strerror_r(errno, buf, sizeof(buf)));
+        LOG_ERROR(
+            &Poco::Logger::get("StatusFile"),
+            "Cannot unlink file {}, errno: {}, strerror: {}",
+            path,
+            errno,
+            strerror_r(errno, buf, sizeof(buf)));
 }
 
 } // namespace DB

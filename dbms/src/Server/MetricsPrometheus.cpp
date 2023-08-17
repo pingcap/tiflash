@@ -62,16 +62,15 @@ std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
         if (service_addr.empty())
             return getHostName();
         // "0.0.0.0", "127.x.x.x", "localhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
-        static const std::vector<std::string> blacklist{
-            // ivp4
-            "0.0.0.0",
-            "127.",
-            "localhost",
-            // ipv6
-            "0:0:0:0:0:0:0",
-            "[0:0:0:0:0:0:0",
-            ":",
-            "[:"};
+        static const std::vector<std::string> blacklist{// ivp4
+                                                        "0.0.0.0",
+                                                        "127.",
+                                                        "localhost",
+                                                        // ipv6
+                                                        "0:0:0:0:0:0:0",
+                                                        "[0:0:0:0:0:0:0",
+                                                        ":",
+                                                        "[:"};
         for (const auto & prefix : blacklist)
         {
             if (startsWith(service_addr, prefix))
@@ -138,7 +137,8 @@ public:
     Poco::Net::HTTPRequestHandler * createRequestHandler(const Poco::Net::HTTPServerRequest & request) override
     {
         const String & uri = request.getURI();
-        if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET || request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD)
+        if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET
+            || request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD)
         {
             if (uri == "/metrics")
             {
@@ -198,9 +198,7 @@ inline bool isIPv6(const String & input_address)
 }
 } // namespace
 
-MetricsPrometheus::MetricsPrometheus(
-    Context & context,
-    const AsynchronousMetrics & async_metrics_)
+MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
     , path_capacity_metrics(context.getPathCapacity())
     , async_metrics(async_metrics_)
@@ -247,7 +245,8 @@ MetricsPrometheus::MetricsPrometheus(
             const auto & labels = prometheus::Gateway::GetInstanceLabel(getInstanceValue(conf));
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+                && context.getSharedContextDisagg()->use_autoscaler)
             {
                 gateway->RegisterCollectable(tiflash_metrics.cn_process_collector);
             }
@@ -270,23 +269,33 @@ MetricsPrometheus::MetricsPrometheus(
         if (context.getSecurityConfig()->hasTlsConfig() && !conf.getBool(status_disable_metrics_tls, false))
         {
             std::vector<std::weak_ptr<prometheus::Collectable>> collectables{tiflash_metrics.registry};
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+                && context.getSharedContextDisagg()->use_autoscaler)
             {
                 collectables.push_back(tiflash_metrics.cn_process_collector);
             }
             server = getHTTPServer(context, collectables, addr);
             server->start();
-            LOG_INFO(log, "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
+            LOG_INFO(
+                log,
+                "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}",
+                listen_host,
+                metrics_port);
         }
         else
         {
             exposer = std::make_shared<prometheus::Exposer>(addr);
             exposer->RegisterCollectable(tiflash_metrics.registry);
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+                && context.getSharedContextDisagg()->use_autoscaler)
             {
                 exposer->RegisterCollectable(tiflash_metrics.cn_process_collector);
             }
-            LOG_INFO(log, "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
+            LOG_INFO(
+                log,
+                "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}",
+                listen_host,
+                metrics_port);
         }
     }
     else
@@ -332,7 +341,8 @@ void MetricsPrometheus::run()
                 // Add new keyspace store usage metric
                 tiflash_metrics.registered_keypace_store_used_metrics.emplace(
                     keyspace_id,
-                    &tiflash_metrics.registered_keypace_store_used_family->Add({{"keyspace_id", std::to_string(keyspace_id)}, {"type", "used"}}));
+                    &tiflash_metrics.registered_keypace_store_used_family->Add(
+                        {{"keyspace_id", std::to_string(keyspace_id)}, {"type", "used"}}));
             }
             tiflash_metrics.registered_keypace_store_used_metrics[keyspace_id]->Set(usage);
         }

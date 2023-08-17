@@ -20,7 +20,6 @@ namespace DB
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
-std::optional<raft_serverpb::StoreIdent>
-tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps);
+std::optional<raft_serverpb::StoreIdent> tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps);
 
 } // namespace DB

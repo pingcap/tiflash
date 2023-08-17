@@ -35,7 +35,13 @@ using namespace DB;
 ColumnDefinesPtr getDefaultColumns();
 Context getContext(const DB::Settings & settings, const String & tmp_path);
 ColumnDefinesPtr createColumnDefines(size_t column_number);
-Block createBlock(size_t column_number, size_t start, size_t row_number, std::size_t limit, std::mt19937_64 & eng, size_t & acc);
+Block createBlock(
+    size_t column_number,
+    size_t start,
+    size_t row_number,
+    std::size_t limit,
+    std::mt19937_64 & eng,
+    size_t & acc);
 } // namespace DTTool::Bench
 
 namespace DTTool::Inspect
@@ -73,8 +79,10 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             property.effective_num_rows = block_size;
             properties.push_back(property);
         }
-        auto path_pool = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
+        auto path_pool
+            = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        auto storage_pool
+            = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
@@ -102,7 +110,13 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
 
         // Write DMFile::V3
         {
-            dmfileV3 = DB::DM::DMFile::create(2, getTemporaryPath(), std::make_optional<DMChecksumConfig>(), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+            dmfileV3 = DB::DM::DMFile::create(
+                2,
+                getTemporaryPath(),
+                std::make_optional<DMChecksumConfig>(),
+                128 * 1024,
+                16 * 1024 * 1024,
+                DMFileFormat::V3);
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfileV3, *defines);
                 stream.writePrefix();
@@ -151,10 +165,7 @@ TEST_F(DTToolTest, MigrationSuccess)
         EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
     }
     {
-        auto args = DTTool::Inspect::InspectArgs{
-            .check = true,
-            .file_id = 1,
-            .workdir = getTemporaryPath()};
+        auto args = DTTool::Inspect::InspectArgs{.check = true, .file_id = 1, .workdir = getTemporaryPath()};
         EXPECT_EQ(DTTool::Inspect::inspectServiceMain(*db_context, args), 0);
     }
 }
@@ -178,10 +189,7 @@ TEST_F(DTToolTest, MigrationV3toV2Success)
         EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
     }
     {
-        auto args = DTTool::Inspect::InspectArgs{
-            .check = true,
-            .file_id = 2,
-            .workdir = getTemporaryPath()};
+        auto args = DTTool::Inspect::InspectArgs{.check = true, .file_id = 2, .workdir = getTemporaryPath()};
         EXPECT_EQ(DTTool::Inspect::inspectServiceMain(*db_context, args), 0);
     }
 }
