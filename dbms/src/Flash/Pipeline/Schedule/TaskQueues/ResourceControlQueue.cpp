@@ -141,7 +141,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
+void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_value)
 {
     assert(task);
     const String & name = task->getResourceGroupName();

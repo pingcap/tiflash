@@ -120,7 +120,8 @@ private:
             std::call_once(finish_flag, [this] {
                 LOG_DEBUG(
                     log,
-                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.3f}s total_wait_schedule={:.3f}s total_wait_upstream={:.3f}s total_wait_downstream={:.3f}s",
+                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.3f}s "
+                    "total_wait_schedule={:.3f}s total_wait_upstream={:.3f}s total_wait_downstream={:.3f}s",
                     getName(),
                     total_processed_tasks,
                     concurrency,
@@ -166,7 +167,10 @@ private:
                     }
                     else
                     {
-                        RUNTIME_CHECK_MSG(false, "Unexpected pop MPMCQueueResult: {}", magic_enum::enum_name(pop_result));
+                        RUNTIME_CHECK_MSG(
+                            false,
+                            "Unexpected pop MPMCQueueResult: {}",
+                            magic_enum::enum_name(pop_result));
                     }
                 }
 
@@ -186,13 +190,21 @@ private:
                         // In case B, we need to populate the error to upstream, so that the whole
                         // pipeline is cancelled.
                         auto cancel_reason = result_queue->getCancelReason();
-                        LOG_WARNING(log, "{}#{} meeting error from downstream: {}", getName(), thread_idx, cancel_reason);
+                        LOG_WARNING(
+                            log,
+                            "{}#{} meeting error from downstream: {}",
+                            getName(),
+                            thread_idx,
+                            cancel_reason);
                         source_queue->cancelWith(cancel_reason);
                         break;
                     }
                     else
                     {
-                        RUNTIME_CHECK_MSG(false, "Unexpected push MPMCQueueResult: {}", magic_enum::enum_name(push_result));
+                        RUNTIME_CHECK_MSG(
+                            false,
+                            "Unexpected push MPMCQueueResult: {}",
+                            magic_enum::enum_name(push_result));
                     }
                 }
 
@@ -204,8 +216,8 @@ private:
             auto error = getCurrentExceptionMessage(false);
             LOG_ERROR(log, "{}#{} meet error: {}", getName(), thread_idx, error);
             auto cancel_reason = fmt::format("{} failed: {}", getName(), error);
-            result_queue->cancelWith(cancel_reason);
             source_queue->cancelWith(cancel_reason);
+            result_queue->cancelWith(cancel_reason);
         }
     }
 
