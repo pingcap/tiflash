@@ -79,7 +79,11 @@ void LogWriter::close()
     log_file->close();
 }
 
-void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter, bool background)
+void LogWriter::addRecord(
+    ReadBuffer & payload,
+    const size_t payload_size,
+    const WriteLimiterPtr & write_limiter,
+    bool background)
 {
     // Header size varies depending on whether we are recycling or not.
     const UInt32 header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
@@ -153,8 +157,12 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     assert(length <= 0xFFFF); // The length of payload must fit in two bytes (less than `BLOCK_SIZE`)
 
     // Create a header buffer without the checksum field
-    static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::CHECKSUM_FIELD_SIZE, "Header size must be greater than the checksum size");
-    static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
+    static_assert(
+        Format::RECYCLABLE_HEADER_SIZE > Format::CHECKSUM_FIELD_SIZE,
+        "Header size must be greater than the checksum size");
+    static_assert(
+        Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE,
+        "Ensure the min buffer size for physical record");
     constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::CHECKSUM_FIELD_SIZE;
     char buf[HEADER_BUFF_SIZE] = {0};
     WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
@@ -208,14 +216,15 @@ void LogWriter::flush(const WriteLimiterPtr & write_limiter, bool background)
         return;
     }
 
-    PageUtil::writeFile(log_file,
-                        written_bytes,
-                        write_buffer.buffer().begin(),
-                        write_buffer.offset(),
-                        write_limiter,
-                        /*background=*/background,
-                        /*truncate_if_failed=*/false,
-                        /*enable_failpoint=*/false);
+    PageUtil::writeFile(
+        log_file,
+        written_bytes,
+        write_buffer.buffer().begin(),
+        write_buffer.offset(),
+        write_limiter,
+        /*background=*/background,
+        /*truncate_if_failed=*/false,
+        /*enable_failpoint=*/false);
 
     written_bytes += write_buffer.offset();
 

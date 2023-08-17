@@ -32,9 +32,7 @@ namespace DM
 class DMFileBlockOutputStream
 {
 public:
-    DMFileBlockOutputStream(const Context & context,
-                            const DMFilePtr & dmfile,
-                            const ColumnDefines & write_columns);
+    DMFileBlockOutputStream(const Context & context, const DMFilePtr & dmfile, const ColumnDefines & write_columns);
 
     DMFilePtr getFile() const { return writer.getFile(); }
 

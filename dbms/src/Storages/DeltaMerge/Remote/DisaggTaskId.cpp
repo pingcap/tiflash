@@ -28,8 +28,7 @@ DisaggTaskId::DisaggTaskId(const disaggregated::DisaggTaskMeta & task_meta)
         task_meta.query_ts(),
         task_meta.local_query_id())
     , executor_id(task_meta.executor_id())
-{
-}
+{}
 
 disaggregated::DisaggTaskMeta DisaggTaskId::toMeta() const
 {

@@ -29,14 +29,20 @@ SegmentPagesFetchTask DisaggReadSnapshot::popSegTask(TableID physical_table_id, 
     auto table_iter = table_snapshots.find(physical_table_id);
     if (table_iter == table_snapshots.end())
     {
-        return SegmentPagesFetchTask::error(fmt::format("Segment task not found by table_id, table_id={}, segment_id={}", physical_table_id, segment_id));
+        return SegmentPagesFetchTask::error(fmt::format(
+            "Segment task not found by table_id, table_id={}, segment_id={}",
+            physical_table_id,
+            segment_id));
     }
 
     assert(table_iter->second->ks_physical_table_id.second == physical_table_id);
     auto seg_task = table_iter->second->popTask(segment_id);
     if (!seg_task)
     {
-        return SegmentPagesFetchTask::error(fmt::format("Segment task not found by segment_id, table_id={}, segment_id={}", physical_table_id, segment_id));
+        return SegmentPagesFetchTask::error(fmt::format(
+            "Segment task not found by segment_id, table_id={}, segment_id={}",
+            physical_table_id,
+            segment_id));
     }
 
     auto task = SegmentPagesFetchTask::task(
@@ -69,7 +75,9 @@ bool DisaggReadSnapshot::empty() const
     return true;
 }
 
-DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(KeyspaceTableID ks_table_id_, SegmentReadTasks && tasks_)
+DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(
+    KeyspaceTableID ks_table_id_,
+    SegmentReadTasks && tasks_)
     : ks_physical_table_id(ks_table_id_)
 {
     for (auto && t : tasks_)

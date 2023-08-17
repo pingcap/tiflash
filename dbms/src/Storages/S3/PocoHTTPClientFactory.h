@@ -31,12 +31,16 @@ public:
     explicit PocoHTTPClientFactory(const PocoHTTPClientConfiguration & http_cfg);
 
     ~PocoHTTPClientFactory() override = default;
-    [[nodiscard]] std::shared_ptr<Aws::Http::HttpClient>
-    CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const override;
-    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest>
-    CreateHttpRequest(const Aws::String & uri, Aws::Http::HttpMethod method, const Aws::IOStreamFactory & streamFactory) const override;
-    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest>
-    CreateHttpRequest(const Aws::Http::URI & uri, Aws::Http::HttpMethod method, const Aws::IOStreamFactory & streamFactory) const override;
+    [[nodiscard]] std::shared_ptr<Aws::Http::HttpClient> CreateHttpClient(
+        const Aws::Client::ClientConfiguration & clientConfiguration) const override;
+    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest> CreateHttpRequest(
+        const Aws::String & uri,
+        Aws::Http::HttpMethod method,
+        const Aws::IOStreamFactory & streamFactory) const override;
+    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest> CreateHttpRequest(
+        const Aws::Http::URI & uri,
+        Aws::Http::HttpMethod method,
+        const Aws::IOStreamFactory & streamFactory) const override;
 
 private:
     const Aws::IOStreamFactory null_factory = []() {

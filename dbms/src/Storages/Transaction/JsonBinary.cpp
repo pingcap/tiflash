@@ -105,7 +105,8 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
 {
     JsonType entry_type = getChar(value_entry_offset);
     size_t cursor = value_entry_offset + VALUE_TYPE_SIZE;
-    size_t value_offset = decodeNumeric<UInt32>(cursor, data); /// Literal type would padding zeros, thus it wouldn't cross array bound
+    size_t value_offset
+        = decodeNumeric<UInt32>(cursor, data); /// Literal type would padding zeros, thus it wouldn't cross array bound
     switch (entry_type)
     {
     case JsonBinary::TYPE_CODE_LITERAL:
@@ -126,7 +127,9 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
         cursor = value_offset + 1;
         auto data_length = DecodeVarUInt(cursor, data);
         auto data_length_length = cursor - value_offset - 1;
-        return JsonBinary(entry_type, getSubRef(value_offset, data_length_length + data_length + 1)); /// one more byte for type
+        return JsonBinary(
+            entry_type,
+            getSubRef(value_offset, data_length_length + data_length + 1)); /// one more byte for type
     }
     case JsonBinary::TYPE_CODE_DATE:
     case JsonBinary::TYPE_CODE_DATETIME:
@@ -222,7 +225,9 @@ typename NeedDecode<doDecode>::Type DecodeJson(size_t & cursor, const String & r
         size += (cursor - base - 1);
         break;
     default:
-        throw Exception("DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     size++;
@@ -427,7 +432,11 @@ void JsonBinary::marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opa
     String out = encodeBase64(opaque.data);
     size_t out_length = out.length();
     size_t padding_index = out_length & 0x3; /// Padding to be 4 bytes alignment
-    auto output = fmt::format("\"base64:type{}:{}{}\"", static_cast<UInt32>(opaque.type), out, base64_padding_ends[padding_index]);
+    auto output = fmt::format(
+        "\"base64:type{}:{}{}\"",
+        static_cast<UInt32>(opaque.type),
+        out,
+        base64_padding_ends[padding_index]);
     write_buffer.write(output.c_str(), output.length());
 }
 
@@ -553,7 +562,9 @@ String JsonBinary::unquoteString(const StringRef & ref)
     return ref.toString();
 }
 
-bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec, JsonBinaryWriteBuffer & write_buffer)
+bool JsonBinary::extract(
+    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+    JsonBinaryWriteBuffer & write_buffer)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;
     for (auto & path_expr_container : path_expr_container_vec)
@@ -572,7 +583,8 @@ bool JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_co
     {
         found = true;
         // Fix https://github.com/pingcap/tidb/issues/30352
-        if (path_expr_container_vec[0]->firstRef() && path_expr_container_vec[0]->firstRef()->couldMatchMultipleValues())
+        if (path_expr_container_vec[0]->firstRef()
+            && path_expr_container_vec[0]->firstRef()->couldMatchMultipleValues())
         {
             buildBinaryJsonArrayInBuffer(extracted_json_binary_vec, write_buffer);
         }
@@ -654,7 +666,11 @@ UInt32 JsonBinary::binarySearchKey(const JsonPathObjectKey & key, UInt32 element
     return static_cast<UInt32>(first);
 }
 
-void JsonBinary::extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonPathExprRawPtr path_expr_ptr, DupCheckSet & dup_check_set, bool one) const
+void JsonBinary::extractTo(
+    std::vector<JsonBinary> & json_binary_vec,
+    ConstJsonPathExprRawPtr path_expr_ptr,
+    DupCheckSet & dup_check_set,
+    bool one) const
 {
     if (!path_expr_ptr)
     {
@@ -750,7 +766,9 @@ void JsonBinary::extractTo(std::vector<JsonBinary> & json_binary_vec, ConstJsonP
     }
 }
 
-void JsonBinary::buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer)
+void JsonBinary::buildBinaryJsonElementsInBuffer(
+    const std::vector<JsonBinary> & json_binary_vec,
+    JsonBinaryWriteBuffer & write_buffer)
 {
     /// first, write value entry with value offset
     UInt32 value_offset = HEADER_SIZE + json_binary_vec.size() * VALUE_ENTRY_SIZE;
@@ -783,7 +801,9 @@ void JsonBinary::buildBinaryJsonElementsInBuffer(const std::vector<JsonBinary> &
     }
 }
 
-void JsonBinary::buildBinaryJsonArrayInBuffer(const std::vector<JsonBinary> & json_binary_vec, JsonBinaryWriteBuffer & write_buffer)
+void JsonBinary::buildBinaryJsonArrayInBuffer(
+    const std::vector<JsonBinary> & json_binary_vec,
+    JsonBinaryWriteBuffer & write_buffer)
 {
     UInt32 total_size = HEADER_SIZE + json_binary_vec.size() * VALUE_ENTRY_SIZE;
     for (const auto & bj : json_binary_vec)

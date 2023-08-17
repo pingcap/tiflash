@@ -25,24 +25,19 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "HighValidBigPageFileGCWorkload";
-    }
+    static String name() { return "HighValidBigPageFileGCWorkload"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 0;
-    }
+    static UInt64 mask() { return 1 << 0; }
 
     String desc() override
     {
-        return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}"
-                           "Please cleanup folder after this test."
-                           "The current workload will generate 9G data, and GC will be performed at the end.",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored"
+            "`paths` will only used first one. which is {}. Data will store in {}"
+            "Please cleanup folder after this test."
+            "The current workload will generate 9G data, and GC will be performed at the end.",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     void run() override
@@ -116,10 +111,7 @@ public:
         gc->doGcOnce();
     }
 
-    bool verify() override
-    {
-        return (gc_time_ms < 1 * 1000);
-    }
+    bool verify() override { return (gc_time_ms < 1 * 1000); }
 
     void onFailed() override
     {

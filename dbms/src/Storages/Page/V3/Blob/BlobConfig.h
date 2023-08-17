@@ -32,16 +32,17 @@ struct BlobConfig
 
     String toString()
     {
-        return fmt::format("BlobStore Config Info: "
-                           "[file_limit_size={}] [spacemap_type={}] "
-                           "[block_alignment_bytes={}] "
-                           "[heavy_gc_valid_rate={}]"
-                           "[heavy_gc_valid_rate_raft_data={}]",
-                           file_limit_size,
-                           spacemap_type,
-                           block_alignment_bytes,
-                           heavy_gc_valid_rate,
-                           heavy_gc_valid_rate_raft_data);
+        return fmt::format(
+            "BlobStore Config Info: "
+            "[file_limit_size={}] [spacemap_type={}] "
+            "[block_alignment_bytes={}] "
+            "[heavy_gc_valid_rate={}]"
+            "[heavy_gc_valid_rate_raft_data={}]",
+            file_limit_size,
+            spacemap_type,
+            block_alignment_bytes,
+            heavy_gc_valid_rate,
+            heavy_gc_valid_rate_raft_data);
     }
 
     static BlobConfig from(const PageStorageConfig & config)

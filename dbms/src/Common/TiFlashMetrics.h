@@ -390,6 +390,31 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}),                                                              \
       F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                \
+    M(tiflash_raft_raft_log_lag_count,                                                                                              \
+      "Bucketed histogram raft index lag",                                                                                          \
+      Histogram,                                                                                                                    \
+      F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}),                                             \
+      F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 200, 5}),                                             \
+      F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 200, 5}))                         \
+    M(tiflash_raft_raft_events_count,                                                                                               \
+      "Raft event counter",                                                                                                         \
+      Counter,                                                                                                                      \
+      F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}),                                                                     \
+      F(type_flush_apply_snapshot, {{"type", "flush_apply_snapshot"}}),                                                             \
+      F(type_flush_ingest_sst, {{"type", "flush_ingest_sst"}}),                                                                     \
+      F(type_flush_useless_admin, {{"type", "flush_useless_admin"}}),                                                               \
+      F(type_flush_useful_admin, {{"type", "flush_useful_admin"}}),                                                                 \
+      F(type_flush_passive, {{"type", "flush_passive"}}),                                                                           \
+      F(type_flush_proactive, {{"type", "flush_proactive"}}),                                                                       \
+      F(type_flush_log_gap, {{"type", "flush_log_gap"}}),                                                                           \
+      F(type_flush_size, {{"type", "flush_size"}}),                                                                                 \
+      F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                         \
+      F(type_exec_compact, {{"type", "exec_compact"}}))                                                                             \
+    M(tiflash_raft_region_flush_size,                                                                                               \
+      "Bucketed histogram of region flushed size",                                                                                  \
+      Histogram,                                                                                                                    \
+      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 16}),                                                                \
+      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 16}))                                                            \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \

@@ -27,10 +27,7 @@ public:
     explicit ConstantLimiter(uint64_t rate_per_sec)
         : limiter(rate_per_sec, LimiterType::UNKNOW)
     {}
-    void request() override
-    {
-        limiter.request(1);
-    }
+    void request() override { limiter.request(1); }
 
 private:
     WriteLimiter limiter;

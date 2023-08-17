@@ -50,7 +50,11 @@ const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
 namespace
 {
-std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
+std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(
+    bool exist_pd_addr,
+    bool for_unit_test,
+    const KVClusterPtr & cluster,
+    bool disaggregated_compute_mode)
 {
     // Doesn't need SchemaSyncer for tiflash_compute mode.
     if (disaggregated_compute_mode)
@@ -116,25 +120,38 @@ void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
 
 void startMonitorMPPTaskThread(const MPPTaskManagerPtr & manager)
 {
-    newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [monitor = manager->getMPPTaskMonitor()] { monitorMPPTasks(monitor); });
+    newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [monitor = manager->getMPPTaskMonitor()] {
+        monitorMPPTasks(monitor);
+    });
 }
 } // namespace
 
-TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+TMTContext::TMTContext(
+    Context & context_,
+    const TiFlashRaftConfig & raft_config,
+    const pingcap::ClusterConfig & cluster_config)
     : context(context_)
-    , kvstore(context_.getSharedContextDisagg()->isDisaggregatedComputeMode() && context_.getSharedContextDisagg()->use_autoscaler ? nullptr : std::make_shared<KVStore>(context))
+    , kvstore(
+          context_.getSharedContextDisagg()->isDisaggregatedComputeMode()
+                  && context_.getSharedContextDisagg()->use_autoscaler
+              ? nullptr
+              : std::make_shared<KVStore>(context))
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
-    , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
-                                           : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
+    , cluster(
+          raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
+                                       : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_sync_manager(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
-    , mpp_task_manager(std::make_shared<MPPTaskManager>(
-          std::make_unique<MinTSOScheduler>(
-              context.getSettingsRef().task_scheduler_thread_soft_limit,
-              context.getSettingsRef().task_scheduler_thread_hard_limit,
-              context.getSettingsRef().task_scheduler_active_set_soft_limit)))
+    , schema_sync_manager(createSchemaSyncer(
+          !raft_config.pd_addrs.empty(),
+          raft_config.for_unit_test,
+          cluster,
+          context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
+    , mpp_task_manager(std::make_shared<MPPTaskManager>(std::make_unique<MinTSOScheduler>(
+          context.getSettingsRef().task_scheduler_thread_soft_limit,
+          context.getSettingsRef().task_scheduler_thread_hard_limit,
+          context.getSettingsRef().task_scheduler_active_set_soft_limit)))
     , engine(raft_config.engine)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
@@ -143,7 +160,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
 {
     startMonitorMPPTaskThread(mpp_task_manager);
 
-    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
+        && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
@@ -165,20 +183,32 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
             }
             else
             {
-                LOG_WARNING(Logger::get(), "Unknown remote gc method from settings, using default method, value={} remote_gc_method={}", gc_method_int, magic_enum::enum_name(remote_gc_config.method));
+                LOG_WARNING(
+                    Logger::get(),
+                    "Unknown remote gc method from settings, using default method, value={} remote_gc_method={}",
+                    gc_method_int,
+                    magic_enum::enum_name(remote_gc_config.method));
             }
         }
-        remote_gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds; // TODO: make it reloadable
+        remote_gc_config.interval_seconds
+            = context.getSettingsRef().remote_gc_interval_seconds; // TODO: make it reloadable
         remote_gc_config.verify_locks = context.getSettingsRef().remote_gc_verify_consistency > 0;
         // set the gc_method so that S3LockService can set tagging when create delmark
         S3::ClientFactory::instance().gc_method = remote_gc_config.method;
-        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, remote_gc_config);
+        s3gc_manager = std::make_unique<S3::S3GCManagerService>(
+            context,
+            cluster->pd_client,
+            s3gc_owner,
+            s3lock_client,
+            remote_gc_config);
     }
 }
 
 TMTContext::~TMTContext() = default;
 
-void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+void TMTContext::updateSecurityConfig(
+    const TiFlashRaftConfig & raft_config,
+    const pingcap::ClusterConfig & cluster_config)
 {
     if (!raft_config.pd_addrs.empty())
     {
@@ -195,7 +225,8 @@ void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, con
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
     // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
-    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+        && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
     kvstore->restore(path_pool, proxy_helper);
@@ -335,23 +366,28 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+        && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
+    static constexpr const char * COMPACT_LOG_MIN_GAP = "flash.compact_log_min_gap";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
     static constexpr const char * READ_INDEX_WORKER_TICK_MS = "flash.read_index_worker_tick_ms";
 
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
-    getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
-                                            std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
-                                            std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
+    getKVStore()->setRegionCompactLogConfig(
+        std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_GAP, 200), 1));
     {
-        batch_read_index_timeout_ms = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
+        batch_read_index_timeout_ms
+            = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
         wait_index_timeout_ms = config.getUInt64(WAIT_INDEX_TIMEOUT_MS, DEFAULT_WAIT_INDEX_TIMEOUT_MS);
         wait_region_ready_timeout_sec = ({
             int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC);
@@ -363,7 +399,8 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     {
         LOG_INFO(
             Logger::get(),
-            "read-index timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
+            "read-index timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; "
+            "read-index-worker-tick: {}ms",
             batchReadIndexTimeout(),
             waitIndexTimeout(),
             waitRegionReadyTimeout(),
@@ -428,7 +465,8 @@ const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
     };
     static const std::string Unknown = "Unknown";
     auto idx = static_cast<uint8_t>(status);
-    return idx > static_cast<uint8_t>(TMTContext::StoreStatus::_MIN) && idx < static_cast<uint8_t>(TMTContext::StoreStatus::_MAX)
+    return idx > static_cast<uint8_t>(TMTContext::StoreStatus::_MIN)
+            && idx < static_cast<uint8_t>(TMTContext::StoreStatus::_MAX)
         ? StoreStatusName[idx - 1]
         : Unknown;
 }

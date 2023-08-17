@@ -103,8 +103,7 @@ struct JsonPathStream
 {
     explicit JsonPathStream(const StringRef & str_ref)
         : str(str_ref)
-    {
-    }
+    {}
 
     void skipWhiteSpace();
     char read(); /// Read and advance
@@ -117,7 +116,8 @@ struct JsonPathStream
     std::pair<bool, JsonPathArrayIndex> tryParseArrayIndex();
     bool tryReadString(const String & expected);
     template <typename FF>
-    std::pair<bool, String> readWhile(FF && f); /// Since path are usually very short strings, return String instead of StringRef
+    std::pair<bool, String> readWhile(
+        FF && f); /// Since path are usually very short strings, return String instead of StringRef
     static const std::pair<bool, JsonPathArrayIndex> InvalidIndexPair;
     StringRef str;
     size_t pos = 0;
@@ -160,7 +160,8 @@ struct JsonPathLeg
     {}
 
     JsonPathLegType type;
-    JsonPathArraySelection array_selection; // if typ is JsonPathLegArraySelection, the value should be parsed into here.
+    JsonPathArraySelection
+        array_selection; // if typ is JsonPathLegArraySelection, the value should be parsed into here.
     JsonPathObjectKey dot_key; // if typ is JsonPathLegKey, the key should be parsed into here.
 };
 using JsonPathLegPtr = std::unique_ptr<JsonPathLeg>;

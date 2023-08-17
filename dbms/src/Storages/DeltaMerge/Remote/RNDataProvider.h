@@ -43,9 +43,7 @@ public:
         , ks_table_id(ks_table_id_)
     {}
 
-    Page readTinyData(
-        PageId page_id,
-        const std::optional<std::vector<size_t>> & fields) const override;
+    Page readTinyData(PageId page_id, const std::optional<std::vector<size_t>> & fields) const override;
 
     size_t getTinyDataSize(PageId page_id) const override;
 };

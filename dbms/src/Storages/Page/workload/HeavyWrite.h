@@ -16,7 +16,8 @@
 
 namespace DB::PS::tests
 {
-class HeavyWrite : public StressWorkload
+class HeavyWrite
+    : public StressWorkload
     , public StressWorkloadFunc<HeavyWrite>
 {
 public:
@@ -24,25 +25,20 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "HeavyWrite";
-    }
+    static String name() { return "HeavyWrite"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 2;
-    }
+    static UInt64 mask() { return 1 << 2; }
 
 private:
     String desc() override
     {
-        return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}"
-                           "Please cleanup folder after this test."
-                           "The current workload will elapse near 60 seconds",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored"
+            "`paths` will only used first one. which is {}. Data will store in {}"
+            "Please cleanup folder after this test."
+            "The current workload will elapse near 60 seconds",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     void run() override
@@ -63,9 +59,6 @@ private:
         }
     }
 
-    bool verify() override
-    {
-        return true;
-    }
+    bool verify() override { return true; }
 };
 } // namespace DB::PS::tests

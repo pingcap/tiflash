@@ -35,10 +35,11 @@ protected:
     RowKeyRanges read_ranges;
 
 
-    SkippableBlockInputStreamPtr getInputStream(const SegmentPtr & segment,
-                                                const SegmentSnapshotPtr & snapshot,
-                                                const ColumnDefines & columns_to_read,
-                                                const RowKeyRanges & read_ranges)
+    SkippableBlockInputStreamPtr getInputStream(
+        const SegmentPtr & segment,
+        const SegmentSnapshotPtr & snapshot,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & read_ranges)
     {
         auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
         constexpr auto is_fast_scan = true;
@@ -62,7 +63,12 @@ protected:
             columns_to_read_ptr,
             segment->getRowKeyRange());
 
-        return std::make_shared<RowKeyOrderedBlockInputStream>(columns_to_read, stable_stream, delta_stream, snapshot->stable->getDMFilesRows(), dm_context->tracing_id);
+        return std::make_shared<RowKeyOrderedBlockInputStream>(
+            columns_to_read,
+            stable_stream,
+            delta_stream,
+            snapshot->stable->getDMFilesRows(),
+            dm_context->tracing_id);
     }
 
     void testSkipBlockCase(std::string_view seg_data, std::vector<size_t> skip_block_idxs = {})
@@ -74,8 +80,8 @@ protected:
         }
 
         auto [segment, snapshot] = getSegmentForRead(SEG_ID);
-        ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
-                                         getVersionColumnDefine()};
+        ColumnDefines columns_to_read
+            = {getExtraHandleColumnDefine(options.is_common_handle), getVersionColumnDefine()};
 
         auto stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
 
@@ -118,8 +124,8 @@ protected:
         }
 
         auto [segment, snapshot] = getSegmentForRead(SEG_ID);
-        ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
-                                         getVersionColumnDefine()};
+        ColumnDefines columns_to_read
+            = {getExtraHandleColumnDefine(options.is_common_handle), getVersionColumnDefine()};
 
         auto stream1 = getInputStream(segment, snapshot, columns_to_read, read_ranges);
         auto stream2 = getInputStream(segment, snapshot, columns_to_read, read_ranges);
@@ -131,7 +137,9 @@ protected:
         for (auto blk = stream1->read(); blk; blk = stream1->read())
         {
             IColumn::Filter filter(blk.rows(), 1);
-            std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) { return e() % 8192 == 0 ? 1 : 0; });
+            std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) {
+                return e() % 8192 == 0 ? 1 : 0;
+            });
             filter[e() % blk.rows()] = 1; // should not be all 0.
             size_t passed_count = countBytesInFilter(filter);
             for (auto & col : blk)
@@ -156,8 +164,8 @@ protected:
         }
 
         auto [segment, snapshot] = getSegmentForRead(SEG_ID);
-        ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
-                                         getVersionColumnDefine()};
+        ColumnDefines columns_to_read
+            = {getExtraHandleColumnDefine(options.is_common_handle), getVersionColumnDefine()};
 
         auto stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
 
@@ -186,7 +194,9 @@ protected:
             else if (e() % 3 == 1)
             {
                 IColumn::Filter filter(eblk.rows(), 1);
-                std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) { return e() % 8192 == 0 ? 1 : 0; });
+                std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) {
+                    return e() % 8192 == 0 ? 1 : 0;
+                });
                 filter[e() % eblk.rows()] = 1; // should not be all 0.
                 auto blk = stream->readWithFilter(filter);
                 ASSERT_EQ(offset, blk.startOffset());

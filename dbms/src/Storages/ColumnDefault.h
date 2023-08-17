@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <Parsers/IAST.h>
+
 #include <string>
 #include <unordered_map>
-
-#include <Parsers/IAST.h>
 
 
 namespace DB
@@ -32,7 +32,7 @@ enum class ColumnDefaultKind
 
 
 ColumnDefaultKind columnDefaultKindFromString(const std::string & str);
-std::string toString(const ColumnDefaultKind type);
+std::string toString(const ColumnDefaultKind kind);
 
 
 struct ColumnDefault
@@ -48,4 +48,4 @@ bool operator==(const ColumnDefault & lhs, const ColumnDefault & rhs);
 using ColumnDefaults = std::unordered_map<std::string, ColumnDefault>;
 
 
-}
+} // namespace DB

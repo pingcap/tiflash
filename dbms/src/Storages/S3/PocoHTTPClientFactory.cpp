@@ -25,11 +25,10 @@ namespace DB::S3
 {
 PocoHTTPClientFactory::PocoHTTPClientFactory(const PocoHTTPClientConfiguration & http_cfg)
     : poco_cfg(http_cfg)
-{
-}
+{}
 
-std::shared_ptr<Aws::Http::HttpClient>
-PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
+std::shared_ptr<Aws::Http::HttpClient> PocoHTTPClientFactory::CreateHttpClient(
+    const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
     // TODO: maybe we need different `poco_cfg` for different client sometimes?
     return std::make_shared<PocoHTTPClient>(clientConfiguration, poco_cfg);

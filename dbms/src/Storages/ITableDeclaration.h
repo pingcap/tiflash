@@ -71,10 +71,7 @@ private:
 
     OrderedNameSet empty_names;
 
-    virtual const OrderedNameSet & getHiddenColumnsImpl() const
-    {
-        return empty_names;
-    }
+    virtual const OrderedNameSet & getHiddenColumnsImpl() const { return empty_names; }
     void setColumnsImpl(ColumnsDescription columns_);
 };
 

@@ -29,7 +29,12 @@ namespace DB
 {
 namespace DM
 {
-inline int compareTuple(const Columns & left, size_t l_pos, const Columns & right, size_t r_pos, const SortDescription & sort_desc)
+inline int compareTuple(
+    const Columns & left,
+    size_t l_pos,
+    const Columns & right,
+    size_t r_pos,
+    const SortDescription & sort_desc)
 {
     auto num_sort_columns = sort_desc.size();
     for (size_t i = 0; i < num_sort_columns; ++i)
@@ -64,11 +69,12 @@ struct RidGenerator
 
     UInt64 rid = 0;
 
-    RidGenerator(const SkippableBlockInputStreamPtr & stable_stream_,
-                 const SortDescription & sort_desc_,
-                 const Block & delta_block,
-                 size_t offset,
-                 size_t limit)
+    RidGenerator(
+        const SkippableBlockInputStreamPtr & stable_stream_,
+        const SortDescription & sort_desc_,
+        const Block & delta_block,
+        size_t offset,
+        size_t limit)
         : stable_stream(stable_stream_)
         , sort_desc(sort_desc_)
         , num_sort_columns(sort_desc.size())
@@ -99,7 +105,12 @@ struct RidGenerator
 
     inline int compareModifyToStable() const
     {
-        return compareTuple(delta_block_columns, delta_block_offset + delta_block_pos, stable_block_columns, stable_block_pos, sort_desc);
+        return compareTuple(
+            delta_block_columns,
+            delta_block_offset + delta_block_pos,
+            stable_block_columns,
+            stable_block_pos,
+            sort_desc);
     }
 
     inline bool fillStableBlockIfNeed()
@@ -126,8 +137,9 @@ struct RidGenerator
         {
             auto res = compareTuple(stable_block_columns, row, stable_block_columns, row + 1, sort_desc);
             if (unlikely(res >= 0))
-                throw Exception("Illegal stable data, the next row@" + DB::toString(row + 1) + " is expected larger than the previous row@"
-                                + DB::toString(row));
+                throw Exception(
+                    "Illegal stable data, the next row@" + DB::toString(row + 1)
+                    + " is expected larger than the previous row@" + DB::toString(row));
         }
 #endif
         return true;
@@ -209,14 +221,15 @@ struct RidGenerator
  * Returns fully index or not (Some rows not match range won't be indexed).
  */
 template <bool use_row_id_ref, class DeltaTree>
-bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
-                 const Block & delta_block,
-                 const RowKeyRange & range,
-                 bool relevant_place,
-                 DeltaTree & delta_tree,
-                 size_t delta_value_space_offset,
-                 const IColumn::Permutation & row_id_ref,
-                 const SortDescription & sort)
+bool placeInsert(
+    const SkippableBlockInputStreamPtr & stable, //
+    const Block & delta_block,
+    const RowKeyRange & range,
+    bool relevant_place,
+    DeltaTree & delta_tree,
+    size_t delta_value_space_offset,
+    const IColumn::Permutation & row_id_ref,
+    const SortDescription & sort)
 {
     auto rows = delta_block.rows();
 
@@ -226,7 +239,8 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
     // Only filter out irrelevant rows if relevant_place is true. Otherwise, range should always be ALL.
     if (relevant_place)
     {
-        std::tie(offset, limit) = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+        std::tie(offset, limit)
+            = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
         if (!limit)
             return rows == limit;
     }
@@ -257,12 +271,13 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
 
 /// Returns fully index or not (Some rows not match range won't be indexed).
 template <class DeltaTree>
-bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
-                 const Block & delta_block,
-                 const RowKeyRange & range,
-                 bool relevant_place,
-                 DeltaTree & delta_tree,
-                 const SortDescription & sort)
+bool placeDelete(
+    const SkippableBlockInputStreamPtr & stable, //
+    const Block & delta_block,
+    const RowKeyRange & range,
+    bool relevant_place,
+    DeltaTree & delta_tree,
+    const SortDescription & sort)
 {
     auto rows = delta_block.rows();
 
@@ -272,7 +287,8 @@ bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
     // Only filter out irrelevant rows if relevant_place is true. Otherwise, range should always be ALL.
     if (relevant_place)
     {
-        std::tie(offset, limit) = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+        std::tie(offset, limit)
+            = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
         if (!limit)
             return rows == limit;
     }

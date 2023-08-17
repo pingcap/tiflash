@@ -80,8 +80,9 @@ public:
 #ifndef NDEBUG
             if (next_block && !isSameSchema(cur_block, next_block))
             {
-                throw Exception("schema not match! [cur_block=" + cur_block.dumpStructure() + "] [next_block=" + next_block.dumpStructure()
-                                + "]");
+                throw Exception(
+                    "schema not match! [cur_block=" + cur_block.dumpStructure()
+                    + "] [next_block=" + next_block.dumpStructure() + "]");
             }
 #endif
 
@@ -121,8 +122,11 @@ public:
     }
 
 private:
-    static size_t
-    findCutOffsetInNextBlock(const Block & cur_block, const Block & next_block, const ColId pk_column_id, bool is_common_handle)
+    static size_t findCutOffsetInNextBlock(
+        const Block & cur_block,
+        const Block & next_block,
+        const ColId pk_column_id,
+        bool is_common_handle)
     {
         assert(cur_block);
         if (!next_block)
@@ -142,9 +146,10 @@ private:
                 if constexpr (DM_RUN_CHECK)
                 {
                     if (unlikely(next_pk < last_curr_pk))
-                        throw Exception("InputStream is not sorted, pk in next block is smaller than current block: "
-                                            + next_pk.toDebugString() + " < " + last_curr_pk.toDebugString(),
-                                        ErrorCodes::LOGICAL_ERROR);
+                        throw Exception(
+                            "InputStream is not sorted, pk in next block is smaller than current block: "
+                                + next_pk.toDebugString() + " < " + last_curr_pk.toDebugString(),
+                            ErrorCodes::LOGICAL_ERROR);
                 }
                 break;
             }
@@ -157,8 +162,9 @@ private:
         if constexpr (need_extra_sort)
         {
             // Sort by handle & version in ascending order.
-            static SortDescription sort{SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
-                                        SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
+            static SortDescription sort{
+                SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
+                SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
             if (block.rows() > 1 && !isAlreadySorted(block, sort))
                 stableSortBlock(block, sort);
         }

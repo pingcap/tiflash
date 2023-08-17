@@ -37,23 +37,22 @@ namespace DB
 namespace DM
 {
 
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path);
+extern DMFilePtr writeIntoNewDMFile(
+    DMContext & dm_context,
+    const ColumnDefinesPtr & schema_snap,
+    const BlockInputStreamPtr & input_stream,
+    UInt64 file_id,
+    const String & parent_path);
 
 namespace tests
 {
 
-class SegmentReplaceDataTest : public SegmentTestBasic
+class SegmentReplaceDataTest
+    : public SegmentTestBasic
     , public testing::WithParamInterface<UInt64>
 {
 public:
-    SegmentReplaceDataTest()
-    {
-        replace_to_rows = GetParam();
-    }
+    SegmentReplaceDataTest() { replace_to_rows = GetParam(); }
 
 protected:
     UInt64 replace_to_rows{};
@@ -166,12 +165,7 @@ try
     auto delegator = storage_path_pool->getStableDiskDelegator();
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(Block{});
-    auto dm_file = writeIntoNewDMFile(
-        *dm_context,
-        table_columns,
-        input_stream,
-        file_id,
-        delegator.choosePath());
+    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, delegator.choosePath());
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();
@@ -330,7 +324,10 @@ TEST_F(SegmentReplaceDataSimpleTest, NewWriteInMemtableAfterSnapshot)
 try
 {
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400, /* at */ 0); // [0, 400)
-    auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
+    auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(
+        *dm_context,
+        /* for_update */ true,
+        CurrentMetrics::DT_SnapshotOfSegmentIngest);
     ASSERT_TRUE(snapshot != nullptr);
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200, /* at */ 300); // [300, 500)
@@ -350,7 +347,10 @@ TEST_F(SegmentReplaceDataSimpleTest, NewWriteInPersistedAfterSnapshot)
 try
 {
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400, /* at */ 0); // [0, 400)
-    auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentIngest);
+    auto snapshot = segments[DELTA_MERGE_FIRST_SEGMENT_ID]->createSnapshot(
+        *dm_context,
+        /* for_update */ true,
+        CurrentMetrics::DT_SnapshotOfSegmentIngest);
     ASSERT_TRUE(snapshot != nullptr);
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200, /* at */ 300); // [300, 500)

@@ -28,8 +28,7 @@ public:
     SessionAwareIOStream(Session session_, std::streambuf * sb)
         : std::iostream(sb)
         , session(std::move(session_))
-    {
-    }
+    {}
 
 private:
     /// Poco HTTP session is holder of response stream.

@@ -57,7 +57,10 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
     return insertRegion(table, *range, region.id());
 }
 
-RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id)
+RegionTable::InternalRegion & RegionTable::insertRegion(
+    Table & table,
+    const RegionRangeKeys & region_range_keys,
+    const RegionID region_id)
 {
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto & table_regions = table.regions;
@@ -275,7 +278,10 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip flush.
-            LOG_WARNING(Logger::get(), "Got error while reading region committed cache: {}. Skip flush region and keep original cache.", e.displayText());
+            LOG_WARNING(
+                Logger::get(),
+                "Got error while reading region committed cache: {}. Skip flush region and keep original cache.",
+                e.displayText());
         }
         else
             first_exception = std::current_exception();
@@ -299,7 +305,10 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     return data_list_to_remove;
 }
 
-void RegionTable::handleInternalRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
+void RegionTable::handleInternalRegionsByTable(
+    const KeyspaceID keyspace_id,
+    const TableID table_id,
+    std::function<void(const InternalRegions &)> && callback) const
 {
     std::lock_guard lock(mutex);
 
@@ -309,7 +318,9 @@ void RegionTable::handleInternalRegionsByTable(const KeyspaceID keyspace_id, con
     }
 }
 
-std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id) const
+std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(
+    const KeyspaceID keyspace_id,
+    const TableID table_id) const
 {
     auto & kvstore = context->getTMTContext().getKVStore();
     std::vector<std::pair<RegionID, RegionPtr>> regions;
@@ -359,7 +370,12 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
-            LOG_INFO(log, "internal region has larger range, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
+            LOG_INFO(
+                log,
+                "internal region has larger range, keyspace={} table_id={} region_id={}",
+                keyspace_id,
+                table_id,
+                region_id);
         }
         else
         {
@@ -403,8 +419,15 @@ bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 
         *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
         *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
     }
-    LOG_TRACE(log, "region_id={} table_id={} leader_safe_ts={} self_safe_ts={}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
-    return (*leader_safe_ts > *self_safe_ts) && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
+    LOG_TRACE(
+        log,
+        "region_id={} table_id={} leader_safe_ts={} self_safe_ts={}",
+        region_id,
+        regions[region_id],
+        *leader_safe_ts,
+        *self_safe_ts);
+    return (*leader_safe_ts > *self_safe_ts)
+        && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
 }
 
 UInt64 RegionTable::getSelfSafeTS(UInt64 region_id)
@@ -425,7 +448,12 @@ void RegionTable::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 s
         auto it = safe_ts_map.find(region_id);
         if (it == safe_ts_map.end() && (leader_safe_ts == InvalidSafeTS || self_safe_ts == InvalidSafeTS))
         {
-            LOG_TRACE(log, "safe_ts_map empty but safe ts invalid, region_id={} leader_safe_ts={} self_safe_ts={}", region_id, leader_safe_ts, self_safe_ts);
+            LOG_TRACE(
+                log,
+                "safe_ts_map empty but safe ts invalid, region_id={} leader_safe_ts={} self_safe_ts={}",
+                region_id,
+                leader_safe_ts,
+                self_safe_ts);
             return;
         }
         if (it != safe_ts_map.end())

@@ -34,17 +34,15 @@ class StorageSetOrJoinBase : public IStorage
 public:
     String getTableName() const override { return table_name; }
 
-    void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name) override;
+    void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
+        override;
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     String getDataPath() const override { return path; }
 
 protected:
-    StorageSetOrJoinBase(
-        const String & path_,
-        const String & table_name_,
-        const ColumnsDescription & columns_);
+    StorageSetOrJoinBase(const String & path_, const String & table_name_, const ColumnsDescription & columns_);
 
     String path;
     String table_name;
@@ -68,7 +66,8 @@ private:
   *  and also written to a file-backup, for recovery after a restart.
   * Reading from the table is not possible directly - it is possible to specify only the right part of the IN statement.
   */
-class StorageSet : public ext::SharedPtrHelper<StorageSet>
+class StorageSet
+    : public ext::SharedPtrHelper<StorageSet>
     , public StorageSetOrJoinBase
 {
     friend struct ext::SharedPtrHelper<StorageSet>;
@@ -86,10 +85,7 @@ private:
     size_t getSize() const override;
 
 protected:
-    StorageSet(
-        const String & path_,
-        const String & name_,
-        const ColumnsDescription & columns_);
+    StorageSet(const String & path_, const String & name_, const ColumnsDescription & columns_);
 };
 
 } // namespace DB
