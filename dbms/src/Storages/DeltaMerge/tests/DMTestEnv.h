@@ -36,7 +36,8 @@ namespace DM
 {
 namespace tests
 {
-#define GET_REGION_RANGE(start, end, table_id) RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
+#define GET_REGION_RANGE(start, end, table_id) \
+    RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
 
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
@@ -114,7 +115,10 @@ class DMTestEnv
 {
 public:
     static ContextPtr getContext() { return ::DB::tests::TiFlashTestEnv::getContext(); }
-    static ContextPtr getContext(const ::DB::Settings & settings) { return ::DB::tests::TiFlashTestEnv::getContext(settings); }
+    static ContextPtr getContext(const ::DB::Settings & settings)
+    {
+        return ::DB::tests::TiFlashTestEnv::getContext(settings);
+    }
 
     static constexpr const char * pk_name = "_tidb_rowid";
 
@@ -168,7 +172,8 @@ public:
             columns->emplace_back(ColumnDefine{PK_ID_PK_IS_HANDLE, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
             break;
         case PkType::PkIsHandleInt32:
-            columns->emplace_back(ColumnDefine{PK_ID_PK_IS_HANDLE, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
+            columns->emplace_back(
+                ColumnDefine{PK_ID_PK_IS_HANDLE, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
             break;
         default:
             throw Exception("Unknown pk type for test");
@@ -177,7 +182,8 @@ public:
         columns->emplace_back(getTagColumnDefine());
         if (add_nullable)
         {
-            columns->emplace_back(ColumnDefine{1, "Nullable(UInt64)", DataTypeFactory::instance().get("Nullable(UInt64)")});
+            columns->emplace_back(
+                ColumnDefine{1, "Nullable(UInt64)", DataTypeFactory::instance().get("Nullable(UInt64)")});
         }
         return columns;
     }
@@ -192,8 +198,12 @@ public:
             columns.push_back({EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE});
             break;
         case PkType::CommonHandle:
-            columns.push_back({PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_STRING_TYPE}); // For common handle, there must be a user-given primary key.
-            columns.push_back({EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE}); // For common handle, a _tidb_rowid is also constructed.
+            columns.push_back(
+                {PK_NAME_PK_IS_HANDLE,
+                 EXTRA_HANDLE_COLUMN_STRING_TYPE}); // For common handle, there must be a user-given primary key.
+            columns.push_back(
+                {EXTRA_HANDLE_COLUMN_NAME,
+                 EXTRA_HANDLE_COLUMN_STRING_TYPE}); // For common handle, a _tidb_rowid is also constructed.
             break;
         case PkType::PkIsHandleInt64:
             columns.emplace_back(PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE);
@@ -280,18 +290,19 @@ public:
      * @param reversed  increasing/decreasing insert `pk`'s value
      * @return
      */
-    static Block prepareSimpleWriteBlock(size_t beg,
-                                         size_t end,
-                                         bool reversed,
-                                         UInt64 tso = 2,
-                                         const String & pk_name_ = pk_name,
-                                         ColumnID pk_col_id = EXTRA_HANDLE_COLUMN_ID,
-                                         DataTypePtr pk_type = EXTRA_HANDLE_COLUMN_INT_TYPE,
-                                         bool is_common_handle = false,
-                                         size_t rowkey_column_size = 1,
-                                         bool with_internal_columns = true,
-                                         bool is_deleted = false,
-                                         bool with_nullable_uint64 = false)
+    static Block prepareSimpleWriteBlock(
+        size_t beg,
+        size_t end,
+        bool reversed,
+        UInt64 tso = 2,
+        const String & pk_name_ = pk_name,
+        ColumnID pk_col_id = EXTRA_HANDLE_COLUMN_ID,
+        DataTypePtr pk_type = EXTRA_HANDLE_COLUMN_INT_TYPE,
+        bool is_common_handle = false,
+        size_t rowkey_column_size = 1,
+        bool with_internal_columns = true,
+        bool is_deleted = false,
+        bool with_nullable_uint64 = false)
     {
         Block block;
         const size_t num_rows = (end - beg);
@@ -304,10 +315,7 @@ public:
                 Int64 value = reversed ? end - 1 - i : beg + i;
                 values.emplace_back(genMockCommonHandle(value, rowkey_column_size));
             }
-            block.insert(DB::tests::createColumn<String>(
-                std::move(values),
-                pk_name_,
-                pk_col_id));
+            block.insert(DB::tests::createColumn<String>(std::move(values), pk_name_, pk_col_id));
         }
         else
         {
@@ -321,7 +329,9 @@ public:
             if (pk_col_id != EXTRA_HANDLE_COLUMN_ID)
             {
                 block.insert(ColumnWithTypeAndName{
-                    DB::tests::makeColumn<Int64>(EXTRA_HANDLE_COLUMN_INT_TYPE, createNumbers<Int64>(beg, end, reversed)),
+                    DB::tests::makeColumn<Int64>(
+                        EXTRA_HANDLE_COLUMN_INT_TYPE,
+                        createNumbers<Int64>(beg, end, reversed)),
                     EXTRA_HANDLE_COLUMN_INT_TYPE,
                     EXTRA_HANDLE_COLUMN_NAME,
                     EXTRA_HANDLE_COLUMN_ID});
@@ -345,29 +355,26 @@ public:
             std::vector<UInt64> data(num_rows);
             std::iota(data.begin(), data.end(), beg);
             std::vector<Int32> null_map(num_rows, 0);
-            block.insert(DB::tests::createNullableColumn<UInt64>(
-                data,
-                null_map,
-                "Nullable(UInt64)",
-                1));
+            block.insert(DB::tests::createNullableColumn<UInt64>(data, null_map, "Nullable(UInt64)", 1));
         }
         return block;
     }
 
     static Block prepareSimpleWriteBlockWithNullable(size_t beg, size_t end)
     {
-        return prepareSimpleWriteBlock(beg,
-                                       end,
-                                       /*reversed*/ false,
-                                       /*tso*/ 2,
-                                       pk_name,
-                                       EXTRA_HANDLE_COLUMN_ID,
-                                       EXTRA_HANDLE_COLUMN_INT_TYPE,
-                                       /* is_common_handle */ false,
-                                       /* rowkey_column_size */ 1,
-                                       /*with_internal_columns*/ true,
-                                       /*is_deleted*/ false,
-                                       /*with_nullable_uint64*/ true);
+        return prepareSimpleWriteBlock(
+            beg,
+            end,
+            /*reversed*/ false,
+            /*tso*/ 2,
+            pk_name,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_INT_TYPE,
+            /* is_common_handle */ false,
+            /* rowkey_column_size */ 1,
+            /*with_internal_columns*/ true,
+            /*is_deleted*/ false,
+            /*with_nullable_uint64*/ true);
     }
     /**
      * Create a simple block with 3 columns:
@@ -377,21 +384,52 @@ public:
      * @param reversed  increasing/decreasing insert `pk`'s value
      * @return
      */
-    static Block prepareSimpleWriteBlock(size_t beg,
-                                         size_t end,
-                                         bool reversed,
-                                         PkType pk_type,
-                                         UInt64 tso = 2,
-                                         bool with_internal_columns = true)
+    static Block prepareSimpleWriteBlock(
+        size_t beg,
+        size_t end,
+        bool reversed,
+        PkType pk_type,
+        UInt64 tso = 2,
+        bool with_internal_columns = true)
     {
         switch (pk_type)
         {
         case PkType::HiddenTiDBRowID:
-            return prepareSimpleWriteBlock(beg, end, reversed, tso, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_INT_TYPE, false, 1, with_internal_columns);
+            return prepareSimpleWriteBlock(
+                beg,
+                end,
+                reversed,
+                tso,
+                EXTRA_HANDLE_COLUMN_NAME,
+                EXTRA_HANDLE_COLUMN_ID,
+                EXTRA_HANDLE_COLUMN_INT_TYPE,
+                false,
+                1,
+                with_internal_columns);
         case PkType::CommonHandle:
-            return prepareSimpleWriteBlock(beg, end, reversed, tso, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_STRING_TYPE, true, 1, with_internal_columns);
+            return prepareSimpleWriteBlock(
+                beg,
+                end,
+                reversed,
+                tso,
+                EXTRA_HANDLE_COLUMN_NAME,
+                EXTRA_HANDLE_COLUMN_ID,
+                EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                true,
+                1,
+                with_internal_columns);
         case PkType::PkIsHandleInt64:
-            return prepareSimpleWriteBlock(beg, end, reversed, tso, PK_NAME_PK_IS_HANDLE, PK_ID_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE, false, 1, with_internal_columns);
+            return prepareSimpleWriteBlock(
+                beg,
+                end,
+                reversed,
+                tso,
+                PK_NAME_PK_IS_HANDLE,
+                PK_ID_PK_IS_HANDLE,
+                EXTRA_HANDLE_COLUMN_INT_TYPE,
+                false,
+                1,
+                with_internal_columns);
             break;
         case PkType::PkIsHandleInt32:
             throw Exception("PkIsHandleInt32 is unsupported");
@@ -410,15 +448,17 @@ public:
      * @param deleted   if deleted is false, set `tag` to 0; otherwise set `tag` to 1
      * @return
      */
-    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false, bool deleted = false)
+    static Block prepareBlockWithTso(
+        Int64 pk,
+        size_t ts_beg,
+        size_t ts_end,
+        bool reversed = false,
+        bool deleted = false)
     {
         Block block;
         const size_t num_rows = (ts_end - ts_beg);
         // int64 pk_col
-        block.insert(DB::tests::createColumn<Int64>(
-            std::vector<Int64>(num_rows, pk),
-            pk_name,
-            EXTRA_HANDLE_COLUMN_ID));
+        block.insert(DB::tests::createColumn<Int64>(std::vector<Int64>(num_rows, pk), pk_name, EXTRA_HANDLE_COLUMN_ID));
         // version_col
         block.insert(DB::tests::createColumn<UInt64>(
             createNumbers<UInt64>(ts_beg, ts_end, reversed),
@@ -449,18 +489,13 @@ public:
         if (is_common_handle)
         {
             Strings values{genMockCommonHandle(pk, rowkey_column_size)};
-            block.insert(DB::tests::createColumn<String>(
-                std::move(values),
-                pk_name,
-                EXTRA_HANDLE_COLUMN_ID));
+            block.insert(DB::tests::createColumn<String>(std::move(values), pk_name, EXTRA_HANDLE_COLUMN_ID));
         }
         else
         {
             // int64 pk_col
-            block.insert(DB::tests::createColumn<Int64>(
-                std::vector<Int64>(num_rows, pk),
-                pk_name,
-                EXTRA_HANDLE_COLUMN_ID));
+            block.insert(
+                DB::tests::createColumn<Int64>(std::vector<Int64>(num_rows, pk), pk_name, EXTRA_HANDLE_COLUMN_ID));
         }
         // version_col
         block.insert(DB::tests::createColumn<UInt64>(
@@ -468,10 +503,8 @@ public:
             VERSION_COLUMN_NAME,
             VERSION_COLUMN_ID));
         // tag_col
-        block.insert(DB::tests::createColumn<UInt8>(
-            std::vector<UInt64>(num_rows, mark),
-            TAG_COLUMN_NAME,
-            TAG_COLUMN_ID));
+        block.insert(
+            DB::tests::createColumn<UInt8>(std::vector<UInt64>(num_rows, mark), TAG_COLUMN_NAME, TAG_COLUMN_ID));
         // string column
         block.insert(DB::tests::createColumn<String>(
             Strings{value},
@@ -496,7 +529,8 @@ public:
 
     static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
     {
-        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(start, rowkey_column_size)));
+        RowKeyValue start_key
+            = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(start, rowkey_column_size)));
         RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(end, rowkey_column_size)));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
@@ -515,10 +549,7 @@ public:
             VERSION_COLUMN_NAME,
             VERSION_COLUMN_ID));
         // tag_col
-        block.insert(DB::tests::createColumn<UInt8>(
-            std::vector<UInt64>(rows, 0),
-            TAG_COLUMN_NAME,
-            TAG_COLUMN_ID));
+        block.insert(DB::tests::createColumn<UInt8>(std::vector<UInt64>(rows, 0), TAG_COLUMN_NAME, TAG_COLUMN_ID));
         return block;
     }
 

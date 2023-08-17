@@ -41,9 +41,7 @@ public:
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)
-        : Exception(fmt::format(
-            "Region error {}",
-            magic_enum::enum_name(status_)))
+        : Exception(fmt::format("Region error {}", magic_enum::enum_name(status_)))
         , unavailable_region(std::move(unavailable_region_))
         , status(status_)
     {}

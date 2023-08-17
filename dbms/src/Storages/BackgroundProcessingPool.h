@@ -54,7 +54,11 @@ public:
         /// Wake up any thread.
         void wake();
 
-        TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_, const uint64_t interval_ms_)
+        TaskInfo(
+            BackgroundProcessingPool & pool_,
+            const Task & function_,
+            const bool multi_,
+            const uint64_t interval_ms_)
             : pool(pool_)
             , function(function_)
             , multi(multi_)

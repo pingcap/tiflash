@@ -82,8 +82,9 @@ public:
                 if ((*prev.end.value) == *current.start.toPrefixNext().value)
                     ++count;
                 else
-                    throw TiFlashException("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
-                                           Errors::Coprocessor::BadRequest);
+                    throw TiFlashException(
+                        "Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
+                        Errors::Coprocessor::BadRequest);
             }
         }
         merged_stats.emplace_back(offset, count);
@@ -120,10 +121,9 @@ public:
         }
 
         // Sort by offset, so that we can have an increasing order by range's start edge.
-        std::sort(
-            merged_stats.begin(),
-            merged_stats.end(),
-            [](const OffsetCount & a, const OffsetCount & b) { return a.offset < b.offset; });
+        std::sort(merged_stats.begin(), merged_stats.end(), [](const OffsetCount & a, const OffsetCount & b) {
+            return a.offset < b.offset;
+        });
     }
 
     RowKeyRanges getRanges()
@@ -173,7 +173,13 @@ RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_range
     do_merge_ranges.trySplit(expected_ranges_count);
 
     if (log)
-        LOG_TRACE(log, "[original ranges: {}] [expected ranges: {}] [after merged ranges: {}] [final ranges: {}]", ori_size, expected_ranges_count, after_merge_count, do_merge_ranges.currentRangesCount());
+        LOG_TRACE(
+            log,
+            "[original ranges: {}] [expected ranges: {}] [after merged ranges: {}] [final ranges: {}]",
+            ori_size,
+            expected_ranges_count,
+            after_merge_count,
+            do_merge_ranges.currentRangesCount());
 
     return do_merge_ranges.getRanges();
 }

@@ -50,7 +50,9 @@ public:
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
         {
             already_initialize_data_store = false;
-            global_context.getSharedContextDisagg()->initRemoteDataStore(global_context.getFileProvider(), /*s3_enabled*/ true);
+            global_context.getSharedContextDisagg()->initRemoteDataStore(
+                global_context.getFileProvider(),
+                /*s3_enabled*/ true);
             ASSERT_TRUE(global_context.getSharedContextDisagg()->remote_data_store != nullptr);
         }
         else
@@ -128,9 +130,7 @@ try
     std::vector<bool> f(total, false);
     while (true)
     {
-        auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int {
-            return a + int(b);
-        });
+        auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
         if (count >= total)
         {
             break;
@@ -168,7 +168,13 @@ try
 }
 CATCH
 
-void persistAfterWrite(Context & ctx, KVStore & kvs, std::unique_ptr<MockRaftStoreProxy> & proxy_instance, UniversalPageStoragePtr page_storage, uint64_t region_id, uint64_t index)
+void persistAfterWrite(
+    Context & ctx,
+    KVStore & kvs,
+    std::unique_ptr<MockRaftStoreProxy> & proxy_instance,
+    UniversalPageStoragePtr page_storage,
+    uint64_t region_id,
+    uint64_t index)
 {
     MockRaftStoreProxy::FailCond cond;
     proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
@@ -177,7 +183,7 @@ void persistAfterWrite(Context & ctx, KVStore & kvs, std::unique_ptr<MockRaftSto
     page_storage->write(std::move(wb));
     // There shall be data to flush.
     ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
-    ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
+    ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0, 0, 0), true);
 }
 
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
@@ -195,7 +201,9 @@ try
     region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
 
     // Write some data, and persist meta.
-    auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    auto [index, term]
+        = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -227,7 +235,8 @@ try
     }
 
     {
-        auto [data_seq, checkpoint_data_holder] = fap_context->getNewerCheckpointData(global_context, store_id, upload_sequence);
+        auto [data_seq, checkpoint_data_holder]
+            = fap_context->getNewerCheckpointData(global_context, store_id, upload_sequence);
         ASSERT_EQ(data_seq, upload_sequence);
         ASSERT_TRUE(checkpoint_data_holder == nullptr);
     }

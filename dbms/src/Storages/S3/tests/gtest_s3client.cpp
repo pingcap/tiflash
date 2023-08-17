@@ -71,14 +71,19 @@ try
     // check the keys with raw `LIST` request
     {
         Strings prefixes;
-        rawListPrefix(*client, client->bucket(), client->root() + "s999/", "/", [&](const Aws::S3::Model::ListObjectsV2Result & result) {
-            const auto & ps = result.GetCommonPrefixes();
-            for (const auto & p : ps)
-            {
-                prefixes.emplace_back(p.GetPrefix());
-            }
-            return PageResult{.num_keys = ps.size(), .more = true};
-        });
+        rawListPrefix(
+            *client,
+            client->bucket(),
+            client->root() + "s999/",
+            "/",
+            [&](const Aws::S3::Model::ListObjectsV2Result & result) {
+                const auto & ps = result.GetCommonPrefixes();
+                for (const auto & p : ps)
+                {
+                    prefixes.emplace_back(p.GetPrefix());
+                }
+                return PageResult{.num_keys = ps.size(), .more = true};
+            });
         ASSERT_EQ(prefixes.size(), 2) << fmt::format("{}", prefixes);
         EXPECT_EQ(prefixes[0], client->root() + "s999/data/");
         EXPECT_EQ(prefixes[1], client->root() + "s999/manifest/");

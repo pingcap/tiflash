@@ -29,7 +29,8 @@ namespace DB
   * It does not support keys.
   * Data is stored as a set of blocks and is not stored anywhere else.
   */
-class StorageMemory : public ext::SharedPtrHelper<StorageMemory>
+class StorageMemory
+    : public ext::SharedPtrHelper<StorageMemory>
     , public IStorage
 {
     friend class MemoryBlockInputStream;
@@ -52,7 +53,11 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     void drop() override;
-    void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & new_table_name) override { table_name = new_table_name; }
+    void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & new_table_name)
+        override
+    {
+        table_name = new_table_name;
+    }
 
 private:
     String table_name;

@@ -110,7 +110,12 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
 }
 
 /// This function is called by `ReadRegionCommitCache`.
-std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied, bool hard_error)
+std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
+    const ConstWriteCFIter & write_it,
+    bool need_value,
+    RegionID region_id,
+    UInt64 applied,
+    bool hard_error)
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [pk, ts] = write_it->first;
@@ -139,8 +144,9 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
             {
                 if (orphan_keys_info.pre_handling)
                 {
-                    RUNTIME_CHECK_MSG(orphan_keys_info.snapshot_index.has_value(),
-                                      "Snapshot index shall be set when Applying snapshot");
+                    RUNTIME_CHECK_MSG(
+                        orphan_keys_info.snapshot_index.has_value(),
+                        "Snapshot index shall be set when Applying snapshot");
                     // While pre-handling snapshot from raftstore v2, we accept and store the orphan keys in memory
                     // These keys should be resolved in later raft logs
                     orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
@@ -177,20 +183,26 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
             }
             if (!hard_error)
             {
-                orphan_key_debug_msg = fmt::format("{}, snapshot_index: {}, {}, orphan key size {}",
-                                                   hard_error ? "" : ", not orphan key",
-                                                   orphan_keys_info.snapshot_index.has_value() ? std::to_string(orphan_keys_info.snapshot_index.value()) : "",
-                                                   orphan_keys_info.removed_remained_keys.contains(*key) ? "duplicated write" : "missing default",
-                                                   orphan_keys_info.remainedKeyCount());
+                orphan_key_debug_msg = fmt::format(
+                    "orphan_info: ({}, snapshot_index: {}, {}, orphan key size {})",
+                    hard_error ? "" : ", not orphan key",
+                    orphan_keys_info.snapshot_index.has_value()
+                        ? std::to_string(orphan_keys_info.snapshot_index.value())
+                        : "",
+                    orphan_keys_info.removed_remained_keys.contains(*key) ? "duplicated write" : "missing default",
+                    orphan_keys_info.remainedKeyCount());
             }
-            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}{}",
-                                        pk.toDebugString(),
-                                        decoded_val.prewrite_ts,
-                                        key->toDebugString(),
-                                        region_id,
-                                        applied,
-                                        orphan_key_debug_msg),
-                            ErrorCodes::ILLFORMAT_RAFT_ROW);
+            throw Exception(
+                fmt::format(
+                    "Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, "
+                    "applied_index: {}{}",
+                    pk.toDebugString(),
+                    decoded_val.prewrite_ts,
+                    key->toDebugString(),
+                    region_id,
+                    applied,
+                    orphan_key_debug_msg),
+                ErrorCodes::ILLFORMAT_RAFT_ROW);
         }
     }
 
@@ -300,7 +312,8 @@ const RegionLockCFData & RegionData::lockCF() const
 
 bool RegionData::isEqual(const RegionData & r2) const
 {
-    return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf && cf_data_size == r2.cf_data_size;
+    return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf
+        && cf_data_size == r2.cf_data_size;
 }
 
 RegionData::RegionData(RegionData && data)
@@ -365,7 +378,15 @@ void RegionData::OrphanKeysInfo::advanceAppliedIndex(uint64_t applied_index)
         if (applied_index >= deadline_index.value() && count > 0)
         {
             auto one = remained_keys.begin()->toDebugString();
-            throw Exception(fmt::format("Orphan keys from snapshot still exists. One of total {} is {}. region_id={} snapshot_index={} deadline_index={} applied_index={}", count, one, region_id, snapshot_index.value(), deadline_index.value(), applied_index));
+            throw Exception(fmt::format(
+                "Orphan keys from snapshot still exists. One of total {} is {}. region_id={} snapshot_index={} "
+                "deadline_index={} applied_index={}",
+                count,
+                one,
+                region_id,
+                snapshot_index.value(),
+                deadline_index.value(),
+                applied_index));
         }
     }
 }

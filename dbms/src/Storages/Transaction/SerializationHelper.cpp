@@ -16,12 +16,11 @@
 
 namespace DB
 {
-
 size_t writeBinary2(const metapb::Peer & peer, WriteBuffer & buf)
 {
-    writeIntBinary((UInt64)peer.id(), buf);
-    writeIntBinary((UInt64)peer.store_id(), buf);
-    writeIntBinary((UInt8)peer.role(), buf);
+    writeIntBinary((UInt64)peer.id(), buf); // NOLINT
+    writeIntBinary((UInt64)peer.store_id(), buf); // NOLINT
+    writeIntBinary((UInt8)peer.role(), buf); // NOLINT
     return sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
 }
 
@@ -37,12 +36,12 @@ metapb::Peer readPeer(ReadBuffer & buf)
 size_t writeBinary2(const metapb::Region & region, WriteBuffer & buf)
 {
     size_t size = 0;
-    size += writeBinary2((UInt64)region.id(), buf);
+    size += writeBinary2((UInt64)region.id(), buf); // NOLINT
     size += writeBinary2(region.start_key(), buf);
     size += writeBinary2(region.end_key(), buf);
 
-    size += writeBinary2((UInt64)region.region_epoch().conf_ver(), buf);
-    size += writeBinary2((UInt64)region.region_epoch().version(), buf);
+    size += writeBinary2((UInt64)region.region_epoch().conf_ver(), buf); // NOLINT
+    size += writeBinary2((UInt64)region.region_epoch().version(), buf); // NOLINT
 
     size += writeBinary2(region.peers_size(), buf);
     for (const auto & peer : region.peers())
@@ -63,7 +62,7 @@ metapb::Region readRegion(ReadBuffer & buf)
     region.mutable_region_epoch()->set_conf_ver(readBinary2<UInt64>(buf));
     region.mutable_region_epoch()->set_version(readBinary2<UInt64>(buf));
 
-    Int32 peer_size = readBinary2<Int32>(buf);
+    auto peer_size = readBinary2<Int32>(buf);
     for (Int32 i = 0; i < peer_size; ++i)
     {
         *(region.mutable_peers()->Add()) = readPeer(buf);
@@ -84,7 +83,7 @@ raft_serverpb::RegionLocalState readRegionLocalState(ReadBuffer & buf)
 {
     raft_serverpb::RegionLocalState region_state;
     *region_state.mutable_region() = readRegion(buf);
-    region_state.set_state((raft_serverpb::PeerState)readBinary2<Int32>(buf));
+    region_state.set_state((raft_serverpb::PeerState)readBinary2<Int32>(buf)); // NOLINT
     bool has_merge_state = readBinary2<bool>(buf);
     if (has_merge_state)
     {
@@ -96,9 +95,9 @@ raft_serverpb::RegionLocalState readRegionLocalState(ReadBuffer & buf)
 size_t writeBinary2(const raft_serverpb::RaftApplyState & state, WriteBuffer & buf)
 {
     size_t size = 0;
-    size += writeBinary2((UInt64)state.applied_index(), buf);
-    size += writeBinary2((UInt64)state.truncated_state().index(), buf);
-    size += writeBinary2((UInt64)state.truncated_state().term(), buf);
+    size += writeBinary2((UInt64)state.applied_index(), buf); // NOLINT
+    size += writeBinary2((UInt64)state.truncated_state().index(), buf); // NOLINT
+    size += writeBinary2((UInt64)state.truncated_state().term(), buf); // NOLINT
     return size;
 }
 
@@ -115,7 +114,7 @@ size_t writeBinary2(const raft_serverpb::RegionLocalState & region_state, WriteB
 {
     size_t size = 0;
     size += writeBinary2(region_state.region(), buf);
-    size += writeBinary2((Int32)region_state.state(), buf);
+    size += writeBinary2((Int32)region_state.state(), buf); // NOLINT
 
     if (region_state.has_merge_state())
     {
@@ -144,7 +143,8 @@ bool operator==(const metapb::Peer & peer1, const metapb::Peer & peer2)
 
 bool operator==(const metapb::Region & region1, const metapb::Region & region2)
 {
-    if (region1.id() != region2.id() || region1.start_key() != region2.start_key() || region1.end_key() != region2.end_key())
+    if (region1.id() != region2.id() || region1.start_key() != region2.start_key()
+        || region1.end_key() != region2.end_key())
         return false;
     if (region1.region_epoch().version() != region2.region_epoch().version()
         || region1.region_epoch().conf_ver() != region2.region_epoch().conf_ver())
@@ -168,12 +168,14 @@ bool operator==(const raft_serverpb::RaftApplyState & state1, const raft_serverp
 
 bool operator==(const raft_serverpb::MergeState & state1, const raft_serverpb::MergeState & state2)
 {
-    return state1.min_index() == state2.min_index() && state1.commit() == state2.commit() && state1.target() == state2.target();
+    return state1.min_index() == state2.min_index() && state1.commit() == state2.commit()
+        && state1.target() == state2.target();
 }
 
 bool operator==(const raft_serverpb::RegionLocalState & state1, const raft_serverpb::RegionLocalState & state2)
 {
-    return state1.region() == state2.region() && state1.state() == state2.state() && state1.merge_state() == state2.merge_state();
+    return state1.region() == state2.region() && state1.state() == state2.state()
+        && state1.merge_state() == state2.merge_state();
 }
-
+// NOLINTEND
 } // namespace DB

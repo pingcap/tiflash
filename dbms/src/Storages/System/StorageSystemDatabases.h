@@ -26,7 +26,8 @@ class Context;
 
 /** Implements `databases` system table, which allows you to get information about all databases.
   */
-class StorageSystemDatabases : public ext::SharedPtrHelper<StorageSystemDatabases>
+class StorageSystemDatabases
+    : public ext::SharedPtrHelper<StorageSystemDatabases>
     , public IStorage
 {
 public:

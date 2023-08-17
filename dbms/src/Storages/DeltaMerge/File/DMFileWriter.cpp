@@ -29,11 +29,12 @@ namespace DB
 {
 namespace DM
 {
-DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
-                           const ColumnDefines & write_columns_,
-                           const FileProviderPtr & file_provider_,
-                           const WriteLimiterPtr & write_limiter_,
-                           const DMFileWriter::Options & options_)
+DMFileWriter::DMFileWriter(
+    const DMFilePtr & dmfile_,
+    const ColumnDefines & write_columns_,
+    const FileProviderPtr & file_provider_,
+    const WriteLimiterPtr & write_limiter_,
+    const DMFileWriter::Options & options_)
     : dmfile(dmfile_)
     , write_columns(write_columns_)
     , options(options_)
@@ -141,7 +142,8 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
-    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
+    const ColumnVector<UInt8> * del_mark
+        = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
 
     for (auto & cd : write_columns)
     {
@@ -201,7 +203,11 @@ void DMFileWriter::finalizeMetaV2()
     dmfile->finalizeDirName();
 }
 
-void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark)
+void DMFileWriter::writeColumn(
+    ColId col_id,
+    const IDataType & type,
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark)
 {
     size_t rows = column.size();
     type.enumerateStreams(
@@ -213,7 +219,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                 // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
                 // For TAG Column, we also ignore del_mark when add minmax index.
-                stream->minmaxes->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
+                stream->minmaxes->addPack(
+                    column,
+                    (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
             /// There could already be enough data to compress into the new block.
@@ -224,7 +232,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
             if (dmfile->useMetaV2())
             {
-                stream->marks->emplace_back(MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
+                stream->marks->emplace_back(
+                    MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
             }
             else
             {
@@ -320,9 +329,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 auto fname = dmfile->colIndexFileName(stream_name);
 
-                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(merged_file.buffer,
-                                                                          dmfile->configuration->getChecksumAlgorithm(),
-                                                                          dmfile->configuration->getChecksumFrameLength());
+                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
+                    merged_file.buffer,
+                    dmfile->configuration->getChecksumAlgorithm(),
+                    dmfile->configuration->getChecksumFrameLength());
 
                 stream->minmaxes->write(*type, *buffer);
 
@@ -341,9 +351,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 auto fname = dmfile->colMarkFileName(stream_name);
 
-                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(merged_file.buffer,
-                                                                          dmfile->configuration->getChecksumAlgorithm(),
-                                                                          dmfile->configuration->getChecksumFrameLength());
+                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
+                    merged_file.buffer,
+                    dmfile->configuration->getChecksumAlgorithm(),
+                    dmfile->configuration->getChecksumFrameLength());
 
 
                 for (const auto & mark : *(stream->marks))
@@ -430,13 +441,14 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 }
                 else
                 {
-                    auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                           dmfile->colIndexPath(stream_name),
-                                                                           dmfile->encryptionIndexPath(stream_name),
-                                                                           false,
-                                                                           write_limiter,
-                                                                           dmfile->configuration->getChecksumAlgorithm(),
-                                                                           dmfile->configuration->getChecksumFrameLength());
+                    auto buf = createWriteBufferFromFileBaseByFileProvider(
+                        file_provider,
+                        dmfile->colIndexPath(stream_name),
+                        dmfile->encryptionIndexPath(stream_name),
+                        false,
+                        write_limiter,
+                        dmfile->configuration->getChecksumAlgorithm(),
+                        dmfile->configuration->getChecksumFrameLength());
                     stream->minmaxes->write(*type, *buf);
                     buf->sync();
                     // Ignore data written in index file when the dmfile is empty.

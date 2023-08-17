@@ -63,7 +63,8 @@ public:
         total_dmfile_skipped_packs = tiflash_scan_context_pb.total_dmfile_skipped_packs();
         total_dmfile_scanned_rows = tiflash_scan_context_pb.total_dmfile_scanned_rows();
         total_dmfile_skipped_rows = tiflash_scan_context_pb.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_check_time_ns = tiflash_scan_context_pb.total_dmfile_rough_set_index_check_time_ms() * 1000000;
+        total_dmfile_rough_set_index_check_time_ns
+            = tiflash_scan_context_pb.total_dmfile_rough_set_index_check_time_ms() * 1000000;
         total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ms() * 1000000;
         total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
@@ -81,7 +82,8 @@ public:
         tiflash_scan_context_pb.set_total_dmfile_skipped_packs(total_dmfile_skipped_packs);
         tiflash_scan_context_pb.set_total_dmfile_scanned_rows(total_dmfile_scanned_rows);
         tiflash_scan_context_pb.set_total_dmfile_skipped_rows(total_dmfile_skipped_rows);
-        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_check_time_ms(total_dmfile_rough_set_index_check_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_check_time_ms(
+            total_dmfile_rough_set_index_check_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_create_snapshot_time_ms(total_create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
@@ -130,10 +132,7 @@ public:
 
     // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control
     // For Read I/O, 1/64 RU per KB.
-    double getReadRU() const
-    {
-        return static_cast<double>(total_user_read_bytes) / 1024.0 / 64.0;
-    }
+    double getReadRU() const { return static_cast<double>(total_user_read_bytes) / 1024.0 / 64.0; }
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

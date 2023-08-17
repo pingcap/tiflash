@@ -58,7 +58,12 @@ inline metapb::Peer createPeer(UInt64 id, bool)
     return peer;
 }
 
-inline metapb::Region createRegionInfo(UInt64 id, const std::string start_key, const std::string end_key, std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt, std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt)
+inline metapb::Region createRegionInfo(
+    UInt64 id,
+    const std::string start_key,
+    const std::string end_key,
+    std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
+    std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt)
 {
     metapb::Region region_info;
     region_info.set_id(id);
@@ -90,14 +95,22 @@ inline metapb::Region createRegionInfo(UInt64 id, const std::string start_key, c
     return region_info;
 }
 
-inline RegionMeta createRegionMeta(UInt64 id, DB::TableID table_id, std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
+inline RegionMeta createRegionMeta(
+    UInt64 id,
+    DB::TableID table_id,
+    std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
 {
-    return RegionMeta(/*peer=*/createPeer(31, true),
-                      /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
-                      /*apply_state_=*/apply_state.value_or(initialApplyState()));
+    return RegionMeta(
+        /*peer=*/createPeer(31, true),
+        /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
+        /*apply_state_=*/apply_state.value_or(initialApplyState()));
 }
 
-inline RegionPtr makeRegion(UInt64 id, const std::string start_key, const std::string end_key, const TiFlashRaftProxyHelper * proxy_helper = nullptr)
+inline RegionPtr makeRegion(
+    UInt64 id,
+    const std::string start_key,
+    const std::string end_key,
+    const TiFlashRaftProxyHelper * proxy_helper = nullptr)
 {
     return std::make_shared<Region>(
         RegionMeta(

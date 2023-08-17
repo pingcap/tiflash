@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Core/NamesAndTypes.h>
-#include <Core/Names.h>
-#include <Storages/ColumnDefault.h>
 #include <Core/Block.h>
+#include <Core/Names.h>
+#include <Core/NamesAndTypes.h>
+#include <Storages/ColumnDefault.h>
 
 
 namespace DB
@@ -43,13 +43,13 @@ struct ColumnsDescription
         , defaults(std::move(defaults_))
     {}
 
-    explicit ColumnsDescription(NamesAndTypesList ordinary_) : ordinary(std::move(ordinary_)) {}
+    explicit ColumnsDescription(NamesAndTypesList ordinary_)
+        : ordinary(std::move(ordinary_))
+    {}
 
     bool operator==(const ColumnsDescription & other) const
     {
-        return ordinary == other.ordinary
-            && materialized == other.materialized
-            && aliases == other.aliases
+        return ordinary == other.ordinary && materialized == other.materialized && aliases == other.aliases
             && defaults == other.defaults;
     }
 
@@ -73,4 +73,4 @@ struct ColumnsDescription
     static ColumnsDescription parse(const String & str);
 };
 
-}
+} // namespace DB

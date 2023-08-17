@@ -26,7 +26,10 @@ namespace DB
 {
 namespace DM
 {
-ColumnFileFlushTask::ColumnFileFlushTask(DMContext & context_, const MemTableSetPtr & mem_table_set_, size_t flush_version_)
+ColumnFileFlushTask::ColumnFileFlushTask(
+    DMContext & context_,
+    const MemTableSetPtr & mem_table_set_,
+    size_t flush_version_)
     : context{context_}
     , mem_table_set{mem_table_set_}
     , flush_version{flush_version_}
@@ -67,10 +70,11 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
         ColumnFilePersistedPtr new_column_file;
         if (auto * m_file = task.column_file->tryToInMemoryFile(); m_file)
         {
-            new_column_file = std::make_shared<ColumnFileTiny>(m_file->getSchema(),
-                                                               m_file->getRows(),
-                                                               m_file->getBytes(),
-                                                               task.data_page);
+            new_column_file = std::make_shared<ColumnFileTiny>(
+                m_file->getSchema(),
+                m_file->getRows(),
+                m_file->getBytes(),
+                task.data_page);
         }
         else if (auto * t_file = task.column_file->tryToTinyFile(); t_file)
         {

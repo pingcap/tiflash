@@ -36,7 +36,7 @@ namespace
 {
 bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partition_start, RowNumber partition_end)
 {
-    return !((partition_end <= frame_start) || (frame_end <= partition_start) || (frame_end <= frame_start));
+    return (frame_start < partition_end) && (partition_start < frame_end) && (frame_start < frame_end);
 }
 
 // Return true when the frame is valid
@@ -46,7 +46,7 @@ bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partitio
 //   1. partition_end <= frame_start
 //   2. frame_end < partition_start
 //   3. frame_end <= frame_start
-bool checkFrameValidAndHandle(WindowTransformAction & action, size_t function_index)
+bool checkFrameValidAndHandleInvalidFrame(WindowTransformAction & action, size_t function_index)
 {
     if (isFrameValid(action.frame_start, action.frame_end, action.partition_start, action.partition_end))
         return true;
@@ -156,10 +156,7 @@ public:
         : IWindowFunction(argument_types_)
     {
         RUNTIME_CHECK(argument_types_.size() == 1);
-        if (argument_types_[0]->isNullable())
-            return_type = argument_types_[0];
-        else
-            return_type = makeNullable(argument_types_[0]);
+        return_type = makeNullable(argument_types_[0]);
     }
 
     String getName() const override { return name; }
@@ -170,7 +167,7 @@ public:
         override
     {
         assert(action.frame_started);
-        if (!checkFrameValidAndHandle(action, function_index))
+        if (!checkFrameValidAndHandleInvalidFrame(action, function_index))
             return;
 
         IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
@@ -192,10 +189,7 @@ public:
         : IWindowFunction(argument_types_)
     {
         RUNTIME_CHECK(argument_types_.size() == 1);
-        if (argument_types_[0]->isNullable())
-            return_type = argument_types_[0];
-        else
-            return_type = makeNullable(argument_types_[0]);
+        return_type = makeNullable(argument_types_[0]);
     }
 
     String getName() const override { return name; }
@@ -206,7 +200,7 @@ public:
         override
     {
         assert(action.frame_ended);
-        if (!checkFrameValidAndHandle(action, function_index))
+        if (!checkFrameValidAndHandleInvalidFrame(action, function_index))
             return;
 
         IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];

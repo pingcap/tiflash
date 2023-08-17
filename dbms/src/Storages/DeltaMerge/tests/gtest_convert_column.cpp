@@ -325,8 +325,7 @@ TEST(ConvertColumnTypeTest, CastNotNullToNullable)
 TEST(ConvertColumnTypeTest, GetDefaultValue)
 try
 {
-    const String json_table_info
-        = R"json({
+    const String json_table_info = R"json({
 "cols":[
     {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":768,"Tp":15}}
     ,{"comment":"","default":"3.14","default_bit":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}}

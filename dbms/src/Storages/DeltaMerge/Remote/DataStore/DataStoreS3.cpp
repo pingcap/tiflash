@@ -33,15 +33,26 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
 {
     Stopwatch sw;
     RUNTIME_CHECK(local_dmfile->fileId() == oid.file_id);
-    RUNTIME_CHECK_MSG(oid.store_id != InvalidStoreID, "try to upload a DMFile with invalid StoreID, oid={} path={}", oid, local_dmfile->path());
+    RUNTIME_CHECK_MSG(
+        oid.store_id != InvalidStoreID,
+        "try to upload a DMFile with invalid StoreID, oid={} path={}",
+        oid,
+        local_dmfile->path());
 
     const auto local_dir = local_dmfile->path();
     const auto local_files = local_dmfile->listFilesForUpload();
-    auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_name) { return file_name == DMFile::metav2FileName(); });
+    auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_name) {
+        return file_name == DMFile::metav2FileName();
+    });
     RUNTIME_CHECK(itr_meta != local_files.cend());
 
     const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
-    LOG_DEBUG(log, "Start upload DMFile, local_dir={} remote_dir={} local_files={}", local_dir, remote_dir, local_files);
+    LOG_DEBUG(
+        log,
+        "Start upload DMFile, local_dir={} remote_dir={} local_files={}",
+        local_dir,
+        remote_dir,
+        local_files);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
@@ -79,7 +90,10 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
 
-bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
+bool DataStoreS3::putCheckpointFiles(
+    const PS::V3::LocalCheckpointFiles & local_files,
+    StoreID store_id,
+    UInt64 upload_seq)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
@@ -113,7 +127,8 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
     return true; // upload success
 }
 
-std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesInfo(const std::unordered_set<String> & lock_keys)
+std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesInfo(
+    const std::unordered_set<String> & lock_keys)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
@@ -137,11 +152,19 @@ std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesIn
                             });
                     }
                     // else fallback
-                    LOG_WARNING(log, "failed to get S3 object size, key={} datafile={} exist={} size={}", lock_key, datafile_key, object_info.exist, object_info.size);
+                    LOG_WARNING(
+                        log,
+                        "failed to get S3 object size, key={} datafile={} exist={} size={}",
+                        lock_key,
+                        datafile_key,
+                        object_info.exist,
+                        object_info.size);
                 }
                 catch (...)
                 {
-                    tryLogCurrentException(log, fmt::format("failed to get S3 object size, key={} datafile={}", lock_key, datafile_key));
+                    tryLogCurrentException(
+                        log,
+                        fmt::format("failed to get S3 object size, key={} datafile={}", lock_key, datafile_key));
                 }
                 return std::make_tuple(lock_key, DataFileInfo{.size = -1, .mtime = {}});
             });
@@ -158,7 +181,10 @@ std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesIn
     return res;
 }
 
-void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vector<String> & target_short_fnames, const String & local_dir)
+void DataStoreS3::copyToLocal(
+    const S3::DMFileOID & remote_oid,
+    const std::vector<String> & target_short_fnames,
+    const String & local_dir)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto remote_dir = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
@@ -190,9 +216,8 @@ void DataStoreS3::setTaggingsForKeys(const std::vector<String> & keys, std::stri
     results.reserve(keys.size());
     for (const auto & k : keys)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>([&s3_client, &tagging, key = k] {
-            rewriteObjectWithTagging(*s3_client, key, String(tagging));
-        });
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&s3_client, &tagging, key = k] { rewriteObjectWithTagging(*s3_client, key, String(tagging)); });
         results.emplace_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }

@@ -50,9 +50,7 @@ public:
         : log(Logger::get())
     {}
 
-    static void SetUpTestCase()
-    {
-    }
+    static void SetUpTestCase() {}
 
     virtual S3GCConfig getConfig()
     {
@@ -88,10 +86,7 @@ public:
         createIfNotExist(tmp_dir);
     }
 
-    void TearDown() override
-    {
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
-    }
+    void TearDown() override { ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client); }
 
 protected:
     String tmp_dir;
@@ -257,13 +252,15 @@ try
     UInt64 file_id2 = 2;
     UInt64 file_id27 = 27;
     {
-        const auto cp_dmf2 = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id2});
+        const auto cp_dmf2
+            = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id2});
         const auto df2_key = cp_dmf2.toFullKey();
         const auto delmark_key = cp_dmf2.toView().getDelMarkKey();
         uploadEmptyFile(*mock_s3_client, df2_key + "/meta");
         uploadEmptyFile(*mock_s3_client, delmark_key);
 
-        const auto cp_dmf27 = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id27});
+        const auto cp_dmf27
+            = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id27});
         const auto df27_key = cp_dmf27.toFullKey();
         uploadEmptyFile(*mock_s3_client, df27_key + "/meta");
 
@@ -278,13 +275,15 @@ try
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, df27_key + "/meta"));
     }
     {
-        const auto cp_dmf2 = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id2});
+        const auto cp_dmf2
+            = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id2});
         const auto df2_key = cp_dmf2.toFullKey();
         const auto delmark_key = cp_dmf2.toView().getDelMarkKey();
         uploadEmptyFile(*mock_s3_client, df2_key + "/meta");
         uploadEmptyFile(*mock_s3_client, delmark_key);
 
-        const auto cp_dmf27 = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id27});
+        const auto cp_dmf27
+            = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id27});
         const auto df27_key = cp_dmf27.toFullKey();
         uploadEmptyFile(*mock_s3_client, df27_key + "/meta");
 
@@ -355,10 +354,10 @@ try
         S3::uploadEmptyFile(*mock_s3_client, df.toFullKey());
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
-        SCOPE_EXIT({
-            FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
-        });
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_set_mocked_s3_object_mtime,
+            std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime); });
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted, datafile and delmark remain
@@ -372,10 +371,10 @@ try
         S3::uploadEmptyFile(*mock_s3_client, df.toFullKey());
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
-        SCOPE_EXIT({
-            FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
-        });
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_set_mocked_s3_object_mtime,
+            std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime); });
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock datafile and delmark are deleted
@@ -455,13 +454,15 @@ try
     UInt64 file_id2 = 2;
     UInt64 file_id27 = 27;
 
-    const auto cp_dmf2 = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id2});
+    const auto cp_dmf2
+        = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id2});
     const auto dmf2_key = cp_dmf2.toFullKey();
     auto lock_key = cp_dmf2.toView().getLockKey(store_id, 400);
     auto lock_view = S3FilenameView::fromKey(lock_key);
     auto delmark_key = cp_dmf2.toView().getDelMarkKey();
 
-    const auto cp_dmf27 = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id27});
+    const auto cp_dmf27
+        = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = table_id, .file_id = file_id27});
     const auto dmf27_key = cp_dmf27.toFullKey();
 
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
@@ -591,7 +592,8 @@ try
 
     {
         auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
-        gc_mgr->cleanUnusedLocks(lock_store_id, S3Filename::getLockPrefix(), safe_sequence, valid_lock_files, timepoint);
+        gc_mgr
+            ->cleanUnusedLocks(lock_store_id, S3Filename::getLockPrefix(), safe_sequence, valid_lock_files, timepoint);
 
         // lock is deleted and delmark is created
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, expected_deleted_lock_key));
@@ -646,12 +648,16 @@ try
                     }},
                 1);
             edits.varDel("banana", PageVersion(4));
-            edits.varEntry("orange", PageVersion(5), PageEntryV3{
-                                                         .size = entry_data.size(),
-                                                         .offset = entry_data.size(),
-                                                         .checkpoint_info = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
-                                                     },
-                           1);
+            edits.varEntry(
+                "orange",
+                PageVersion(5),
+                PageEntryV3{
+                    .size = entry_data.size(),
+                    .offset = entry_data.size(),
+                    .checkpoint_info
+                    = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
+                },
+                1);
             writer->writeEditsAndApplyCheckpointInfo(edits);
         }
         auto data_paths = writer->writeSuffix();
@@ -679,12 +685,16 @@ try
         });
         {
             auto edits = universal::PageEntriesEdit{};
-            edits.varEntry("cherry", PageVersion(6), PageEntryV3{
-                                                         .size = entry_data.size(),
-                                                         .offset = 0,
-                                                         .checkpoint_info = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
-                                                     },
-                           1);
+            edits.varEntry(
+                "cherry",
+                PageVersion(6),
+                PageEntryV3{
+                    .size = entry_data.size(),
+                    .offset = 0,
+                    .checkpoint_info
+                    = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
+                },
+                1);
             writer->writeEditsAndApplyCheckpointInfo(edits);
         }
         auto data_paths = writer->writeSuffix();

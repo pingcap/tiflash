@@ -24,7 +24,8 @@ namespace DB
 class Context;
 
 
-class StorageSystemDTSegments : public ext::SharedPtrHelper<StorageSystemDTSegments>
+class StorageSystemDTSegments
+    : public ext::SharedPtrHelper<StorageSystemDTSegments>
     , public IStorage
 {
 public:

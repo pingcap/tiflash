@@ -44,8 +44,7 @@ UniversalPageStorageService::UniversalPageStorageService(Context & global_contex
     : global_context(global_context_)
     , uni_page_storage(nullptr)
     , log(Logger::get("UniPSService"))
-{
-}
+{}
 
 UniversalPageStorageServicePtr UniversalPageStorageService::create(
     Context & context,
@@ -67,25 +66,20 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
         // Only upload checkpoint when S3 is enabled
         service->checkpoint_pool = std::make_unique<BackgroundProcessingPool>(1, "ps-checkpoint");
         service->remote_checkpoint_handle = service->checkpoint_pool->addTask(
-            [service] {
-                return service->uploadCheckpoint();
-            },
+            [service] { return service->uploadCheckpoint(); },
             /*multi*/ false,
             /*interval_ms*/ interval_s * 1000);
     }
 
     auto & bkg_pool = context.getBackgroundPool();
     service->gc_handle = bkg_pool.addTask(
-        [service] {
-            return service->gc();
-        },
+        [service] { return service->gc(); },
         false,
         /*interval_ms*/ 60 * 1000);
     return service;
 }
 
-UniversalPageStorageServicePtr
-UniversalPageStorageService::createForTest(
+UniversalPageStorageServicePtr UniversalPageStorageService::createForTest(
     Context & context,
     const String & name,
     PSDiskDelegatorPtr delegator,
@@ -344,7 +338,8 @@ void UniversalPageStorageService::removeAllLocalCheckpointFiles()
 
 Poco::Path UniversalPageStorageService::getCheckpointLocalDir(UInt64 seq) const
 {
-    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq)).absolute();
+    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq))
+        .absolute();
 }
 
 } // namespace DB

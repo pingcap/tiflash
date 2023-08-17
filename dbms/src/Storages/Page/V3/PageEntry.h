@@ -48,24 +48,20 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
-    PageSize getTotalSize() const
-    {
-        return size + padded_size;
-    }
+    PageSize getTotalSize() const { return size + padded_size; }
 
-    inline bool isValid() const
-    {
-        return file_id != INVALID_BLOBFILE_ID || checkpoint_info.has_value();
-    }
+    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID || checkpoint_info.has_value(); }
 
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
-            throw Exception(fmt::format("Try to getFieldData of PageEntry [blob_id={}] with invalid [index={}] [fields size={}]",
-                                        file_id,
-                                        index,
-                                        field_offsets.size()),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format(
+                    "Try to getFieldData of PageEntry [blob_id={}] with invalid [index={}] [fields size={}]",
+                    file_id,
+                    index,
+                    field_offsets.size()),
+                ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
         {
             if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
@@ -87,7 +83,10 @@ public:
     {
         if (unlikely(index >= field_offsets.size()))
             throw Exception(
-                fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
+                fmt::format(
+                    "Try to getFieldOffsets with invalid index [index={}] [fields_size={}]",
+                    index,
+                    field_offsets.size()),
                 ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
         {
@@ -115,10 +114,7 @@ using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 template <>
 struct fmt::formatter<DB::PS::V3::PageEntryV3>
 {
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        return ctx.begin();
-    }
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const DB::PS::V3::PageEntryV3 & entry, FormatContext & ctx) const
@@ -129,11 +125,19 @@ struct fmt::formatter<DB::PS::V3::PageEntryV3>
         fmt_buf.joinStr(
             entry.field_offsets.begin(),
             entry.field_offsets.end(),
-            [](const auto & offset_checksum, FmtBuffer & fb) {
-                fb.fmtAppend("{}", offset_checksum.first);
-            },
+            [](const auto & offset_checksum, FmtBuffer & fb) { fb.fmtAppend("{}", offset_checksum.first); },
             ",");
 
-        return format_to(ctx.out(), "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}], checkpoint_info: {}}}", entry.file_id, entry.offset, entry.size, entry.checksum, entry.tag, fmt_buf.toString(), entry.checkpoint_info.toDebugString());
+        return format_to(
+            ctx.out(),
+            "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}], "
+            "checkpoint_info: {}}}",
+            entry.file_id,
+            entry.offset,
+            entry.size,
+            entry.checksum,
+            entry.tag,
+            fmt_buf.toString(),
+            entry.checkpoint_info.toDebugString());
     }
 };

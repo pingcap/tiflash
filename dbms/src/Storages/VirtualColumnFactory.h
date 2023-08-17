@@ -31,4 +31,4 @@ public:
     static DataTypePtr tryGetType(const String & name);
 };
 
-}
+} // namespace DB

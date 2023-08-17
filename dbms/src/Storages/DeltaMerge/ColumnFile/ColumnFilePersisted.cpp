@@ -64,7 +64,14 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     return schema;
 }
 
-void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
+void serializeColumn(
+    WriteBuffer & buf,
+    const IColumn & column,
+    const DataTypePtr & type,
+    size_t offset,
+    size_t limit,
+    CompressionMethod compression_method,
+    Int64 compression_level)
 {
     CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
     type->serializeBinaryBulkWithMultipleStreams(
@@ -104,11 +111,16 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
         serializeSavedColumnFilesInV3Format(buf, column_files);
         break;
     default:
-        throw Exception("Unexpected delta value version: " + DB::toString(STORAGE_FORMAT_CURRENT.delta), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Unexpected delta value version: " + DB::toString(STORAGE_FORMAT_CURRENT.delta),
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(
+    const DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
@@ -126,8 +138,10 @@ ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, cons
         column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
         break;
     default:
-        throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Unexpected delta value version: " + DB::toString(version)
+                + ", latest version: " + DB::toString(DeltaFormat::V3),
+            ErrorCodes::LOGICAL_ERROR);
     }
     return column_files;
 }
@@ -150,8 +164,10 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
         column_files = createColumnFilesInV3FormatFromCheckpoint(context, segment_range, buf, temp_ps, wbs);
         break;
     default:
-        throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Unexpected delta value version: " + DB::toString(version)
+                + ", latest version: " + DB::toString(DeltaFormat::V3),
+            ErrorCodes::LOGICAL_ERROR);
     }
     return column_files;
 }

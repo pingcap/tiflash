@@ -16,7 +16,8 @@
 
 namespace DB::PS::tests
 {
-class HoldSnapshotsLongTime : public StressWorkload
+class HoldSnapshotsLongTime
+    : public StressWorkload
     , public StressWorkloadFunc<HoldSnapshotsLongTime>
 {
 public:
@@ -24,26 +25,21 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "HoldSnapshotsLongTime";
-    }
+    static String name() { return "HoldSnapshotsLongTime"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 6;
-    }
+    static UInt64 mask() { return 1 << 6; }
 
 private:
     String desc() override
     {
-        return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}"
-                           "Please cleanup folder after this test."
-                           "The current workload will elapse near 60 seconds and generator 100 snapshot in memory."
-                           "Then do NORMAL GC + SKIP GC at the last.",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored"
+            "`paths` will only used first one. which is {}. Data will store in {}"
+            "Please cleanup folder after this test."
+            "The current workload will elapse near 60 seconds and generator 100 snapshot in memory."
+            "Then do NORMAL GC + SKIP GC at the last.",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     void run() override
@@ -81,9 +77,6 @@ private:
         gc->doGcOnce();
     }
 
-    bool verify() override
-    {
-        return true;
-    }
+    bool verify() override { return true; }
 };
 } // namespace DB::PS::tests

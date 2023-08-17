@@ -23,9 +23,10 @@ namespace DB::PS::V1
 class PageEntriesBuilder
 {
 public:
-    explicit PageEntriesBuilder(const PageEntries * old_version_, //
-                                bool ignore_invalid_ref_ = false,
-                                Poco::Logger * log_ = nullptr)
+    explicit PageEntriesBuilder(
+        const PageEntries * old_version_, //
+        bool ignore_invalid_ref_ = false,
+        Poco::Logger * log_ = nullptr)
         : old_version(const_cast<PageEntries *>(old_version_))
         , current_version(new PageEntries)
         , //

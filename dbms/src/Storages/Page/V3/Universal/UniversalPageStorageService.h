@@ -64,8 +64,7 @@ public:
         const DM::Remote::IDataStorePtr & remote_store,
         bool force_sync_data);
 
-    static UniversalPageStorageServicePtr
-    createForTest(
+    static UniversalPageStorageServicePtr createForTest(
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,

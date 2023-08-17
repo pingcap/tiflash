@@ -45,8 +45,7 @@ public:
     {
         Strings paths;
         for (size_t i = 0; i < TEST_NUMBER_FOR_FOLDER; ++i)
-            paths.emplace_back(
-                TiFlashTestEnv::getTemporaryPath(fmt::format("/path_pool_test/data{}", i)));
+            paths.emplace_back(TiFlashTestEnv::getTemporaryPath(fmt::format("/path_pool_test/data{}", i)));
         return paths;
     }
 
@@ -380,12 +379,7 @@ public:
         const std::vector<size_t> main_capacity_quota_,
         const Strings & latest_paths_,
         const std::vector<size_t> latest_capacity_quota_)
-        : PathCapacityMetrics(
-            capacity_quota_,
-            main_paths_,
-            main_capacity_quota_,
-            latest_paths_,
-            latest_capacity_quota_)
+        : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
     {}
 
     std::map<FSID, DiskCapacity> getDiskStats() override { return disk_stats_map; }
@@ -462,7 +456,12 @@ TEST_F(PathCapacity, SingleDiskSinglePathTest)
         createIfNotExist(lastest_data_path1);
 
         // Not use the capacity limit
-        auto capacity = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {capactity * 2, capactity * 2}, {latest_data_path, lastest_data_path1}, {capactity, capactity});
+        auto capacity = PathCapacityMetrics(
+            0,
+            {main_data_path, main_data_path1},
+            {capactity * 2, capactity * 2},
+            {latest_data_path, lastest_data_path1},
+            {capactity, capactity});
 
         capacity.addUsedSize(main_data_path, used);
         capacity.addUsedSize(main_data_path1, used);
@@ -502,11 +501,12 @@ TEST_F(PathCapacity, MultiDiskMultiPathTest)
     fake_vfs.f_bavail = 50;
     fake_vfs.f_frsize = 1;
 
-    disk_capacity_map[100] = {.vfs_info = fake_vfs,
-                              .path_stats = {
-                                  {.used_size = 4, .avail_size = 50, .capacity_size = 100, .ok = 1},
-                                  {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
-                              }};
+    disk_capacity_map[100]
+        = {.vfs_info = fake_vfs,
+           .path_stats = {
+               {.used_size = 4, .avail_size = 50, .capacity_size = 100, .ok = 1},
+               {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
+           }};
     capacity.setDiskStats(disk_capacity_map);
     FsStats total_stats = capacity.getFsStats(false);
     ASSERT_EQ(total_stats.capacity_size, 100);
@@ -526,11 +526,12 @@ TEST_F(PathCapacity, MultiDiskMultiPathTest)
     ///             - capacity size : 50
     ///             - used size     : 12
     ///             - avail size    : 38  // min(capacity size - used size, disk avail size);
-    disk_capacity_map[101] = {.vfs_info = fake_vfs,
-                              .path_stats = {
-                                  {.used_size = 40, .avail_size = 8, .capacity_size = 48, .ok = 1},
-                                  {.used_size = 12, .avail_size = 38, .capacity_size = 50, .ok = 1},
-                              }};
+    disk_capacity_map[101]
+        = {.vfs_info = fake_vfs,
+           .path_stats = {
+               {.used_size = 40, .avail_size = 8, .capacity_size = 48, .ok = 1},
+               {.used_size = 12, .avail_size = 38, .capacity_size = 50, .ok = 1},
+           }};
     capacity.setDiskStats(disk_capacity_map);
 
     total_stats = capacity.getFsStats(false);
@@ -545,7 +546,8 @@ try
     size_t global_capacity_quota = 10;
     size_t capacity = 100;
     {
-        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
+        PathCapacityMetrics
+            path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
 
         FsStats fs_stats = path_capacity.getFsStats(false);
         EXPECT_EQ(fs_stats.capacity_size, 2 * capacity); // summing the capacity of main and latest path
@@ -555,7 +557,9 @@ try
         PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
 
         FsStats fs_stats = path_capacity.getFsStats(false);
-        EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
+        EXPECT_EQ(
+            fs_stats.capacity_size,
+            global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
     }
 }
 CATCH

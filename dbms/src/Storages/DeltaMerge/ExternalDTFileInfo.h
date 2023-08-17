@@ -33,13 +33,7 @@ struct ExternalDTFileInfo
      */
     RowKeyRange range;
 
-    std::string toString() const
-    {
-        return fmt::format(
-            "<file=dmf_{} range={}>",
-            id,
-            range.toDebugString());
-    }
+    std::string toString() const { return fmt::format("<file=dmf_{} range={}>", id, range.toDebugString()); }
 };
 
 } // namespace DB::DM

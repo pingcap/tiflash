@@ -92,7 +92,11 @@ Block LateMaterializationBlockInputStream::readImpl()
                 //       but the filter_column_stream doesn't meet the end of stream
                 //       so it is an unexpected behavior.
                 rest_column_stream->read();
-                LOG_ERROR(log, "Late materialization skip block failed, at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
+                LOG_ERROR(
+                    log,
+                    "Late materialization skip block failed, at start_offset: {}, rows: {}",
+                    filter_column_block.startOffset(),
+                    filter_column_block.rows());
             }
         }
         else
@@ -137,13 +141,15 @@ Block LateMaterializationBlockInputStream::readImpl()
             }
 
             // make sure the position and size of filter_column_block and rest_column_block are the same
-            RUNTIME_CHECK_MSG(rest_column_block.startOffset() == filter_column_block.startOffset(),
-                              "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
-                              filter_column_block.startOffset(),
-                              filter_column_block.rows(),
-                              rest_column_block.startOffset(),
-                              rest_column_block.rows(),
-                              passed_count);
+            RUNTIME_CHECK_MSG(
+                rest_column_block.startOffset() == filter_column_block.startOffset(),
+                "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, "
+                "rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
+                filter_column_block.startOffset(),
+                filter_column_block.rows(),
+                rest_column_block.startOffset(),
+                rest_column_block.rows(),
+                passed_count);
             // join filter_column_block and rest_column_block by columns,
             // the tmp column added by FilterBlockInputStream will be removed.
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);

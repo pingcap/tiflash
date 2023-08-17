@@ -37,7 +37,9 @@ public:
         for (const auto & child : children)
         {
             const auto tmp = child->roughCheck(start_pack, pack_count, param);
-            std::transform(res.begin(), res.end(), tmp.cbegin(), res.begin(), [](const auto a, const auto b) { return a || b; });
+            std::transform(res.begin(), res.end(), tmp.cbegin(), res.begin(), [](const auto a, const auto b) {
+                return a || b;
+            });
         }
         return res;
     }

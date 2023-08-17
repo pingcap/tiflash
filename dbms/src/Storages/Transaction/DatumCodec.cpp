@@ -199,7 +199,8 @@ inline UInt32 readWord(int binIdx, const String & dec, int size)
         }
         break;
     case 4:
-        v = (UInt8(dec[binIdx]) << 24) | (UInt8(dec[binIdx + 1]) << 16) | (UInt8(dec[binIdx + 2]) << 8) | UInt8(dec[binIdx + 3]);
+        v = (UInt8(dec[binIdx]) << 24) | (UInt8(dec[binIdx + 1]) << 16) | (UInt8(dec[binIdx + 2]) << 8)
+            | UInt8(dec[binIdx + 3]);
         break;
     }
     return v;

@@ -26,7 +26,8 @@ class Context;
 
 /** Implements `events` system table, which allows you to obtain information for profiling.
   */
-class StorageSystemEvents : public ext::SharedPtrHelper<StorageSystemEvents>
+class StorageSystemEvents
+    : public ext::SharedPtrHelper<StorageSystemEvents>
     , public IStorage
 {
 public:

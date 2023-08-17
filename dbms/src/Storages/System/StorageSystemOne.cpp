@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
-
 #include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <Common/Exception.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Storages/System/StorageSystemOne.h>
 
 
@@ -42,12 +41,13 @@ BlockInputStreams StorageSystemOne::read(
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(
-        Block{ColumnWithTypeAndName(
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(Block{ColumnWithTypeAndName(
             DataTypeUInt8().createColumnConst(1, UInt64(0))->convertToFullColumnIfConst(),
             std::make_shared<DataTypeUInt8>(),
             "dummy")}));
 }
 
 
-}
+} // namespace DB

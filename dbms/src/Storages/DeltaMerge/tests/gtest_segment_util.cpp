@@ -133,13 +133,13 @@ template <typename E, typename A>
     {
         if (expected[i] != actual[i])
         {
-            return ::testing::AssertionFailure()
-                << fmt::format("Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
-                               i,
-                               expected[i],
-                               actual[i],
-                               std::vector<E>(expected, expected + size),
-                               std::vector<A>(actual, actual + size));
+            return ::testing::AssertionFailure() << fmt::format(
+                       "Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
+                       i,
+                       expected[i],
+                       actual[i],
+                       std::vector<E>(expected, expected + size),
+                       std::vector<A>(actual, actual + size));
         }
     }
     return ::testing::AssertionSuccess();
