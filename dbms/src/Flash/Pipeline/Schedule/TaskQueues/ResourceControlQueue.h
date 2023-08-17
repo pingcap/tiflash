@@ -31,6 +31,8 @@ class ResourceControlQueue
 public:
     ResourceControlQueue()
     {
+        // No need to register delete reource group callback,
+        // because resource group info will be deleted when its task queue is empty.
         LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() {
             std::lock_guard lock(mu);
             cv.notify_all();

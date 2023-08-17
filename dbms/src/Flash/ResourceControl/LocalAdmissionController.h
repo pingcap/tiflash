@@ -22,6 +22,7 @@
 #include <Flash/ResourceControl/TokenBucket.h>
 #include <kvproto/resource_manager.pb.h>
 #include <pingcap/kv/Cluster.h>
+#include <TiDB/Etcd/Client.h>
 
 #include <atomic>
 #include <memory>
@@ -284,13 +285,14 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-    explicit LocalAdmissionController(MPPTaskManagerPtr mpp_task_manager_, ::pingcap::kv::Cluster * cluster_)
+    explicit LocalAdmissionController(MPPTaskManagerPtr mpp_task_manager_, ::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
-        , last_cleanup_resource_group_timepoint(std::chrono::steady_clock::now())
         , mpp_task_manager(mpp_task_manager_)
         , thread_manager(newThreadManager())
+        , etcd_client(etcd_client_)
     {
-        thread_manager->scheduleThenDetach(true, "LocalAdmissionController", [this] { this->startBackgroudJob(); });
+        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::fetchGAC", [this] { this->startBackgroudJob(); });
+        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::watchResourceGroupDelete", [this] { this->watchResourceGroupDelete(); });
     }
 
     ~LocalAdmissionController()
@@ -346,14 +348,13 @@ public:
     static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
     // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
     static constexpr uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
-    // Interval of cleanup resource group.
-    static constexpr auto CLEANUP_RESOURCE_GROUP_INTERVAL = std::chrono::minutes(10);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = 120;
     static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t EMPTY_RESOURCE_GROUP_DEF_PRIORITY = 1;
+    static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
 
     void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
 
@@ -399,12 +400,7 @@ private:
         return std::make_pair(new_group, true);
     }
 
-    void setupUniqueClientID()
-    {
-        // todo: need etcd client.
-    }
-
-    void handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
+    std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
 
     void handleBackgroundError(const std::string & err_msg);
 
@@ -413,12 +409,19 @@ private:
     // Background jobs:
     // 1. Fetch tokens from GAC periodically.
     // 2. Fetch tokens when low threshold is triggered.
-    // 3. Cleanup resource groups.
-    // 4. Check if resource group need to goto degrade mode.
+    // 3. Check if resource group need to goto degrade mode.
+    // 4. Watch GAC event to delete resource group.
     void startBackgroudJob();
     void fetchTokensFromGAC();
-    void cleanupResourceGroups();
     void checkDegradeMode();
+    void watchResourceGroupDelete();
+
+    struct AcquireTokenInfo
+    {
+        std::string resource_group_name;
+        double acquire_tokens;
+        double ru_consumption_delta;
+    };
 
     std::mutex mu;
 
@@ -433,9 +436,6 @@ private:
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 
-    // No need to use lock, only be accessed by background thread.
-    std::chrono::time_point<std::chrono::steady_clock> last_cleanup_resource_group_timepoint;
-
     // To cleanup MinTSOScheduler of resource group.
     MPPTaskManagerPtr mpp_task_manager;
 
@@ -449,5 +449,7 @@ private:
 
     // gjt todo update this
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+
+    Etcd::ClientPtr etcd_client;
 };
 } // namespace DB

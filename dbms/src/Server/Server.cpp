@@ -1550,7 +1550,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         static_assert(0, "gjt test");
 #else
         LocalAdmissionController::global_instance
-            = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster());
+            = std::make_unique<LocalAdmissionController>(tmt_context.getMPPTaskManager(), tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
