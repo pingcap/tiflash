@@ -606,7 +606,8 @@ try
             executeMPPTasks(tasks, properties);
         }
         catch (...)
-        {}
+        {
+        }
         EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     WRAP_FOR_SERVER_TEST_END

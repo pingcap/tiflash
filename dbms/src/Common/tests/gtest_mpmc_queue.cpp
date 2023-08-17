@@ -580,7 +580,8 @@ try
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
-    {}
+    {
+    }
 
     ASSERT_EQ(queue.size(), 0);
 
@@ -596,7 +597,8 @@ try
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
-    {}
+    {
+    }
     ASSERT_EQ(queue.size(), 1);
 
     throw_when_move.store(false);
@@ -611,7 +613,8 @@ try
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
-    {}
+    {
+    }
     ASSERT_EQ(queue.size(), 0);
 
     queue.emplace(0, false);

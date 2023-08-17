@@ -47,8 +47,7 @@ public:
         const override final;
 
     virtual void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
-        const
-        = 0;
+        const = 0;
 
 protected:
     virtual String getColumnNameImpl() const = 0;

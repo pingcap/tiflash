@@ -120,10 +120,9 @@ try
     for (int i = 0; i < digits - 1; ++i)
         large *= 10;
 
-#define DATA                                                                              \
-    {                                                                                     \
-        0, 1, -1, 4, 5, -4, -5, 49, 50, -49, -50, large - 1, large, -(large - 1), -large, \
-        {}                                                                                \
+#define DATA                                                                                 \
+    {                                                                                        \
+        0, 1, -1, 4, 5, -4, -5, 49, 50, -49, -50, large - 1, large, -(large - 1), -large, {} \
     }
 
     auto input = createColumn<Nullable<Int>>(DATA);
@@ -185,10 +184,9 @@ try
     for (int i = 0; i < digits - 1; ++i)
         large *= 10;
 
-#define DATA                                  \
-    {                                         \
-        0, 1, 4, 5, 49, 50, large - 1, large, \
-        {}                                    \
+#define DATA                                     \
+    {                                            \
+        0, 1, 4, 5, 49, 50, large - 1, large, {} \
     }
 
     auto input = createColumn<Nullable<UInt>>(DATA);

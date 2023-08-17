@@ -1111,7 +1111,9 @@ void ExpressionAnalyzer::normalizeTreeImpl(
             normalizeTreeImpl(child, finished_asts, current_asts, current_alias, level + 1);
         }
     }
-    else if (identifier_node) {}
+    else if (identifier_node)
+    {
+    }
     else
     {
         for (auto & child : ast->children)

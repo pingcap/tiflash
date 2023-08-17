@@ -221,8 +221,8 @@ TEST_P(CRC64, Alignment)
     auto digest = crc64::Digest{GetParam()};
     digest.update(data.data(), data.size());
     auto initial = digest.checksum();
-    auto storage = reinterpret_cast<char *>(::operator new(8192 * 2, std::align_val_t{1024}));
-    SCOPE_EXIT({ ::operator delete(storage, std::align_val_t{1024}); });
+    auto storage = reinterpret_cast<char *>(::operator new (8192 * 2, std::align_val_t{1024}));
+    SCOPE_EXIT({ ::operator delete (storage, std::align_val_t{1024}); });
     for (auto align = 1; align <= 600; ++align)
     {
         std::memcpy(storage + align, data.data(), data.size());

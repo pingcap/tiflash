@@ -31,10 +31,7 @@ void Settings::set(const String & name, const Field & value)
 
     if (false) {}
     APPLY_FOR_SETTINGS(TRY_SET)
-    else
-    {
-        throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING);
-    }
+    else { throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING); }
 
 #undef TRY_SET
 }
@@ -46,10 +43,7 @@ void Settings::set(const String & name, ReadBuffer & buf)
 
     if (false) {}
     APPLY_FOR_SETTINGS(TRY_SET)
-    else
-    {
-        throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING);
-    }
+    else { throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING); }
 
 #undef TRY_SET
 }
@@ -61,10 +55,7 @@ void Settings::ignore(const String & name, ReadBuffer & buf)
 
     if (false) {}
     APPLY_FOR_SETTINGS(TRY_IGNORE)
-    else
-    {
-        throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING);
-    }
+    else { throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING); }
 
 #undef TRY_IGNORE
 }
@@ -77,10 +68,7 @@ void Settings::set(const String & name, const String & value)
 
     if (false) {}
     APPLY_FOR_SETTINGS(TRY_SET)
-    else
-    {
-        throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING);
-    }
+    else { throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING); }
 
 #undef TRY_SET
 }
@@ -91,10 +79,7 @@ String Settings::get(const String & name) const
 
     if (false) {}
     APPLY_FOR_SETTINGS(GET)
-    else
-    {
-        throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING);
-    }
+    else { throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING); }
 
 #undef GET
 }
@@ -110,10 +95,7 @@ bool Settings::tryGet(const String & name, String & value) const
 
     if (false) {}
     APPLY_FOR_SETTINGS(TRY_GET)
-    else
-    {
-        return false;
-    }
+    else { return false; }
 
 #undef TRY_GET
 }

@@ -78,7 +78,8 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
             getCurrentExceptionMessage(true));              \
     }                                                       \
     catch (...)                                             \
-    {}
+    {                                                       \
+    }
 
 void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message)
 {
@@ -116,7 +117,8 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
                 e.what());
         }
         catch (...)
-        {}
+        {
+        }
     }
     catch (const std::exception & e)
     {
@@ -135,7 +137,8 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
                 e.what());
         }
         catch (...)
-        {}
+        {
+        }
     }
     catch (...)
     {
@@ -150,7 +153,8 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
             buffer.fmtAppend("Unknown exception. Code: {}, type: {}", ErrorCodes::UNKNOWN_EXCEPTION, name);
         }
         catch (...)
-        {}
+        {
+        }
     }
 
     return buffer.toString();
@@ -213,7 +217,8 @@ std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool 
             buffer.append(", Stack trace:\n\n").append(e.getStackTrace().toString());
     }
     catch (...)
-    {}
+    {
+    }
 
     return buffer.toString();
 }

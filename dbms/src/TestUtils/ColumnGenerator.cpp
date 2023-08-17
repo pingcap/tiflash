@@ -124,7 +124,8 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         for (size_t i = 0; i < opts.size; ++i)
             genEnumValue(col, type);
         break;
-        {}
+        {
+        }
     default:
         throw std::invalid_argument("RandomColumnGenerator invalid type");
     }

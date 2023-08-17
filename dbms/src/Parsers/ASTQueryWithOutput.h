@@ -38,8 +38,8 @@ protected:
     void cloneOutputOptions(ASTQueryWithOutput & cloned) const;
 
     /// Format only the query part of the AST (without output options).
-    virtual void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
-        = 0;
+    virtual void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+        const = 0;
 };
 
 

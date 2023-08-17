@@ -767,8 +767,8 @@ struct ConvertThroughParsing
             return true;
 
         /// Special case, that allows to parse string with DateTime as Date.
-        if ((std::is_same_v<ToDataType, DataTypeDate>
-             || std::is_same_v<ToDataType, DataTypeMyDate>)&&(in.buffer().size())
+        if ((std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeMyDate>)&&(
+                in.buffer().size())
             == strlen("YYYY-MM-DD hh:mm:ss"))
             return true;
 

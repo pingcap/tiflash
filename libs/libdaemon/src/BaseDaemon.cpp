@@ -622,7 +622,8 @@ static void terminate_handler()
             log << "what(): " << e.what() << std::endl;
         }
         catch (...)
-        {}
+        {
+        }
 
         log << "Stack trace:\n\n" << StackTrace().toString() << std::endl;
     }

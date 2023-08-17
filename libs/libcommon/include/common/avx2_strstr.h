@@ -213,7 +213,11 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
     }
     case 1:
     {
-        return avx2_strstr_impl(src, needle[0], n, [&](const char *) constexpr { return true; });
+        return avx2_strstr_impl(
+            src,
+            needle[0],
+            n,
+            [&](const char *) constexpr { return true; });
     }
         M(2);
         M(3);
@@ -264,6 +268,10 @@ const char * avx2_memchr(const char * src, size_t n, char target)
     {
         return nullptr;
     }
-    return avx2_strstr_impl(src, target, n, [&](const char *) constexpr { return true; });
+    return avx2_strstr_impl(
+        src,
+        target,
+        n,
+        [&](const char *) constexpr { return true; });
 }
 } // namespace mem_utils::details

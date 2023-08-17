@@ -32,7 +32,7 @@ ASTPtr tryParseQuery(
         allow_multi_statements, /// If false, check for non-space characters after semicolon and set error message if any.
     size_t
         max_query_size); /// If (end - pos) > max_query_size and query is longer than max_query_size then throws "Max query size exceeded".
-    /// Disabled if zero. Is used in order to check query size if buffer can contains data for INSERT query.
+/// Disabled if zero. Is used in order to check query size if buffer can contains data for INSERT query.
 
 
 /// Parse query or throw an exception with error message.

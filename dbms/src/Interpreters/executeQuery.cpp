@@ -96,7 +96,8 @@ void setExceptionStackTrace(QueryLogElement & elem)
         elem.stack_trace = e.getStackTrace().toString();
     }
     catch (...)
-    {}
+    {
+    }
 }
 
 
