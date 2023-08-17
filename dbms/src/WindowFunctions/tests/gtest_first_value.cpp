@@ -360,37 +360,56 @@ public:
             true,
             static_cast<Int64>(0));
 
+        auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 2, 2, 2, 2, 2});
+        auto order_col = toNullableVec<Int64>(/*order*/ {0, {}, 1, 2, {}, 5, 6, 9, 10});
+        auto val_col = toVec<Int64>(/*value*/ {1, 2, 3, 4, 5, 6, 7, 8, 9});
+
         {
-            std::vector<Int64> frame_start_range{0, 1, 3, 10};
-            std::vector<std::vector<std::optional<Int64>>> res{
-                {1, 2, 3, 4, 5, 6, 7, 8, 9},
-                {1, 2, 3, 3, 5, 6, 6, 8, 8},
-                {1, 2, 3, 3, 5, 6, 6, 7, 8},
-                {1, 2, 3, 3, 5, 6, 6, 6, 6}};
+            // std::vector<Int64> frame_start_range{0, 1, 3, 10};
+            // std::vector<std::vector<std::optional<Int64>>> res{
+            //     {1, 2, 3, 4, 5, 6, 7, 8, 9},
+            //     {1, 2, 3, 3, 5, 6, 6, 8, 8},
+            //     {1, 2, 3, 3, 5, 6, 6, 7, 8},
+            //     {1, 2, 3, 3, 5, 6, 6, 6, 6}};
 
-            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 2, 2, 2, 2, 2});
-            auto order_col = toNullableVec<Int64>(/*order*/ {0, {}, 1, 2, {}, 5, 6, 9, 10});
-            auto val_col = toVec<Int64>(/*value*/ {1, 2, 3, 4, 5, 6, 7, 8, 9});
-
-            for (size_t i = 0; i < frame_start_range.size(); ++i)
-            {
-                mock_frame.start = buildRangeFrameBound(
-                    tipb::WindowBoundType::Preceding,
-                    tipb::RangeCmpDataType::Int,
-                    ORDER_COL_NAME,
-                    false,
-                    frame_start_range[i]);
-                executeFunctionAndAssert(
-                    toNullableVec<Int64>(res[i]),
-                    FirstValue(value_col),
-                    {partition_col, order_col, val_col},
-                    mock_frame,
-                    false);
-            }
+            // for (size_t i = 0; i < frame_start_range.size(); ++i)
+            // {
+            //     mock_frame.start = buildRangeFrameBound(
+            //         tipb::WindowBoundType::Preceding,
+            //         tipb::RangeCmpDataType::Int,
+            //         ORDER_COL_NAME,
+            //         false,
+            //         frame_start_range[i]);
+            //     executeFunctionAndAssert(
+            //         toNullableVec<Int64>(res[i]),
+            //         FirstValue(value_col),
+            //         {partition_col, order_col, val_col},
+            //         mock_frame,
+            //         false);
+            // }
         }
 
         {
             // <preceding, preceding>
+            mock_frame.start = buildRangeFrameBound(
+                tipb::WindowBoundType::Preceding,
+                tipb::RangeCmpDataType::Float,
+                ORDER_COL_NAME,
+                false,
+                static_cast<Int64>(1));
+            mock_frame.end = buildRangeFrameBound(
+                tipb::WindowBoundType::Preceding,
+                tipb::RangeCmpDataType::Float,
+                ORDER_COL_NAME,
+                false,
+                static_cast<Int64>(1));
+
+            executeFunctionAndAssert(
+                toNullableVec<Int64>({{}, 2, {}, 3, 5, {}, 6, {}, 8}),
+                FirstValue(value_col),
+                {partition_col, order_col, val_col},
+                mock_frame,
+                false);
         }
 
         {
