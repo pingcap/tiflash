@@ -56,11 +56,14 @@ void LocalAdmissionController::startBackgroudJob()
         }
     }
 
+    std::function<void()> tmp_refill_token_callback;
     while (!stopped.load())
     {
         bool only_fetch_for_low_token = true;
         {
             std::unique_lock<std::mutex> lock(mu);
+            tmp_refill_token_callback = refill_token_callback;
+
             if (low_token_resource_groups.empty())
             {
                 only_fetch_for_low_token = false;
@@ -69,9 +72,8 @@ void LocalAdmissionController::startBackgroudJob()
                     }))
                     return;
 
-                // gjt todo
-                // if (delete_resource_group_callback)
-                //     delete_resource_group_callback();
+                if (clean_tombstone_resource_group_callback)
+                    clean_tombstone_resource_group_callback();
             }
             else
             {
@@ -91,8 +93,8 @@ void LocalAdmissionController::startBackgroudJob()
                 checkDegradeMode();
             }
 
-            if (refill_token_callback)
-                refill_token_callback();
+            if (tmp_refill_token_callback)
+                tmp_refill_token_callback();
         }
         catch (...)
         {
@@ -113,7 +115,7 @@ void LocalAdmissionController::watchResourceGroupDelete()
     auto * watch_create_req = watch_req.mutable_create_request();
     watch_create_req->set_key(GAC_RESOURCE_GROUP_ETCD_PATH);
     // Only watch delete event.
-    // For create event, when new MPPTask arrives, resource group will be fetched from GAC.
+    // For resource group create event, it happens when new MPPTask arrives, resource group will be fetched from GAC.
     watch_create_req->add_filters(etcdserverpb::WatchCreateRequest_FilterType::WatchCreateRequest_FilterType_NOPUT);
     bool ok = stream->Write(watch_req);
     static const std::string err_msg_prefix = "watch resource group delete event failed: ";
@@ -144,8 +146,13 @@ void LocalAdmissionController::watchResourceGroupDelete()
             {
                 const mvccpb::KeyValue & kv = event.kv();
                 const std::string & name = kv.value();
-                std::lock_guard lock(mu);
-                auto erase_num = resource_groups.erase(name);
+                size_t erase_num = 0;
+                {
+                    std::lock_guard lock(mu);
+                    erase_num = resource_groups.erase(name);
+                    if (delete_resource_group_callback)
+                        delete_resource_group_callback(name);
+                }
                 LOG_INFO(log, "delete resource group {}, erase_num: {}", name, erase_num);
             }
         }

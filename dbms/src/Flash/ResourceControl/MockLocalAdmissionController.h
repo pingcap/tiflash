@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
 
@@ -61,6 +62,14 @@ public:
     bool isResourceGroupThrottled(const std::string & name) { return is_resource_group_throttled_func(name); }
 
     void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
+    void registerDeleteResourceGroupCallback(const std::function<void(const std::string & del_rg_name)> &)
+    {
+        RUNTIME_ASSERT("not implement for MockLocalAdmissionController");
+    }
+    void registerCleanTombstoneResourceGroupCallback(const std::function<void()> &)
+    {
+        RUNTIME_ASSERT("not implement for MockLocalAdmissionController");
+    }
 
     void stop()
     {

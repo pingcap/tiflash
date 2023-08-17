@@ -397,7 +397,29 @@ public:
     static constexpr uint64_t EMPTY_RESOURCE_GROUP_DEF_PRIORITY = 1;
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
 
-    void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
+    // 1. This callback will be called everytime AcquireTokenBuckets GRPC is called.
+    // 2. For now, only support one callback.
+    //    Because only ResourceControlQueue will register this callback.
+    void registerRefillTokenCallback(const std::function<void()> & cb)
+    {
+        std::lock_guard lock(mu);
+        refill_token_callback = cb;
+    }
+
+    // This callback will be called when Etcd watcher find resource group is deleted by GAC.
+    void registerDeleteResourceGroupCallback(const std::function<void(const std::string & del_rg_name)> & cb)
+    {
+        std::lock_guard lock(mu);
+        delete_resource_group_callback = cb;
+    }
+
+    // This callback will be called every DEFAULT_FETCH_GAC_INTERVAL, to cleanup tombstone resource group.
+    // Because sometime we cannot delete resource gorup info immediately, need to wait related tasks to finish.
+    void registerCleanTombstoneResourceGroupCallback(const std::function<void()> & cb)
+    {
+        std::lock_guard lock(mu);
+        clean_tombstone_resource_group_callback = cb;
+    }
 
     // gjt todo: maybe reorder func
     // gjt todo: split ResourceGroup to another file
@@ -490,6 +512,8 @@ private:
     std::atomic<uint64_t> max_ru_per_sec = 0;
 
     std::function<void()> refill_token_callback;
+    std::function<void(const std::string & del_rg_name)> delete_resource_group_callback;
+    std::function<void()> clean_tombstone_resource_group_callback;
 
     // gjt todo update this
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint

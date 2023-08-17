@@ -69,7 +69,12 @@ MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_, UInt64 resource_c
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
     , resource_control_mpp_task_hard_limit(resource_control_mpp_task_hard_limit_)
-{}
+{
+    LocalAdmissionController::global_instance->registerDeleteResourceGroupCallback(
+        [this](const std::string & del_rg_name) { tagResourceGroupSchedulerReadyToDelete(del_rg_name); });
+    LocalAdmissionController::global_instance->registerCleanTombstoneResourceGroupCallback(
+        [this]() { cleanResourceGroupScheduler(); });
+}
 
 MPPTaskManager::~MPPTaskManager()
 {
