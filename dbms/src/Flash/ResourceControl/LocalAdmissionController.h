@@ -443,7 +443,7 @@ private:
 
     std::shared_ptr<ThreadManager> thread_manager;
 
-    int64_t unique_client_id = -1;
+    uint64_t unique_client_id = 0;
 
     std::atomic<uint64_t> max_ru_per_sec = 0;
 
