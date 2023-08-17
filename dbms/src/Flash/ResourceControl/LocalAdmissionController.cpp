@@ -104,60 +104,110 @@ void LocalAdmissionController::startBackgroudJob()
     }
 }
 
-void LocalAdmissionController::watchResourceGroupDelete()
+void LocalAdmissionController::watchGAC()
 {
-    grpc::ClientContext grpc_context;
-    grpc_context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(2));
-    auto stream = etcd_client->watch(&grpc_context);
-
-    etcdserverpb::WatchRequest watch_req;
-    // gjt todo add test to ensure not change.
-    auto * watch_create_req = watch_req.mutable_create_request();
-    watch_create_req->set_key(GAC_RESOURCE_GROUP_ETCD_PATH);
-    // Only watch delete event.
-    // For resource group create event, it happens when new MPPTask arrives, resource group will be fetched from GAC.
-    watch_create_req->add_filters(etcdserverpb::WatchCreateRequest_FilterType::WatchCreateRequest_FilterType_NOPUT);
-    bool ok = stream->Write(watch_req);
-    static const std::string err_msg_prefix = "watch resource group delete event failed: ";
-    if (!ok)
-    {
-        auto status = stream->Finish();
-        handleBackgroundError(err_msg_prefix + status.error_message());
-        return;
-    }
-
+    // gjt todo: single group by keyspace?
     while (!stopped.load())
     {
-        etcdserverpb::WatchResponse resp;
-        ok = stream->Read(&resp);
-        if (!ok)
+        grpc::ClientContext grpc_context;
+        auto stream = etcd_client->watch(&grpc_context);
+
+        etcdserverpb::WatchRequest watch_req;
+        // gjt todo add test to ensure not change.
+        auto * watch_create_req = watch_req.mutable_create_request();
+        watch_create_req->set_key(GAC_RESOURCE_GROUP_ETCD_PATH);
+        auto end_key = GAC_RESOURCE_GROUP_ETCD_PATH;
+        end_key[end_key.length() - 1] += 1;
+        watch_create_req->set_range_end(end_key);
+        LOG_DEBUG(log, "watchGAC watch req: {}", watch_req.DebugString());
+
+        const bool write_ok = stream->Write(watch_req);
+        static const std::string err_msg_prefix = "watch resource group event failed: ";
+        if (!write_ok)
         {
-            handleBackgroundError(err_msg_prefix + "read watch stream failed, watcher is closed");
-            break;
+            auto status = stream->Finish();
+            handleBackgroundError(err_msg_prefix + status.error_message());
         }
-        if (resp.canceled())
+        else
         {
-            handleBackgroundError(err_msg_prefix + "watch is canceled");
-            break;
-        }
-        for (const auto & event : resp.events())
-        {
-            if (event.type() == mvccpb::Event_EventType_DELETE)
+            while (!stopped.load())
             {
-                const mvccpb::KeyValue & kv = event.kv();
-                const std::string & name = kv.value();
-                size_t erase_num = 0;
+                etcdserverpb::WatchResponse resp;
+                auto read_ok = stream->Read(&resp);
+                if (!read_ok)
                 {
-                    std::lock_guard lock(mu);
-                    erase_num = resource_groups.erase(name);
-                    if (delete_resource_group_callback)
-                        delete_resource_group_callback(name);
+                    auto status = stream->Finish();
+                    // gjt todo continue log
+                    handleBackgroundError(err_msg_prefix + "read watch stream failed, " + status.error_message());
+                    break;
                 }
-                LOG_INFO(log, "delete resource group {}, erase_num: {}", name, erase_num);
+                LOG_DEBUG(log, "watchGAC got resp: {}", resp.DebugString());
+                if (resp.canceled())
+                {
+                    handleBackgroundError(err_msg_prefix + "watch is canceled");
+                    break;
+                }
+                for (const auto & event : resp.events())
+                {
+                    const mvccpb::KeyValue & kv = event.kv();
+                    if (event.type() == mvccpb::Event_EventType_DELETE)
+                    {
+                        std::string name;
+                        if (!parseResourceGroupNameFromWatchKey(kv.key(), name))
+                            continue;
+
+                        size_t erase_num = 0;
+                        {
+                            std::lock_guard lock(mu);
+                            erase_num = resource_groups.erase(name);
+                            if (delete_resource_group_callback)
+                                delete_resource_group_callback(name);
+                        }
+                        LOG_INFO(log, "delete resource group {}, erase_num: {}", name, erase_num);
+                    }
+                    else if (event.type() == mvccpb::Event_EventType_PUT)
+                    {
+                        std::string name;
+                        if (!parseResourceGroupNameFromWatchKey(kv.key(), name))
+                            continue;
+
+                        resource_manager::ResourceGroup group_pb;
+                        if (!group_pb.ParseFromString(kv.value()))
+                        {
+                            handleBackgroundError(err_msg_prefix + "parse pb from etcd value failed");
+                            continue;
+                        }
+                        {
+                            std::lock_guard lock(mu);
+                            auto iter = resource_groups.find(name);
+                            if (iter == resource_groups.end())
+                            {
+                                handleBackgroundError(fmt::format(
+                                    "{}trying to modify resource group config({}), but cannot find its info",
+                                    err_msg_prefix,
+                                    group_pb.DebugString()));
+                                continue;
+                            }
+                            else
+                            {
+                                iter->second->reConfig(group_pb);
+                            }
+                        }
+                        LOG_INFO(log, "modify resource group to: {}", group_pb.DebugString());
+                    }
+                }
             }
         }
+        // Got here when:
+        // 1. grpc stream write error.
+        // 2. grpc stream read error.
+        // 3. watch is cancel.
+        // Will sleep and try again.
+        {
+            std::unique_lock lock(mu);
+            cv.wait_for(lock, std::chrono::seconds(30), [this]() { return stopped.load(); });
+        }
     }
-    // No need to cancel watch when exit, check: https://github.com/etcd-io/etcd/issues/7742#issuecomment-294184158
 }
 
 void LocalAdmissionController::fetchTokensForAllResourceGroups()
@@ -353,7 +403,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
     return handled_resource_group_names;
 }
 
-void LocalAdmissionController::handleBackgroundError(const std::string & err_msg)
+void LocalAdmissionController::handleBackgroundError(const std::string & err_msg) const
 {
     // Basically, errors are all from GAC, cannot handle in tiflash.
     // So only print log.
@@ -370,6 +420,23 @@ std::string LocalAdmissionController::isGACRespValid(const resource_manager::Res
         err_msg += fmt::format(" expect RUMode, got {}", new_group_pb.mode());
 
     return err_msg;
+}
+
+bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
+    const std::string & etcd_key,
+    std::string & parsed_rg_name) const
+{
+    const std::string & key_prefix = GAC_RESOURCE_GROUP_ETCD_PATH;
+    // Expect etcd_key: resource_group/settings/rg_name
+    // key_prefix is resource_group/settings
+    if (etcd_key.length() <= key_prefix.length() + 1)
+    {
+        handleBackgroundError(
+            fmt::format("expect {}/resource_group_name, but got {}", GAC_RESOURCE_GROUP_ETCD_PATH, etcd_key));
+        return false;
+    }
+    parsed_rg_name = std::string(etcd_key.begin() + key_prefix.length() + 1, etcd_key.end());
+    return true;
 }
 
 #ifdef DBMS_PUBLIC_GTEST

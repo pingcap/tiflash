@@ -141,6 +141,15 @@ private:
         return priority;
     }
 
+    // Called when user change config of resource group.
+    // Only update meta, will not touch runtime state(like bucket remaining tokens).
+    void reConfig(const resource_manager::ResourceGroup & group_pb_)
+    {
+        group_pb = group_pb_;
+        user_priority = group_pb_.priority();
+        user_ru_per_sec = group_pb_.r_u_settings().r_u().settings().fill_rate();
+    }
+
     bool lowToken() const
     {
         std::lock_guard lock(mu);
@@ -328,9 +337,7 @@ public:
         thread_manager->scheduleThenDetach(true, "LocalAdmissionController::fetchGAC", [this] {
             this->startBackgroudJob();
         });
-        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::watchResourceGroupDelete", [this] {
-            this->watchResourceGroupDelete();
-        });
+        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::watchGAC", [this] { this->watchGAC(); });
     }
 
     ~LocalAdmissionController() { stop(); }
@@ -463,7 +470,7 @@ private:
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
 
-    void handleBackgroundError(const std::string & err_msg);
+    void handleBackgroundError(const std::string & err_msg) const;
 
     static std::string isGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
@@ -482,10 +489,12 @@ private:
     void startBackgroudJob();
     void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_tokens);
     void checkDegradeMode();
-    void watchResourceGroupDelete();
+    void watchGAC();
 
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
+
+    bool parseResourceGroupNameFromWatchKey(const std::string & etcd_key, std::string & parsed_rg_name) const;
 
     std::mutex mu;
 

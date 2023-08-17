@@ -64,17 +64,12 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
 }
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_, UInt64 resource_control_mpp_task_hard_limit_)
-    : scheduler(std::move(scheduler_))
+    : scheduler(scheduler_)
     , aborted_query_gather_cache(ABORTED_MPPGATHER_CACHE_SIZE)
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
     , resource_control_mpp_task_hard_limit(resource_control_mpp_task_hard_limit_)
-{
-    LocalAdmissionController::global_instance->registerDeleteResourceGroupCallback(
-        [this](const std::string & del_rg_name) { tagResourceGroupSchedulerReadyToDelete(del_rg_name); });
-    LocalAdmissionController::global_instance->registerCleanTombstoneResourceGroupCallback(
-        [this]() { cleanResourceGroupScheduler(); });
-}
+{}
 
 MPPTaskManager::~MPPTaskManager()
 {
