@@ -49,16 +49,17 @@ public:
 
     ~WNDisaggSnapshotManager();
 
-    bool registerSnapshot(const DisaggTaskId & task_id, const DisaggReadSnapshotPtr & snap, const Timepoint & expired_at)
+    bool registerSnapshot(
+        const DisaggTaskId & task_id,
+        const DisaggReadSnapshotPtr & snap,
+        const Timepoint & expired_at)
     {
         std::unique_lock lock(mtx);
         LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
         // Since EstablishDisagg may be retried, there may be existing snapshot.
         // We replace these existing snapshot using a new one.
-        snapshots.insert_or_assign(
-            task_id,
-            SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at});
+        snapshots.insert_or_assign(task_id, SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at});
         return true;
     }
 

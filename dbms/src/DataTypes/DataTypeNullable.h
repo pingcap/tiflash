@@ -26,7 +26,7 @@ class DataTypeNullable final : public IDataType
 public:
     static constexpr bool is_parametric = true;
 
-    DataTypeNullable(const DataTypePtr & nested_data_type_);
+    explicit DataTypeNullable(const DataTypePtr & nested_data_type_);
     std::string getName() const override { return "Nullable(" + nested_data_type->getName() + ")"; }
     const char * getFamilyName() const override { return "Nullable"; }
 
@@ -50,8 +50,14 @@ public:
         bool position_independent_encoding,
         SubstreamPath & path) const override;
 
-    void serializeBinary(const Field & field, WriteBuffer & ostr) const override { nested_data_type->serializeBinary(field, ostr); }
-    void deserializeBinary(Field & field, ReadBuffer & istr) const override { nested_data_type->deserializeBinary(field, istr); }
+    void serializeBinary(const Field & field, WriteBuffer & ostr) const override
+    {
+        nested_data_type->serializeBinary(field, ostr);
+    }
+    void deserializeBinary(Field & field, ReadBuffer & istr) const override
+    {
+        nested_data_type->deserializeBinary(field, istr);
+    }
     void serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeBinary(IColumn & column, ReadBuffer & istr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -70,7 +76,8 @@ public:
       */
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
-    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const override;
+    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
+        const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -84,7 +91,10 @@ public:
     bool isParametric() const override { return true; }
     bool haveSubtypes() const override { return true; }
     bool cannotBeStoredInTables() const override { return nested_data_type->cannotBeStoredInTables(); }
-    bool shouldAlignRightInPrettyFormats() const override { return nested_data_type->shouldAlignRightInPrettyFormats(); }
+    bool shouldAlignRightInPrettyFormats() const override
+    {
+        return nested_data_type->shouldAlignRightInPrettyFormats();
+    }
     bool textCanContainOnlyValidUTF8() const override { return nested_data_type->textCanContainOnlyValidUTF8(); }
     bool isComparable() const override { return nested_data_type->isComparable(); };
     bool canBeComparedWithCollation() const override { return nested_data_type->canBeComparedWithCollation(); }
@@ -92,7 +102,10 @@ public:
     bool isSummable() const override { return nested_data_type->isSummable(); }
     bool canBeUsedInBooleanContext() const override { return nested_data_type->canBeUsedInBooleanContext(); }
     bool haveMaximumSizeOfValue() const override { return nested_data_type->haveMaximumSizeOfValue(); }
-    size_t getMaximumSizeOfValueInMemory() const override { return 1 + nested_data_type->getMaximumSizeOfValueInMemory(); }
+    size_t getMaximumSizeOfValueInMemory() const override
+    {
+        return 1 + nested_data_type->getMaximumSizeOfValueInMemory();
+    }
     bool isNullable() const override { return true; }
     size_t getSizeOfValueInMemory() const override;
     bool onlyNull() const override;

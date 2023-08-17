@@ -58,10 +58,7 @@ public:
         const UInt64 applied_term_,
         raft_serverpb::RegionLocalState region_state_);
 
-    RegionMeta(
-        metapb::Peer peer_,
-        metapb::Region region,
-        raft_serverpb::RaftApplyState apply_state_);
+    RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_);
 
     RegionMeta(RegionMeta && rhs);
 
@@ -81,7 +78,7 @@ public:
 
     UInt64 confVer() const;
 
-    raft_serverpb::RaftApplyState getApplyState() const;
+    raft_serverpb::RaftApplyState clonedApplyState() const;
 
     void setApplied(UInt64 index, UInt64 term);
     void notifyAll() const;
@@ -113,6 +110,7 @@ public:
     metapb::Region cloneMetaRegion() const;
     const raft_serverpb::MergeState & getMergeState() const;
     raft_serverpb::MergeState cloneMergeState() const;
+    const RegionState & getRegionState() const;
 
     RegionMeta() = delete;
 

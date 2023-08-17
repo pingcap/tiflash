@@ -47,8 +47,7 @@ struct FullGCParam
     explicit FullGCParam(const std::tuple<bool, bool> & t)
         : keep_snap(std::get<0>(t))
         , has_ref(std::get<1>(t))
-    {
-    }
+    {}
 };
 
 class PageStorageFullGCTest
@@ -58,13 +57,9 @@ class PageStorageFullGCTest
 public:
     PageStorageFullGCTest()
         : test_param(GetParam())
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        PageStorageTest::SetUp();
-    }
+    void SetUp() override { PageStorageTest::SetUp(); }
 
 protected:
     FullGCParam test_param;
@@ -114,12 +109,7 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(
-    Group,
-    PageStorageFullGCTest,
-    ::testing::Combine(
-        ::testing::Bool(),
-        ::testing::Bool()));
+INSTANTIATE_TEST_CASE_P(Group, PageStorageFullGCTest, ::testing::Combine(::testing::Bool(), ::testing::Bool()));
 
 ///////
 /// PageStorageFullGCConcurrentTest
@@ -138,13 +128,9 @@ class PageStorageFullGCConcurrentTest
 public:
     PageStorageFullGCConcurrentTest()
         : timing(GetParam())
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        PageStorageTest::SetUp();
-    }
+    void SetUp() override { PageStorageTest::SetUp(); }
 
     SyncPointScopeGuard getSyncPoint() const
     {
@@ -348,13 +334,9 @@ class PageStorageFullGCConcurrentTest2
 public:
     PageStorageFullGCConcurrentTest2()
         : timing(GetParam())
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        PageStorageTest::SetUp();
-    }
+    void SetUp() override { PageStorageTest::SetUp(); }
 
     SyncPointScopeGuard getSyncPoint() const
     {

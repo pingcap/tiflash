@@ -48,15 +48,9 @@ try
         auto page = cache.getPage({.page_id = 1}, {0});
         ASSERT_EQ("page_1_data", page.getFieldData(0));
     }
-    ASSERT_THROW({
-        cache.getPage({.page_id = 2}, {0});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ cache.getPage({.page_id = 2}, {0}); }, DB::Exception);
 
-    ASSERT_THROW({
-        cache.getPage({.page_id = 1}, {1});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ cache.getPage({.page_id = 1}, {1}); }, DB::Exception);
 
     cache.write({.page_id = 5}, "foo_bar", {3, 4});
     {

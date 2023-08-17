@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -80,8 +81,7 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-    writeNodeBuildRemoteReadSnapshot(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr writeNodeBuildRemoteReadSnapshot(
         const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,
@@ -90,7 +90,7 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     /// Write from raft layer.
-    void write(Block & block, const Settings & settings);
+    DM::WriteResult write(Block & block, const Settings & settings);
 
     void flushCache(const Context & context) override;
 
@@ -112,9 +112,7 @@ public:
 
     // If the "ingest" has been aborted, we use this method to
     // clean the generated external files on the fly.
-    void cleanPreIngestFiles(
-        const std::vector<DM::ExternalDTFileInfo> & external_files,
-        const Settings & settings);
+    void cleanPreIngestFiles(const std::vector<DM::ExternalDTFileInfo> & external_files, const Settings & settings);
 
     /// Return the 'ingtested bytes'.
     UInt64 ingestFiles(
@@ -181,10 +179,7 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    const DM::DeltaMergeStorePtr & getStore()
-    {
-        return getAndMaybeInitStore();
-    }
+    const DM::DeltaMergeStorePtr & getStore() { return getAndMaybeInitStore(); }
 
     DM::DeltaMergeStorePtr getStoreIfInited() const;
 
@@ -192,23 +187,23 @@ public:
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
-    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool /* need_block */) override;
+    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(
+        const TableStructureLockHolder & table_structure_lock,
+        bool /* need_block */) override;
 
     void releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block) override;
 
     bool initStoreIfDataDirExist(ThreadPool * thread_pool) override;
 
-    DM::DMConfigurationOpt createChecksumConfig() const
-    {
-        return DM::DMChecksumConfig::fromDBContext(global_context);
-    }
+    DM::DMConfigurationOpt createChecksumConfig() const { return DM::DMChecksumConfig::fromDBContext(global_context); }
 
-    static DM::PushDownFilterPtr buildPushDownFilter(const DM::RSOperatorPtr & rs_operator,
-                                                     const ColumnInfos & table_scan_column_info,
-                                                     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
-                                                     const DM::ColumnDefines & columns_to_read,
-                                                     const Context & context,
-                                                     const LoggerPtr & tracing_logger);
+    static DM::PushDownFilterPtr buildPushDownFilter(
+        const DM::RSOperatorPtr & rs_operator,
+        const ColumnInfos & table_scan_column_info,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+        const DM::ColumnDefines & columns_to_read,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -239,31 +234,31 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr & getAndMaybeInitStore(ThreadPool * thread_pool = nullptr);
-    bool storeInited() const
-    {
-        return store_inited.load(std::memory_order_acquire);
-    }
+    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
     void updateTableColumnInfo();
     ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info);
     DM::ColumnDefines getStoreColumnDefines() const override;
     bool dataDirExist();
     void shutdownImpl();
 
-    DM::RSOperatorPtr buildRSOperator(const std::unique_ptr<DAGQueryInfo> & dag_query,
-                                      const DM::ColumnDefines & columns_to_read,
-                                      const Context & context,
-                                      const LoggerPtr & tracing_logger);
+    DM::RSOperatorPtr buildRSOperator(
+        const std::unique_ptr<DAGQueryInfo> & dag_query,
+        const DM::ColumnDefines & columns_to_read,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
     /// Get filters from query to construct rough set operation and push down filters.
-    DM::PushDownFilterPtr parsePushDownFilter(const SelectQueryInfo & query_info,
-                                              const DM::ColumnDefines & columns_to_read,
-                                              const Context & context,
-                                              const LoggerPtr & tracing_logger);
+    DM::PushDownFilterPtr parsePushDownFilter(
+        const SelectQueryInfo & query_info,
+        const DM::ColumnDefines & columns_to_read,
+        const Context & context,
+        const LoggerPtr & tracing_logger);
 
-    DM::RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
-                                        unsigned num_streams,
-                                        const Context & context,
-                                        const String & req_id,
-                                        const LoggerPtr & tracing_logger);
+    DM::RowKeyRanges parseMvccQueryInfo(
+        const DB::MvccQueryInfo & mvcc_query_info,
+        unsigned num_streams,
+        const Context & context,
+        const String & req_id,
+        const LoggerPtr & tracing_logger);
 
     RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const;
 

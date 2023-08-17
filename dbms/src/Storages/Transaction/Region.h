@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -149,6 +151,10 @@ public:
 
     void markCompactLog();
     Timepoint lastCompactLogTime() const;
+    UInt64 lastCompactLogApplied() const;
+    void setLastCompactLogApplied(UInt64 new_value) const;
+    // Must hold region lock.
+    void updateLastCompactLogApplied() const;
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -162,7 +168,10 @@ public:
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, UInt64 timeout_ms, std::function<bool(void)> && check_running);
+    std::tuple<WaitIndexResult, double> waitIndex(
+        UInt64 index,
+        UInt64 timeout_ms,
+        std::function<bool(void)> && check_running);
 
     // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
@@ -191,7 +200,11 @@ public:
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    std::pair<EngineStoreApplyRes, DM::WriteResult> handleWriteRaftCmd(
+        const WriteCmdsView & cmds,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
 
     /// get approx rows, bytes info about mem cache.
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
@@ -225,7 +238,10 @@ private:
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
-    std::optional<RegionDataReadInfo> readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error);
+    std::optional<RegionDataReadInfo> readDataByWriteIt(
+        const RegionData::ConstWriteCFIter & write_it,
+        bool need_value,
+        bool hard_error);
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
@@ -250,16 +266,25 @@ private:
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
+    mutable std::atomic<uint64_t> last_compact_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };
 
-class RegionRaftCommandDelegate : public Region
+class RegionRaftCommandDelegate
+    : public Region
     , private boost::noncopyable
 {
 public:
     /// Only after the task mutex of KVStore is locked, region can apply raft command.
-    void handleAdminRaftCmd(const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse &, UInt64, UInt64, const KVStore &, RegionTable &, RaftCommandResult &);
+    void handleAdminRaftCmd(
+        const raft_cmdpb::AdminRequest &,
+        const raft_cmdpb::AdminResponse &,
+        UInt64,
+        UInt64,
+        const KVStore &,
+        RegionTable &,
+        RaftCommandResult &);
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 

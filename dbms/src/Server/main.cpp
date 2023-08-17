@@ -40,6 +40,9 @@
 #if ENABLE_TIFLASH_PAGECTL
 #include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 #endif
+#if ENABLE_TIFLASH_CHECKPOINTTOOL
+#include <Storages/Page/tools/Checkpoint/CheckpointTool.h>
+#endif
 #include <Common/StringUtils/StringUtils.h>
 #include <Server/DTTool/DTTool.h>
 
@@ -111,6 +114,9 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #endif
 #if ENABLE_TIFLASH_PAGECTL
     {"pagectl", DB::PageStorageCtl::mainEntry},
+#endif
+#if ENABLE_TIFLASH_CHECKPOINTTOOL
+    {"pagecheckpoint", DB::PS::CheckpointTool::mainEntry},
 #endif
     {"version", mainEntryVersion},
     {"errgen", mainExportError}};

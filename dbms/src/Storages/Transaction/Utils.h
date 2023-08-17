@@ -50,20 +50,11 @@ class MutexLockWrap
 public:
     using Mutex = std::mutex;
 
-    std::lock_guard<Mutex> genLockGuard() const
-    {
-        return std::lock_guard(*mutex);
-    }
+    std::lock_guard<Mutex> genLockGuard() const { return std::lock_guard(*mutex); }
 
-    std::unique_lock<Mutex> tryToLock() const
-    {
-        return std::unique_lock(*mutex, std::try_to_lock);
-    }
+    std::unique_lock<Mutex> tryToLock() const { return std::unique_lock(*mutex, std::try_to_lock); }
 
-    std::unique_lock<Mutex> genUniqueLock() const
-    {
-        return std::unique_lock(*mutex);
-    }
+    std::unique_lock<Mutex> genUniqueLock() const { return std::unique_lock(*mutex); }
 
 private:
     mutable AlignedStruct<Mutex, CPU_CACHE_LINE_SIZE> mutex;
@@ -74,15 +65,9 @@ class SharedMutexLockWrap
 public:
     using Mutex = std::shared_mutex;
 
-    std::shared_lock<Mutex> genSharedLock() const
-    {
-        return std::shared_lock(*mutex);
-    }
+    std::shared_lock<Mutex> genSharedLock() const { return std::shared_lock(*mutex); }
 
-    std::unique_lock<Mutex> genUniqueLock() const
-    {
-        return std::unique_lock(*mutex);
-    }
+    std::unique_lock<Mutex> genUniqueLock() const { return std::unique_lock(*mutex); }
 
 private:
     mutable AlignedStruct<Mutex, CPU_CACHE_LINE_SIZE> mutex;

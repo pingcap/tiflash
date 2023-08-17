@@ -130,7 +130,10 @@ std::optional<DMChecksumConfig> DMChecksumConfig::fromDBContext(const Context & 
 }
 
 DMChecksumConfig::DMChecksumConfig(const Context & context)
-    : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dt_checksum_algorithm.get()){};
+    : DMChecksumConfig(
+        {},
+        context.getSettingsRef().dt_checksum_frame_size.get(),
+        context.getSettingsRef().dt_checksum_algorithm.get()){};
 
 
 } // namespace DB::DM

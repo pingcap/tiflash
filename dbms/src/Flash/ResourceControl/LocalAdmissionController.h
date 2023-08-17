@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/MockLocalAdmissionController.h>
 #include <Flash/ResourceControl/TokenBucket.h>
+#include <common/logger_useful.h>
 #include <kvproto/resource_manager.pb.h>
 #include <pingcap/kv/Cluster.h>
 #include <TiDB/Etcd/Client.h>

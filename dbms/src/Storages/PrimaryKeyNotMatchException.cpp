@@ -39,11 +39,16 @@ String fixCreateStatementWithPriKeyNotMatchException( //
 {
     LOG_WARNING(
         log,
-        "Try to fix statement in " + table_metadata_path + ", primary key [" + ex.pri_key + "] -> [" + ex.actual_pri_key + "]");
+        "Try to fix statement in " + table_metadata_path + ", primary key [" + ex.pri_key + "] -> [" + ex.actual_pri_key
+            + "]");
     // Try to fix the create statement.
     ParserCreateQuery parser;
-    ASTPtr ast
-        = parseQuery(parser, old_definition.data(), old_definition.data() + old_definition.size(), "in file " + table_metadata_path, 0);
+    ASTPtr ast = parseQuery(
+        parser,
+        old_definition.data(),
+        old_definition.data() + old_definition.size(),
+        "in file " + table_metadata_path,
+        0);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
     auto args = ast_create_query.storage->engine->arguments;
     if (!args->children.empty())
@@ -61,12 +66,20 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         // 2. The implementation in this function assume that the rename operation is atomic.
         // 3. If we create new encryption info for `t_31.sql.tmp`,
         // then we cannot rename the encryption info and the file in an atomic operation.
-        bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
-        EncryptionPath encryption_path
-            = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
+        bool use_target_encrypt_info
+            = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
+        EncryptionPath encryption_path = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "")
+                                                                 : EncryptionPath(table_metadata_tmp_path, "");
         {
             bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-            WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            WriteBufferFromFileProvider out(
+                context.getFileProvider(),
+                table_metadata_tmp_path,
+                encryption_path,
+                create_new_encryption_info,
+                nullptr,
+                statement.size(),
+                O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -77,11 +90,18 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         try
         {
             /// rename atomically replaces the old file with the new one.
-            context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path, EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
+            context.getFileProvider()->renameFile(
+                table_metadata_tmp_path,
+                encryption_path,
+                table_metadata_path,
+                EncryptionPath(table_metadata_path, ""),
+                !use_target_encrypt_info);
         }
         catch (...)
         {
-            context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+            context.getFileProvider()->deleteRegularFile(
+                table_metadata_tmp_path,
+                EncryptionPath(table_metadata_tmp_path, ""));
             throw;
         }
     }

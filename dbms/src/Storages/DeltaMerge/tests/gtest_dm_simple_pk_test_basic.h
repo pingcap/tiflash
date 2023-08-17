@@ -33,15 +33,9 @@ namespace tests
 class SimplePKTestBasic : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    void SetUp() override
-    {
-        reload();
-    }
+    void SetUp() override { reload(); }
 
-    void TearDown() override
-    {
-        TiFlashStorageTestBasic::TearDown();
-    }
+    void TearDown() override { TiFlashStorageTestBasic::TearDown(); }
 
 public:
     // Lightweight wrappers

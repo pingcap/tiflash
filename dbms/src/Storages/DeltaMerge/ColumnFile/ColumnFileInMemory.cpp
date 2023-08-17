@@ -64,7 +64,12 @@ ColumnFileReaderPtr ColumnFileInMemory::getReader(
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
 
-bool ColumnFileInMemory::append(const DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
+bool ColumnFileInMemory::append(
+    const DMContext & context,
+    const Block & data,
+    size_t offset,
+    size_t limit,
+    size_t data_bytes)
 {
     if (disable_append)
         return false;
@@ -74,7 +79,8 @@ bool ColumnFileInMemory::append(const DMContext & context, const Block & data, s
         return false;
 
     // check whether this instance overflows
-    if (cache->block.rows() >= context.delta_cache_limit_rows || cache->block.bytes() >= context.delta_cache_limit_bytes)
+    if (cache->block.rows() >= context.delta_cache_limit_rows
+        || cache->block.bytes() >= context.delta_cache_limit_bytes)
         return false;
 
     for (size_t i = 0; i < cache->block.columns(); ++i)
@@ -114,7 +120,11 @@ ColumnPtr ColumnFileInMemoryReader::getVersionColumn()
     return cols_data_cache[1];
 }
 
-std::pair<size_t, size_t> ColumnFileInMemoryReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+std::pair<size_t, size_t> ColumnFileInMemoryReader::readRows(
+    MutableColumns & output_cols,
+    size_t rows_offset,
+    size_t rows_limit,
+    const RowKeyRange * range)
 {
     memory_file.fillColumns(*col_defs, output_cols.size(), cols_data_cache);
 

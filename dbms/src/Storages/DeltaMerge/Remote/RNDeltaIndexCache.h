@@ -34,8 +34,7 @@ public:
     //       However, as the delta index's size could be changing, we need to implement our own LRU instead.
     explicit RNDeltaIndexCache(size_t max_cache_keys)
         : cache(max_cache_keys)
-    {
-    }
+    {}
 
     struct CacheKey
     {
@@ -47,11 +46,8 @@ public:
 
         bool operator==(const CacheKey & other) const
         {
-            return store_id == other.store_id
-                && table_id == other.table_id
-                && segment_id == other.segment_id
-                && segment_epoch == other.segment_epoch
-                && delta_index_epoch == other.delta_index_epoch;
+            return store_id == other.store_id && table_id == other.table_id && segment_id == other.segment_id
+                && segment_epoch == other.segment_epoch && delta_index_epoch == other.delta_index_epoch;
         }
     };
 

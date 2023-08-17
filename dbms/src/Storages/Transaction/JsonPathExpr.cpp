@@ -105,7 +105,8 @@ void JsonPathStream::skipWhiteSpace()
 {
     for (; pos < str.size; ++pos)
     {
-        if (!isWhitespaceASCII(str.data[pos])) /// Implementation is different from TiDB, which uses go lib's unicode.IsSpace
+        if (!isWhitespaceASCII(
+                str.data[pos])) /// Implementation is different from TiDB, which uses go lib's unicode.IsSpace
             break;
     }
 }
@@ -133,9 +134,7 @@ bool JsonPathStream::exhausted() const
 std::pair<bool, JsonPathArrayIndex> JsonPathStream::tryReadIndexNumber()
 {
     auto record_pos = pos;
-    auto res = readWhile([](char c) {
-        return isNumericASCII(c);
-    });
+    auto res = readWhile([](char c) { return isNumericASCII(c); });
     if (!res.first)
     {
         pos = record_pos;
@@ -280,7 +279,8 @@ bool JsonPathExpr::parseJsonPathArray(JsonPathStream & stream, JsonPathExpr * pa
     {
         stream.skip(1);
         path_expr->flag |= JsonPathExpressionContainsAsterisk;
-        path_expr->legs.push_back(std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegArraySelection, AsteriskSelection));
+        path_expr->legs.push_back(
+            std::make_unique<JsonPathLeg>(JsonPathLeg::JsonPathLegArraySelection, AsteriskSelection));
     }
     else
     {
@@ -366,9 +366,8 @@ bool JsonPathExpr::parseJsonPathMember(JsonPathStream & stream, JsonPathExpr * p
         }
         else
         {
-            auto res = stream.readWhile([](char c) {
-                return !(isWhitespaceASCII(c) || c == '.' || c == '[' || c == '*');
-            });
+            auto res
+                = stream.readWhile([](char c) { return !(isWhitespaceASCII(c) || c == '.' || c == '[' || c == '*'); });
             dot_key = res.second;
         }
 

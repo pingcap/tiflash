@@ -19,7 +19,8 @@ namespace DB::PS::V3
 
 Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & page_id_and_entry)
 {
-    if (page_id_and_entry.second.checkpoint_info.has_value() && page_id_and_entry.second.checkpoint_info.is_local_data_reclaimed)
+    if (page_id_and_entry.second.checkpoint_info.has_value()
+        && page_id_and_entry.second.checkpoint_info.is_local_data_reclaimed)
     {
         return remote_reader->read(page_id_and_entry);
     }

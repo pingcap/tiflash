@@ -28,8 +28,8 @@ struct ExternalPageCallbacksT
     //           external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
     using PathAndIdsVec = std::vector<std::pair<String, std::set<PageIdU64>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
-    using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageIdU64> & valid_normal_pages)>;
+    using ExternalPagesRemover = std::function<
+        void(const PathAndIdsVec & pending_external_pages, const std::set<PageIdU64> & valid_normal_pages)>;
     ExternalPagesScanner scanner = nullptr;
     ExternalPagesRemover remover = nullptr;
     Prefix prefix{};

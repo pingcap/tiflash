@@ -37,9 +37,7 @@ struct LogFile
 };
 using LogFiles = std::vector<LogFile>;
 
-LogFilenameSet WALStoreReader::listAllFiles(
-    const PSDiskDelegatorPtr & delegator,
-    LoggerPtr logger)
+LogFilenameSet WALStoreReader::listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, LogFiles>> all_filenames;
@@ -82,7 +80,11 @@ LogFilenameSet WALStoreReader::listAllFiles(
             }
             case LogFileStage::Invalid:
             {
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown logfile name, parent_path={} filename={}", parent_path, file.filename);
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Unknown logfile name, parent_path={} filename={}",
+                    parent_path,
+                    file.filename);
             }
             }
         }
@@ -90,8 +92,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
     return log_files;
 }
 
-std::tuple<std::optional<LogFilename>, LogFilenameSet>
-WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
+std::tuple<std::optional<LogFilename>, LogFilenameSet> WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 {
     auto latest_checkpoint_iter = all_files.cend();
     for (auto iter = all_files.cbegin(); iter != all_files.cend(); ++iter)
@@ -131,14 +132,21 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
     return {latest_checkpoint, std::move(all_files)};
 }
 
-WALStoreReaderPtr WALStoreReader::create(String storage_name,
-                                         FileProviderPtr & provider,
-                                         LogFilenameSet files,
-                                         WALRecoveryMode recovery_mode_,
-                                         const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(
+    String storage_name,
+    FileProviderPtr & provider,
+    LogFilenameSet files,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(storage_name, provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(
+        storage_name,
+        provider,
+        checkpoint,
+        std::move(files_to_read),
+        recovery_mode_,
+        read_limiter);
     reader->openNextFile();
     return reader;
 }
@@ -206,12 +214,13 @@ String WALStoreReader::getLastRecordInLogFile(
     return last_record;
 }
 
-WALStoreReader::WALStoreReader(String storage_name,
-                               FileProviderPtr & provider_,
-                               std::optional<LogFilename> checkpoint,
-                               LogFilenameSet && files_,
-                               WALRecoveryMode recovery_mode_,
-                               const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(
+    String storage_name,
+    FileProviderPtr & provider_,
+    std::optional<LogFilename> checkpoint,
+    LogFilenameSet && files_,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
     , checkpoint_reader_created(!checkpoint.has_value())

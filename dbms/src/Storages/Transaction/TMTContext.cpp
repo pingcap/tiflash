@@ -148,11 +148,10 @@ TMTContext::TMTContext(
           raft_config.for_unit_test,
           cluster,
           context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
-    , mpp_task_manager(std::make_shared<MPPTaskManager>(
-          std::make_unique<MinTSOScheduler>(
-              context.getSettingsRef().task_scheduler_thread_soft_limit,
-              context.getSettingsRef().task_scheduler_thread_hard_limit,
-              context.getSettingsRef().task_scheduler_active_set_soft_limit),
+    , mpp_task_manager(std::make_shared<MPPTaskManager>(std::make_unique<MinTSOScheduler>(
+          context.getSettingsRef().task_scheduler_thread_soft_limit,
+          context.getSettingsRef().task_scheduler_thread_hard_limit,
+          context.getSettingsRef().task_scheduler_active_set_soft_limit),
           context.getSettingsRef().resource_control_mpptask_hard_limit))
     , engine(raft_config.engine)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
@@ -375,6 +374,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
+    static constexpr const char * COMPACT_LOG_MIN_GAP = "flash.compact_log_min_gap";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
@@ -384,7 +384,8 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     getKVStore()->setRegionCompactLogConfig(
         std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
-        std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
+        std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_GAP, 200), 1));
     {
         batch_read_index_timeout_ms
             = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);

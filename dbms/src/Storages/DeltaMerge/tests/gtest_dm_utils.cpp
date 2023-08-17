@@ -57,15 +57,16 @@ TEST(RowKeyFilterTest, FilterSortedBlockCommonHandle)
     ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(20, 50), true));
     ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(0, 30), true));
     ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(70, 90), true));
-    Block block = DMTestEnv::prepareSimpleWriteBlock(0,
-                                                     num_rows_write,
-                                                     false,
-                                                     2,
-                                                     EXTRA_HANDLE_COLUMN_NAME,
-                                                     EXTRA_HANDLE_COLUMN_ID,
-                                                     EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                     true,
-                                                     1);
+    Block block = DMTestEnv::prepareSimpleWriteBlock(
+        0,
+        num_rows_write,
+        false,
+        2,
+        EXTRA_HANDLE_COLUMN_NAME,
+        EXTRA_HANDLE_COLUMN_ID,
+        EXTRA_HANDLE_COLUMN_STRING_TYPE,
+        true,
+        1);
     auto filtered_block = RowKeyFilter::filterSorted(ranges, std::move(block), 0);
     ASSERT_EQ(filtered_block.rows(), 70);
 }
@@ -78,15 +79,16 @@ TEST(RowKeyFilterTest, FilterUnsortedBlockCommonHandle)
     ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(20, 50), true));
     ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(0, 30), true));
     ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(70, 90), true));
-    Block block = DMTestEnv::prepareSimpleWriteBlock(0,
-                                                     num_rows_write,
-                                                     false,
-                                                     2,
-                                                     EXTRA_HANDLE_COLUMN_NAME,
-                                                     EXTRA_HANDLE_COLUMN_ID,
-                                                     EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                     true,
-                                                     1);
+    Block block = DMTestEnv::prepareSimpleWriteBlock(
+        0,
+        num_rows_write,
+        false,
+        2,
+        EXTRA_HANDLE_COLUMN_NAME,
+        EXTRA_HANDLE_COLUMN_ID,
+        EXTRA_HANDLE_COLUMN_STRING_TYPE,
+        true,
+        1);
     auto filtered_block = RowKeyFilter::filterUnsorted(ranges, std::move(block), 0);
     ASSERT_EQ(filtered_block.rows(), 70);
 }

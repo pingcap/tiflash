@@ -48,13 +48,14 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     // RefPage exists, but normal Page do NOT exist. Should NOT call here
     if (!entry)
     {
-        throw DB::Exception("Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
-                            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception(
+            "Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+            ErrorCodes::LOGICAL_ERROR);
     }
     return entry;
 }
 
-const PageEntry PageEntriesView::at(const PageId page_id) const
+PageEntry PageEntriesView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
     if (!entry)
@@ -173,7 +174,7 @@ size_t PageEntriesView::numPages() const
     for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         nodes.emplace_back(node);
 
-    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node)
+    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node) // NOLINT
     {
         for (const auto & pair : (*node)->page_ref)
         {

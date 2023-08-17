@@ -53,11 +53,11 @@ namespace FailPoints
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
-extern const char force_triggle_foreground_flush[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
 extern const char force_set_page_file_write_errno[];
+extern const char proactive_flush_force_set_type[];
 } // namespace FailPoints
 
 namespace DM
@@ -259,18 +259,19 @@ try
     {
         new_cols = DMTestEnv::getDefaultColumns();
         ColumnDefine handle_column_define = (*new_cols)[0];
-        new_store = std::make_shared<DeltaMergeStore>(*db_context,
-                                                      false,
-                                                      "test",
-                                                      "t_200",
-                                                      NullspaceID,
-                                                      200,
-                                                      true,
-                                                      *new_cols,
-                                                      handle_column_define,
-                                                      false,
-                                                      1,
-                                                      DeltaMergeStore::Settings());
+        new_store = std::make_shared<DeltaMergeStore>(
+            *db_context,
+            false,
+            "test",
+            "t_200",
+            NullspaceID,
+            200,
+            true,
+            *new_cols,
+            handle_column_define,
+            false,
+            1,
+            DeltaMergeStore::Settings());
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
         new_store->write(*db_context, db_context->getSettingsRef(), block);
         new_store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -279,19 +280,20 @@ try
     sp_gc.next(); // continue the page storage gc
     th_gc.get();
 
-    BlockInputStreamPtr in = new_store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             *new_cols,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             "",
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+    BlockInputStreamPtr in = new_store->read(
+        *db_context,
+        db_context->getSettingsRef(),
+        *new_cols,
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /* num_streams= */ 1,
+        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        0,
+        "",
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
 CATCH
@@ -341,22 +343,25 @@ try
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
         store = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
 
-        ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle) << DMTestEnv::PkTypeToString(pk_type);
-        ASSERT_EQ(DeltaMergeStore::pkIsHandle(store->getHandle()),
-                  (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
+        ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle)
+            << DMTestEnv::PkTypeToString(pk_type);
+        ASSERT_EQ(
+            DeltaMergeStore::pkIsHandle(store->getHandle()),
+            (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
             << DMTestEnv::PkTypeToString(pk_type);
 
         const size_t nrows = 20;
         const auto & handle = store->getHandle();
-        auto block1 = DMTestEnv::prepareSimpleWriteBlock(0,
-                                                         nrows,
-                                                         false,
-                                                         /*tso*/ 2,
-                                                         /*pk_name*/ handle.name,
-                                                         handle.id,
-                                                         handle.type,
-                                                         store->isCommonHandle(),
-                                                         store->getRowKeyColumnSize());
+        auto block1 = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            nrows,
+            false,
+            /*tso*/ 2,
+            /*pk_name*/ handle.name,
+            handle.id,
+            handle.type,
+            store->isCommonHandle(),
+            store->getRowKeyColumnSize());
         block1 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block1));
         ASSERT_EQ(block1.rows(), nrows);
         ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
@@ -364,15 +369,16 @@ try
 
         // Make a block that is overlapped with `block1` and it should be squashed by `PKSquashingBlockInputStream`
         size_t nrows_2 = 2;
-        auto block2 = DMTestEnv::prepareSimpleWriteBlock(nrows - 1,
-                                                         nrows - 1 + nrows_2,
-                                                         false,
-                                                         /*tso*/ 4,
-                                                         /*pk_name*/ handle.name,
-                                                         handle.id,
-                                                         handle.type,
-                                                         store->isCommonHandle(),
-                                                         store->getRowKeyColumnSize());
+        auto block2 = DMTestEnv::prepareSimpleWriteBlock(
+            nrows - 1,
+            nrows - 1 + nrows_2,
+            false,
+            /*tso*/ 4,
+            /*pk_name*/ handle.name,
+            handle.id,
+            handle.type,
+            store->isCommonHandle(),
+            store->getRowKeyColumnSize());
         block2 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block2));
         ASSERT_EQ(block2.rows(), nrows_2);
         ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
@@ -380,7 +386,10 @@ try
 
 
         BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
-        stream = std::make_shared<PKSquashingBlockInputStream<false>>(stream, EXTRA_HANDLE_COLUMN_ID, store->isCommonHandle());
+        stream = std::make_shared<PKSquashingBlockInputStream<false>>(
+            stream,
+            EXTRA_HANDLE_COLUMN_ID,
+            store->isCommonHandle());
         ASSERT_INPUTSTREAM_NROWS(stream, nrows + nrows_2);
 
         LOG_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
@@ -458,19 +467,20 @@ try
 
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
@@ -484,7 +494,8 @@ try
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
+        BlockInputStreamPtr in
+            = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
@@ -544,22 +555,23 @@ try
 
     const auto & columns = store->getTableColumns();
     auto scan_context = std::make_shared<ScanContext>();
-    auto in = store->read(*db_context,
-                          db_context->getSettingsRef(),
-                          columns,
-                          {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                          /* num_streams= */ 1,
-                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                          EMPTY_FILTER,
-                          std::vector<RuntimeFilterPtr>{},
-                          0,
-                          TRACING_NAME,
-                          /* keep_order= */ false,
-                          /* is_fast_scan= */ false,
-                          /* expected_block_size= */ 1024,
-                          /* read_segments */ {},
-                          /* extra_table_id_index */ InvalidColumnID,
-                          /* scan_context */ scan_context)[0];
+    auto in = store->read(
+        *db_context,
+        db_context->getSettingsRef(),
+        columns,
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /* num_streams= */ 1,
+        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        0,
+        TRACING_NAME,
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        /* expected_block_size= */ 1024,
+        /* read_segments */ {},
+        /* extra_table_id_index */ InvalidColumnID,
+        /* scan_context */ scan_context)[0];
     in->readPrefix();
     while (in->read()) {};
     in->readSuffix();
@@ -569,24 +581,28 @@ try
     ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 0);
     ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0);
 
-    auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
+    auto filter = createGreater(
+        Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")},
+        Field(static_cast<Int64>(10000)),
+        0);
     scan_context = std::make_shared<ScanContext>();
-    in = store->read(*db_context,
-                     db_context->getSettingsRef(),
-                     columns,
-                     {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                     /* num_streams= */ 1,
-                     /* max_version= */ std::numeric_limits<UInt64>::max(),
-                     std::make_shared<PushDownFilter>(filter),
-                     std::vector<RuntimeFilterPtr>{},
-                     0,
-                     TRACING_NAME,
-                     /* keep_order= */ false,
-                     /* is_fast_scan= */ false,
-                     /* expected_block_size= */ 1024,
-                     /* read_segments */ {},
-                     /* extra_table_id_index */ InvalidColumnID,
-                     /* scan_context */ scan_context)[0];
+    in = store->read(
+        *db_context,
+        db_context->getSettingsRef(),
+        columns,
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /* num_streams= */ 1,
+        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        std::make_shared<PushDownFilter>(filter),
+        std::vector<RuntimeFilterPtr>{},
+        0,
+        TRACING_NAME,
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        /* expected_block_size= */ 1024,
+        /* read_segments */ {},
+        /* extra_table_id_index */ InvalidColumnID,
+        /* scan_context */ scan_context)[0];
 
     in->readPrefix();
     while (in->read()) {};
@@ -662,19 +678,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, 0);
     }
 }
@@ -729,7 +746,9 @@ try
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
         SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
         store->write(*db_context, db_context->getSettingsRef(), block); // Will not write PS.
-        ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
+        ASSERT_THROW(
+            store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())),
+            DB::Exception);
         try
         {
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -744,19 +763,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
@@ -796,19 +816,20 @@ try
     // Test Reading first
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -825,19 +846,20 @@ try
     // Read after deletion
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -905,19 +927,20 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -934,7 +957,8 @@ try
         UInt64 tso2 = 100;
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
-        Block block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
+        Block block3
+            = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
 
         switch (mode)
         {
@@ -981,19 +1005,20 @@ try
     // Read without version
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -1004,19 +1029,20 @@ try
     // Read with version
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ static_cast<UInt64>(1),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ static_cast<UInt64>(1),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -1051,19 +1077,20 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             settings,
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            settings,
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -1083,19 +1110,20 @@ try
     // segment2: 4, 5, 6, 7, 8
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             settings,
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            settings,
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -1113,19 +1141,20 @@ try
 
     auto settings = db_context->getSettings();
     const auto & columns = store->getTableColumns();
-    BlockInputStreamPtr in = store->read(*db_context,
-                                         settings,
-                                         columns,
-                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                         /* num_streams= */ 1,
-                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                         EMPTY_FILTER,
-                                         std::vector<RuntimeFilterPtr>{},
-                                         0,
-                                         TRACING_NAME,
-                                         /* keep_order= */ false,
-                                         /* is_fast_scan= */ false,
-                                         /* expected_block_size= */ 1024)[0];
+    BlockInputStreamPtr in = store->read(
+        *db_context,
+        settings,
+        columns,
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /* num_streams= */ 1,
+        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        0,
+        TRACING_NAME,
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        /* expected_block_size= */ 1024)[0];
     auto b = in->read();
     ASSERT_FALSE(static_cast<bool>(b));
 }
@@ -1153,19 +1182,20 @@ try
     {
         // read all data of max_version
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_tso1 + num_rows_tso2);
@@ -1174,19 +1204,20 @@ try
     {
         // read all data <= tso2
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso2,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso2,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_tso1 + num_rows_tso2);
@@ -1195,19 +1226,20 @@ try
     {
         // read all data <= tso1
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_tso1);
@@ -1216,19 +1248,20 @@ try
     {
         // read all data < tso1
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso1 - 1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso1 - 1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, 0);
@@ -1275,19 +1308,20 @@ try
         // Read all data <= tso1
         // We can only get [0, 32) with tso1
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -1303,19 +1337,20 @@ try
     {
         // Read all data between [tso, tso2)
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso2 - 1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso2 - 1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -1325,46 +1360,51 @@ try
                 createColumn<Int64>(createNumbers<Int64>(0, 32)),
                 createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
             }))
-            << fmt::format("Data [32, 128) after ingest with tso less than: {} are erased, should only get [0, 32)", tso2);
+            << fmt::format(
+                   "Data [32, 128) after ingest with tso less than: {} are erased, should only get [0, 32)",
+                   tso2);
     }
 
     {
         // Read all data between [tso2, tso3)
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso3 - 1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso3 - 1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_NROWS(in, 32 + 16) << fmt::format("The rows number after ingest with tso less than {} is not match", tso3);
+        ASSERT_INPUTSTREAM_NROWS(in, 32 + 16)
+            << fmt::format("The rows number after ingest with tso less than {} is not match", tso3);
     }
 
     {
         // Read all data between [tso2, tso3)
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, 32 + (48 - 32) + (256 - 80)) << "The rows number after ingest is not match";
@@ -1375,19 +1415,20 @@ try
         auto range0 = RowKeyRange::fromHandleRange(HandleRange(32, 33));
         auto range1 = RowKeyRange::fromHandleRange(HandleRange(40, 41));
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {range0, range1},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {range0, range1},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, 2) << "The rows number of two point get is not match";
@@ -1421,7 +1462,8 @@ try
     {
         // Prepare DTFiles for ingesting
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto [ingest_range, file_ids] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 128, false, tso2));
+        auto [ingest_range, file_ids]
+            = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 128, false, tso2));
         // Enable failpoint for testing
         FailPointHelper::enableFailPoint(FailPoints::force_set_segment_ingest_packs_fail);
         FailPointHelper::enableFailPoint(FailPoints::segment_merge_after_ingest_packs);
@@ -1434,19 +1476,20 @@ try
         // Read all data <= tso1
         // We can only get [0, 32) with tso1
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -1462,19 +1505,20 @@ try
     {
         // Read all data between [tso, tso2)
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ tso2 - 1,
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ tso2 - 1,
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -1484,25 +1528,28 @@ try
                 createColumn<Int64>(createNumbers<Int64>(0, 32)),
                 createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
             }))
-            << fmt::format("Data [32, 128) after ingest with tso less than: {} are erased, should only get [0, 32)", tso2);
+            << fmt::format(
+                   "Data [32, 128) after ingest with tso less than: {} are erased, should only get [0, 32)",
+                   tso2);
     }
 
     {
         // Read all data between [tso2, tso3)
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
         ASSERT_INPUTSTREAM_NROWS(in, 32 + 128 - 32) << "The rows number after ingest is not match";
@@ -1578,24 +1625,28 @@ try
 
             // read all columns from store
             const auto & columns = store->getTableColumns();
-            BlockInputStreams ins = store->read(*db_context,
-                                                db_context->getSettingsRef(),
-                                                //                                                settings,
-                                                columns,
-                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                                /* num_streams= */ 1,
-                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                                EMPTY_FILTER,
-                                                std::vector<RuntimeFilterPtr>{},
-                                                0,
-                                                TRACING_NAME,
-                                                /* keep_order= */ false,
-                                                /* is_fast_scan= */ false,
-                                                /* expected_block_size= */ 1024);
+            BlockInputStreams ins = store->read(
+                *db_context,
+                db_context->getSettingsRef(),
+                //                                                settings,
+                columns,
+                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                /* num_streams= */ 1,
+                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                EMPTY_FILTER,
+                std::vector<RuntimeFilterPtr>{},
+                0,
+                TRACING_NAME,
+                /* keep_order= */ false,
+                /* is_fast_scan= */ false,
+                /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(
+                &Poco::Logger::get(GET_GTEST_FULL_NAME),
+                "start to check data of [1,{}]",
+                num_rows_write_in_total);
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
@@ -1644,10 +1695,8 @@ try
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of i8:Int8 for test
-            block.insert(DB::tests::createColumn<Int8>(
-                createSignedNumbers(0, num_rows_write),
-                col_name_ddl,
-                col_id_ddl));
+            block.insert(
+                DB::tests::createColumn<Int8>(createSignedNumbers(0, num_rows_write), col_name_ddl, col_id_ddl));
         }
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
@@ -1665,19 +1714,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
         {
@@ -1750,19 +1800,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
         {
@@ -1803,10 +1854,7 @@ try
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of i8:Int8 for test
-            block.insert(DB::tests::createColumn<Int8>(
-                createSignedNumbers(0, num_rows_write),
-                col_name_c1,
-                col_id_c1));
+            block.insert(DB::tests::createColumn<Int8>(createSignedNumbers(0, num_rows_write), col_name_c1, col_id_c1));
         }
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
@@ -1823,19 +1871,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
         {
@@ -1891,19 +1940,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
 
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1941,19 +1991,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
@@ -1990,19 +2041,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
@@ -2039,19 +2091,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
 
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -2088,19 +2141,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
 
         std::vector<DataTypeMyDateTime::FieldType> datetime_data(
             num_rows_write,
@@ -2143,19 +2197,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
@@ -2199,10 +2254,8 @@ try
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of i8:Int8 for test
-            block.insert(DB::tests::createColumn<Int8>(
-                createSignedNumbers(0, num_rows_write),
-                col_name_before_ddl,
-                col_id_ddl));
+            block.insert(
+                DB::tests::createColumn<Int8>(createSignedNumbers(0, num_rows_write), col_name_before_ddl, col_id_ddl));
         }
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
@@ -2220,19 +2273,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
         {
@@ -2327,19 +2381,20 @@ try
     {
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreams ins = store->read(*db_context,
-                                            db_context->getSettingsRef(),
-                                            columns,
-                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                            /* num_streams= */ 1,
-                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                            EMPTY_FILTER,
-                                            std::vector<RuntimeFilterPtr>{},
-                                            0,
-                                            TRACING_NAME,
-                                            /* keep_order= */ false,
-                                            /* is_fast_scan= */ false,
-                                            /* expected_block_size= */ 1024);
+        BlockInputStreams ins = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
         {
@@ -2377,19 +2432,20 @@ try
         {
             // read all columns from store
             const auto & columns = store->getTableColumns();
-            BlockInputStreams ins = store->read(*db_context,
-                                                db_context->getSettingsRef(),
-                                                columns,
-                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                                /* num_streams= */ 1,
-                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                                EMPTY_FILTER,
-                                                std::vector<RuntimeFilterPtr>{},
-                                                0,
-                                                TRACING_NAME,
-                                                /* keep_order= */ false,
-                                                /* is_fast_scan= */ false,
-                                                /* expected_block_size= */ 1024);
+            BlockInputStreams ins = store->read(
+                *db_context,
+                db_context->getSettingsRef(),
+                columns,
+                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                /* num_streams= */ 1,
+                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                EMPTY_FILTER,
+                std::vector<RuntimeFilterPtr>{},
+                0,
+                TRACING_NAME,
+                /* keep_order= */ false,
+                /* is_fast_scan= */ false,
+                /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
             {
@@ -2449,19 +2505,20 @@ try
 
     // try read
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
@@ -2473,7 +2530,9 @@ try
 
     {
         // write and triggle flush
-        FailPointHelper::enableFailPoint(FailPoints::force_triggle_foreground_flush);
+        std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();
+        ai->store(0b11);
+        FailPointHelper::enableFailPoint(FailPoints::proactive_flush_force_set_type, ai);
 
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write * 2, false);
         {
@@ -2493,19 +2552,20 @@ try
     // wait till delta-merge is done
     FAIL_POINT_PAUSE(FailPoints::pause_until_dt_background_delta_merge);
     {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
-                              std::vector<RuntimeFilterPtr>{},
-                              0,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
 
         // FIXME!!!
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -2575,15 +2635,16 @@ try
         // write to store
         Block block;
         {
-            block = DMTestEnv::prepareSimpleWriteBlock(0,
-                                                       num_rows_write,
-                                                       false,
-                                                       2,
-                                                       EXTRA_HANDLE_COLUMN_NAME,
-                                                       EXTRA_HANDLE_COLUMN_ID,
-                                                       EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                       true,
-                                                       rowkey_column_size);
+            block = DMTestEnv::prepareSimpleWriteBlock(
+                0,
+                num_rows_write,
+                false,
+                2,
+                EXTRA_HANDLE_COLUMN_NAME,
+                EXTRA_HANDLE_COLUMN_ID,
+                EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                true,
+                rowkey_column_size);
             // Add a column of col2:String for test
             block.insert(DB::tests::createColumn<String>(
                 createNumberStrings(0, num_rows_write),
@@ -2606,25 +2667,28 @@ try
 
         // read all columns from store
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
 
         // mock common handle
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(0, num_rows_write);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -2640,12 +2704,15 @@ try
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
+        BlockInputStreamPtr in
+            = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
         // mock common handle
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(0, num_rows_write);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -2674,33 +2741,36 @@ try
 
     // Test write multi blocks without overlap
     {
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0,
-                                                          1 * num_write_rows,
-                                                          false,
-                                                          2,
-                                                          EXTRA_HANDLE_COLUMN_NAME,
-                                                          EXTRA_HANDLE_COLUMN_ID,
-                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                          true,
-                                                          rowkey_column_size);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
-                                                          2 * num_write_rows,
-                                                          false,
-                                                          2,
-                                                          EXTRA_HANDLE_COLUMN_NAME,
-                                                          EXTRA_HANDLE_COLUMN_ID,
-                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                          true,
-                                                          rowkey_column_size);
-        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows,
-                                                          3 * num_write_rows,
-                                                          false,
-                                                          2,
-                                                          EXTRA_HANDLE_COLUMN_NAME,
-                                                          EXTRA_HANDLE_COLUMN_ID,
-                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                          true,
-                                                          rowkey_column_size);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            1 * num_write_rows,
+            false,
+            2,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            true,
+            rowkey_column_size);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(
+            1 * num_write_rows,
+            2 * num_write_rows,
+            false,
+            2,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            true,
+            rowkey_column_size);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(
+            2 * num_write_rows,
+            3 * num_write_rows,
+            false,
+            2,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            true,
+            rowkey_column_size);
         store->write(*db_context, db_context->getSettingsRef(), block1);
         store->write(*db_context, db_context->getSettingsRef(), block2);
         store->write(*db_context, db_context->getSettingsRef(), block3);
@@ -2710,24 +2780,27 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(0, 3 * num_write_rows);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
@@ -2745,33 +2818,36 @@ try
     {
         UInt64 tso1 = 1;
         UInt64 tso2 = 100;
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0,
-                                                          1 * num_write_rows,
-                                                          false,
-                                                          tso1,
-                                                          EXTRA_HANDLE_COLUMN_NAME,
-                                                          EXTRA_HANDLE_COLUMN_ID,
-                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                          true,
-                                                          rowkey_column_size);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
-                                                          2 * num_write_rows,
-                                                          false,
-                                                          tso1,
-                                                          EXTRA_HANDLE_COLUMN_NAME,
-                                                          EXTRA_HANDLE_COLUMN_ID,
-                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                          true,
-                                                          rowkey_column_size);
-        Block block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2,
-                                                          num_write_rows / 2 + num_write_rows,
-                                                          false,
-                                                          tso2,
-                                                          EXTRA_HANDLE_COLUMN_NAME,
-                                                          EXTRA_HANDLE_COLUMN_ID,
-                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
-                                                          true,
-                                                          rowkey_column_size);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            1 * num_write_rows,
+            false,
+            tso1,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            true,
+            rowkey_column_size);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(
+            1 * num_write_rows,
+            2 * num_write_rows,
+            false,
+            tso1,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            true,
+            rowkey_column_size);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(
+            num_write_rows / 2,
+            num_write_rows / 2 + num_write_rows,
+            false,
+            tso2,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            true,
+            rowkey_column_size);
         store->write(*db_context, db_context->getSettingsRef(), block1);
         store->write(*db_context, db_context->getSettingsRef(), block2);
         store->write(*db_context, db_context->getSettingsRef(), block3);
@@ -2784,24 +2860,27 @@ try
     // Read without version
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(0, 3 * num_write_rows);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
@@ -2815,24 +2894,27 @@ try
     // Read with version
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ static_cast<UInt64>(1),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ static_cast<UInt64>(1),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(0, 2 * num_write_rows);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 2 * num_write_rows);
@@ -2873,24 +2955,27 @@ try
     // Test Reading first
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(0, num_rows_write);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
@@ -2912,24 +2997,27 @@ try
     // Read after deletion
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             std::vector<RuntimeFilterPtr>{},
-                                             0,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_fast_scan= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
         // mock common handle, data range after deletion is [64, 128)
         auto common_handle_coldata = []() {
             auto tmp = createNumbers<Int64>(num_deleted_rows, num_rows_write);
             Strings res;
-            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) {
+                return genMockCommonHandle(v, rowkey_column_size);
+            });
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), num_rows_write - num_deleted_rows);
@@ -2979,24 +3067,28 @@ try
 
             // read all columns from store
             const auto & columns = store->getTableColumns();
-            BlockInputStreams ins = store->read(*db_context,
-                                                db_context->getSettingsRef(),
-                                                //                                                settings,
-                                                columns,
-                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                                /* num_streams= */ 1,
-                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                                EMPTY_FILTER,
-                                                std::vector<RuntimeFilterPtr>{},
-                                                0,
-                                                TRACING_NAME,
-                                                /* keep_order= */ false,
-                                                /* is_fast_scan= */ false,
-                                                /* expected_block_size= */ 1024);
+            BlockInputStreams ins = store->read(
+                *db_context,
+                db_context->getSettingsRef(),
+                //                                                settings,
+                columns,
+                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                /* num_streams= */ 1,
+                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                EMPTY_FILTER,
+                std::vector<RuntimeFilterPtr>{},
+                0,
+                TRACING_NAME,
+                /* keep_order= */ false,
+                /* is_fast_scan= */ false,
+                /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(
+                &Poco::Logger::get(GET_GTEST_FULL_NAME),
+                "start to check data of [1,{}]",
+                num_rows_write_in_total);
 
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
@@ -3017,7 +3109,14 @@ CATCH
 INSTANTIATE_TEST_CASE_P(
     TestMode,
     DeltaMergeStoreRWTest,
-    testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix, TestMode::V3_BlockOnly, TestMode::V3_FileOnly, TestMode::V3_Mix),
+    testing::Values(
+        TestMode::V1_BlockOnly,
+        TestMode::V2_BlockOnly,
+        TestMode::V2_FileOnly,
+        TestMode::V2_Mix,
+        TestMode::V3_BlockOnly,
+        TestMode::V3_FileOnly,
+        TestMode::V3_Mix),
     testModeToString);
 
 
@@ -3026,10 +3125,7 @@ class DeltaMergeStoreMergeDeltaBySegmentTest
     , public testing::WithParamInterface<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>>
 {
 public:
-    DeltaMergeStoreMergeDeltaBySegmentTest()
-    {
-        std::tie(ps_ver, pk_type) = GetParam();
-    }
+    DeltaMergeStoreMergeDeltaBySegmentTest() { std::tie(ps_ver, pk_type) = GetParam(); }
 
     void SetUp() override
     {
@@ -3050,19 +3146,23 @@ public:
     void setupDMStore()
     {
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
-        store = std::make_shared<DeltaMergeStore>(*db_context,
-                                                  false,
-                                                  "test",
-                                                  DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
-                                                  NullspaceID,
-                                                  101,
-                                                  true,
-                                                  *cols,
-                                                  (*cols)[0],
-                                                  pk_type == DMTestEnv::PkType::CommonHandle,
-                                                  1,
-                                                  DeltaMergeStore::Settings());
-        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+        store = std::make_shared<DeltaMergeStore>(
+            *db_context,
+            false,
+            "test",
+            DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+            NullspaceID,
+            101,
+            true,
+            *cols,
+            (*cols)[0],
+            pk_type == DMTestEnv::PkType::CommonHandle,
+            1,
+            DeltaMergeStore::Settings());
+        dm_context = store->newDMContext(
+            *db_context,
+            db_context->getSettingsRef(),
+            DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
     }
 
 protected:
@@ -3079,7 +3179,10 @@ INSTANTIATE_TEST_CASE_P(
     DeltaMergeStoreMergeDeltaBySegmentTest,
     ::testing::Combine(
         ::testing::Values(2, 3),
-        ::testing::Values(DMTestEnv::PkType::HiddenTiDBRowID, DMTestEnv::PkType::CommonHandle, DMTestEnv::PkType::PkIsHandleInt64)),
+        ::testing::Values(
+            DMTestEnv::PkType::HiddenTiDBRowID,
+            DMTestEnv::PkType::CommonHandle,
+            DMTestEnv::PkType::PkIsHandleInt64)),
     [](const testing::TestParamInfo<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>> & info) {
         const auto [ps_ver, pk_type] = info.param;
         return fmt::format("PsV{}_{}", ps_ver, DMTestEnv::PkTypeToString(pk_type));
@@ -3092,7 +3195,8 @@ try
 {
     {
         // Write data to first 3 segments.
-        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        auto newly_written_rows
+            = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -3202,7 +3306,8 @@ try
 {
     {
         // Write data to first 3 segments.
-        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        auto newly_written_rows
+            = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -3234,7 +3339,8 @@ try
 {
     {
         // Write data to first 3 segments and flush.
-        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        auto newly_written_rows
+            = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -3250,7 +3356,12 @@ try
     {
         // Write new data to segment[1] without flush.
         auto newly_written_rows = helper->rows_by_segments[1];
-        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            helper->rows_by_segments[0],
+            helper->rows_by_segments[0] + newly_written_rows,
+            false,
+            pk_type,
+            10 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
 
         helper->expected_delta_rows[1] += helper->rows_by_segments[1];
@@ -3284,14 +3395,20 @@ try
     {
         // Write new data to segment[1] without flush.
         auto newly_written_rows = helper->rows_by_segments[1];
-        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            helper->rows_by_segments[0],
+            helper->rows_by_segments[0] + newly_written_rows,
+            false,
+            pk_type,
+            10 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         helper->expected_delta_rows[1] += helper->rows_by_segments[1];
         helper->verifyExpectedRowsForAllSegments();
     }
 
     auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
-    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+    auto sp_merge_delta_retry
+        = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
 
     // Start a flush and suspend it before flushCommit.
     auto th_flush = std::async([&]() {
@@ -3334,7 +3451,8 @@ TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryBySplit)
 try
 {
     auto sp_split_prepare = SyncPointCtl::enableInScope("before_Segment::prepareSplit");
-    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+    auto sp_merge_delta_retry
+        = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
 
     // Start a split and suspend it during prepareSplit to simulate a long-running split.
     auto th_split = std::async([&] {
@@ -3380,7 +3498,12 @@ try
     {
         // Write to the new segment1 + segment2 after split.
         auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
-        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            helper->rows_by_segments[0],
+            helper->rows_by_segments[0] + newly_written_rows,
+            false,
+            pk_type,
+            10 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         helper->expected_delta_rows[1] += helper->rows_by_segments[1];
         helper->expected_delta_rows[2] += helper->rows_by_segments[2];

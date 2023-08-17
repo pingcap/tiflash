@@ -74,7 +74,6 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     }
     else
     {
-        LOG_TRACE(logger, "gjt debug add task to nested queue {}", name);
         iter->second->submit(std::move(task));
     }
 }

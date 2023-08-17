@@ -29,15 +29,19 @@ class StorageDeltaMerge;
 class TMTContext;
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region);
-void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true);
+void RemoveRegionCommitCache(
+    const RegionPtr & region,
+    const RegionDataReadInfoList & data_list_read,
+    bool lock_region = true);
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
 
-Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
-                                   const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
-                                   Timestamp gc_safepoint,
-                                   bool force_decode,
-                                   TMTContext & tmt);
+Block GenRegionBlockDataWithSchema(
+    const RegionPtr & region, //
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
+    Timestamp gc_safepoint,
+    bool force_decode,
+    TMTContext & tmt);
 
 } // namespace DB

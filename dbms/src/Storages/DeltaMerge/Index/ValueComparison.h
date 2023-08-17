@@ -144,7 +144,8 @@ private:
                   || compareNumberLeftType<Field::Types::Which::Int64, Int64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Float64, Float64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Int128, Int128>(left_field, right, res)))
-                throw Exception(fmt::format("Illegal compare {} with {}", left_field.getTypeName(), compareTypeToString(right)));
+                throw Exception(
+                    fmt::format("Illegal compare {} with {}", left_field.getTypeName(), compareTypeToString(right)));
             return true;
         }
         else if constexpr (LeftGroupType == Decimal || RightGroupType == Decimal)
@@ -214,11 +215,12 @@ private:
         return true;
     }
 
-    template <Field::Types::Which LeftFieldType,
-              typename Left,
-              ValueGroupType LeftGroupType,
-              typename Right,
-              ValueGroupType RightGroupType = getGroupType<Right>()>
+    template <
+        Field::Types::Which LeftFieldType,
+        typename Left,
+        ValueGroupType LeftGroupType,
+        typename Right,
+        ValueGroupType RightGroupType = getGroupType<Right>()>
     static bool compareDecimalLeftType(const Field & left_field, const Right & right, bool & res)
     {
         if (left_field.getType() != LeftFieldType)
@@ -234,7 +236,9 @@ private:
             left_scale = left.getScale();
         if constexpr (RightGroupType == Decimal)
             right_scale = right.getScale();
-        else if constexpr ((LeftGroupType == Number || LeftGroupType == Decimal) && (RightGroupType == Number || RightGroupType == Decimal))
+        else if constexpr (
+            (LeftGroupType == Number || LeftGroupType == Decimal)
+            && (RightGroupType == Number || RightGroupType == Decimal))
             res = DecimalComparison<Left, Right, Op, true>::compare(left, right, left_scale, right_scale);
 
         return true;
@@ -258,8 +262,11 @@ private:
     }
 
     template <typename Right>
-    static bool
-    compareDateOrDateTimeOrEnumWithString(const std::string & left, const DataTypePtr & right_type, const Right & right, bool & res)
+    static bool compareDateOrDateTimeOrEnumWithString(
+        const std::string & left,
+        const DataTypePtr & right_type,
+        const Right & right,
+        bool & res)
     {
         const IDataType * number_type = right_type.get();
 
@@ -271,7 +278,8 @@ private:
 
         const auto legal_types = (is_date = checkAndGetDataType<DataTypeDate>(number_type))
             || (is_date_time = checkAndGetDataType<DataTypeDateTime>(number_type))
-            || (is_uuid = checkAndGetDataType<DataTypeUUID>(number_type)) || (is_enum8 = checkAndGetDataType<DataTypeEnum8>(number_type))
+            || (is_uuid = checkAndGetDataType<DataTypeUUID>(number_type))
+            || (is_enum8 = checkAndGetDataType<DataTypeEnum8>(number_type))
             || (is_enum16 = checkAndGetDataType<DataTypeEnum16>(number_type));
 
         if (!legal_types)

@@ -160,7 +160,10 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
 
     for (size_t i = 0; i < keys.size(); i++)
     {
-        DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
+        DB::EncodeDatum(
+            keys[i],
+            table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(),
+            ss);
     }
     return encodeAsTiKVKey(key + ss.releaseStr());
 }
@@ -244,7 +247,8 @@ inline HandleID getHandle(const TiKVKey & key)
 
 inline bool isRecord(const DecodedTiKVKey & raw_key)
 {
-    return raw_key.size() >= RAW_KEY_SIZE && raw_key[0] == TABLE_PREFIX && memcmp(raw_key.data() + 9, RECORD_PREFIX_SEP, 2) == 0;
+    return raw_key.size() >= RAW_KEY_SIZE && raw_key[0] == TABLE_PREFIX
+        && memcmp(raw_key.data() + 9, RECORD_PREFIX_SEP, 2) == 0;
 }
 
 inline TiKVKey truncateTs(const TiKVKey & key)
@@ -445,10 +449,17 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
         }
     }
 
-    return InnerDecodedWriteCFValue{write_type, prewrite_ts, short_value.empty() ? nullptr : std::make_shared<const TiKVValue>(short_value.data(), short_value.length())};
+    return InnerDecodedWriteCFValue{
+        write_type,
+        prewrite_ts,
+        short_value.empty() ? nullptr : std::make_shared<const TiKVValue>(short_value.data(), short_value.length())};
 }
 
-inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_view short_value = {}, bool gc_fence = false)
+inline TiKVValue encodeWriteCfValue(
+    UInt8 write_type,
+    Timestamp ts,
+    std::string_view short_value = {},
+    bool gc_fence = false)
 {
     WriteBufferFromOwnString res;
     res.write(write_type);
@@ -483,7 +494,9 @@ inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_ke
             return "+INF";
         }
     }
-    return Redact::keyToDebugString(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+    return Redact::keyToDebugString(
+        decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE,
+        decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;

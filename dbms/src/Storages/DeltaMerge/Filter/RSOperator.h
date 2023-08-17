@@ -71,8 +71,7 @@ public:
         : attr(attr_)
         , value(value_)
         , null_direction(null_direction_)
-    {
-    }
+    {}
 
     Attrs getAttrs() override { return {attr}; }
 

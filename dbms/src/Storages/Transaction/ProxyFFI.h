@@ -116,6 +116,8 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     TimerTask makeTimerTask(uint64_t time_ms) const;
     bool pollTimerTask(TimerTask & task, RawVoidPtr waker = nullptr) const;
     raft_serverpb::RegionLocalState getRegionLocalState(uint64_t region_id) const;
+    void notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index)
+        const;
 };
 
 extern "C" {
@@ -125,14 +127,19 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     BaseBuffView req_buff,
     BaseBuffView resp_buff,
     RaftCmdHeader header);
-EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
-                                       WriteCmdsView cmds,
-                                       RaftCmdHeader header);
+EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView cmds, RaftCmdHeader header);
 uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
 // `flush_pattern` values:
 // 0: try, but can fail.
 // 1: try until succeed.
-uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term);
+uint8_t TryFlushData(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint8_t flush_pattern,
+    uint64_t index,
+    uint64_t term,
+    uint64_t truncated_index,
+    uint64_t truncated_term);
 RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy);
 void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value);
 void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id);
@@ -142,7 +149,10 @@ void HandleMergeWriteBatch(RawVoidPtr lhs, RawVoidPtr rhs);
 void HandleClearWriteBatch(RawVoidPtr ptr);
 void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr);
 CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
-RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
+RawCppPtrCarr HandleScanPage(
+    const EngineStoreServerWrap * server,
+    BaseBuffView start_page_id,
+    BaseBuffView end_page_id);
 CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuffView raw_page_id);
 uint8_t IsPSEmpty(const EngineStoreServerWrap * server);
 void HandlePurgePageStorage(const EngineStoreServerWrap * server);
@@ -170,12 +180,15 @@ BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
 void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view);
-void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts);
+void HandleSafeTSUpdate(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t self_safe_ts,
+    uint64_t leader_safe_ts);
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id);
 }
 
-inline EngineStoreServerHelper GetEngineStoreServerHelper(
-    EngineStoreServerWrap * tiflash_instance_wrap)
+inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)
 {
     return EngineStoreServerHelper{
         // a special number, also defined in proxy

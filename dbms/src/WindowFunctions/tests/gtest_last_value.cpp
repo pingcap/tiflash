@@ -28,10 +28,7 @@ class LastValue : public DB::tests::WindowTest
 public:
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 
     template <typename IntType>
     void testInt()
@@ -42,7 +39,7 @@ public:
             mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0)};
 
         executeFunctionAndAssert(
-            toVec<IntType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
+            toNullableVec<IntType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
             LastValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -67,7 +64,7 @@ public:
             mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0)};
 
         executeFunctionAndAssert(
-            toVec<FloatType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
+            toNullableVec<FloatType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
             LastValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -90,7 +87,7 @@ try
     {
         // frame type: unbounded
         executeFunctionAndAssert(
-            toVec<String>({"1", "5", "5", "5", "5", "10", "10", "10", "10", "10", "13", "13", "13"}),
+            toNullableVec<String>({"1", "5", "5", "5", "5", "10", "10", "10", "10", "10", "13", "13", "13"}),
             LastValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -111,7 +108,7 @@ try
         frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
 
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-        std::vector<std::vector<String>> res_not_null{
+        std::vector<std::vector<std::optional<String>>> res_not_null{
             {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"},
             {"1", "3", "4", "5", "5", "7", "8", "9", "10", "10", "12", "13", "13"},
             {"1", "5", "5", "5", "5", "9", "10", "10", "10", "10", "13", "13", "13"},
@@ -128,7 +125,7 @@ try
         {
             frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
             executeFunctionAndAssert(
-                toVec<String>(res_not_null[i]),
+                toNullableVec<String>(res_not_null[i]),
                 LastValue(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
                  toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -143,6 +140,28 @@ try
                  toNullableVec<String>(/*value*/ {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}})},
                 frame);
         }
+
+        // The following are <preceding, preceding> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 2);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 1);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, {}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12"}),
+            LastValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
+
+        // The following are <following, folloing> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 1);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 2);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, "4", "5", "5", {}, "8", "9", "10", "10", {}, "13", "13", {}}),
+            LastValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
     }
 
     // TODO support unsigned int.

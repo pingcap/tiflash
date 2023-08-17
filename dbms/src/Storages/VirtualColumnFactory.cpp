@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/VirtualColumnFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Storages/VirtualColumnFactory.h>
 
 
 namespace DB
@@ -22,7 +22,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+extern const int NO_SUCH_COLUMN_IN_TABLE;
 }
 
 
@@ -41,11 +41,15 @@ bool VirtualColumnFactory::hasColumn(const String & name)
 
 DataTypePtr VirtualColumnFactory::tryGetType(const String & name)
 {
-    if (name == "_table")         return std::make_shared<DataTypeString>();
-    if (name == "_part")          return std::make_shared<DataTypeString>();
-    if (name == "_part_index")    return std::make_shared<DataTypeUInt64>();
-    if (name == "_sample_factor") return std::make_shared<DataTypeFloat64>();
+    if (name == "_table")
+        return std::make_shared<DataTypeString>();
+    if (name == "_part")
+        return std::make_shared<DataTypeString>();
+    if (name == "_part_index")
+        return std::make_shared<DataTypeUInt64>();
+    if (name == "_sample_factor")
+        return std::make_shared<DataTypeFloat64>();
     return nullptr;
 }
 
-}
+} // namespace DB

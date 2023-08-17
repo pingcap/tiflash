@@ -93,10 +93,17 @@ BlockInputStreams StorageSystemNumbers::read(
     BlockInputStreams res(num_streams);
     for (size_t i = 0; i < num_streams; ++i)
     {
-        res[i] = std::make_shared<NumbersBlockInputStream>(max_block_size, i * max_block_size, num_streams * max_block_size);
+        res[i] = std::make_shared<NumbersBlockInputStream>(
+            max_block_size,
+            i * max_block_size,
+            num_streams * max_block_size);
 
         if (limit) /// This formula is how to split 'limit' elements to 'num_streams' chunks almost uniformly.
-            res[i] = std::make_shared<LimitBlockInputStream>(res[i], limit * (i + 1) / num_streams - limit * i / num_streams, /*offset*/ 0, /*req_id=*/"");
+            res[i] = std::make_shared<LimitBlockInputStream>(
+                res[i],
+                limit * (i + 1) / num_streams - limit * i / num_streams,
+                /*offset*/ 0,
+                /*req_id=*/"");
     }
 
     return res;

@@ -79,10 +79,7 @@ public:
 public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
-    void debugSetKVStore(const KVStorePtr & new_kvstore)
-    {
-        kvstore = new_kvstore;
-    }
+    void debugSetKVStore(const KVStorePtr & new_kvstore) { kvstore = new_kvstore; }
 
     const ManagedStorages & getStorages() const;
     ManagedStorages & getStorages();
@@ -99,9 +96,10 @@ public:
 
     const Context & getContext() const;
 
-    explicit TMTContext(Context & context_,
-                        const TiFlashRaftConfig & raft_config,
-                        const pingcap::ClusterConfig & cluster_config_);
+    explicit TMTContext(
+        Context & context_,
+        const TiFlashRaftConfig & raft_config,
+        const pingcap::ClusterConfig & cluster_config_);
     ~TMTContext();
 
     std::shared_ptr<TiDBSchemaSyncerManager> getSchemaSyncerManager() const;
