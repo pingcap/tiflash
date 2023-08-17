@@ -18,7 +18,7 @@
 
 namespace DB
 {
-ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::string & name)
+ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::string & name)
 {
     ResourceGroupPtr group = findResourceGroup(name);
     if (group != nullptr)
@@ -50,6 +50,7 @@ void LocalAdmissionController::startBackgroudJob()
         }
         catch (...)
         {
+            // If error happens constantly, the bg thread will not work and will keeping log error.
             auto err_msg = getCurrentExceptionMessage(true);
             handleBackgroundError(err_msg);
         }
@@ -57,25 +58,41 @@ void LocalAdmissionController::startBackgroudJob()
 
     while (!stopped.load())
     {
+        bool only_fetch_for_low_token = true;
         {
             std::unique_lock<std::mutex> lock(mu);
-            if (cv.wait_for(lock, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
-                    return stopped.load();
-                }))
-                return;
+            if (low_token_resource_groups.empty())
+            {
+                only_fetch_for_low_token = false;
+                if (cv.wait_for(lock, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
+                        return stopped.load();
+                    }))
+                    return;
 
-            if (refill_token_callback)
-                refill_token_callback();
-
-            // gjt todo
-            // if (delete_resource_group_callback)
-            //     delete_resource_group_callback();
+                // gjt todo
+                // if (delete_resource_group_callback)
+                //     delete_resource_group_callback();
+            }
+            else
+            {
+                LOG_DEBUG(log, "skip cv wait because will fetch tokens for low token resource group");
+            }
         }
 
         try
         {
-            fetchTokensFromGAC();
-            checkDegradeMode();
+            if (only_fetch_for_low_token)
+            {
+                fetchTokensForLowTokenResourceGroups();
+            }
+            else
+            {
+                fetchTokensForAllResourceGroups();
+                checkDegradeMode();
+            }
+
+            if (refill_token_callback)
+                refill_token_callback();
         }
         catch (...)
         {
@@ -96,6 +113,7 @@ void LocalAdmissionController::watchResourceGroupDelete()
     auto * watch_create_req = watch_req.mutable_create_request();
     watch_create_req->set_key(GAC_RESOURCE_GROUP_ETCD_PATH);
     // Only watch delete event.
+    // For create event, when new MPPTask arrives, resource group will be fetched from GAC.
     watch_create_req->add_filters(etcdserverpb::WatchCreateRequest_FilterType::WatchCreateRequest_FilterType_NOPUT);
     bool ok = stream->Write(watch_req);
     static const std::string err_msg_prefix = "watch resource group delete event failed: ";
@@ -135,7 +153,7 @@ void LocalAdmissionController::watchResourceGroupDelete()
     // No need to cancel watch when exit, check: https://github.com/etcd-io/etcd/issues/7742#issuecomment-294184158
 }
 
-void LocalAdmissionController::fetchTokensFromGAC()
+void LocalAdmissionController::fetchTokensForAllResourceGroups()
 {
     std::vector<AcquireTokenInfo> acquire_infos;
     {
@@ -154,6 +172,37 @@ void LocalAdmissionController::fetchTokensFromGAC()
         }
     }
 
+    fetchTokensFromGAC(acquire_infos);
+}
+
+void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
+{
+    std::vector<AcquireTokenInfo> acquire_infos;
+    {
+        for (const auto & name : low_token_resource_groups)
+        {
+            auto iter = resource_groups.find(name);
+            if (iter != resource_groups.end())
+            {
+                double token_need_from_gac
+                    = iter->second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
+                if (token_need_from_gac <= 0.0)
+                    continue;
+
+                acquire_infos.emplace_back(AcquireTokenInfo{
+                    .resource_group_name = iter->second->name,
+                    .acquire_tokens = token_need_from_gac,
+                    .ru_consumption_delta = iter->second->getAndCleanConsumptionDelta()});
+            }
+        }
+        low_token_resource_groups.clear();
+    }
+
+    fetchTokensFromGAC(acquire_infos);
+}
+
+void LocalAdmissionController::fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos)
+{
     if (acquire_infos.empty())
     {
         last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
@@ -161,8 +210,7 @@ void LocalAdmissionController::fetchTokensFromGAC()
     }
 
     resource_manager::TokenBucketsRequest gac_req;
-    // gjt todo:
-    gac_req.set_client_unique_id(10010);
+    gac_req.set_client_unique_id(unique_client_id);
     gac_req.set_target_request_period_ms(TARGET_REQUEST_PERIOD_MS);
 
     for (const auto & info : acquire_infos)

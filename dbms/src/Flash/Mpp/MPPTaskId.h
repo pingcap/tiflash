@@ -107,7 +107,6 @@ struct MPPTaskId
         : task_id(unknown_task_id)
         , gather_id(0, 0, 0, 0, 0){};
 
-    // gjt todo rg name
     MPPTaskId(
         UInt64 start_ts,
         Int64 task_id_,

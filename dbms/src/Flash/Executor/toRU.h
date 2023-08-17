@@ -18,6 +18,7 @@
 
 namespace DB
 {
+// gjt todo change to double
 using RU = UInt64;
 
 // Convert cpu time nanoseconds to cpu time millisecond, and round up.

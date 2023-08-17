@@ -335,17 +335,23 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
+    // NOTE: getOrFetchResourceGroup may throw if resource group has been deleted.
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return;
 
-        ResourceGroupPtr group = getOrCreateResourceGroup(name);
+        ResourceGroupPtr group = getOrFetchResourceGroup(name);
         group->consumeResource(ru, cpu_time_in_ns);
-        // gjt todo: notify may miss
         if (group->lowToken())
+        {
+            {
+                std::lock_guard lock(mu);
+                low_token_resource_groups.push_back(name);
+            }
             cv.notify_one();
+        }
     }
 
     uint64_t getPriority(const std::string & name)
@@ -353,7 +359,7 @@ public:
         if (name.empty())
             return EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
 
-        ResourceGroupPtr group = getOrCreateResourceGroup(name);
+        ResourceGroupPtr group = getOrFetchResourceGroup(name);
         return group->getPriority(max_ru_per_sec.load());
     }
 
@@ -406,7 +412,7 @@ public:
 
 private:
     // Get ResourceGroup by name, if not exist, fetch from PD.
-    ResourceGroupPtr getOrCreateResourceGroup(const std::string & name);
+    ResourceGroupPtr getOrFetchResourceGroup(const std::string & name);
     ResourceGroupPtr findResourceGroup(const std::string & name)
     {
         std::lock_guard lock(mu);
@@ -441,22 +447,25 @@ private:
 
     static std::string isGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
-    // Background jobs:
-    // 1. Fetch tokens from GAC periodically.
-    // 2. Fetch tokens when low threshold is triggered.
-    // 3. Check if resource group need to goto degrade mode.
-    // 4. Watch GAC event to delete resource group.
-    void startBackgroudJob();
-    void fetchTokensFromGAC();
-    void checkDegradeMode();
-    void watchResourceGroupDelete();
-
     struct AcquireTokenInfo
     {
         std::string resource_group_name;
         double acquire_tokens;
         double ru_consumption_delta;
     };
+
+    // Background jobs:
+    // 1. Fetch tokens from GAC periodically.
+    // 2. Fetch tokens when low threshold is triggered.
+    // 3. Check if resource group need to goto degrade mode.
+    // 4. Watch GAC event to delete resource group.
+    void startBackgroudJob();
+    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_tokens);
+    void checkDegradeMode();
+    void watchResourceGroupDelete();
+
+    void fetchTokensForLowTokenResourceGroups();
+    void fetchTokensForAllResourceGroups();
 
     std::mutex mu;
 
@@ -487,5 +496,7 @@ private:
         = std::chrono::steady_clock::now();
 
     Etcd::ClientPtr etcd_client;
+
+    std::vector<std::string> low_token_resource_groups;
 };
 } // namespace DB

@@ -67,10 +67,11 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedTaskQueueType>();
-        task_queue->submit(std::move(task));
-        // gjt todo may throw. put before submit
-        resource_group_infos.push({name, LocalAdmissionController::global_instance->getPriority(name), task_queue});
+        // May throw if resource group has been deleted.
+        auto priority = LocalAdmissionController::global_instance->getPriority(name);
+        resource_group_infos.push({name, priority, task_queue});
         resource_group_task_queues.insert({name, task_queue});
+        task_queue->submit(std::move(task));
     }
     else
     {
