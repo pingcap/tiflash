@@ -17,8 +17,7 @@
 
 namespace DB
 {
-namespace
-{
+
 // Convert cpu time nanoseconds to cpu time millisecond, and round up.
 UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
 {
@@ -29,7 +28,6 @@ UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
     auto ceil_cpu_time_millisecond = ceil(cpu_time_millisecond);
     return ceil_cpu_time_millisecond;
 }
-} // namespace
 
 // 1 ru = 3 millisecond cpu time
 RU toRU(UInt64 cpu_time_ns)

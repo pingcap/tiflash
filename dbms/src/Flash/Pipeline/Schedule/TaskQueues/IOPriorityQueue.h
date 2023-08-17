@@ -47,7 +47,9 @@ public:
 
     void finish() override;
 
-    void cancel(const String & query_id) override;
+    void cancel(const String & query_id, const String & resource_group_name) override;
+
+    void collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id);
 
 private:
     void submitTaskWithoutLock(TaskPtr && task);

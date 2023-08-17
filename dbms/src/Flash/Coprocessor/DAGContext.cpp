@@ -48,6 +48,7 @@ DAGContext::DAGContext(
     KeyspaceID keyspace_id_,
     const String & tidb_host_,
     DAGRequestKind kind_,
+    const String & resource_group_name_,
     LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
@@ -66,6 +67,7 @@ DAGContext::DAGContext(
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(keyspace_id_)
+    , resource_group_name(resource_group_name_)
 {
     RUNTIME_ASSERT(kind != DAGRequestKind::MPP, log, "DAGContext non-mpp constructor get a mpp kind");
     initOutputInfo();
@@ -89,6 +91,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , warnings(max_recorded_error_count)
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(meta_))
+    , resource_group_name(meta_.resource_group_name())
 {
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
