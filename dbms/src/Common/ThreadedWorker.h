@@ -204,8 +204,8 @@ private:
             auto error = getCurrentExceptionMessage(false);
             LOG_ERROR(log, "{}#{} meet error: {}", getName(), thread_idx, error);
             auto cancel_reason = fmt::format("{} failed: {}", getName(), error);
-            result_queue->cancelWith(cancel_reason);
             source_queue->cancelWith(cancel_reason);
+            result_queue->cancelWith(cancel_reason);
         }
     }
 
