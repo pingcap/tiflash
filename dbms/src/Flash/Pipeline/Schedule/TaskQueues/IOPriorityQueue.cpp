@@ -20,21 +20,6 @@ namespace DB
 {
 namespace
 {
-template <typename Queue>
-bool popTask(Queue & queue, TaskPtr & task)
-{
-    if (!queue.empty())
-    {
-        task = std::move(queue.front());
-        queue.pop_front();
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
 void moveCancelledTasks(std::list<TaskPtr> & normal_queue, std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
     assert(!query_id.empty());
@@ -145,7 +130,9 @@ void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
         io_out_task_queue.push_back(std::move(task));
         break;
     default:
-        throw Exception(fmt::format("Unexpected status: {}, IOPriorityQueue only accepts tasks with IO status", magic_enum::enum_name(status)));
+        throw Exception(fmt::format(
+            "Unexpected status: {}, IOPriorityQueue only accepts tasks with IO status",
+            magic_enum::enum_name(status)));
     }
 }
 
@@ -183,7 +170,7 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-void IOPriorityQueue::cancel(const String & query_id)
+void IOPriorityQueue::cancel(const String & query_id, const String &)
 {
     if unlikely (query_id.empty())
         return;
@@ -191,9 +178,14 @@ void IOPriorityQueue::cancel(const String & query_id)
     std::lock_guard lock(mu);
     if (cancel_query_id_cache.add(query_id))
     {
-        moveCancelledTasks(io_in_task_queue, cancel_task_queue, query_id);
-        moveCancelledTasks(io_out_task_queue, cancel_task_queue, query_id);
+        collectCancelledTasks(cancel_task_queue, query_id);
         cv.notify_all();
     }
+}
+
+void IOPriorityQueue::collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id)
+{
+    moveCancelledTasks(io_in_task_queue, cancel_queue, query_id);
+    moveCancelledTasks(io_out_task_queue, cancel_queue, query_id);
 }
 } // namespace DB

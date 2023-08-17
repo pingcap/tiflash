@@ -399,7 +399,7 @@ tipb::SelectResponse executeDAGRequest(
         region_id,
         RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, log);
+    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", log);
     context.setDAGContext(&dag_context);
 
     DAGDriver<DAGRequestKind::Cop> driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
@@ -433,7 +433,7 @@ bool runAndCompareDagReq(
         region_id,
         RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, log);
+    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", log);
     context.setDAGContext(&dag_context);
     DAGDriver<DAGRequestKind::Cop>
         driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);

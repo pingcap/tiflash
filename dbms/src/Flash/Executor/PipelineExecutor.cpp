@@ -35,7 +35,8 @@ PipelineExecutor::PipelineExecutor(
           req_id,
           memory_tracker_,
           auto_spill_trigger,
-          register_operator_spill_context)
+          register_operator_spill_context,
+          context.getDAGContext()->getResourceGroupName())
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());

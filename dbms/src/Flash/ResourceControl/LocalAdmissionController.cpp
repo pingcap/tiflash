@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <common/types.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 
 namespace DB
 {
-using RU = UInt64;
 
-// Convert cpu time nanoseconds to cpu time millisecond, and round up.
-UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns);
+auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 
-// Convert cpu time nanoseconds to Request Unit.
-RU toRU(UInt64 cpu_time_ns);
 } // namespace DB

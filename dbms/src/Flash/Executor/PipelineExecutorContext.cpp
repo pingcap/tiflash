@@ -22,9 +22,7 @@ namespace DB
 ExecutionResult PipelineExecutorContext::toExecutionResult()
 {
     std::lock_guard lock(mu);
-    return exception_ptr
-        ? ExecutionResult::fail(exception_ptr)
-        : ExecutionResult::success();
+    return exception_ptr ? ExecutionResult::fail(exception_ptr) : ExecutionResult::success();
 }
 
 std::exception_ptr PipelineExecutorContext::getExceptionPtr()
@@ -158,7 +156,7 @@ void PipelineExecutorContext::cancel()
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
         if likely (TaskScheduler::instance && !query_id.empty())
-            TaskScheduler::instance->cancel(query_id);
+            TaskScheduler::instance->cancel(query_id, resource_group_name);
     }
 }
 
