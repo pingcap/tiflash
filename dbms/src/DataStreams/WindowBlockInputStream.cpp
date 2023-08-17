@@ -62,34 +62,23 @@ bool lessEqual(LeftType left, RightType right)
 {
     if constexpr (checkIfDecimalFieldType<LeftType>() && checkIfDecimalFieldType<RightType>())
     {
-        // This `if` branch is necessary or the next branch's codes will be generated
-        // when these two types are all DecimalField type which will cause compilation errors.
         return left <= right;
     }
-    else if constexpr (checkIfDecimalFieldType<LeftType>() || checkIfDecimalFieldType<RightType>())
+    else if constexpr (checkIfDecimalFieldType<LeftType>())
     {
-        // Only one type will be Decimal as Decimal vs Decimal can be handled in the `else` branch
-        UInt32 left_scale = 0;
-        UInt32 right_scale = 0;
-
-        if constexpr (checkIfDecimalFieldType<LeftType>())
-        {
-            left_scale = left.getScale();
-            return DecimalComparison<typename LeftType::DecimalType, RightType, LessOrEqualsOp>::compare(
-                left.getValue(),
-                right,
-                left_scale,
-                right_scale);
-        }
-        else if constexpr (checkIfDecimalFieldType<RightType>())
-        {
-            right_scale = right.getScale();
-            return DecimalComparison<LeftType, typename RightType::DecimalType, LessOrEqualsOp>::compare(
-                left,
-                right.getValue(),
-                left_scale,
-                right_scale);
-        }
+        return DecimalComparison<typename LeftType::DecimalType, RightType, LessOrEqualsOp>::compare(
+            left.getValue(),
+            right,
+            left.getScale(),
+            0);
+    }
+    else if constexpr (checkIfDecimalFieldType<RightType>())
+    {
+        return DecimalComparison<LeftType, typename RightType::DecimalType, LessOrEqualsOp>::compare(
+            left,
+            right.getValue(),
+            0,
+            right.getScale());
     }
     else
     {
@@ -102,34 +91,23 @@ bool greaterEqual(LeftType left, RightType right)
 {
     if constexpr (checkIfDecimalFieldType<LeftType>() && checkIfDecimalFieldType<RightType>())
     {
-        // This `if` branch is necessary or the next branch's codes will be generated
-        // when these two types are all DecimalField type which will cause compilation errors.
         return left >= right;
     }
-    else if constexpr (checkIfDecimalFieldType<LeftType>() || checkIfDecimalFieldType<RightType>())
+    else if constexpr (checkIfDecimalFieldType<LeftType>())
     {
-        // Only one type will be Decimal as Decimal vs Decimal can be handled in the `else` branch
-        UInt32 left_scale = 0;
-        UInt32 right_scale = 0;
-
-        if constexpr (checkIfDecimalFieldType<LeftType>())
-        {
-            left_scale = left.getScale();
-            return DecimalComparison<typename LeftType::DecimalType, RightType, GreaterOrEqualsOp>::compare(
-                left.getValue(),
-                right,
-                left_scale,
-                right_scale);
-        }
-        else if constexpr (checkIfDecimalFieldType<RightType>())
-        {
-            right_scale = right.getScale();
-            return DecimalComparison<LeftType, typename RightType::DecimalType, GreaterOrEqualsOp>::compare(
-                left,
-                right.getValue(),
-                left_scale,
-                right_scale);
-        }
+        return DecimalComparison<typename LeftType::DecimalType, RightType, GreaterOrEqualsOp>::compare(
+            left.getValue(),
+            right,
+            left.getScale(),
+            0);
+    }
+    else if constexpr (checkIfDecimalFieldType<RightType>())
+    {
+        return DecimalComparison<LeftType, typename RightType::DecimalType, GreaterOrEqualsOp>::compare(
+            left,
+            right.getValue(),
+            0,
+            right.getScale());
     }
     else
     {
