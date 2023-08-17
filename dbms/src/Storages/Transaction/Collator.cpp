@@ -293,7 +293,7 @@ private:
         if (c > 0xFFFF)
             return 0xFFFD;
         return GeneralCI::weight_lut[c & 0xFFFF];
-        //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF];
+        //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut_0400[c & 0xFFFF];
     }
 
     static inline bool regexEq(CharType a, CharType b) { return weight(a) == weight(b); }
@@ -308,10 +308,11 @@ using long_weight = struct
     uint64_t first;
     uint64_t second;
 };
-extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
+extern const std::array<uint64_t, 256 * 256 + 1> weight_lut_0400;
+extern const std::array<uint64_t, 256 * 256 + 1> weight_lut_0900;
 const uint64_t long_weight_rune = 0xFFFD;
 
-const std::array<long_weight, 23> weight_lut_long
+const std::array<long_weight, 23> weight_lut_long_0400
     = {long_weight{0x1D6E1DC61D6D0288, 0x000002891E031DC2},
        long_weight{0x1D741DC61D6D0288, 0x0000000002891DCB},
        long_weight{0x1D621E0F1DBE1D70, 0x0000000000001DC6},
@@ -337,19 +338,49 @@ const std::array<long_weight, 23> weight_lut_long
        // for default use
        long_weight{0x0, 0x0}};
 
+const std::array<long_weight, 28> weight_lut_long_0900
+    = {long_weight{0x3C013C7B3C000317, 0x000003183CD43C77},
+       long_weight{0x3C073C7B3C000317, 0x0000000003183C80},
+       long_weight{0x3BF53CE03C733C03, 0x0000000000003C7B},
+       long_weight{0x1C0E3D623D673D5E, 0x0000000000003D6E},
+       long_weight{0x3D823D623D863D61, 0x0000000000003D7B},
+       long_weight{0x1C0E3D7C3D863D61, 0x000000003D843D6E},
+       long_weight{0x3D6C3D873D863D61, 0x0000000000003D6E},
+       long_weight{0x3D6E3D7B3D823D62, 0x0000000000003D8B},
+       long_weight{0x3D5B3D683D843D62, 0x0000000000003D86},
+       long_weight{0x1C0E3D6B3D8B3D65, 0x0000000000003D7B},
+       long_weight{0x3D8B3D681C0E3D74, 0x0000000000003D6E},
+       long_weight{0x3D6E3D673D5A3D75, 0x0000000000003D84},
+       long_weight{0x3D6C3D823D5A3D76, 0x0000000000003D6E},
+       long_weight{0x3D5E3D663D6C3D76, 0x0000000000003D84},
+       long_weight{0x1C0E3D6A3D623D77, 0x0000000000003D84},
+       long_weight{0x3D813D663D8B3D79, 0x0000000000003D8B},
+       long_weight{0x1C0E3D743D833D7A, 0x0000000000003D84},
+       long_weight{0x3D633D6E3D8B3D85, 0x0000000000003D8B},
+       long_weight{0xDF0FFB40E82AFB40, 0xF93EFB40CF1AFB40},
+       long_weight{0x06251C8F1C471E33, 0x0000000000001E71},
+       long_weight{0x06251C8F1C471E33, 0x000000001C3F1E71},
+       long_weight{0x020923C5239C2364, 0x23B1239C239C230B},
+       long_weight{0x23250209239C2325, 0x23B1239C230B239C},
+       long_weight{0x000000000000FFFD, 0x0000000000000000},
+       long_weight{0x02091C8F1DB91C3F, 0x00001E331C7A1E71},
+       long_weight{0x1E3302091D321D18, 0x000000001E711CAA},
+       long_weight{0x1E711E711DDD1D77, 0x1E711E711CAA1D77},
+       // for default use
+       long_weight{0x0, 0x0}};
 } // namespace UnicodeCI
 
-class UnicodeCICollator final : public ITiDBCollator
+template <typename T, bool padding>
+class UCACICollator final : public ITiDBCollator
 {
 public:
-    explicit UnicodeCICollator(int32_t id)
+    explicit UCACICollator(int32_t id)
         : ITiDBCollator(id)
     {}
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
-        auto v1 = rtrim(s1, length1);
-        auto v2 = rtrim(s2, length2);
+        std::string_view v1 = preprocess(s1, length1), v2 = preprocess(s2, length2);
 
         size_t offset1 = 0, offset2 = 0;
         size_t v1_length = v1.length(), v2_length = v2.length();
@@ -402,7 +433,7 @@ public:
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
-        auto v = rtrim(s, length);
+        std::string_view v = preprocess(s, length);
         // every char have 8 uint16 at most.
         if (8 * length * sizeof(uint16_t) > container.size())
             container.resize(8 * length * sizeof(uint16_t));
@@ -422,7 +453,7 @@ public:
         return StringRef(container.data(), total_size);
     }
 
-    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UnicodeCICollator>>(); }
+    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UCACICollator>>(); }
 
     const std::string & getLocale() const override { return name; }
 
@@ -444,15 +475,57 @@ private:
         }
     }
 
-    static inline bool regexEq(CharType a, CharType b)
+    static inline bool regexEq(CharType a, CharType b) { return T::regexEq(a, b); }
+
+    static inline void weight(uint64_t & first, uint64_t & second, size_t & offset, size_t length, const char * s)
+    {
+        if (first == 0)
+        {
+            if (second == 0)
+            {
+                while (offset < length)
+                {
+                    auto r = decodeChar(s, offset);
+                    if (!T::weight(first, second, r))
+                    {
+                        continue;
+                    }
+                    break;
+                }
+            }
+            else
+            {
+                first = second;
+                second = 0;
+            }
+        }
+    }
+
+    static inline std::string_view preprocess(const char * s, size_t length)
+    {
+        if constexpr (padding)
+        {
+            return rtrim(s, length);
+        }
+
+        return std::string_view(s, length);
+    }
+
+    friend class Pattern<UCACICollator>;
+};
+
+class Unicode0400
+{
+public:
+    static inline bool regexEq(Rune a, Rune b)
     {
         if (a > 0xFFFF || b > 0xFFFF)
         {
             return a == b;
         }
 
-        auto a_weight = UnicodeCI::weight_lut[a];
-        auto b_weight = UnicodeCI::weight_lut[b];
+        auto a_weight = UnicodeCI::weight_lut_0400[a];
+        auto b_weight = UnicodeCI::weight_lut_0400[b];
 
         if (a_weight != b_weight)
         {
@@ -467,101 +540,189 @@ private:
         return true;
     }
 
+    static inline bool weight(uint64_t & first, uint64_t & second, Rune r)
+    {
+        if (r > 0xFFFF)
+        {
+            first = 0xFFFD;
+            return true;
+        }
+        auto w = UnicodeCI::weight_lut_0400[r];
+        // skip 0 weight char
+        if (w == 0)
+        {
+            return false;
+        }
+        if (w == UnicodeCI::long_weight_rune)
+        {
+            auto long_weight = weightLutLongMap(r);
+            first = long_weight.first;
+            second = long_weight.second;
+        }
+        else
+        {
+            first = w;
+        }
+        return true;
+    }
+
+private:
     static inline const UnicodeCI::long_weight & weightLutLongMap(Rune r)
     {
         switch (r)
         {
         case 0x321D:
-            return UnicodeCI::weight_lut_long[0];
+            return UnicodeCI::weight_lut_long_0400[0];
         case 0x321E:
-            return UnicodeCI::weight_lut_long[1];
+            return UnicodeCI::weight_lut_long_0400[1];
         case 0x327C:
-            return UnicodeCI::weight_lut_long[2];
+            return UnicodeCI::weight_lut_long_0400[2];
         case 0x3307:
-            return UnicodeCI::weight_lut_long[3];
+            return UnicodeCI::weight_lut_long_0400[3];
         case 0x3315:
-            return UnicodeCI::weight_lut_long[4];
+            return UnicodeCI::weight_lut_long_0400[4];
         case 0x3316:
-            return UnicodeCI::weight_lut_long[5];
+            return UnicodeCI::weight_lut_long_0400[5];
         case 0x3317:
-            return UnicodeCI::weight_lut_long[6];
+            return UnicodeCI::weight_lut_long_0400[6];
         case 0x3319:
-            return UnicodeCI::weight_lut_long[7];
+            return UnicodeCI::weight_lut_long_0400[7];
         case 0x331A:
-            return UnicodeCI::weight_lut_long[8];
+            return UnicodeCI::weight_lut_long_0400[8];
         case 0x3320:
-            return UnicodeCI::weight_lut_long[9];
+            return UnicodeCI::weight_lut_long_0400[9];
         case 0x332B:
-            return UnicodeCI::weight_lut_long[10];
+            return UnicodeCI::weight_lut_long_0400[10];
         case 0x332E:
-            return UnicodeCI::weight_lut_long[11];
+            return UnicodeCI::weight_lut_long_0400[11];
         case 0x3332:
-            return UnicodeCI::weight_lut_long[12];
+            return UnicodeCI::weight_lut_long_0400[12];
         case 0x3334:
-            return UnicodeCI::weight_lut_long[13];
+            return UnicodeCI::weight_lut_long_0400[13];
         case 0x3336:
-            return UnicodeCI::weight_lut_long[14];
+            return UnicodeCI::weight_lut_long_0400[14];
         case 0x3347:
-            return UnicodeCI::weight_lut_long[15];
+            return UnicodeCI::weight_lut_long_0400[15];
         case 0x334A:
-            return UnicodeCI::weight_lut_long[16];
+            return UnicodeCI::weight_lut_long_0400[16];
         case 0x3356:
-            return UnicodeCI::weight_lut_long[17];
+            return UnicodeCI::weight_lut_long_0400[17];
         case 0x337F:
-            return UnicodeCI::weight_lut_long[18];
+            return UnicodeCI::weight_lut_long_0400[18];
         case 0x33AE:
-            return UnicodeCI::weight_lut_long[19];
+            return UnicodeCI::weight_lut_long_0400[19];
         case 0x33AF:
-            return UnicodeCI::weight_lut_long[20];
+            return UnicodeCI::weight_lut_long_0400[20];
         case 0xFDFB:
-            return UnicodeCI::weight_lut_long[21];
+            return UnicodeCI::weight_lut_long_0400[21];
         default:
-            return UnicodeCI::weight_lut_long[22];
+            return UnicodeCI::weight_lut_long_0400[22];
         }
     }
+};
 
-    static inline void weight(uint64_t & first, uint64_t & second, size_t & offset, size_t length, const char * s)
+class Unicode0900
+{
+public:
+    static inline bool regexEq(Rune a, Rune b)
     {
-        if (first == 0)
-        {
-            if (second == 0)
-            {
-                while (offset < length)
-                {
-                    auto r = decodeChar(s, offset);
-                    if (r > 0xFFFF)
-                    {
-                        first = 0xFFFD;
-                        return;
-                    }
-                    auto w = UnicodeCI::weight_lut[r];
-                    // skip 0 weight char
-                    if (w == 0)
-                    {
-                        continue;
-                    }
-                    if (w == UnicodeCI::long_weight_rune)
-                    {
-                        auto long_weight = weightLutLongMap(r);
-                        first = long_weight.first;
-                        second = long_weight.second;
-                    }
-                    else
-                    {
-                        first = w;
-                    }
-                    break;
-                }
-            }
-            else
-            {
-                first = second;
-                second = 0;
-            }
-        }
+        uint64_t a_first = 0, a_second = 0, b_first = 0, b_second = 0;
+        weight(a_first, a_second, a);
+        weight(b_first, b_second, b);
+
+        return a_first == b_first && a_second == b_second;
     }
 
-    friend class Pattern<UnicodeCICollator>;
+    static inline bool weight(uint64_t & first, uint64_t & second, Rune r)
+    {
+        if (r > 0x2CEA1)
+        {
+            first = (r >> 15) + 0xFBC0 + (((r & 0x7FFF) | 0x8000) << 16);
+            return true;
+        }
+
+        auto w = UnicodeCI::weight_lut_0900[r];
+        // skip 0 weight char
+        if (w == 0)
+        {
+            return false;
+        }
+        if (w == UnicodeCI::long_weight_rune)
+        {
+            auto long_weight = weightLutLongMap(r);
+            first = long_weight.first;
+            second = long_weight.second;
+        }
+        else
+        {
+            first = w;
+        }
+        return true;
+    }
+
+private:
+    static inline const UnicodeCI::long_weight & weightLutLongMap(Rune r)
+    {
+        switch (r)
+        {
+        case 0x321D:
+            return UnicodeCI::weight_lut_long_0900[0];
+        case 0x321E:
+            return UnicodeCI::weight_lut_long_0900[1];
+        case 0x327C:
+            return UnicodeCI::weight_lut_long_0900[2];
+        case 0x3307:
+            return UnicodeCI::weight_lut_long_0900[3];
+        case 0x3315:
+            return UnicodeCI::weight_lut_long_0900[4];
+        case 0x3316:
+            return UnicodeCI::weight_lut_long_0900[5];
+        case 0x3317:
+            return UnicodeCI::weight_lut_long_0900[6];
+        case 0x3319:
+            return UnicodeCI::weight_lut_long_0900[7];
+        case 0x331A:
+            return UnicodeCI::weight_lut_long_0900[8];
+        case 0x3320:
+            return UnicodeCI::weight_lut_long_0900[9];
+        case 0x332B:
+            return UnicodeCI::weight_lut_long_0900[10];
+        case 0x332E:
+            return UnicodeCI::weight_lut_long_0900[11];
+        case 0x3332:
+            return UnicodeCI::weight_lut_long_0900[12];
+        case 0x3334:
+            return UnicodeCI::weight_lut_long_0900[13];
+        case 0x3336:
+            return UnicodeCI::weight_lut_long_0900[14];
+        case 0x3347:
+            return UnicodeCI::weight_lut_long_0900[15];
+        case 0x334A:
+            return UnicodeCI::weight_lut_long_0900[16];
+        case 0x3356:
+            return UnicodeCI::weight_lut_long_0900[17];
+        case 0x337F:
+            return UnicodeCI::weight_lut_long_0900[18];
+        case 0x33AE:
+            return UnicodeCI::weight_lut_long_0900[19];
+        case 0x33AF:
+            return UnicodeCI::weight_lut_long_0900[20];
+        case 0xFDFA:
+            return UnicodeCI::weight_lut_long_0900[21];
+        case 0xFDFB:
+            return UnicodeCI::weight_lut_long_0900[22];
+        case 0xFFFD:
+            return UnicodeCI::weight_lut_long_0900[23];
+        case 0x1F19C:
+            return UnicodeCI::weight_lut_long_0900[24];
+        case 0x1F1A8:
+            return UnicodeCI::weight_lut_long_0900[25];
+        case 0x1F1A9:
+            return UnicodeCI::weight_lut_long_0900[26];
+        default:
+            return UnicodeCI::weight_lut_long_0400[27];
+        }
+    }
 };
 
 struct TiDBCollatorTypeIDMap
@@ -572,6 +733,7 @@ struct TiDBCollatorTypeIDMap
         id_to_type[ITiDBCollator::UTF8MB4_GENERAL_CI] = ITiDBCollator::CollatorType::UTF8MB4_GENERAL_CI;
         id_to_type[ITiDBCollator::UTF8_UNICODE_CI] = ITiDBCollator::CollatorType::UTF8_UNICODE_CI;
         id_to_type[ITiDBCollator::UTF8MB4_UNICODE_CI] = ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI;
+        id_to_type[ITiDBCollator::UTF8MB4_0900_AI_CI] = ITiDBCollator::CollatorType::UTF8MB4_0900_AI_CI;
         id_to_type[ITiDBCollator::UTF8MB4_BIN] = ITiDBCollator::CollatorType::UTF8MB4_BIN;
         id_to_type[ITiDBCollator::LATIN1_BIN] = ITiDBCollator::CollatorType::LATIN1_BIN;
         id_to_type[ITiDBCollator::BINARY] = ITiDBCollator::CollatorType::BINARY;
@@ -607,8 +769,9 @@ struct TiDBCollatorPtrMap
     {
         static const auto c_utf8_general_ci = GeneralCICollator(ITiDBCollator::UTF8_GENERAL_CI);
         static const auto c_utf8mb4_general_ci = GeneralCICollator(ITiDBCollator::UTF8MB4_GENERAL_CI);
-        static const auto c_utf8_unicode_ci = UnicodeCICollator(ITiDBCollator::UTF8_UNICODE_CI);
-        static const auto c_utf8mb4_unicode_ci = UnicodeCICollator(ITiDBCollator::UTF8MB4_UNICODE_CI);
+        static const auto c_utf8_unicode_ci = UCACICollator<Unicode0400, true>(ITiDBCollator::UTF8_UNICODE_CI);
+        static const auto c_utf8mb4_unicode_ci = UCACICollator<Unicode0400, true>(ITiDBCollator::UTF8MB4_UNICODE_CI);
+        static const auto c_utf8mb4_0900_ai_ci = UCACICollator<Unicode0900, false>(ITiDBCollator::UTF8MB4_0900_AI_CI);
         static const auto c_utf8mb4_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8MB4_BIN);
         static const auto c_latin1_bin = BinCollator<char, true>(ITiDBCollator::LATIN1_BIN);
         static const auto c_binary = BinCollator<char, false>(ITiDBCollator::BINARY);
@@ -631,6 +794,7 @@ struct TiDBCollatorPtrMap
         M(utf8mb4_general_ci);
         M(utf8_unicode_ci);
         M(utf8mb4_unicode_ci);
+        M(utf8mb4_0900_ai_ci);
         M(utf8mb4_bin);
         M(latin1_bin);
         M(binary);
@@ -672,6 +836,7 @@ bool ITiDBCollator::isCI() const
     case CollatorType::UTF8_GENERAL_CI:
     case CollatorType::UTF8MB4_UNICODE_CI:
     case CollatorType::UTF8MB4_GENERAL_CI:
+    case CollatorType::UTF8MB4_0900_AI_CI:
         return true;
     default:
         return false;
