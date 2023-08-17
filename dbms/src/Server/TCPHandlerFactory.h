@@ -37,8 +37,7 @@ public:
     explicit TCPHandlerFactory(IServer & server_, bool secure_ = false)
         : server(server_)
         , log(&Poco::Logger::get(std::string("TCP") + (secure_ ? "S" : "") + "HandlerFactory"))
-    {
-    }
+    {}
 
     Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket) override
     {

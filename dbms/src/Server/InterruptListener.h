@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <signal.h>
 #include <Common/Exception.h>
+#include <signal.h>
 
 
 namespace DB
@@ -23,15 +23,15 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_MANIPULATE_SIGSET;
-    extern const int CANNOT_WAIT_FOR_SIGNAL;
-    extern const int CANNOT_BLOCK_SIGNAL;
-    extern const int CANNOT_UNBLOCK_SIGNAL;
-}
+extern const int CANNOT_MANIPULATE_SIGSET;
+extern const int CANNOT_WAIT_FOR_SIGNAL;
+extern const int CANNOT_BLOCK_SIGNAL;
+extern const int CANNOT_UNBLOCK_SIGNAL;
+} // namespace ErrorCodes
 
 #ifdef __APPLE__
 // We only need to support timeout = {0, 0} at this moment
-static int sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec * /*timeout*/)
+static int sigtimedwait(const sigset_t * set, siginfo_t * info, const struct timespec * /*timeout*/)
 {
     sigset_t pending;
     int signo;
@@ -69,26 +69,23 @@ private:
     sigset_t sig_set;
 
 public:
-    InterruptListener() : active(false)
+    InterruptListener()
+        : active(false)
     {
-        if (sigemptyset(&sig_set)
-            || sigaddset(&sig_set, SIGINT))
+        if (sigemptyset(&sig_set) || sigaddset(&sig_set, SIGINT))
             throwFromErrno("Cannot manipulate with signal set.", ErrorCodes::CANNOT_MANIPULATE_SIGSET);
 
         block();
     }
 
-    ~InterruptListener()
-    {
-        unblock();
-    }
+    ~InterruptListener() { unblock(); }
 
     bool check()
     {
         if (!active)
             return false;
 
-        timespec timeout = { 0, 0 };
+        timespec timeout = {0, 0};
 
         if (-1 == sigtimedwait(&sig_set, nullptr, &timeout))
         {
@@ -125,4 +122,4 @@ public:
     }
 };
 
-}
+} // namespace DB

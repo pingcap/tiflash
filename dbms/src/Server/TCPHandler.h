@@ -75,15 +75,9 @@ struct QueryState
     std::unique_ptr<TimeoutSetter> timeout_setter;
 
 
-    void reset()
-    {
-        *this = QueryState();
-    }
+    void reset() { *this = QueryState(); }
 
-    bool empty()
-    {
-        return is_empty;
-    }
+    bool empty() { return is_empty; }
 };
 
 
