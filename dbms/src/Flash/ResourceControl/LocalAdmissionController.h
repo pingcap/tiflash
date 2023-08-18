@@ -325,14 +325,10 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-    explicit LocalAdmissionController(
-        MPPTaskManagerPtr mpp_task_manager_,
-        ::pingcap::kv::Cluster * cluster_,
-        Etcd::ClientPtr etcd_client_)
+    explicit LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
-        , mpp_task_manager(mpp_task_manager_)
-        , thread_manager(newThreadManager())
         , etcd_client(etcd_client_)
+        , thread_manager(newThreadManager())
     {
         thread_manager->scheduleThenDetach(true, "LocalAdmissionController::fetchGAC", [this] {
             this->startBackgroudJob();
@@ -402,7 +398,9 @@ public:
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t EMPTY_RESOURCE_GROUP_DEF_PRIORITY = 1;
+
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
+    static const std::string WATCH_GAC_ERR_PREFIX;
 
     // 1. This callback will be called everytime AcquireTokenBuckets GRPC is called.
     // 2. For now, only support one callback.
@@ -428,11 +426,14 @@ public:
         clean_tombstone_resource_group_callback = cb;
     }
 
+    // LAC will call register of ResourceControlQueue, so if ResourceControlQueue should call LAC::stop()
+    // to make sure LAC will never call its callback after ResourceControlQueue is destructed.
     void stop()
     {
         if (stopped)
             return;
         stopped.store(true);
+        watch_gac_grpc_context.TryCancel();
         cv.notify_all();
         thread_manager->wait();
     }
@@ -494,40 +495,38 @@ private:
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
 
-    bool parseResourceGroupNameFromWatchKey(const std::string & etcd_key, std::string & parsed_rg_name) const;
+    // Watch GAC utilities.
+    void doWatch();
+    static etcdserverpb::WatchRequest setupWatchReq();
+    bool handleDeleteEvent(const mvccpb::KeyValue & kv, std::string & err_msg);
+    bool handlePutEvent(const mvccpb::KeyValue & kv, std::string & err_msg);
+    static bool parseResourceGroupNameFromWatchKey(
+        const std::string & etcd_key,
+        std::string & parsed_rg_name,
+        std::string & err_msg);
 
     std::mutex mu;
-
     std::condition_variable cv;
 
     std::atomic<bool> stopped = false;
 
-    // gjt todo when to del
     std::unordered_map<std::string, ResourceGroupPtr> resource_groups;
+    std::atomic<uint64_t> max_ru_per_sec = 0;
+    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
+        = std::chrono::steady_clock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
-
-    const LoggerPtr log = Logger::get("LocalAdmissionController");
-
-    // To cleanup MinTSOScheduler of resource group.
-    MPPTaskManagerPtr mpp_task_manager;
-
-    std::shared_ptr<ThreadManager> thread_manager;
-
     uint64_t unique_client_id = 0;
-
-    std::atomic<uint64_t> max_ru_per_sec = 0;
+    Etcd::ClientPtr etcd_client;
+    grpc::ClientContext watch_gac_grpc_context;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     std::function<void()> refill_token_callback;
     std::function<void(const std::string & del_rg_name)> delete_resource_group_callback;
     std::function<void()> clean_tombstone_resource_group_callback;
 
-    // gjt todo update this
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
-        = std::chrono::steady_clock::now();
-
-    Etcd::ClientPtr etcd_client;
-
     std::vector<std::string> low_token_resource_groups;
+
+    const LoggerPtr log = Logger::get("LocalAdmissionController");
 };
 } // namespace DB
