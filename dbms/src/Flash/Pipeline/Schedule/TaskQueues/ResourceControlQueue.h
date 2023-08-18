@@ -37,7 +37,7 @@ public:
         });
     }
 
-    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->stop(); }
+    ~ResourceControlQueue() override { LocalAdmissionController::global_instance.reset(); }
 
     void submit(TaskPtr && task) override;
 

@@ -38,6 +38,7 @@ void MockLocalAdmissionController::refillTokenBucket()
             }
         }
 
+        std::lock_guard lock(call_back_mutex);
         if (refill_token_callback)
             refill_token_callback();
     }

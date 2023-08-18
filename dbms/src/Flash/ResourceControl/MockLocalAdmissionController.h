@@ -14,10 +14,13 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
 
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 
 namespace DB
 {
@@ -60,7 +63,12 @@ public:
 
     bool isResourceGroupThrottled(const std::string & name) { return is_resource_group_throttled_func(name); }
 
-    void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
+    void registerRefillTokenCallback(const std::function<void()> & cb)
+    {
+        std::lock_guard lock(call_back_mutex);
+        RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
+        refill_token_callback = cb;
+    }
 
     void stop()
     {
@@ -97,7 +105,8 @@ public:
 
     uint64_t max_ru_per_sec = 0;
     bool stopped = false;
-    std::function<void()> refill_token_callback;
+    std::mutex call_back_mutex;
+    std::function<void()> refill_token_callback{nullptr};
     std::thread refill_token_thread;
 };
 
