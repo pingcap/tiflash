@@ -346,6 +346,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
+        0,
         context.isTest());
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);

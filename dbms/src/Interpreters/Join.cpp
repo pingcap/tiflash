@@ -141,6 +141,7 @@ Join::Join(
     const String & match_helper_name_,
     const String & flag_mapped_entry_helper_name_,
     size_t restore_round_,
+    size_t restore_part,
     bool is_test_,
     const std::vector<RuntimeFilterPtr> & runtime_filter_list_)
     : restore_round(restore_round_)
@@ -149,6 +150,7 @@ Join::Join(
     , kind(kind_)
     , strictness(strictness_)
     , original_strictness(strictness)
+    , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind, strictness))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
@@ -166,7 +168,9 @@ Join::Join(
                                                   : std::max(1, max_block_size / 10))
     , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
-    , log(Logger::get(req_id))
+    , log(Logger::get(
+          restore_round == 0 ? join_req_id
+                             : fmt::format("{}_round_{}_part_{}", join_req_id, restore_round, restore_part)))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
@@ -348,21 +352,19 @@ void Join::setSampleBlock(const Block & block)
         sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
 }
 
-std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_join_)
+std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_join_, size_t restore_partition_id)
 {
     return std::make_shared<Join>(
         key_names_left,
         key_names_right,
         kind,
         original_strictness,
-        log->identifier(),
+        join_req_id,
         false,
         0,
         max_bytes_before_external_join_,
-        hash_join_spill_context->createBuildSpillConfig(
-            fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
-        hash_join_spill_context->createProbeSpillConfig(
-            fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
+        hash_join_spill_context->createBuildSpillConfig(fmt::format("{}_{}_build", join_req_id, restore_round + 1)),
+        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_{}_probe", join_req_id, restore_round + 1)),
         join_restore_concurrency,
         tidb_output_column_names,
         collators,
@@ -372,6 +374,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         match_helper_name,
         flag_mapped_entry_helper_name,
         restore_round + 1,
+        restore_partition_id,
         is_test);
 }
 
@@ -2183,7 +2186,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             auto new_max_bytes_before_external_join = static_cast<size_t>(
                 hash_join_spill_context->getOperatorSpillThreshold()
                 * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
-            restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
+            restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join), spilled_partition_index);
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
