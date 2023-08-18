@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,10 +36,7 @@ class StringHolder
 {
 public:
     StringHolder() = default;
-    StringHolder(size_t init_size)
-    {
-        value.resize(init_size);
-    }
+    StringHolder(size_t init_size) { value.resize(init_size); }
 
 protected:
     std::string value;
@@ -63,7 +60,10 @@ public:
 
     DISALLOW_MOVE(WriteBufferFromOwnString);
 
-    StringRef stringRef() const { return isFinished() ? StringRef(value) : StringRef(value.data(), pos - value.data()); }
+    StringRef stringRef() const
+    {
+        return isFinished() ? StringRef(value) : StringRef(value.data(), pos - value.data());
+    }
 
     std::string & str()
     {

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,17 +24,19 @@ namespace tests
 class SpillSortTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 };
 
 /// todo add more tests
 TEST_F(SpillSortTestRunner, SimpleCase)
 try
 {
-    DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}, {"c", TiDB::TP::TypeLongLong}, {"d", TiDB::TP::TypeLongLong}, {"e", TiDB::TP::TypeLongLong}};
+    DB::MockColumnInfoVec column_infos{
+        {"a", TiDB::TP::TypeLongLong},
+        {"b", TiDB::TP::TypeLongLong},
+        {"c", TiDB::TP::TypeLongLong},
+        {"d", TiDB::TP::TypeLongLong},
+        {"e", TiDB::TP::TypeLongLong}};
     ColumnsWithTypeAndName column_data;
     size_t table_rows = 102400;
     UInt64 max_block_size = 500;
@@ -43,18 +45,24 @@ try
     size_t limit_size = table_rows / 10 * 9;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
-        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        ColumnGeneratorOpts opts{
+            table_rows,
+            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+            RANDOM,
+            column_info.name};
         column_data.push_back(ColumnGenerator::instance().generate(opts));
         total_data_size += column_data.back().column->byteSize();
     }
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_data, 8);
 
-    MockOrderByItemVec order_by_items{std::make_pair("a", true), std::make_pair("b", true), std::make_pair("c", true), std::make_pair("d", true), std::make_pair("e", true)};
+    MockOrderByItemVec order_by_items{
+        std::make_pair("a", true),
+        std::make_pair("b", true),
+        std::make_pair("c", true),
+        std::make_pair("d", true),
+        std::make_pair("e", true)};
 
-    auto request = context
-                       .scan("spill_sort_test", "simple_table")
-                       .topN(order_by_items, limit_size)
-                       .build(context);
+    auto request = context.scan("spill_sort_test", "simple_table").topN(order_by_items, limit_size).build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
 
     enablePipeline(false);
@@ -82,7 +90,12 @@ CATCH
 TEST_F(SpillSortTestRunner, CollatorTest)
 try
 {
-    DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}, {"c", TiDB::TP::TypeString, false}, {"d", TiDB::TP::TypeString, false}, {"e", TiDB::TP::TypeString, false}};
+    DB::MockColumnInfoVec column_infos{
+        {"a", TiDB::TP::TypeString, false},
+        {"b", TiDB::TP::TypeString, false},
+        {"c", TiDB::TP::TypeString, false},
+        {"d", TiDB::TP::TypeString, false},
+        {"e", TiDB::TP::TypeString, false}};
     ColumnsWithTypeAndName column_data;
     size_t table_rows = 102400;
     UInt64 max_block_size = 500;
@@ -91,21 +104,32 @@ try
     size_t limit_size = table_rows / 10 * 8;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
-        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name, 5};
+        ColumnGeneratorOpts opts{
+            table_rows,
+            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+            RANDOM,
+            column_info.name,
+            5};
         column_data.push_back(ColumnGenerator::instance().generate(opts));
         total_data_size += column_data.back().column->byteSize();
     }
     context.addMockTable("spill_sort_test", "collation_table", column_infos, column_data, 8);
 
-    MockOrderByItemVec order_by_items{std::make_pair("a", true), std::make_pair("b", true), std::make_pair("c", true), std::make_pair("d", true), std::make_pair("e", true)};
-    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI, TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI};
+    MockOrderByItemVec order_by_items{
+        std::make_pair("a", true),
+        std::make_pair("b", true),
+        std::make_pair("c", true),
+        std::make_pair("d", true),
+        std::make_pair("e", true)};
+    std::vector<Int64> collators{
+        TiDB::ITiDBCollator::UTF8MB4_BIN,
+        TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
+        TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI};
     for (const auto & collator_id : collators)
     {
         context.setCollation(collator_id);
-        auto request = context
-                           .scan("spill_sort_test", "collation_table")
-                           .topN(order_by_items, limit_size)
-                           .build(context);
+        auto request
+            = context.scan("spill_sort_test", "collation_table").topN(order_by_items, limit_size).build(context);
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
 
         enablePipeline(false);
@@ -118,7 +142,9 @@ try
         /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
         /// enable spill and use small max_cached_data_bytes_in_spiller
-        context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
+        context.context->setSetting(
+            "max_cached_data_bytes_in_spiller",
+            Field(static_cast<UInt64>(total_data_size / 100)));
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
 
         // The implementation of topN in the pipeline model is LocalSort, and the result of using multiple threads is unstable. Therefore, a single thread is used here instead.
@@ -126,7 +152,9 @@ try
         enablePipeline(true);
         context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
-        context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
+        context.context->setSetting(
+            "max_cached_data_bytes_in_spiller",
+            Field(static_cast<UInt64>(total_data_size / 100)));
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     }
 }

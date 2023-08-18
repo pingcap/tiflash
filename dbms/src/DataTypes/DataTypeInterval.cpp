@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,13 +26,27 @@ bool DataTypeInterval::equals(const IDataType & rhs) const
 
 void registerDataTypeInterval(DataTypeFactory & factory)
 {
-    factory.registerSimpleDataType("IntervalSecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Second)); });
-    factory.registerSimpleDataType("IntervalMinute", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Minute)); });
-    factory.registerSimpleDataType("IntervalHour", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Hour)); });
-    factory.registerSimpleDataType("IntervalDay", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Day)); });
-    factory.registerSimpleDataType("IntervalWeek", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Week)); });
-    factory.registerSimpleDataType("IntervalMonth", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Month)); });
-    factory.registerSimpleDataType("IntervalYear", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Year)); });
+    factory.registerSimpleDataType("IntervalSecond", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Second));
+    });
+    factory.registerSimpleDataType("IntervalMinute", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Minute));
+    });
+    factory.registerSimpleDataType("IntervalHour", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Hour));
+    });
+    factory.registerSimpleDataType("IntervalDay", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Day));
+    });
+    factory.registerSimpleDataType("IntervalWeek", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Week));
+    });
+    factory.registerSimpleDataType("IntervalMonth", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Month));
+    });
+    factory.registerSimpleDataType("IntervalYear", [] {
+        return DataTypePtr(std::make_shared<DataTypeInterval>(DataTypeInterval::Year));
+    });
 }
 
 } // namespace DB

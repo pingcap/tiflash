@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -138,9 +138,7 @@ public:
             return MPMCQueueResult::CANCELLED;
 
         if (queue.empty())
-            return status == MPMCQueueStatus::NORMAL
-                ? MPMCQueueResult::EMPTY
-                : MPMCQueueResult::FINISHED;
+            return status == MPMCQueueStatus::NORMAL ? MPMCQueueResult::EMPTY : MPMCQueueResult::FINISHED;
 
         data = popBack();
         return MPMCQueueResult::OK;
@@ -154,9 +152,7 @@ public:
             return MPMCQueueResult::CANCELLED;
 
         if (queue.empty())
-            return status == MPMCQueueStatus::NORMAL
-                ? MPMCQueueResult::EMPTY
-                : MPMCQueueResult::FINISHED;
+            return status == MPMCQueueStatus::NORMAL ? MPMCQueueResult::EMPTY : MPMCQueueResult::FINISHED;
 
         popBack();
         return MPMCQueueResult::OK;
@@ -186,10 +182,7 @@ public:
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
     /// After `cancel()` the queue can't be pushed or popped any more.
     /// That means some objects may leave at the queue without poped.
-    bool cancel()
-    {
-        return cancelWith("");
-    }
+    bool cancel() { return cancelWith(""); }
     bool cancelWith(String reason)
     {
         return changeStatus([&] {
@@ -211,16 +204,15 @@ public:
     /// Return true if the previous status is NORMAL.
     bool finish()
     {
-        return changeStatus([&] {
-            status = MPMCQueueStatus::FINISHED;
-        });
+        return changeStatus([&] { status = MPMCQueueStatus::FINISHED; });
     }
 
 private:
     bool isFullWithoutLock() const
     {
         assert(current_auxiliary_memory_usage >= 0);
-        return static_cast<Int64>(queue.size()) >= capacity_limits.max_size || current_auxiliary_memory_usage >= capacity_limits.max_bytes;
+        return static_cast<Int64>(queue.size()) >= capacity_limits.max_size
+            || current_auxiliary_memory_usage >= capacity_limits.max_bytes;
     }
 
     template <typename FF>

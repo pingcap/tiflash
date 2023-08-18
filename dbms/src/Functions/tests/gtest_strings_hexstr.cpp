@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,13 +35,15 @@ try
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"7777772E70696E676361702E636F6D", "61626364", std::nullopt, ""}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<String>>({"www.pingcap.com", "abcd", std::nullopt, ""})));
+        executeFunction(func_name, createColumn<Nullable<String>>({"www.pingcap.com", "abcd", std::nullopt, ""})));
 
     // CJK and emoji
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"E38195E38289E381ABE585A5", "E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95", "F09F8DBB", "F09F8FB4E2808DE298A0EFB88F"}),
+        createColumn<Nullable<String>>(
+            {"E38195E38289E381ABE585A5",
+             "E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95",
+             "F09F8DBB",
+             "F09F8FB4E2808DE298A0EFB88F"}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"さらに入", "测试测试测试测试abcd测试", "🍻", "🏴‍☠️"})));
@@ -49,9 +51,7 @@ try
     // Special Empty Character
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"09", "0A", "20"}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<String>>({"\t", "\n", " "})));
+        executeFunction(func_name, createColumn<Nullable<String>>({"\t", "\n", " "})));
 }
 CATCH
 } // namespace tests

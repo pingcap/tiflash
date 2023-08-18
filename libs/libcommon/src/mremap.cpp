@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,17 +13,25 @@
 // limitations under the License.
 
 #include <common/mremap.h>
+#include <errno.h>
+
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <errno.h>
 
 #if defined(MREMAP_FIXED)
 // we already have implementation (linux)
 #else
 
 void * mremap(
-    void * old_address, size_t old_size, size_t new_size, int flags, int mmap_prot, int mmap_flags, int mmap_fd, off_t mmap_offset)
+    void * old_address,
+    size_t old_size,
+    size_t new_size,
+    int flags,
+    int mmap_prot,
+    int mmap_flags,
+    int mmap_fd,
+    off_t mmap_offset)
 {
     /// No actual shrink
     if (new_size < old_size)

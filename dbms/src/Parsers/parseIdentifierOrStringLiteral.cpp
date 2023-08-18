@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
 
 #include "parseIdentifierOrStringLiteral.h"
 
-#include "ExpressionElementParsers.h"
-#include "ASTLiteral.h"
-#include "ASTIdentifier.h"
 #include <Common/typeid_cast.h>
+
+#include "ASTIdentifier.h"
+#include "ASTLiteral.h"
+#include "ExpressionElementParsers.h"
 
 namespace DB
 {
@@ -39,4 +40,4 @@ bool parseIdentifierOrStringLiteral(IParser::Pos & pos, Expected & expected, Str
     return true;
 }
 
-}
+} // namespace DB

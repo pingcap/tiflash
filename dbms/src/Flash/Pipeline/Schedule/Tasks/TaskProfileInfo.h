@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,15 +54,9 @@ protected:
 class TaskProfileInfo : public ProfileInfo<UInt64>
 {
 public:
-    ALWAYS_INLINE void startTimer()
-    {
-        stopwatch.start();
-    }
+    ALWAYS_INLINE void startTimer() { stopwatch.start(); }
 
-    ALWAYS_INLINE UInt64 elapsedFromPrev()
-    {
-        return stopwatch.elapsedFromLastTime();
-    }
+    ALWAYS_INLINE UInt64 elapsedFromPrev() { return stopwatch.elapsedFromLastTime(); }
 
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
@@ -71,10 +65,7 @@ public:
             cpu_execute_max_time_ns_per_round = value;
     }
 
-    ALWAYS_INLINE void elapsedCPUPendingTime()
-    {
-        cpu_pending_time_ns += elapsedFromPrev();
-    }
+    ALWAYS_INLINE void elapsedCPUPendingTime() { cpu_pending_time_ns += elapsedFromPrev(); }
 
     ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
     {
@@ -83,15 +74,9 @@ public:
             io_execute_max_time_ns_per_round = value;
     }
 
-    ALWAYS_INLINE void elapsedIOPendingTime()
-    {
-        io_pending_time_ns += elapsedFromPrev();
-    }
+    ALWAYS_INLINE void elapsedIOPendingTime() { io_pending_time_ns += elapsedFromPrev(); }
 
-    ALWAYS_INLINE void elapsedAwaitTime()
-    {
-        await_time_ns += elapsedFromPrev();
-    }
+    ALWAYS_INLINE void elapsedAwaitTime() { await_time_ns += elapsedFromPrev(); }
 
     ALWAYS_INLINE void reportMetrics() const
     {

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,7 @@ struct ExecutionResult
             std::rethrow_exception(exception);
     }
 
-    static ExecutionResult success()
-    {
-        return {true, nullptr};
-    }
+    static ExecutionResult success() { return {true, nullptr}; }
 
     static ExecutionResult fail(const std::exception_ptr & exception)
     {

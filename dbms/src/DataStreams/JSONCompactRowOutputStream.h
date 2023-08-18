@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,11 @@ struct FormatSettingsJSON;
 class JSONCompactRowOutputStream : public JSONRowOutputStream
 {
 public:
-    JSONCompactRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool write_statistics_, const FormatSettingsJSON & settings);
+    JSONCompactRowOutputStream(
+        WriteBuffer & ostr_,
+        const Block & sample_,
+        bool write_statistics_,
+        const FormatSettingsJSON & settings);
 
     void writeField(const IColumn & column, const IDataType & type, size_t row_num) override;
     void writeFieldDelimiter() override;

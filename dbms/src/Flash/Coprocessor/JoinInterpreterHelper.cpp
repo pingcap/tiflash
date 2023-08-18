@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,11 @@ struct JoinKindAndInnerIndexPairHash
     }
 };
 
-std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
+std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
+    tipb::JoinType tipb_join_type,
+    size_t inner_index,
+    bool is_null_aware,
+    size_t join_keys_size)
 {
     /// in DAG request, inner part is the build side, however for TiFlash implementation,
     /// the build side must be the right side, so need to swap the join side if needed
@@ -57,34 +61,46 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
     /// 4. for cross left outer join, the build side is always right, needn't and can't swap.
     /// 5. for cross right outer join, the build side is always left, so it will always swap and change to cross left outer join.
     /// note that whatever the build side is, we can't support cross-right-outer join now.
-    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> equal_join_type_map{
-        {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Inner, 0}},
-        {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
-        {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::RightOuter, 0}},
-        {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::LeftOuter, 1}},
-        {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::LeftOuter, 0}},
-        {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::RightOuter, 1}},
-        {{tipb::JoinType::TypeSemiJoin, 0}, {ASTTableJoin::Kind::RightSemi, 0}},
-        {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
-        {{tipb::JoinType::TypeAntiSemiJoin, 0}, {ASTTableJoin::Kind::RightAnti, 0}},
-        {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Anti, 1}},
-        {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterSemi, 1}},
-        {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterAnti, 1}}};
-    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> cartesian_join_type_map{
-        {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Cross, 0}},
-        {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
-        {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
-        {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
-        {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
-        {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
-        {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
-        {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Cross_Anti, 1}},
-        {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterSemi, 1}},
-        {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterAnti, 1}}};
-    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> null_aware_join_type_map{
-        {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_Anti, 1}},
-        {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterSemi, 1}},
-        {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterAnti, 1}}};
+    static const std::unordered_map<
+        std::pair<tipb::JoinType, size_t>,
+        std::pair<ASTTableJoin::Kind, size_t>,
+        JoinKindAndInnerIndexPairHash>
+        equal_join_type_map{
+            {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Inner, 0}},
+            {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
+            {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::RightOuter, 0}},
+            {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::LeftOuter, 1}},
+            {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::LeftOuter, 0}},
+            {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::RightOuter, 1}},
+            {{tipb::JoinType::TypeSemiJoin, 0}, {ASTTableJoin::Kind::RightSemi, 0}},
+            {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
+            {{tipb::JoinType::TypeAntiSemiJoin, 0}, {ASTTableJoin::Kind::RightAnti, 0}},
+            {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Anti, 1}},
+            {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterSemi, 1}},
+            {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterAnti, 1}}};
+    static const std::unordered_map<
+        std::pair<tipb::JoinType, size_t>,
+        std::pair<ASTTableJoin::Kind, size_t>,
+        JoinKindAndInnerIndexPairHash>
+        cartesian_join_type_map{
+            {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Cross, 0}},
+            {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
+            {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
+            {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
+            {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
+            {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
+            {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
+            {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Cross_Anti, 1}},
+            {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterSemi, 1}},
+            {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterAnti, 1}}};
+    static const std::unordered_map<
+        std::pair<tipb::JoinType, size_t>,
+        std::pair<ASTTableJoin::Kind, size_t>,
+        JoinKindAndInnerIndexPairHash>
+        null_aware_join_type_map{
+            {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_Anti, 1}},
+            {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterSemi, 1}},
+            {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterAnti, 1}}};
 
     RUNTIME_ASSERT(inner_index == 0 || inner_index == 1);
     const auto & join_type_map = [is_null_aware, join_keys_size]() {
@@ -102,13 +118,19 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
 
     auto join_type_it = join_type_map.find(std::make_pair(tipb_join_type, inner_index));
     if (unlikely(join_type_it == join_type_map.end()))
-        throw TiFlashException(fmt::format("Unknown join type in dag request {} {}", tipb_join_type, inner_index), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            fmt::format("Unknown join type in dag request {} {}", tipb_join_type, inner_index),
+            Errors::Coprocessor::BadRequest);
     return join_type_it->second;
 }
 
 std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
 {
-    return getJoinKindAndBuildSideIndex(join.join_type(), join.inner_idx(), join.is_null_aware_semi_join(), join.left_join_keys_size());
+    return getJoinKindAndBuildSideIndex(
+        join.join_type(),
+        join.inner_idx(),
+        join.is_null_aware_semi_join(),
+        join.left_join_keys_size());
 }
 
 JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypePtr & right_type)
@@ -119,8 +141,7 @@ JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypeP
     }
     catch (DB::Exception & e)
     {
-        if (e.code() == ErrorCodes::NO_COMMON_TYPE
-            && removeNullable(left_type)->isDecimal()
+        if (e.code() == ErrorCodes::NO_COMMON_TYPE && removeNullable(left_type)->isDecimal()
             && removeNullable(right_type)->isDecimal())
         {
             // fix https://github.com/pingcap/tiflash/issues/4519
@@ -145,7 +166,9 @@ JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
     const auto & right_join_keys = join.right_join_keys();
 
     if (unlikely(join.left_join_keys_size() != join.right_join_keys_size()))
-        throw TiFlashException("size of join.left_join_keys != size of join.right_join_keys", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            "size of join.left_join_keys != size of join.right_join_keys",
+            Errors::Coprocessor::BadRequest);
     JoinKeyTypes join_key_types;
     for (int i = 0; i < join.left_join_keys_size(); ++i)
     {
@@ -162,14 +185,18 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
 {
     TiDB::TiDBCollators collators;
     size_t join_key_size = join_key_types.size();
-    if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
+    if (join.probe_types_size() == static_cast<int>(join_key_size)
+        && join.build_types_size() == join.probe_types_size())
         for (size_t i = 0; i < join_key_size; ++i)
         {
             // Don't need to check the collate for decimal format string.
-            if ((removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal) || unlikely(is_test))
+            if ((removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal)
+                || unlikely(is_test))
             {
                 if (unlikely(join.probe_types(i).collate() != join.build_types(i).collate()))
-                    throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
+                    throw TiFlashException(
+                        "Join with different collators on the join key",
+                        Errors::Coprocessor::BadRequest);
                 collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
             }
             else
@@ -185,7 +212,8 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    strictness = (isSemiJoin() && !isRightSemiFamily(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
+    strictness
+        = (isSemiJoin() && !isRightSemiFamily(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
 String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
@@ -204,7 +232,8 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
     return match_helper_name;
 }
 
-String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const
+String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition)
+    const
 {
     if (!useRowFlaggedHashMap(kind, has_other_condition))
     {
@@ -235,7 +264,9 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
         }
         return true;
     };
-    if (unlikely(!is_prepare_actions_valid(build_side_index == 1 ? left_input_header : right_input_header, probe_prepare_join_actions)))
+    if (unlikely(!is_prepare_actions_valid(
+            build_side_index == 1 ? left_input_header : right_input_header,
+            probe_prepare_join_actions)))
     {
         throw TiFlashException("probe_prepare_join_actions isn't valid", Errors::Coprocessor::Internal);
     }
@@ -258,13 +289,14 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     NamesAndTypes columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_origin_columns;
 
-    auto append_origin_columns = [&columns_for_other_join_filter, &column_set_for_origin_columns](const Block & header, bool make_nullable) {
-        for (const auto & p : header)
-        {
-            columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-            column_set_for_origin_columns.emplace(p.name);
-        }
-    };
+    auto append_origin_columns
+        = [&columns_for_other_join_filter, &column_set_for_origin_columns](const Block & header, bool make_nullable) {
+              for (const auto & p : header)
+              {
+                  columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+                  column_set_for_origin_columns.emplace(p.name);
+              }
+          };
     append_origin_columns(left_input_header, join.join_type() == tipb::JoinType::TypeRightOuterJoin);
     append_origin_columns(right_input_header, join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
 
@@ -272,16 +304,16 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     /// the new columns are
     /// - filter_column and related temporary columns
     /// - join keys and related temporary columns
-    auto append_new_columns = [&columns_for_other_join_filter, &column_set_for_origin_columns](const Block & header, bool make_nullable) {
-        for (const auto & p : header)
-        {
-            if (column_set_for_origin_columns.find(p.name) == column_set_for_origin_columns.end())
-                columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        }
-    };
-    bool make_nullable = build_side_index == 1
-        ? join.join_type() == tipb::JoinType::TypeRightOuterJoin
-        : join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
+    auto append_new_columns
+        = [&columns_for_other_join_filter, &column_set_for_origin_columns](const Block & header, bool make_nullable) {
+              for (const auto & p : header)
+              {
+                  if (column_set_for_origin_columns.find(p.name) == column_set_for_origin_columns.end())
+                      columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+              }
+          };
+    bool make_nullable = build_side_index == 1 ? join.join_type() == tipb::JoinType::TypeRightOuterJoin
+                                               : join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     append_new_columns(probe_prepare_join_actions->getSampleBlock(), make_nullable);
 
     return columns_for_other_join_filter;
@@ -325,12 +357,10 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
     JoinNonEqualConditions & join_non_equal_conditions) const
 {
     auto columns_for_other_join_filter
-        = genColumnsForOtherJoinFilter(
-            left_input_header,
-            right_input_header,
-            probe_side_prepare_join);
+        = genColumnsForOtherJoinFilter(left_input_header, right_input_header, probe_side_prepare_join);
 
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && !join.is_null_aware_semi_join())
+    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0
+        && !join.is_null_aware_semi_join())
         return;
 
     DAGExpressionAnalyzer dag_analyzer(columns_for_other_join_filter, context);
@@ -340,7 +370,8 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
         join_non_equal_conditions.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
 
     if (join.other_eq_conditions_from_in_size() > 0)
-        join_non_equal_conditions.other_eq_cond_from_in_name = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
+        join_non_equal_conditions.other_eq_cond_from_in_name
+            = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
 
     if (!chain.steps.empty())
     {
@@ -350,7 +381,8 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
 
     if (join.is_null_aware_semi_join())
     {
-        join_non_equal_conditions.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, join_key_collators);
+        join_non_equal_conditions.null_aware_eq_cond_name
+            = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, join_key_collators);
         join_non_equal_conditions.null_aware_eq_cond_expr = chain.getLastActions();
     }
 }
@@ -372,13 +404,23 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     Names key_names;
     Names original_key_names;
     String filter_column_name;
-    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, original_key_names, left, is_right_out_join, filters, filter_column_name);
+    dag_analyzer.appendJoinKeyAndJoinFilters(
+        chain,
+        keys,
+        join_key_types,
+        key_names,
+        original_key_names,
+        left,
+        is_right_out_join,
+        filters,
+        filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
 }
 
-std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(const Context & context,
-                                                                const Block & input_header,
-                                                                const LoggerPtr & log)
+std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
+    const Context & context,
+    const Block & input_header,
+    const LoggerPtr & log)
 {
     std::vector<RuntimeFilterPtr> result;
     if (join.runtime_filter_list().empty())

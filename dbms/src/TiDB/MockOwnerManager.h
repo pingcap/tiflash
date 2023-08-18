@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,10 +42,7 @@ public:
     }
 
     // Quick check whether this node is owner or not
-    bool isOwner() override
-    {
-        return owner == OwnerType::IsOwner;
-    }
+    bool isOwner() override { return owner == OwnerType::IsOwner; }
 
     OwnerInfo getOwnerID() override
     {
@@ -74,10 +71,7 @@ public:
         owner = OwnerType::NotOwner;
     }
 
-    void setBeOwnerHook(std::function<void()> &&) override
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
-    }
+    void setBeOwnerHook(std::function<void()> &&) override { throw Exception(ErrorCodes::NOT_IMPLEMENTED, ""); }
 
 
     // testing method

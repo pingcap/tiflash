@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,9 +26,10 @@ ReadBufferFromFileProvider::ReadBufferFromFileProvider(
     int flags,
     char * existing_memory,
     size_t alignment)
-    : ReadBufferFromRandomAccessFile(file_provider_->newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags),
-                                     buf_size,
-                                     existing_memory,
-                                     alignment)
+    : ReadBufferFromRandomAccessFile(
+        file_provider_->newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags),
+        buf_size,
+        existing_memory,
+        alignment)
 {}
 } // namespace DB

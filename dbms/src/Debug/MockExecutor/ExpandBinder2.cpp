@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,11 @@
 
 namespace DB::mock
 {
-bool ExpandBinder2::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ExpandBinder2::toTiPBExecutor(
+    tipb::Executor * tipb_executor,
+    int32_t collator_id,
+    const MPPInfo & mpp_info,
+    const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExpand2);
     tipb_executor->set_executor_id(name);
@@ -49,7 +53,12 @@ bool ExpandBinder2::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t colla
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-ExecutorBinderPtr compileExpand2(ExecutorBinderPtr input, size_t & executor_index, ASTPtrVec level_select_list, std::vector<String> output_names, std::vector<tipb::FieldType> fts)
+ExecutorBinderPtr compileExpand2(
+    ExecutorBinderPtr input,
+    size_t & executor_index,
+    ASTPtrVec level_select_list,
+    std::vector<String> output_names,
+    std::vector<tipb::FieldType> fts)
 {
     DAGSchema output_schema;
     std::vector<std::vector<ASTPtr>> expand_exprs;
@@ -65,8 +74,12 @@ ExecutorBinderPtr compileExpand2(ExecutorBinderPtr input, size_t & executor_inde
             // for mock output schema, just output schema from the first level projection is adequate.
             if (i == 0)
             {
-                auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(), [&](const auto & field) { return field.first == expr->getColumnName(); });
-                auto output_name = j < input_col_size ? input->output_schema[j].first : output_names[j - input_col_size];
+                auto ft
+                    = std::find_if(input->output_schema.begin(), input->output_schema.end(), [&](const auto & field) {
+                          return field.first == expr->getColumnName();
+                      });
+                auto output_name
+                    = j < input_col_size ? input->output_schema[j].first : output_names[j - input_col_size];
                 if (ft != input->output_schema.end())
                 {
                     // base col ref (since ast can't derive the expression's field type, use the test injected one)
@@ -99,7 +112,8 @@ ExecutorBinderPtr compileExpand2(ExecutorBinderPtr input, size_t & executor_inde
         }
         expand_exprs.push_back(level_exprs);
     }
-    ExecutorBinderPtr expand = std::make_shared<ExpandBinder2>(executor_index, output_schema, expand_exprs, output_names, fts);
+    ExecutorBinderPtr expand
+        = std::make_shared<ExpandBinder2>(executor_index, output_schema, expand_exprs, output_names, fts);
     expand->children.push_back(input);
     return expand;
 }

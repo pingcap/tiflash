@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,10 @@ class Context;
 class NamesAndTypesList;
 struct ColumnDefault;
 
-void evaluateMissingDefaults(Block & block,
-                             const NamesAndTypesList & required_columns,
-                             const std::unordered_map<std::string, ColumnDefault> & column_defaults,
-                             const Context & context);
+void evaluateMissingDefaults(
+    Block & block,
+    const NamesAndTypesList & required_columns,
+    const std::unordered_map<std::string, ColumnDefault> & column_defaults,
+    const Context & context);
 
 } // namespace DB

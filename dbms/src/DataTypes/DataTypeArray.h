@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,20 +30,11 @@ public:
 
     DataTypeArray(const DataTypePtr & nested_);
 
-    std::string getName() const override
-    {
-        return "Array(" + nested->getName() + ")";
-    }
+    std::string getName() const override { return "Array(" + nested->getName() + ")"; }
 
-    const char * getFamilyName() const override
-    {
-        return "Array";
-    }
+    const char * getFamilyName() const override { return "Array"; }
 
-    bool canBeInsideNullable() const override
-    {
-        return false;
-    }
+    bool canBeInsideNullable() const override { return false; }
 
     TypeIndex getTypeId() const override { return TypeIndex::Array; }
 
@@ -61,7 +52,11 @@ public:
     void serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const override;
 
-    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON & settings) const override;
+    void serializeTextJSON(
+        const IColumn & column,
+        size_t row_num,
+        WriteBuffer & ostr,
+        const FormatSettingsJSON & settings) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
 
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;

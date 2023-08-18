@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,47 +53,47 @@ void throwFromErrno(const std::string & s, int code, int e)
         strcpy(buf, unknown_message);
         strcpy(buf + strlen(unknown_message), code);
     }
-    throw ErrnoException(s + ", errno: " + toString(e) + ", strerror: " + std::string(buf),
-                         code,
-                         e);
+    throw ErrnoException(s + ", errno: " + toString(e) + ", strerror: " + std::string(buf), code, e);
 #else
-    throw ErrnoException(s + ", errno: " + toString(e) + ", strerror: " + std::string(strerror_r(e, buf, sizeof(buf))),
-                         code,
-                         e);
+    throw ErrnoException(
+        s + ", errno: " + toString(e) + ", strerror: " + std::string(strerror_r(e, buf, sizeof(buf))),
+        code,
+        e);
 #endif
 }
 
-void tryLogCurrentException(const char * log_name,
-                            const std::string & start_of_message)
+void tryLogCurrentException(const char * log_name, const std::string & start_of_message)
 {
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
-#define TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message)                                                                            \
-    try                                                                                                                                \
-    {                                                                                                                                  \
-        LOG_ERROR((logger), "{}{}{}", (start_of_message), ((start_of_message).empty() ? "" : ": "), getCurrentExceptionMessage(true)); \
-    }                                                                                                                                  \
-    catch (...)                                                                                                                        \
-    {                                                                                                                                  \
+#define TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message) \
+    try                                                     \
+    {                                                       \
+        LOG_ERROR(                                          \
+            (logger),                                       \
+            "{}{}{}",                                       \
+            (start_of_message),                             \
+            ((start_of_message).empty() ? "" : ": "),       \
+            getCurrentExceptionMessage(true));              \
+    }                                                       \
+    catch (...)                                             \
+    {                                                       \
     }
 
-void tryLogCurrentException(const LoggerPtr & logger,
-                            const std::string & start_of_message)
+void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message)
 {
     TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message);
 }
 
-void tryLogCurrentException(Poco::Logger * logger,
-                            const std::string & start_of_message)
+void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
 {
     TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message);
 }
 
 #undef TRY_LOG_CURRENT_EXCEPTION
 
-std::string getCurrentExceptionMessage(bool with_stacktrace,
-                                       bool check_embedded_stacktrace)
+std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace)
 {
     FmtBuffer buffer;
 
@@ -130,7 +130,11 @@ std::string getCurrentExceptionMessage(bool with_stacktrace,
             if (status)
                 name += " (demangling status: " + toString(status) + ")";
 
-            buffer.fmtAppend("std::exception. Code: {}, type: {}, e.what() = {}", ErrorCodes::STD_EXCEPTION, name, e.what());
+            buffer.fmtAppend(
+                "std::exception. Code: {}, type: {}, e.what() = {}",
+                ErrorCodes::STD_EXCEPTION,
+                name,
+                e.what());
         }
         catch (...)
         {
@@ -234,8 +238,7 @@ std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace)
 std::string ExecutionStatus::serializeText() const
 {
     WriteBufferFromOwnString wb;
-    wb << code << "\n"
-       << escape << message;
+    wb << code << "\n" << escape << message;
     return wb.str();
 }
 
@@ -259,8 +262,7 @@ bool ExecutionStatus::tryDeserializeText(const std::string & data)
     return true;
 }
 
-ExecutionStatus
-ExecutionStatus::fromCurrentException(const std::string & start_of_message)
+ExecutionStatus ExecutionStatus::fromCurrentException(const std::string & start_of_message)
 {
     String msg = (start_of_message.empty() ? "" : (start_of_message + ": ")) + getCurrentExceptionMessage(false, true);
     return ExecutionStatus(getCurrentExceptionCode(), msg);

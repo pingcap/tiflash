@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,8 +58,9 @@ To assert_cast(From && from)
         throw DB::Exception(e.what(), DB::ErrorCodes::LOGICAL_ERROR);
     }
 
-    throw DB::Exception("Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
-                        DB::ErrorCodes::BAD_CAST);
+    throw DB::Exception(
+        "Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
+        DB::ErrorCodes::BAD_CAST);
 #else
     return static_cast<To>(from);
 #endif

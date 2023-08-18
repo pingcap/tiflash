@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,8 @@ protected:
         if (table.empty() && !database.empty())
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << (detach ? "DETACH DATABASE " : "DROP DATABASE ")
-                          << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "") << backQuoteIfNeed(database);
+                          << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "")
+                          << backQuoteIfNeed(database);
         }
         else
         {

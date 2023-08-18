@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ PhysicalPlanNode::PhysicalPlanNode(
     , type(type_)
     , schema(schema_)
     , fine_grained_shuffle(fine_grained_shuffle_)
-    , log(Logger::get(req_id, type_.toString(), executor_id_))
+    , log(Logger::get(fmt::format("{}_{}_{}", req_id, type_.toString(), executor_id_)))
 {}
 
 String PhysicalPlanNode::toString()
@@ -87,7 +87,11 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     if (is_restore_concurrency)
     {
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        restoreConcurrency(
+            pipeline,
+            context.getDAGContext()->final_concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
     }
 }
 
@@ -102,7 +106,10 @@ void PhysicalPlanNode::buildPipelineExecGroup(
         context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context)
+void PhysicalPlanNode::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorContext & exec_context)
 {
     RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)

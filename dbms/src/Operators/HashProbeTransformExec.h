@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,10 @@ public:
 
     // For probe stage
     Block joinBlock(ProbeProcessInfo & probe_process_info) { return join->joinBlock(probe_process_info); }
-    void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list) { join->dispatchProbeBlock(block, partition_blocks_list, op_index); }
+    void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list)
+    {
+        join->dispatchProbeBlock(block, partition_blocks_list, op_index);
+    }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool quickCheckProbeFinished() const { return join->quickCheckProbeFinished(); }

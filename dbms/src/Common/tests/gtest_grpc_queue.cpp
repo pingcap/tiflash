@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,10 +47,7 @@ public:
         tag = nullptr;
     }
 
-    void checkTagInQueue(GRPCKickTag * t)
-    {
-        GTEST_ASSERT_EQ(t, queue.tag);
-    }
+    void checkTagInQueue(GRPCKickTag * t) { GTEST_ASSERT_EQ(t, queue.tag); }
 };
 
 TEST_F(TestGRPCSendQueue, Sequential)

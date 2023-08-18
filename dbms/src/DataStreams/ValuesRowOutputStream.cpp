@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/ValuesRowOutputStream.h>
-
-#include <IO/WriteHelpers.h>
 #include <Columns/IColumn.h>
+#include <DataStreams/ValuesRowOutputStream.h>
 #include <DataTypes/IDataType.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -25,8 +24,7 @@ namespace DB
 
 ValuesRowOutputStream::ValuesRowOutputStream(WriteBuffer & ostr_)
     : ostr(ostr_)
-{
-}
+{}
 
 void ValuesRowOutputStream::flush()
 {
@@ -59,4 +57,4 @@ void ValuesRowOutputStream::writeRowBetweenDelimiter()
 }
 
 
-}
+} // namespace DB

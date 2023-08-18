@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_by("BY");
 
     ParserNotEmptyExpressionList exp_list(false);
-    ParserNotEmptyExpressionList exp_list_for_with_clause(false, true); /// Set prefer_alias_to_column_name for each alias.
+    ParserNotEmptyExpressionList exp_list_for_with_clause(
+        false,
+        true); /// Set prefer_alias_to_column_name for each alias.
     ParserNotEmptyExpressionList exp_list_for_select_clause(true); /// Allows aliases without AS keyword.
     ParserExpressionWithOptionalAlias exp_elem(false);
     ParserOrderByExpressionList order_list;

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,10 +51,7 @@ public:
         , sample_block(sample_block_)
     {}
 
-    void buildPipeline(
-        PipelineBuilder & builder,
-        Context & context,
-        PipelineExecutorContext & exec_context) override;
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
 
     void finalize(const Names & parent_require) override;
 

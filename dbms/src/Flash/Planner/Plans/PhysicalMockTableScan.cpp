@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,14 +40,22 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
     auto & dag_context = *context.getDAGContext();
-    size_t max_streams = getMockSourceStreamConcurrency(dag_context.initialize_concurrency, context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID()));
+    size_t max_streams = getMockSourceStreamConcurrency(
+        dag_context.initialize_concurrency,
+        context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID()));
     RUNTIME_CHECK(max_streams > 0);
 
     if (context.mockStorage()->useDeltaMerge())
     {
         RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
-        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID(), nullptr, false, table_scan.getRuntimeFilterIDs(), 10000));
+        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(
+            context,
+            table_scan.getLogicalTableID(),
+            nullptr,
+            false,
+            table_scan.getRuntimeFilterIDs(),
+            10000));
     }
     else
     {
@@ -57,11 +65,18 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
         std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
         if (context.isMPPTest())
         {
-            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStreamForMpp(context, max_streams, log, table_scan);
+            std::tie(names_and_types, mock_table_scan_streams)
+                = mockSourceStreamForMpp(context, max_streams, log, table_scan);
         }
         else
         {
-            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID(), table_scan.getColumns());
+            std::tie(names_and_types, mock_table_scan_streams) = mockSourceStream<MockTableScanBlockInputStream>(
+                context,
+                max_streams,
+                log,
+                executor_id,
+                table_scan.getLogicalTableID(),
+                table_scan.getColumns());
         }
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
@@ -112,7 +127,10 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     return physical_mock_table_scan;
 }
 
-void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context /*context*/, size_t /*max_streams*/)
+void PhysicalMockTableScan::buildBlockInputStreamImpl(
+    DAGPipeline & pipeline,
+    Context & context /*context*/,
+    size_t /*max_streams*/)
 {
     RUNTIME_CHECK(pipeline.streams.empty());
     buildRuntimeFilterInLocalStream(context);
@@ -141,7 +159,8 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
         {
             if (auto * source_op = dynamic_cast<UnorderedSourceOp *>(group_builder.getCurBuilder(i).source_op.get()))
             {
-                auto runtime_filter_list = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
+                auto runtime_filter_list
+                    = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
                 // todo config max wait time
                 source_op->setRuntimeFilterInfo(runtime_filter_list, rf_max_wait_time_ms);
             }
@@ -152,10 +171,7 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
         for (const auto & stream : mock_streams)
         {
             group_builder.addConcurrency(
-                std::make_unique<BlockInputStreamSourceOp>(
-                    exec_context,
-                    log->identifier(),
-                    stream));
+                std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), stream));
         }
     }
 }
@@ -170,7 +186,10 @@ const Block & PhysicalMockTableScan::getSampleBlock() const
     return sample_block;
 }
 
-bool PhysicalMockTableScan::setFilterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection)
+bool PhysicalMockTableScan::setFilterConditions(
+    Context & context,
+    const String & filter_executor_id,
+    const tipb::Selection & selection)
 {
     if (unlikely(hasFilterConditions()))
     {
@@ -184,7 +203,9 @@ bool PhysicalMockTableScan::setFilterConditions(Context & context, const String 
         // The update here is only for the stream model.
         mock_streams.clear();
         RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_id));
-        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &filter_conditions, false, runtime_filter_ids, 10000));
+        mock_streams.emplace_back(
+            context.mockStorage()
+                ->getStreamFromDeltaMerge(context, table_id, &filter_conditions, false, runtime_filter_ids, 10000));
 
         return true;
     }
@@ -211,7 +232,8 @@ void PhysicalMockTableScan::buildRuntimeFilterInLocalStream(Context & context)
     {
         if (auto * p_stream = dynamic_cast<DM::UnorderedInputStream *>(local_stream.get()))
         {
-            auto runtime_filter_list = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
+            auto runtime_filter_list
+                = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
             // todo config max wait time
             p_stream->setRuntimeFilterInfo(runtime_filter_list, rf_max_wait_time_ms);
         }

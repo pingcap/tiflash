@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iomanip>
 #include <Parsers/ASTInsertQuery.h>
+
+#include <iomanip>
 
 
 namespace DB
@@ -38,8 +39,8 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
 
     if (partition_expression_list)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws <<
-            indent_str << "PARTITION " << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str << "PARTITION "
+                      << (settings.hilite ? hilite_none : "");
         partition_expression_list->formatImpl(settings, state, frame);
     }
 
@@ -59,13 +60,15 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
     {
         if (!format.empty())
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " FORMAT " << (settings.hilite ? hilite_none : "") << format;
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " FORMAT "
+                          << (settings.hilite ? hilite_none : "") << format;
         }
         else
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " VALUES" << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " VALUES"
+                          << (settings.hilite ? hilite_none : "");
         }
     }
 }
 
-}
+} // namespace DB

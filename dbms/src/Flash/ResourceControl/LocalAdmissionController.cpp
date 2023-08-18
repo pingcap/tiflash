@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,16 @@
 
 namespace DB
 {
+std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_instance = nullptr;
 
-auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+LocalAdmissionController::LocalAdmissionController()
+{
+    if (!global_instance)
+        global_instance = std::make_unique<MockLocalAdmissionController>();
+}
 
+LocalAdmissionController::~LocalAdmissionController()
+{
+    global_instance.reset();
+}
 } // namespace DB

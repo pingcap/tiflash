@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ DataTypePtr getPkType(const ColumnInfo & column_info)
     const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
     /// primary key type must be tidb_pk_column_int_type or tidb_pk_column_string_type.
     RUNTIME_CHECK(
-        pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type) || pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type),
+        pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type)
+            || pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type),
         pk_data_type->getName(),
         MutableSupport::tidb_pk_column_int_type->getName(),
         MutableSupport::tidb_pk_column_string_type->getName());
@@ -47,7 +48,9 @@ NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_sc
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         const auto & column_info = table_scan.getColumns()[i];
-        names_and_types.emplace_back(genNameForExchangeReceiver(i), getDataTypeByColumnInfoForComputingLayer(column_info));
+        names_and_types.emplace_back(
+            genNameForExchangeReceiver(i),
+            getDataTypeByColumnInfoForComputingLayer(column_info));
     }
     return names_and_types;
 }
@@ -70,10 +73,14 @@ NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef
             names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getPkType(column_info));
             break;
         case ExtraTableIDColumnID:
-            names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
+            names_and_types.emplace_back(
+                MutableSupport::extra_table_id_column_name,
+                MutableSupport::extra_table_id_column_type);
             break;
         default:
-            names_and_types.emplace_back(column_info.name.empty() ? fmt::format("{}_{}", column_prefix, i) : column_info.name, getDataTypeByColumnInfoForComputingLayer(column_info));
+            names_and_types.emplace_back(
+                column_info.name.empty() ? fmt::format("{}_{}", column_prefix, i) : column_info.name,
+                getDataTypeByColumnInfoForComputingLayer(column_info));
         }
     }
     return names_and_types;

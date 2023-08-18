@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,12 +36,13 @@ extern const int CANNOT_CLOSE_FILE;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-PosixWriteReadableFile::PosixWriteReadableFile(const String & file_name_,
-                                               bool truncate_when_exists_,
-                                               int flags,
-                                               mode_t mode,
-                                               const WriteLimiterPtr & write_limiter_,
-                                               const ReadLimiterPtr & read_limiter_)
+PosixWriteReadableFile::PosixWriteReadableFile(
+    const String & file_name_,
+    bool truncate_when_exists_,
+    int flags,
+    mode_t mode,
+    const WriteLimiterPtr & write_limiter_,
+    const ReadLimiterPtr & read_limiter_)
     : file_name{file_name_}
     , write_limiter{write_limiter_}
     , read_limiter{read_limiter_}
@@ -66,7 +67,9 @@ PosixWriteReadableFile::PosixWriteReadableFile(const String & file_name_,
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        throwFromErrno("Cannot open file " + file_name, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        throwFromErrno(
+            "Cannot open file " + file_name,
+            errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 
     metric_increment.changeTo(1); // Add metrics for `CurrentMetrics::OpenFileForWrite`
@@ -137,9 +140,7 @@ int PosixWriteReadableFile::fsync()
 {
     ProfileEvents::increment(ProfileEvents::FileFSync);
     Stopwatch sw;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds()); });
     return ::fsync(fd);
 }
 

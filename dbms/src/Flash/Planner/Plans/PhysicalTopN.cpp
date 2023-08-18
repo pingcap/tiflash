@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,7 +85,12 @@ void PhysicalTopN::buildPipelineExecGroupImpl(
     {
         executeFinalSort(exec_context, group_builder, order_descr, limit, context, log);
         if (is_restore_concurrency)
-            restoreConcurrency(exec_context, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+            restoreConcurrency(
+                exec_context,
+                group_builder,
+                concurrency,
+                context.getSettingsRef().max_buffered_bytes_in_executor,
+                log);
     }
 }
 

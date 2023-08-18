@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -199,10 +199,7 @@ public:
         }
     }
 
-    void update(const std::string & x)
-    {
-        update(x.data(), x.length());
-    }
+    void update(const std::string & x) { update(x.data(), x.length()); }
 
     /// Get the result in some form. This can only be done once!
 

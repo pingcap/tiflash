@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,7 @@ try
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a"}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<String>>({"a"}),
-            createOnlyNullColumnConst(1)));
+        executeFunction(func_name, createColumn<Nullable<String>>({"a"}), createOnlyNullColumnConst(1)));
 }
 CATCH
 } // namespace DB::tests

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,10 @@
 
 namespace DB::Etcd
 {
-ClientPtr Client::create(const pingcap::pd::ClientPtr & pd_client, const pingcap::ClusterConfig & config, Int64 timeout_s)
+ClientPtr Client::create(
+    const pingcap::pd::ClientPtr & pd_client,
+    const pingcap::ClusterConfig & config,
+    Int64 timeout_s)
 {
     auto etcd_client = std::make_shared<Client>();
     etcd_client->pd_client = pd_client;
@@ -180,8 +183,10 @@ grpc::Status Client::leaseRevoke(LeaseID lease_id)
     return leaderClient()->lease_stub->LeaseRevoke(&context, req, &resp);
 }
 
-std::tuple<v3electionpb::LeaderKey, grpc::Status>
-Client::campaign(const String & name, const String & value, LeaseID lease_id)
+std::tuple<v3electionpb::LeaderKey, grpc::Status> Client::campaign(
+    const String & name,
+    const String & value,
+    LeaseID lease_id)
 {
     v3electionpb::CampaignRequest req;
     req.set_name(name);
@@ -197,8 +202,8 @@ Client::campaign(const String & name, const String & value, LeaseID lease_id)
     return {resp.leader(), status};
 }
 
-std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>>
-Client::watch(grpc::ClientContext * grpc_context)
+std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>> Client::watch(
+    grpc::ClientContext * grpc_context)
 {
     return leaderClient()->watch_stub->Watch(grpc_context);
 }
@@ -272,7 +277,11 @@ bool Session::keepAliveOne()
         return false;
     }
     lease_deadline = next_timepoint + std::chrono::seconds(resp.ttl());
-    LOG_DEBUG(log, "keep alive update deadline, ttl={} lease_deadline={:%Y-%m-%d %H:%M:%S}", resp.ttl(), lease_deadline);
+    LOG_DEBUG(
+        log,
+        "keep alive update deadline, ttl={} lease_deadline={:%Y-%m-%d %H:%M:%S}",
+        resp.ttl(),
+        lease_deadline);
     return true;
 }
 

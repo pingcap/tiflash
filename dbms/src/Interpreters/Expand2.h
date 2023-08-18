@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,10 @@ public:
     ///
     /// \param leveled_projections_actions
     /// \param level_alias_projections
-    explicit Expand2(ExpressionActionsPtrVec projections_actions_, ExpressionActionsPtr before_expand_actions_, NamesWithAliasesVec projections_);
+    explicit Expand2(
+        ExpressionActionsPtrVec projections_actions_,
+        ExpressionActionsPtr before_expand_actions_,
+        NamesWithAliasesVec projections_);
     Block next(const Block & block_cache, size_t i_th_projection);
     String getLevelProjectionDes() const;
     size_t getLevelProjectionNum() const;

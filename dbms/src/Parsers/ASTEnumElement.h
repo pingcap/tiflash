@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Parsers/IAST.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST.h>
 
 
 namespace DB
@@ -29,14 +29,13 @@ public:
     Field value;
 
     ASTEnumElement(const String & name, const Field & value)
-        : name{name}, value {value} {}
+        : name{name}
+        , value{value}
+    {}
 
     String getID() const override { return "EnumElement"; }
 
-    ASTPtr clone() const override
-    {
-        return std::make_shared<ASTEnumElement>(name, value);
-    }
+    ASTPtr clone() const override { return std::make_shared<ASTEnumElement>(name, value); }
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
@@ -44,9 +43,10 @@ protected:
         frame.need_parens = false;
 
         const std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
-        settings.ostr << settings.nl_or_ws << indent_str << '\'' << name << "' = " << applyVisitor(FieldVisitorToString{}, value);
+        settings.ostr << settings.nl_or_ws << indent_str << '\'' << name
+                      << "' = " << applyVisitor(FieldVisitorToString{}, value);
     }
 };
 
 
-}
+} // namespace DB

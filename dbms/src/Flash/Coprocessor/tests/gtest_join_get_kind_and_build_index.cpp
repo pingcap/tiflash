@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,7 +91,8 @@ TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)
     /// Cross LeftOuter Semi/Anti, expects right table as build side only, otherwise throws exceptions
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 1, false, 0);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuterSemi && result.second == 1);
-    result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, false, 0);
+    result
+        = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, false, 0);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuterAnti && result.second == 1);
 
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeLeftOuterSemiJoin, 0, false, 0));
@@ -131,7 +132,8 @@ TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
     /// LeftOuter Semi/Anti, expects right table as build side only, otherwise throws exceptions
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 1, false, 1);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuterSemi && result.second == 1);
-    result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, false, 1);
+    result
+        = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, false, 1);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuterAnti && result.second == 1);
 
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeLeftOuterSemiJoin, 0, false, 1));
