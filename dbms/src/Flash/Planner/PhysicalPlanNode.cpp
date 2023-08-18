@@ -87,7 +87,11 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     if (is_restore_concurrency)
     {
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        restoreConcurrency(
+            pipeline,
+            context.getDAGContext()->final_concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
     }
 }
 
@@ -102,7 +106,10 @@ void PhysicalPlanNode::buildPipelineExecGroup(
         context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context)
+void PhysicalPlanNode::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorContext & exec_context)
 {
     RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)

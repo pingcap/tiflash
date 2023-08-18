@@ -168,7 +168,9 @@ Join::Join(
                                                   : std::max(1, max_block_size / 10))
     , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
-    , log(Logger::get(restore_round == 0 ? join_req_id : fmt::format("{}_round_{}_part_{}", join_req_id, restore_round, restore_part)))
+    , log(Logger::get(
+          restore_round == 0 ? join_req_id
+                             : fmt::format("{}_round_{}_part_{}", join_req_id, restore_round, restore_part)))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
@@ -361,10 +363,8 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         false,
         0,
         max_bytes_before_external_join_,
-        hash_join_spill_context->createBuildSpillConfig(
-            fmt::format("{}_{}_build", join_req_id, restore_round + 1)),
-        hash_join_spill_context->createProbeSpillConfig(
-            fmt::format("{}_{}_probe", join_req_id, restore_round + 1)),
+        hash_join_spill_context->createBuildSpillConfig(fmt::format("{}_{}_build", join_req_id, restore_round + 1)),
+        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_{}_probe", join_req_id, restore_round + 1)),
         join_restore_concurrency,
         tidb_output_column_names,
         collators,
