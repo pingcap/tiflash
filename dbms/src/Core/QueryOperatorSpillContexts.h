@@ -24,9 +24,7 @@ class QueryOperatorSpillContexts
 {
 public:
     QueryOperatorSpillContexts(const MPPQueryId & query_id, UInt64 auto_spill_check_min_interval_ms)
-        : auto_spill_check_min_interval_ns(
-            auto_spill_check_min_interval_ms == 0 ? std::numeric_limits<UInt64>::max()
-                                                   : auto_spill_check_min_interval_ms * 1000000ULL)
+        : auto_spill_check_min_interval_ns(auto_spill_check_min_interval_ms * 1000000ULL)
         , log(Logger::get(query_id.toString()))
     {
         watch.start();
@@ -42,7 +40,6 @@ public:
             {
                 first_check = true;
                 log_level = Poco::Message::PRIO_INFORMATION;
-                LOG_INFO(log, "Query memory usage exceeded threshold, trigger auto spill check");
             }
 
             LOG_IMPL(log, log_level, "Query memory usage exceeded threshold, trigger auto spill check, expected released memory: {}", expected_released_memories);
