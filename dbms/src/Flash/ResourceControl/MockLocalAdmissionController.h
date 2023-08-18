@@ -25,15 +25,25 @@
 namespace DB
 {
 class ResourceGroup;
+inline void nopConsumeResource(const std::string &, double, uint64_t) {}
+inline uint64_t nopGetPriority(const std::string &)
+{
+    return 1.0;
+}
+inline bool nopIsResourceGroupThrottled(const std::string &)
+{
+    return false;
+}
+
 
 // This is only for ResourceControlQueue gtest.
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
     MockLocalAdmissionController()
-        : consume_resource_func([](const std::string &, double, uint64_t) {})
-        , get_priority_func([](const std::string &) -> uint64_t { return 1; })
-        , is_resource_group_throttled_func([](const std::string &) { return false; })
+        : consume_resource_func(nopConsumeResource)
+        , get_priority_func(nopGetPriority)
+        , is_resource_group_throttled_func(nopIsResourceGroupThrottled)
     {
         refill_token_thread = std::thread([&]() { refillTokenBucket(); });
     }
@@ -44,7 +54,10 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
-    void consumeResource(const std::string &, double, uint64_t) const {}
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
+    {
+        consume_resource_func(name, ru, cpu_time_ns);
+    }
 
     uint64_t getPriority(const std::string & name) const { return get_priority_func(name); }
 
