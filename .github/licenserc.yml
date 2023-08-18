@@ -32,5 +32,8 @@ header:
     - '**/NOTICE'
     - 'dbms/src/IO/tests/limit_read_buffer.reference'
     - 'dbms/src/IO/tests/DevicePixelRatio'
+    - 'Cargo.lock'
+    - 'Cargo.toml'
+    - 'rust-toolchain'
 
   comment: on-failure
