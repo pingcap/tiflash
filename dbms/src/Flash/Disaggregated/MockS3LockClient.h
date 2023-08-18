@@ -32,15 +32,18 @@ class MockS3LockClient : public IS3LockClient
 public:
     explicit MockS3LockClient(std::shared_ptr<TiFlashS3Client> c)
         : s3_client(std::move(c))
-    {
-    }
+    {}
 
-    std::pair<bool, String>
-    sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64) override
+    std::pair<bool, String> sendTryAddLockRequest(
+        const String & data_file_key,
+        UInt32 lock_store_id,
+        UInt32 lock_seq,
+        Int64) override
     {
         // If the data file exist and no delmark exist, then create a lock file on `data_file_key`
         auto view = S3FilenameView::fromKey(data_file_key);
-        auto object_key = view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFile::metav2FileName()) : data_file_key;
+        auto object_key
+            = view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFile::metav2FileName()) : data_file_key;
         if (!objectExists(*s3_client, object_key))
         {
             return {false, ""};
@@ -54,8 +57,7 @@ public:
         return {true, ""};
     }
 
-    std::pair<bool, String>
-    sendTryMarkDeleteRequest(const String & data_file_key, Int64) override
+    std::pair<bool, String> sendTryMarkDeleteRequest(const String & data_file_key, Int64) override
     {
         // If there is no lock on the given `data_file_key`, then mark as deleted
         auto view = S3FilenameView::fromKey(data_file_key);

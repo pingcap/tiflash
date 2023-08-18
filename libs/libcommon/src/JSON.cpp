@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <string>
-#include <string.h>
-
-#include <Poco/UTF8Encoding.h>
 #include <Poco/NumberParser.h>
+#include <Poco/UTF8Encoding.h>
 #include <common/JSON.h>
 #include <common/find_symbols.h>
 #include <common/preciseExp10.h>
+#include <string.h>
 
 #include <iostream>
+#include <string>
 
 #define JSON_MAX_DEPTH 100
 
@@ -41,23 +40,23 @@ static UInt64 readUIntText(const char * buf, const char * end)
     {
         switch (*buf)
         {
-            case '+':
-                break;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                x *= 10;
-                x += *buf - '0';
-                break;
-            default:
-                return x;
+        case '+':
+            break;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            x *= 10;
+            x += *buf - '0';
+            break;
+        default:
+            return x;
         }
         ++buf;
     }
@@ -80,27 +79,27 @@ static Int64 readIntText(const char * buf, const char * end)
     {
         switch (*buf)
         {
-            case '+':
-                break;
-            case '-':
-                negative = true;
-                break;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                x *= 10;
-                x += *buf - '0';
-                break;
-            default:
-                run = false;
-                break;
+        case '+':
+            break;
+        case '-':
+            negative = true;
+            break;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            x *= 10;
+            x += *buf - '0';
+            break;
+        default:
+            run = false;
+            break;
         }
         ++buf;
     }
@@ -125,48 +124,48 @@ static double readFloatText(const char * buf, const char * end)
     {
         switch (*buf)
         {
-            case '+':
-                break;
-            case '-':
-                negative = true;
-                break;
-            case '.':
-                after_point = true;
-                break;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                if (after_point)
-                {
-                    power_of_ten /= 10;
-                    x += (*buf - '0') * power_of_ten;
-                }
-                else
-                {
-                    x *= 10;
-                    x += *buf - '0';
-                }
-                break;
-            case 'e':
-            case 'E':
+        case '+':
+            break;
+        case '-':
+            negative = true;
+            break;
+        case '.':
+            after_point = true;
+            break;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            if (after_point)
             {
-                ++buf;
-                Int32 exponent = readIntText(buf, end);
-                x *= preciseExp10(exponent);
-
-                run = false;
-                break;
+                power_of_ten /= 10;
+                x += (*buf - '0') * power_of_ten;
             }
-            default:
-                run = false;
-                break;
+            else
+            {
+                x *= 10;
+                x += *buf - '0';
+            }
+            break;
+        case 'e':
+        case 'E':
+        {
+            ++buf;
+            Int32 exponent = readIntText(buf, end);
+            x *= preciseExp10(exponent);
+
+            run = false;
+            break;
+        }
+        default:
+            run = false;
+            break;
         }
         ++buf;
     }
@@ -191,38 +190,39 @@ JSON::ElementType JSON::getType() const
 {
     switch (*ptr_begin)
     {
-        case '{':
-            return TYPE_OBJECT;
-        case '[':
-            return TYPE_ARRAY;
-        case 't':
-        case 'f':
-            return TYPE_BOOL;
-        case 'n':
-            return TYPE_NULL;
-        case '-':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-            return TYPE_NUMBER;
-        case '"':
-        {
-            /// Проверим - это просто строка или name-value pair
-            Pos after_string = skipString();
-            if (after_string < ptr_end && *after_string == ':')
-                return TYPE_NAME_VALUE_PAIR;
-            else
-                return TYPE_STRING;
-        }
-        default:
-            throw JSONException(std::string("JSON: unexpected char ") + *ptr_begin + ", expected one of '{[tfn-0123456789\"'");
+    case '{':
+        return TYPE_OBJECT;
+    case '[':
+        return TYPE_ARRAY;
+    case 't':
+    case 'f':
+        return TYPE_BOOL;
+    case 'n':
+        return TYPE_NULL;
+    case '-':
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+        return TYPE_NUMBER;
+    case '"':
+    {
+        /// Проверим - это просто строка или name-value pair
+        Pos after_string = skipString();
+        if (after_string < ptr_end && *after_string == ':')
+            return TYPE_NAME_VALUE_PAIR;
+        else
+            return TYPE_STRING;
+    }
+    default:
+        throw JSONException(
+            std::string("JSON: unexpected char ") + *ptr_begin + ", expected one of '{[tfn-0123456789\"'");
     }
 }
 
@@ -245,7 +245,8 @@ JSON::Pos JSON::skipString() const
     ++pos;
 
     /// fast path: находим следующую двойную кавычку. Если перед ней нет бэкслеша - значит это конец строки (при допущении корректности JSON).
-    Pos closing_quote = reinterpret_cast<const char *>(memchr(reinterpret_cast<const void *>(pos), '\"', ptr_end - pos));
+    Pos closing_quote
+        = reinterpret_cast<const char *>(memchr(reinterpret_cast<const void *>(pos), '\"', ptr_end - pos));
     if (nullptr != closing_quote && closing_quote[-1] != '\\')
         return closing_quote + 1;
 
@@ -294,7 +295,7 @@ JSON::Pos JSON::skipNumber() const
         ++pos;
     if (pos < ptr_end && *pos == '-')
         ++pos;
-     while (pos < ptr_end && *pos >= '0' && *pos <= '9')
+    while (pos < ptr_end && *pos >= '0' && *pos <= '9')
         ++pos;
 
     return pos;
@@ -339,7 +340,6 @@ JSON::Pos JSON::skipNameValuePair() const
     ++pos;
 
     return JSON(pos, ptr_end, level + 1).skipElement();
-
 }
 
 
@@ -363,13 +363,13 @@ JSON::Pos JSON::skipArray() const
 
         switch (*pos)
         {
-            case ',':
-                ++pos;
-                break;
-            case ']':
-                return ++pos;
-            default:
-                throw JSONException(std::string("JSON: expected one of ',]', got ") + *pos);
+        case ',':
+            ++pos;
+            break;
+        case ']':
+            return ++pos;
+        default:
+            throw JSONException(std::string("JSON: expected one of ',]', got ") + *pos);
         }
     }
 }
@@ -395,13 +395,13 @@ JSON::Pos JSON::skipObject() const
 
         switch (*pos)
         {
-            case ',':
-                ++pos;
-                break;
-            case '}':
-                return ++pos;
-            default:
-                throw JSONException(std::string("JSON: expected one of ',}', got ") + *pos);
+        case ',':
+            ++pos;
+            break;
+        case '}':
+            return ++pos;
+        default:
+            throw JSONException(std::string("JSON: expected one of ',}', got ") + *pos);
         }
     }
 }
@@ -415,22 +415,22 @@ JSON::Pos JSON::skipElement() const
 
     switch (type)
     {
-        case TYPE_NULL:
-            return skipNull();
-        case TYPE_BOOL:
-            return skipBool();
-        case TYPE_NUMBER:
-            return skipNumber();
-        case TYPE_STRING:
-            return skipString();
-        case TYPE_NAME_VALUE_PAIR:
-            return skipNameValuePair();
-        case TYPE_ARRAY:
-            return skipArray();
-        case TYPE_OBJECT:
-            return skipObject();
-        default:
-            throw JSONException("Logical error in JSON: unknown element type: " + std::to_string(type));
+    case TYPE_NULL:
+        return skipNull();
+    case TYPE_BOOL:
+        return skipBool();
+    case TYPE_NUMBER:
+        return skipNumber();
+    case TYPE_STRING:
+        return skipString();
+    case TYPE_NAME_VALUE_PAIR:
+        return skipNameValuePair();
+    case TYPE_ARRAY:
+        return skipArray();
+    case TYPE_OBJECT:
+        return skipObject();
+    default:
+        throw JSONException("Logical error in JSON: unknown element type: " + std::to_string(type));
     }
 }
 
@@ -451,7 +451,7 @@ bool JSON::empty() const
 }
 
 
-JSON JSON::operator[] (size_t n) const
+JSON JSON::operator[](size_t n) const
 {
     ElementType type = getType();
 
@@ -526,9 +526,8 @@ bool JSON::hasEscapes() const
 bool JSON::hasSpecialChars() const
 {
     Pos pos = ptr_begin + 1;
-    while (pos < ptr_end && *pos != '"'
-        && *pos != '\\' && *pos != '\r' && *pos != '\n' && *pos != '\t'
-        && *pos != '\f' && *pos != '\b' && *pos != '\0' && *pos != '\'')
+    while (pos < ptr_end && *pos != '"' && *pos != '\\' && *pos != '\r' && *pos != '\n' && *pos != '\t' && *pos != '\f'
+           && *pos != '\b' && *pos != '\0' && *pos != '\'')
         ++pos;
 
     if (*pos == '"')
@@ -539,7 +538,7 @@ bool JSON::hasSpecialChars() const
 }
 
 
-JSON JSON::operator[] (const std::string & name) const
+JSON JSON::operator[](const std::string & name) const
 {
     Pos pos = searchField(name);
     if (!pos)
@@ -591,7 +590,7 @@ std::string JSON::getString() const
     std::string buf;
     do
     {
-        Pos p = find_first_symbols<'\\','"'>(s, ptr_end);
+        Pos p = find_first_symbols<'\\', '"'>(s, ptr_end);
         if (p >= ptr_end)
         {
             break;
@@ -600,72 +599,73 @@ std::string JSON::getString() const
         s = p;
         switch (*s)
         {
-            case '\\':
-                ++s;
-                checkPos(s);
+        case '\\':
+            ++s;
+            checkPos(s);
 
-                switch (*s)
-                {
-                    case '"':
-                        buf += '"';
-                        break;
-                    case '\\':
-                        buf += '\\';
-                        break;
-                    case '/':
-                        buf += '/';
-                        break;
-                    case 'b':
-                        buf += '\b';
-                        break;
-                    case 'f':
-                        buf += '\f';
-                        break;
-                    case 'n':
-                        buf += '\n';
-                        break;
-                    case 'r':
-                        buf += '\r';
-                        break;
-                    case 't':
-                        buf += '\t';
-                        break;
-                    case 'u':
-                    {
-                        Poco::UTF8Encoding utf8;
-
-                        ++s;
-                        checkPos(s + 4);
-                        std::string hex(s, 4);
-                        s += 3;
-                        int unicode;
-                        try
-                        {
-                            unicode = Poco::NumberParser::parseHex(hex);
-                        }
-                        catch (const Poco::SyntaxException &)
-                        {
-                            throw JSONException("JSON: incorrect syntax: incorrect HEX code.");
-                        }
-                        buf.resize(buf.size() + 6);    /// максимальный размер UTF8 многобайтовой последовательности
-                        int res = utf8.convert(unicode,
-                            reinterpret_cast<unsigned char *>(const_cast<char*>(buf.data())) + buf.size() - 6, 6);
-                        if (!res)
-                            throw JSONException("JSON: cannot convert unicode " + std::to_string(unicode)
-                                + " to UTF8.");
-                        buf.resize(buf.size() - 6 + res);
-                        break;
-                    }
-                    default:
-                        buf += *s;
-                        break;
-                }
-                ++s;
-                break;
+            switch (*s)
+            {
             case '"':
-                return buf;
+                buf += '"';
+                break;
+            case '\\':
+                buf += '\\';
+                break;
+            case '/':
+                buf += '/';
+                break;
+            case 'b':
+                buf += '\b';
+                break;
+            case 'f':
+                buf += '\f';
+                break;
+            case 'n':
+                buf += '\n';
+                break;
+            case 'r':
+                buf += '\r';
+                break;
+            case 't':
+                buf += '\t';
+                break;
+            case 'u':
+            {
+                Poco::UTF8Encoding utf8;
+
+                ++s;
+                checkPos(s + 4);
+                std::string hex(s, 4);
+                s += 3;
+                int unicode;
+                try
+                {
+                    unicode = Poco::NumberParser::parseHex(hex);
+                }
+                catch (const Poco::SyntaxException &)
+                {
+                    throw JSONException("JSON: incorrect syntax: incorrect HEX code.");
+                }
+                buf.resize(buf.size() + 6); /// максимальный размер UTF8 многобайтовой последовательности
+                int res = utf8.convert(
+                    unicode,
+                    reinterpret_cast<unsigned char *>(const_cast<char *>(buf.data())) + buf.size() - 6,
+                    6);
+                if (!res)
+                    throw JSONException("JSON: cannot convert unicode " + std::to_string(unicode) + " to UTF8.");
+                buf.resize(buf.size() - 6 + res);
+                break;
+            }
             default:
-                throw JSONException("find_first_symbols<...>() failed in unexpected way");
+                buf += *s;
+                break;
+            }
+            ++s;
+            break;
+        case '"':
+            return buf;
+        default:
+            throw JSONException("find_first_symbols<...>() failed in unexpected way");
         }
     } while (s < ptr_end);
     throw JSONException("JSON: incorrect syntax (expected end of string, found end of JSON).");
@@ -681,7 +681,8 @@ StringRef JSON::getRawString() const
     Pos s = ptr_begin;
     if (*s != '"')
         throw JSONException(std::string("JSON: expected \", got ") + *s);
-    while (++s != ptr_end && *s != '"');
+    while (++s != ptr_end && *s != '"')
+        ;
     if (s != ptr_end)
         return StringRef(ptr_begin + 1, s - ptr_begin - 1);
     throw JSONException("JSON: incorrect syntax (expected end of string, found end of JSON).");
@@ -853,4 +854,3 @@ bool JSON::isType<bool>() const
 {
     return isBool();
 }
-

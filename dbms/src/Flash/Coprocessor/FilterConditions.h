@@ -34,9 +34,7 @@ struct FilterConditions
 
     FilterConditions() = default;
 
-    FilterConditions(
-        const String & executor_id_,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions_);
+    FilterConditions(const String & executor_id_, const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions_);
 
     bool hasValue() const { return !conditions.empty(); }
 

@@ -38,7 +38,7 @@
 #define CLOCK_THREAD_CPUTIME_ID 3
 
 typedef int clockid_t;
-int clock_gettime(int clk_id, struct timespec* t);
+int clock_gettime(int clk_id, struct timespec * t);
 #else
 #define CLOCK_MONOTONIC_COARSE CLOCK_MONOTONIC
 #endif

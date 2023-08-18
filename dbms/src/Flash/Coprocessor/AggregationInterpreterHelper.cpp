@@ -29,7 +29,8 @@ bool isFinalAggMode(const tipb::Expr & expr)
         /// set default value to true to make it compatible with old version of TiDB since before this
         /// change, all the aggregation in TiFlash is treated as final aggregation
         return true;
-    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
+    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode
+        || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
 bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings & settings)
@@ -46,7 +47,9 @@ bool isSumOnPartialResults(const tipb::Expr & expr)
 {
     if (!expr.has_aggfuncmode())
         return false;
-    return getAggFunctionName(expr) == "sum" && (expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::Partial2Mode);
+    return getAggFunctionName(expr) == "sum"
+        && (expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode
+            || expr.aggfuncmode() == tipb::AggFunctionMode::Partial2Mode);
 }
 
 bool isFinalAgg(const tipb::Aggregation & aggregation)
@@ -93,7 +96,8 @@ Aggregator::Params buildParams(
     const Settings & settings = context.getSettingsRef();
 
     bool allow_to_use_two_level_group_by = isAllowToUseTwoLevelGroupBy(before_agg_streams_size, settings);
-    auto total_two_level_threshold_bytes = allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0);
+    auto total_two_level_threshold_bytes
+        = allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0);
 
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 

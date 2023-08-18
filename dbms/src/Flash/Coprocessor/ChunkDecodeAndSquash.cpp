@@ -18,13 +18,10 @@
 
 namespace DB
 {
-CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
-    const Block & header,
-    size_t rows_limit_)
+CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_)
     : codec(header)
     , rows_limit(rows_limit_)
-{
-}
+{}
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
 {

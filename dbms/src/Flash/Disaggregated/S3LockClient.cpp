@@ -38,17 +38,13 @@ extern const int TIMEOUT_EXCEEDED;
 
 namespace DB::S3
 {
-S3LockClient::S3LockClient(
-    pingcap::kv::Cluster * kv_cluster_,
-    OwnerManagerPtr s3gc_owner_)
+S3LockClient::S3LockClient(pingcap::kv::Cluster * kv_cluster_, OwnerManagerPtr s3gc_owner_)
     : kv_cluster(kv_cluster_)
     , s3gc_owner(s3gc_owner_)
     , log(Logger::get())
-{
-}
+{}
 
-std::pair<bool, String>
-S3LockClient::sendTryAddLockRequest(
+std::pair<bool, String> S3LockClient::sendTryAddLockRequest(
     const String & data_file_key,
     UInt32 lock_store_id,
     UInt32 lock_seq,
@@ -60,24 +56,20 @@ S3LockClient::sendTryAddLockRequest(
     req.set_data_file_key(data_file_key);
     req.set_lock_store_id(lock_store_id);
     req.set_lock_seq(lock_seq);
-    auto tracing_log = log->getChild(fmt::format("<key=<{},{},{}>,type=AddLock>", data_file_key, lock_store_id, lock_seq));
+    auto tracing_log
+        = log->getChild(fmt::format("<key=<{},{},{}>,type=AddLock>", data_file_key, lock_store_id, lock_seq));
 
     return makeCall<Resp>(
         [](grpc::ClientContext * grpc_context,
            const std::shared_ptr<pingcap::kv::KvConnClient> & kvstub,
            const Req & req,
-           Resp * response) {
-            return kvstub->stub->tryAddLock(grpc_context, req, response);
-        },
+           Resp * response) { return kvstub->stub->tryAddLock(grpc_context, req, response); },
         req,
         timeout_s,
         tracing_log);
 }
 
-std::pair<bool, String>
-S3LockClient::sendTryMarkDeleteRequest(
-    const String & data_file_key,
-    Int64 timeout_s)
+std::pair<bool, String> S3LockClient::sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s)
 {
     using Req = disaggregated::TryMarkDeleteRequest;
     using Resp = disaggregated::TryMarkDeleteResponse;
@@ -89,9 +81,7 @@ S3LockClient::sendTryMarkDeleteRequest(
         [](grpc::ClientContext * grpc_context,
            const std::shared_ptr<pingcap::kv::KvConnClient> & kvstub,
            const Req & req,
-           Resp * response) {
-            return kvstub->stub->tryMarkDelete(grpc_context, req, response);
-        },
+           Resp * response) { return kvstub->stub->tryMarkDelete(grpc_context, req, response); },
         req,
         timeout_s,
         tracing_log);
@@ -104,7 +94,11 @@ S3LockClient::sendTryMarkDeleteRequest(
 // If deadline exceed or failed to get the owner info within
 // `timeout_s`, it will throw exception.
 template <typename Response, typename Request, typename SendRpc>
-std::pair<bool, String> S3LockClient::makeCall(SendRpc send, const Request & req, Int64 timeout_s, const LoggerPtr & tracing_log)
+std::pair<bool, String> S3LockClient::makeCall(
+    SendRpc send,
+    const Request & req,
+    Int64 timeout_s,
+    const LoggerPtr & tracing_log)
 {
     const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(timeout_s);
     String address = getOwnerAddr(deadline, tracing_log);
@@ -185,7 +179,9 @@ String S3LockClient::updateOwnerAddr(const Timepoint & deadline, const LoggerPtr
         {
             if (Clock::now() > deadline)
             {
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "deadline exceed, owner not available, " + tracing_log->identifier());
+                throw Exception(
+                    ErrorCodes::TIMEOUT_EXCEEDED,
+                    "deadline exceed, owner not available, " + tracing_log->identifier());
             }
             LOG_ERROR(tracing_log, "owner not available");
             std::this_thread::sleep_for(500ms);
@@ -195,7 +191,12 @@ String S3LockClient::updateOwnerAddr(const Timepoint & deadline, const LoggerPtr
         {
             if (Clock::now() > deadline)
             {
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, fmt::format("deadline exceed, owner not available, msg={} {}", owner_info.errMsg(), tracing_log->identifier()));
+                throw Exception(
+                    ErrorCodes::TIMEOUT_EXCEEDED,
+                    fmt::format(
+                        "deadline exceed, owner not available, msg={} {}",
+                        owner_info.errMsg(),
+                        tracing_log->identifier()));
             }
             LOG_ERROR(tracing_log, "owner not available, msg={}", owner_info.errMsg());
             std::this_thread::sleep_for(500ms);

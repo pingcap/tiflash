@@ -32,7 +32,8 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     size_t build_index = 0;
     assert(join_ptr);
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
+        builder.setSinkOp(
+            std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
     });
     auto & join_execute_info = context.getDAGContext()->getJoinExecuteInfoMap()[execId()];
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <cstring>
-
 #include <Poco/Exception.h>
-
 #include <common/DateLUT.h>
+
+#include <cstring>
+#include <iostream>
 
 
 static std::string toString(time_t Value)
@@ -26,8 +25,16 @@ static std::string toString(time_t Value)
     char buf[96];
 
     localtime_r(&Value, &tm);
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    snprintf(
+        buf,
+        sizeof(buf),
+        "%04d-%02d-%02d %02d:%02d:%02d",
+        tm.tm_year + 1900,
+        tm.tm_mon + 1,
+        tm.tm_mday,
+        tm.tm_hour,
+        tm.tm_min,
+        tm.tm_sec);
 
     return buf;
 }
@@ -53,8 +60,13 @@ void loop(time_t begin, time_t end, int step)
 
     for (time_t t = begin; t < end; t += step)
     {
-        time_t t2 = date_lut.makeDateTime(date_lut.toYear(t), date_lut.toMonth(t), date_lut.toDayOfMonth(t),
-            date_lut.toHour(t), date_lut.toMinute(t), date_lut.toSecond(t));
+        time_t t2 = date_lut.makeDateTime(
+            date_lut.toYear(t),
+            date_lut.toMonth(t),
+            date_lut.toDayOfMonth(t),
+            date_lut.toHour(t),
+            date_lut.toMinute(t),
+            date_lut.toSecond(t));
 
         std::string s1 = toString(t);
         std::string s2 = toString(t2);

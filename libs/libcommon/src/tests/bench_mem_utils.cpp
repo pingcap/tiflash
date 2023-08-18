@@ -62,13 +62,17 @@ public:
         inner_data2 = inner_data1;
 
         {
-            const auto * src = reinterpret_cast<const char *>((size_t(inner_data1.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_1); // start address not aligned
+            const auto * src = reinterpret_cast<const char *>(
+                (size_t(inner_data1.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE
+                + TEST_ALIGN_OFF_1); // start address not aligned
             size_t size = inner_data1.data() + inner_data1.size() - src;
             data1 = {src, size};
         }
 
         {
-            const auto * src = reinterpret_cast<const char *>((size_t(inner_data2.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_2); // start address not aligned
+            const auto * src = reinterpret_cast<const char *>(
+                (size_t(inner_data2.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE
+                + TEST_ALIGN_OFF_2); // start address not aligned
             size_t size = inner_data2.data() + inner_data2.size() - src;
             data2 = {src, size};
         }
@@ -93,12 +97,16 @@ public:
         inner_data2 = inner_data1;
 
         {
-            const auto * src = reinterpret_cast<const char *>((size_t(inner_data1.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_1); // start address not aligned
+            const auto * src = reinterpret_cast<const char *>(
+                (size_t(inner_data1.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE
+                + TEST_ALIGN_OFF_1); // start address not aligned
             data1 = {src, max_size};
         }
 
         {
-            auto * src = reinterpret_cast<char *>((size_t(inner_data2.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_2); // start address not aligned
+            auto * src = reinterpret_cast<char *>(
+                (size_t(inner_data2.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE
+                + TEST_ALIGN_OFF_2); // start address not aligned
             src[max_size - 1] = DEFAULT_TEST_CHAR;
             data2 = {src, max_size};
         }
@@ -130,7 +138,9 @@ public:
             {
                 auto & inner_data = inner_data1[i];
                 inner_data.resize(max_src_size + RESERVE_OFFSET, DEFAULT_INIT_CHAR);
-                auto * src = reinterpret_cast<char *>((size_t(inner_data.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_1); // start address not aligned
+                auto * src = reinterpret_cast<char *>(
+                    (size_t(inner_data.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE
+                    + TEST_ALIGN_OFF_1); // start address not aligned
                 size_t size = max_src_size;
                 data1[i] = {src, size};
 
@@ -142,7 +152,9 @@ public:
             {
                 auto & inner_data = inner_data2[i];
                 inner_data.resize(max_needle_size + RESERVE_OFFSET, check_char);
-                auto * src = reinterpret_cast<char *>((size_t(inner_data.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE + TEST_ALIGN_OFF_2); // start address not aligned
+                auto * src = reinterpret_cast<char *>(
+                    (size_t(inner_data.data()) + TEST_ALIGN_SIZE - 1) / TEST_ALIGN_SIZE * TEST_ALIGN_SIZE
+                    + TEST_ALIGN_OFF_2); // start address not aligned
                 size_t size = max_needle_size;
                 data2[i] = {src, size};
             }
@@ -258,9 +270,10 @@ NO_INLINE size_t stl_str_find(std::string_view s, std::string_view p)
 #define BENCH_MEM_CMP_ALL(max_src_size, loop_cnt, iter_cnt) \
     BENCH_MEM_CMP_ALL_IMPL(BENCH_MEM_CMP_IMPL_ID(max_src_size, loop_cnt, iter_cnt), max_src_size, loop_cnt, iter_cnt)
 
-#define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                          \
-    using MemUtilsStrStr##_##max_src_size##_##max_needle_size = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>; \
-    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, stl_str_find, stl_str_find, iter_cnt)         \
+#define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                  \
+    using MemUtilsStrStr##_##max_src_size##_##max_needle_size                                                   \
+        = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>;                                               \
+    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, stl_str_find, stl_str_find, iter_cnt) \
     BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, avx2_strstr, mem_utils::avx2_strstr, iter_cnt)
 
 #define BENCH_MEM_EQ_LOOP 20

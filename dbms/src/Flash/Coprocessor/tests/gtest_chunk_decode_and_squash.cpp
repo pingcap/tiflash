@@ -31,13 +31,10 @@ namespace tests
 class TestChunkDecodeAndSquash : public testing::Test
 {
 protected:
-    void SetUp() override
-    {
-    }
+    void SetUp() override {}
 
 public:
-    TestChunkDecodeAndSquash()
-    {}
+    TestChunkDecodeAndSquash() {}
 
     static Block squashBlocks(std::vector<Block> & blocks)
     {
@@ -82,10 +79,8 @@ public:
         {
             DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
             auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-            block.insert(ColumnWithTypeAndName{
-                std::move(int64_column),
-                int64_data_type,
-                String("col") + std::to_string(i)});
+            block.insert(
+                ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
         }
         return block;
     }
@@ -102,11 +97,13 @@ public:
             UInt64 rows = flush_something ? static_cast<UInt64>(rand_gen()) % (block_rows * 4) : block_rows;
             blocks.emplace_back(prepareBlock(rows));
             if (flush_something)
-                blocks.emplace_back(prepareBlock(0)); /// Adds this empty block, so even unluckily, total_rows % rows_limit == 0, it would flush an empty block with header
+                blocks.emplace_back(prepareBlock(
+                    0)); /// Adds this empty block, so even unluckily, total_rows % rows_limit == 0, it would flush an empty block with header
         }
 
         // 2. encode all blocks
-        std::unique_ptr<ChunkCodecStream> codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(makeFields());
+        std::unique_ptr<ChunkCodecStream> codec_stream
+            = std::make_unique<CHBlockChunkCodec>()->newCodecStream(makeFields());
         std::vector<String> encode_str_vec(block_num);
         std::vector<int> encode_str_use_compression(block_num, true);
         size_t round_index = 0;

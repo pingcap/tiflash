@@ -38,16 +38,23 @@ public:
     {                                              \
         enablePipeline(enable_pipeline);
 
-#define WRAP_FOR_JOIN_TEST_END \
-    }
+#define WRAP_FOR_JOIN_TEST_END }
 
 TEST_F(JoinExecutorTestRunner, SimpleJoin)
 try
 {
     constexpr size_t simple_test_num = 4;
 
-    context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
-    context.addMockTable("simple_test", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
+    context.addMockTable(
+        "simple_test",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
+    context.addMockTable(
+        "simple_test",
+        "t2",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "3", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
 
     // names of left table, right table and join key column
     const std::tuple<String, String, String> join_cases[simple_test_num] = {
@@ -59,20 +66,56 @@ try
 
     const ColumnsWithTypeAndName expected_cols[simple_test_num * join_type_num] = {
         // inner join
-        {toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({{}, "3", {}, "3"}), toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({"3", "3", {}, {}})},
-        {toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({{}, "3", {}, "3"}), toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({"3", "3", {}, {}})},
-        {toNullableVec<String>({{}, "1", "2", {}, "1"}), toNullableVec<String>({"3", "3", "4", "3", "3"}), toNullableVec<String>({"1", "1", "3", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3"})},
-        {toNullableVec<String>({{}, "1", "3", {}, "1"}), toNullableVec<String>({"3", "3", "4", "3", "3"}), toNullableVec<String>({"1", "1", "2", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3"})},
+        {toNullableVec<String>({"1", "1", "1", "1"}),
+         toNullableVec<String>({{}, "3", {}, "3"}),
+         toNullableVec<String>({"1", "1", "1", "1"}),
+         toNullableVec<String>({"3", "3", {}, {}})},
+        {toNullableVec<String>({"1", "1", "1", "1"}),
+         toNullableVec<String>({{}, "3", {}, "3"}),
+         toNullableVec<String>({"1", "1", "1", "1"}),
+         toNullableVec<String>({"3", "3", {}, {}})},
+        {toNullableVec<String>({{}, "1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "3", "4", "3", "3"}),
+         toNullableVec<String>({"1", "1", "3", {}, {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3"})},
+        {toNullableVec<String>({{}, "1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "3", "4", "3", "3"}),
+         toNullableVec<String>({"1", "1", "2", {}, {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3"})},
         // left join
-        {toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}), toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})},
-        {toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}), toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})},
-        {toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
-        {toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        {toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}),
+         toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}),
+         toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})},
+        {toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}),
+         toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}),
+         toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})},
+        {toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}),
+         toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        {toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}),
+         toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
         // right join
-        {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})},
-        {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})},
-        {toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
-        {toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}),
+         toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}),
+         toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})},
+        {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}),
+         toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}),
+         toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})},
+        {toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}),
+         toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        {toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}),
+         toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}),
+         toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
         // semi join
         {toNullableVec<String>({"1", "1"}), toNullableVec<String>({"3", {}})},
         {toNullableVec<String>({"1", "1"}), toNullableVec<String>({"3", {}})},
@@ -84,15 +127,31 @@ try
         {toNullableVec<String>({"1", {}}), toNullableVec<String>({{}, {}})},
         {toNullableVec<String>({"1", {}}), toNullableVec<String>({{}, {}})},
         // left outer semi join
-        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 0, 0, 1, 0})},
-        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 0, 0, 1, 0})},
-        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 1, 1, 0, 0})},
-        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 1, 1, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({1, 0, 0, 1, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({1, 0, 0, 1, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({1, 1, 1, 0, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({1, 1, 1, 0, 0})},
         // anti left outer semi join
-        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 1, 1, 0, 1})},
-        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 1, 1, 0, 1})},
-        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 0, 0, 1, 1})},
-        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 0, 0, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({0, 1, 1, 0, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({0, 1, 1, 0, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({0, 0, 0, 1, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}),
+         toNullableVec<String>({"3", "4", "3", {}, {}}),
+         toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
     for (size_t i = 0; i < join_type_num; ++i)
@@ -113,81 +172,274 @@ CATCH
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
 {
-    context.addMockTable("multi_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
+    context.addMockTable(
+        "multi_test",
+        "t1",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
 
-    context.addMockTable("multi_test", "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
+    context.addMockTable(
+        "multi_test",
+        "t2",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
 
-    context.addMockTable("multi_test", "t3", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
+    context.addMockTable(
+        "multi_test",
+        "t3",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
 
-    context.addMockTable("multi_test", "t4", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
+    context.addMockTable(
+        "multi_test",
+        "t4",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num * join_type_num] = {
         /// inner x inner x inner
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0})},
         /// inner x left x inner
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0})},
         /// inner x right x inner
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0})},
         /// inner x semi x inner
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0})},
         /// inner x anti semi x inner
-        {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})},
+        {toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({})},
         /// inner x left outer semi x inner
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int8>({1, 1, 1})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int8>({1, 1, 1})},
         /// inner x anti left outer semi x inner
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int8>({0, 0, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int8>({0, 0, 0})},
 
         /// left x inner x left
-        {toNullableVec<Int32>({1, 1, 3, 3, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 2, 2, 0}), toNullableVec<Int32>({{}, {}, 3, 3, 3, 3, 0}), toNullableVec<Int32>({{}, {}, 4, 4, 2, 2, 0}), toNullableVec<Int32>({{}, {}, 5, 5, 3, 3, 0}), toNullableVec<Int32>({1, 2, 1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}), toNullableVec<Int32>({{}, 2, {}, 2, {}, 2, 0}), toNullableVec<Int32>({{}, 2, {}, 2, {}, 2, 0})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({{}, {}, 3, 3, 3, 3, 0}),
+         toNullableVec<Int32>({{}, {}, 4, 4, 2, 2, 0}),
+         toNullableVec<Int32>({{}, {}, 5, 5, 3, 3, 0}),
+         toNullableVec<Int32>({1, 2, 1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 2, {}, 2, {}, 2, 0}),
+         toNullableVec<Int32>({{}, 2, {}, 2, {}, 2, 0})},
         /// left x left x left
-        {toNullableVec<Int32>({1, 1, 3, 3, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 2, 2, 0}), toNullableVec<Int32>({{}, {}, 3, 3, 3, 3, 0}), toNullableVec<Int32>({{}, {}, 2, 2, 4, 4, 0}), toNullableVec<Int32>({{}, {}, 3, 3, 5, 5, 0}), toNullableVec<Int32>({2, 1, 2, 1, 2, 1, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}), toNullableVec<Int32>({2, {}, 2, {}, 2, {}, 0}), toNullableVec<Int32>({2, {}, 2, {}, 2, {}, 0})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({{}, {}, 3, 3, 3, 3, 0}),
+         toNullableVec<Int32>({{}, {}, 2, 2, 4, 4, 0}),
+         toNullableVec<Int32>({{}, {}, 3, 3, 5, 5, 0}),
+         toNullableVec<Int32>({2, 1, 2, 1, 2, 1, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({2, {}, 2, {}, 2, {}, 0}),
+         toNullableVec<Int32>({2, {}, 2, {}, 2, {}, 0})},
         /// left x right x left
-        {toNullableVec<Int32>({1, 3, 3, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 2, 2, 3, 2, 2, 0}), toNullableVec<Int32>({{}, 3, 3, {}, 3, 3, 0}), toNullableVec<Int32>({{}, 4, 2, {}, 4, 2, 0}), toNullableVec<Int32>({{}, 5, 3, {}, 5, 3, 0}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}), toNullableVec<Int32>({{}, {}, {}, 2, 2, 2, 0}), toNullableVec<Int32>({{}, {}, {}, 2, 2, 2, 0})},
+        {toNullableVec<Int32>({1, 3, 3, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 2, 3, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 3, 3, {}, 3, 3, 0}),
+         toNullableVec<Int32>({{}, 4, 2, {}, 4, 2, 0}),
+         toNullableVec<Int32>({{}, 5, 3, {}, 5, 3, 0}),
+         toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({{}, {}, {}, 2, 2, 2, 0}),
+         toNullableVec<Int32>({{}, {}, {}, 2, 2, 2, 0})},
         /// left x semi x left
-        {toNullableVec<Int32>({1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 0}), toNullableVec<Int32>({3, 2, 2, 0}), toNullableVec<Int32>({{}, 3, 3, 0}), toNullableVec<Int32>({{}, 4, 2, 0}), toNullableVec<Int32>({{}, 5, 3, 0})},
+        {toNullableVec<Int32>({1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 3, 3, 0}),
+         toNullableVec<Int32>({{}, 4, 2, 0}),
+         toNullableVec<Int32>({{}, 5, 3, 0})},
         /// left x anti semi x left
-        {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})},
+        {toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({})},
         /// left x left outer semi x left
-        {toNullableVec<Int32>({1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 0}), toNullableVec<Int32>({3, 2, 2, 0}), toNullableVec<Int32>({{}, 3, 3, 0}), toNullableVec<Int32>({{}, 4, 2, 0}), toNullableVec<Int32>({{}, 5, 3, 0}), toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<Int32>({1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 3, 3, 0}),
+         toNullableVec<Int32>({{}, 4, 2, 0}),
+         toNullableVec<Int32>({{}, 5, 3, 0}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
         /// left x anti left outer semi x left
-        {toNullableVec<Int32>({1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 0}), toNullableVec<Int32>({3, 2, 2, 0}), toNullableVec<Int32>({{}, 3, 3, 0}), toNullableVec<Int32>({{}, 4, 2, 0}), toNullableVec<Int32>({{}, 5, 3, 0}), toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<Int32>({1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 3, 3, 0}),
+         toNullableVec<Int32>({{}, 4, 2, 0}),
+         toNullableVec<Int32>({{}, 5, 3, 0}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
 
         /// right x inner x right
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0})},
         /// right x left x right
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0})},
         /// right x right x right
-        {toNullableVec<Int32>({{}, 3, 3, 0}), toNullableVec<Int32>({{}, 2, 2, 0}), toNullableVec<Int32>({{}, 2, 2, 0}), toNullableVec<Int32>({{}, 3, 3, 0}), toNullableVec<Int32>({{}, 4, 2, 0}), toNullableVec<Int32>({{}, 5, 3, 0}), toNullableVec<Int32>({{}, 2, 2, 0}), toNullableVec<Int32>({{}, 2, 2, 0}), toNullableVec<Int32>({3, 2, 2, 0}), toNullableVec<Int32>({4, 2, 2, 0})},
+        {toNullableVec<Int32>({{}, 3, 3, 0}),
+         toNullableVec<Int32>({{}, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 3, 3, 0}),
+         toNullableVec<Int32>({{}, 4, 2, 0}),
+         toNullableVec<Int32>({{}, 5, 3, 0}),
+         toNullableVec<Int32>({{}, 2, 2, 0}),
+         toNullableVec<Int32>({{}, 2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 2, 0}),
+         toNullableVec<Int32>({4, 2, 2, 0})},
         /// right x semi x right
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0})},
         /// right x anti semi x right
-        {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})},
+        {toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({}),
+         toNullableVec<Int32>({})},
         /// right x left outer semi x right
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int8>({1, 1, 1})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int8>({1, 1, 1})},
         /// right x anti left outer semi x right
-        {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int8>({0, 0, 0})},
+        {toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 0}),
+         toNullableVec<Int32>({4, 2, 0}),
+         toNullableVec<Int32>({5, 3, 0}),
+         toNullableVec<Int8>({0, 0, 0})},
 
         /// semi x inner x semi
-        {toNullableVec<Int32>({3, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0})},
+        {toNullableVec<Int32>({3, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0})},
         /// semi x left x semi
-        {toNullableVec<Int32>({3, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0})},
+        {toNullableVec<Int32>({3, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0})},
         /// semi x right x semi
-        {toNullableVec<Int32>({3, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0})},
+        {toNullableVec<Int32>({3, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0})},
         /// semi x semi x semi
         {toNullableVec<Int32>({3, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0})},
         /// semi x anti semi x semi
         {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})},
         /// semi x left outer semi x semi
-        {toNullableVec<Int32>({3, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int8>({1, 1})},
+        {toNullableVec<Int32>({3, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int8>({1, 1})},
         /// semi x anti left outer semi x semi
-        {toNullableVec<Int32>({3, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int32>({2, 0}), toNullableVec<Int8>({0, 0})},
+        {toNullableVec<Int32>({3, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int32>({2, 0}),
+         toNullableVec<Int8>({0, 0})},
 
         /// anti semi x inner x anti semi
-        {toNullableVec<Int32>({1}), toNullableVec<Int32>({2}), toNullableVec<Int32>({3}), toNullableVec<Int32>({1}), toNullableVec<Int32>({2})},
+        {toNullableVec<Int32>({1}),
+         toNullableVec<Int32>({2}),
+         toNullableVec<Int32>({3}),
+         toNullableVec<Int32>({1}),
+         toNullableVec<Int32>({2})},
         /// anti semi x left x anti semi
-        {toNullableVec<Int32>({1}), toNullableVec<Int32>({2}), toNullableVec<Int32>({3}), toNullableVec<Int32>({1}), toNullableVec<Int32>({2})},
+        {toNullableVec<Int32>({1}),
+         toNullableVec<Int32>({2}),
+         toNullableVec<Int32>({3}),
+         toNullableVec<Int32>({1}),
+         toNullableVec<Int32>({2})},
         /// anti semi x right x anti semi
-        {toNullableVec<Int32>({1}), toNullableVec<Int32>({2}), toNullableVec<Int32>({3}), toNullableVec<Int32>({1}), toNullableVec<Int32>({2})},
+        {toNullableVec<Int32>({1}),
+         toNullableVec<Int32>({2}),
+         toNullableVec<Int32>({3}),
+         toNullableVec<Int32>({1}),
+         toNullableVec<Int32>({2})},
         /// anti semi x semi x anti semi
         {toNullableVec<Int32>({1}), toNullableVec<Int32>({2}), toNullableVec<Int32>({3})},
         /// anti semi x anti semi x anti semi
@@ -198,34 +450,92 @@ try
         {toNullableVec<Int32>({1}), toNullableVec<Int32>({2}), toNullableVec<Int32>({3}), toNullableVec<Int8>({0})},
 
         /// left outer semi x inner x left outer semi
-        {toNullableVec<Int32>({1, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 0}), toNullableVec<Int8>({0, 0, 1, 1, 1}), toNullableVec<Int32>({1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int8>({0, 1, 0, 1, 1})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 0}),
+         toNullableVec<Int8>({0, 0, 1, 1, 1}),
+         toNullableVec<Int32>({1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int8>({0, 1, 0, 1, 1})},
         /// left outer semi x left x left outer semi
-        {toNullableVec<Int32>({1, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 0}), toNullableVec<Int8>({0, 0, 1, 1, 1}), toNullableVec<Int32>({1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int8>({0, 1, 0, 1, 1})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 0}),
+         toNullableVec<Int8>({0, 0, 1, 1, 1}),
+         toNullableVec<Int32>({1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int8>({0, 1, 0, 1, 1})},
         /// left outer semi x right x left outer semi
-        {toNullableVec<Int32>({1, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 0}), toNullableVec<Int8>({0, 0, 1, 1, 1}), toNullableVec<Int32>({1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int8>({0, 1, 0, 1, 1})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 0}),
+         toNullableVec<Int8>({0, 0, 1, 1, 1}),
+         toNullableVec<Int32>({1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int8>({0, 1, 0, 1, 1})},
         /// left outer semi x semi x left outer semi
-        {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({0, 1, 1})},
+        {toNullableVec<Int32>({1, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 0}),
+         toNullableVec<Int8>({0, 1, 1})},
         /// left outer semi x anti semi x left outer semi
         {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int8>({})},
         /// left outer semi x left outer semi x left outer semi
-        {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({0, 1, 1}), toNullableVec<Int8>({1, 1, 1})},
+        {toNullableVec<Int32>({1, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 0}),
+         toNullableVec<Int8>({0, 1, 1}),
+         toNullableVec<Int8>({1, 1, 1})},
         /// left outer semi x left outer anti semi x left outer semi
-        {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({0, 1, 1}), toNullableVec<Int8>({0, 0, 0})},
+        {toNullableVec<Int32>({1, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 0}),
+         toNullableVec<Int8>({0, 1, 1}),
+         toNullableVec<Int8>({0, 0, 0})},
 
         /// left outer anti semi x inner x left outer anti semi
-        {toNullableVec<Int32>({1, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 0}), toNullableVec<Int8>({1, 1, 0, 0, 0}), toNullableVec<Int32>({1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int8>({1, 0, 1, 0, 0})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 0}),
+         toNullableVec<Int8>({1, 1, 0, 0, 0}),
+         toNullableVec<Int32>({1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int8>({1, 0, 1, 0, 0})},
         /// left outer anti semi x left x left outer anti semi
-        {toNullableVec<Int32>({1, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 0}), toNullableVec<Int8>({1, 1, 0, 0, 0}), toNullableVec<Int32>({1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int8>({1, 0, 1, 0, 0})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 0}),
+         toNullableVec<Int8>({1, 1, 0, 0, 0}),
+         toNullableVec<Int32>({1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int8>({1, 0, 1, 0, 0})},
         /// left outer anti semi x right x left outer anti semi
-        {toNullableVec<Int32>({1, 1, 3, 3, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int32>({3, 3, 2, 2, 0}), toNullableVec<Int8>({1, 1, 0, 0, 0}), toNullableVec<Int32>({1, 2, 1, 2, 0}), toNullableVec<Int32>({2, 2, 2, 2, 0}), toNullableVec<Int8>({1, 0, 1, 0, 0})},
+        {toNullableVec<Int32>({1, 1, 3, 3, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int32>({3, 3, 2, 2, 0}),
+         toNullableVec<Int8>({1, 1, 0, 0, 0}),
+         toNullableVec<Int32>({1, 2, 1, 2, 0}),
+         toNullableVec<Int32>({2, 2, 2, 2, 0}),
+         toNullableVec<Int8>({1, 0, 1, 0, 0})},
         /// left outer anti semi x semi x left outer anti semi
-        {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({1, 0, 0})},
+        {toNullableVec<Int32>({1, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 0}),
+         toNullableVec<Int8>({1, 0, 0})},
         /// left outer anti semi x anti semi x left outer anti semi
         {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int8>({})},
         /// left outer anti semi x left outer semi x left outer anti semi
-        {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({1, 0, 0}), toNullableVec<Int8>({1, 1, 1})},
+        {toNullableVec<Int32>({1, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 0}),
+         toNullableVec<Int8>({1, 0, 0}),
+         toNullableVec<Int8>({1, 1, 1})},
         /// left outer anti semi x left outer anti semi x left outer anti semi
-        {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({1, 0, 0}), toNullableVec<Int8>({0, 0, 0})},
+        {toNullableVec<Int32>({1, 3, 0}),
+         toNullableVec<Int32>({2, 2, 0}),
+         toNullableVec<Int32>({3, 2, 0}),
+         toNullableVec<Int8>({1, 0, 0}),
+         toNullableVec<Int8>({0, 0, 0})},
     };
 
     /// select * from (t1 JT1 t2 using (a)) JT2 (t3 JT1 t4 using (a)) using (b)
@@ -237,11 +547,8 @@ try
             auto t2 = context.scan("multi_test", "t2");
             auto t3 = context.scan("multi_test", "t3");
             auto t4 = context.scan("multi_test", "t4");
-            auto request = t1.join(t2, jt1, {col("a")})
-                               .join(t3.join(t4, jt1, {col("a")}),
-                                     jt2,
-                                     {col("b")})
-                               .build(context);
+            auto request
+                = t1.join(t2, jt1, {col("a")}).join(t3.join(t4, jt1, {col("a")}), jt2, {col("b")}).build(context);
 
             executeAndAssertColumnsEqual(request, expected_cols[i * join_type_num + j]);
         }
@@ -315,41 +622,82 @@ try
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
 
     /// decimal with different scale
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeNewDecimal}}, {createColumn<Decimal256>(std::make_tuple(9, 4), {"0.12"}, "a")});
+    context.addMockTable(
+        "cast",
+        "t1",
+        {{"a", TiDB::TP::TypeNewDecimal}},
+        {createColumn<Decimal256>(std::make_tuple(9, 4), {"0.12"}, "a")});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeNewDecimal}}, {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
+    context.addMockTable(
+        "cast",
+        "t2",
+        {{"a", TiDB::TP::TypeNewDecimal}},
+        {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
 
-    executeAndAssertColumnsEqual(cast_request(), {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}), createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
+    executeAndAssertColumnsEqual(
+        cast_request(),
+        {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
+         createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
 
     /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
-    context.addMockTable("cast", "t1", {{"datetime", TiDB::TP::TypeDatetime}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
+    context.addMockTable(
+        "cast",
+        "t1",
+        {{"datetime", TiDB::TP::TypeDatetime}},
+        {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
-    context.addMockTable("cast", "t2", {{"datetime", TiDB::TP::TypeTimestamp}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
+    context.addMockTable(
+        "cast",
+        "t2",
+        {{"datetime", TiDB::TP::TypeTimestamp}},
+        {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
     auto cast_request_1 = [&]() {
         return context.scan("cast", "t1")
             .join(context.scan("cast", "t2"), tipb::JoinType::TypeInnerJoin, {col("datetime")})
             .build(context);
     };
-    executeAndAssertColumnsEqual(cast_request_1(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
+    executeAndAssertColumnsEqual(
+        cast_request_1(),
+        {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
 }
 CATCH
 
 TEST_F(JoinExecutorTestRunner, JoinAgg)
 try
 {
-    context.addMockTable("join_agg", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
+    context.addMockTable(
+        "join_agg",
+        "t1",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
 
-    context.addMockTable("join_agg", "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
+    context.addMockTable(
+        "join_agg",
+        "t2",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num] = {
         {toNullableVec<Int32>({4}), toNullableVec<Int32>({1}), toVec<UInt64>({3}), toNullableVec<Int32>({1})},
-        {toNullableVec<Int32>({4, 3}), toNullableVec<Int32>({1, 3}), toVec<UInt64>({3, 1}), toNullableVec<Int32>({1, 4})},
-        {toNullableVec<Int32>({4, {}}), toNullableVec<Int32>({1, {}}), toVec<UInt64>({3, 0}), toNullableVec<Int32>({1, {}})},
+        {toNullableVec<Int32>({4, 3}),
+         toNullableVec<Int32>({1, 3}),
+         toVec<UInt64>({3, 1}),
+         toNullableVec<Int32>({1, 4})},
+        {toNullableVec<Int32>({4, {}}),
+         toNullableVec<Int32>({1, {}}),
+         toVec<UInt64>({3, 0}),
+         toNullableVec<Int32>({1, {}})},
         {toNullableVec<Int32>({4}), toNullableVec<Int32>({1}), toVec<UInt64>({3}), toNullableVec<Int32>({1})},
         {toNullableVec<Int32>({3}), toNullableVec<Int32>({3}), toVec<UInt64>({1}), toNullableVec<Int32>({4})},
-        {toNullableVec<Int32>({4, 3}), toNullableVec<Int32>({1, 3}), toVec<UInt64>({3, 1}), toNullableVec<Int32>({1, 4})},
-        {toNullableVec<Int32>({4, 3}), toNullableVec<Int32>({1, 3}), toVec<UInt64>({3, 1}), toNullableVec<Int32>({1, 4})},
+        {toNullableVec<Int32>({4, 3}),
+         toNullableVec<Int32>({1, 3}),
+         toVec<UInt64>({3, 1}),
+         toNullableVec<Int32>({1, 4})},
+        {toNullableVec<Int32>({4, 3}),
+         toNullableVec<Int32>({1, 3}),
+         toVec<UInt64>({3, 1}),
+         toNullableVec<Int32>({1, 4})},
     };
 
     for (auto [i, tp] : ext::enumerate(join_types))
@@ -367,14 +715,46 @@ CATCH
 TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
 try
 {
-    context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
-    context.addMockTable("cross_join", "t1_not_null", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, {toVec<String>("a", {"1", "3", "5", "1"}), toVec<String>("b", {"3", "4", "3", "6"})});
-    context.addMockTable("cross_join", "t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {"1", "3", {}, "2"}), toNullableVec<String>("d", {"3", "4", "3", {}})});
-    context.addMockTable("cross_join", "t2_not_null", {{"c", TiDB::TP::TypeString, false}, {"d", TiDB::TP::TypeString, false}}, {toVec<String>("c", {"1", "3", "7", "2"}), toVec<String>("d", {"3", "4", "3", "8"})});
-    context.addMockTable("cross_join", "empty_table_t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
-    context.addMockTable("cross_join", "empty_table_t1_not_null", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, {toVec<String>("a", {}), toVec<String>("b", {})});
-    context.addMockTable("cross_join", "empty_table_t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {}), toNullableVec<String>("d", {})});
-    context.addMockTable("cross_join", "empty_table_t2_not_null", {{"c", TiDB::TP::TypeString, false}, {"d", TiDB::TP::TypeString, false}}, {toVec<String>("c", {}), toVec<String>("d", {})});
+    context.addMockTable(
+        "cross_join",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "3", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable(
+        "cross_join",
+        "t1_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {"1", "3", "5", "1"}), toVec<String>("b", {"3", "4", "3", "6"})});
+    context.addMockTable(
+        "cross_join",
+        "t2",
+        {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}},
+        {toNullableVec<String>("c", {"1", "3", {}, "2"}), toNullableVec<String>("d", {"3", "4", "3", {}})});
+    context.addMockTable(
+        "cross_join",
+        "t2_not_null",
+        {{"c", TiDB::TP::TypeString, false}, {"d", TiDB::TP::TypeString, false}},
+        {toVec<String>("c", {"1", "3", "7", "2"}), toVec<String>("d", {"3", "4", "3", "8"})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table_t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table_t1_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {}), toVec<String>("b", {})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table_t2",
+        {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}},
+        {toNullableVec<String>("c", {}), toNullableVec<String>("d", {})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table_t2_not_null",
+        {{"c", TiDB::TP::TypeString, false}, {"d", TiDB::TP::TypeString, false}},
+        {toVec<String>("c", {}), toVec<String>("d", {})});
 
     const auto cond_left = gt(col("a"), lit(Field("1", 1)));
     const auto cond_right = gt(col("c"), lit(Field("0", 1)));
@@ -399,7 +779,8 @@ try
             {context.scan("cross_join", "empty_table_t1"), context.scan("cross_join", "empty_table_t2")},
             {context.scan("cross_join", "empty_table_t1"), context.scan("cross_join", "empty_table_t2_not_null")},
             {context.scan("cross_join", "empty_table_t1_not_null"), context.scan("cross_join", "empty_table_t2")},
-            {context.scan("cross_join", "empty_table_t1_not_null"), context.scan("cross_join", "empty_table_t2_not_null")},
+            {context.scan("cross_join", "empty_table_t1_not_null"),
+             context.scan("cross_join", "empty_table_t2_not_null")},
         };
     };
 
@@ -605,8 +986,12 @@ try
         {},
         {},
         // non-empty left outer semi non-empty
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 1, 0, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 1, 0, 0})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 1, 1, 0})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 1, 1, 0})},
         // empty left outer semi non-empty
@@ -615,8 +1000,12 @@ try
         {},
         {},
         // non-empty left outer semi empty
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
         // empty left outer semi empty
@@ -625,8 +1014,12 @@ try
         {},
         {},
         // non-empty anti left outer semi non-empty
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 0, 1, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 0, 1, 1})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 0, 0, 1})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 0, 0, 1})},
         // empty anti left outer semi non-empty
@@ -635,8 +1028,12 @@ try
         {},
         {},
         // non-empty anti left outer semi empty
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
-        {toNullableVec<String>({"1", "3", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
         {toVec<String>({"1", "3", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
         // empty anti left outer semi empty
@@ -776,16 +1173,17 @@ try
 
     for (const auto shallow_copy_threshold : shallow_copy_thresholds)
     {
-        context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+        context.context->setSetting(
+            "shallow_copy_cross_probe_threshold",
+            Field(static_cast<UInt64>(shallow_copy_threshold)));
         size_t i = 0;
         for (const auto & join_type : join_types)
         {
             auto join_inputs = gen_join_inputs();
             for (auto & join_input : join_inputs)
             {
-                auto request = join_input.first
-                                   .join(join_input.second, join_type, {}, {}, {}, {cond_other}, {})
-                                   .build(context);
+                auto request
+                    = join_input.first.join(join_input.second, join_type, {}, {}, {}, {cond_other}, {}).build(context);
                 executeAndAssertColumnsEqual(request, expected_cols[i++]);
             }
             /// extra tests for outer join
@@ -796,9 +1194,10 @@ try
                 size_t left_join_index = 0;
                 for (auto & join_input : join_inputs)
                 {
-                    auto request = join_input.first
-                                       .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond_left}, {}, {}, {})
-                                       .build(context);
+                    auto request
+                        = join_input.first
+                              .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond_left}, {}, {}, {})
+                              .build(context);
                     executeAndAssertColumnsEqual(request, left_join_expected_cols[left_join_index++]);
                 }
                 /// left out join with left condition and other condition
@@ -807,7 +1206,14 @@ try
                 for (auto & join_input : join_inputs)
                 {
                     auto request = join_input.first
-                                       .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond_left}, {}, {cond_other}, {})
+                                       .join(
+                                           join_input.second,
+                                           tipb::JoinType::TypeLeftOuterJoin,
+                                           {},
+                                           {cond_left},
+                                           {},
+                                           {cond_other},
+                                           {})
                                        .build(context);
                     executeAndAssertColumnsEqual(request, expected_cols[i++]);
                 }
@@ -820,7 +1226,14 @@ try
                 for (auto & join_input : join_inputs)
                 {
                     auto request = join_input.first
-                                       .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {gt(col("c"), lit(Field("2", 1)))}, {}, {})
+                                       .join(
+                                           join_input.second,
+                                           tipb::JoinType::TypeRightOuterJoin,
+                                           {},
+                                           {},
+                                           {gt(col("c"), lit(Field("2", 1)))},
+                                           {},
+                                           {})
                                        .build(context);
                     executeAndAssertColumnsEqual(request, right_join_expected_cols[right_join_index++]);
                 }
@@ -830,7 +1243,14 @@ try
                 for (auto & join_input : join_inputs)
                 {
                     auto request = join_input.first
-                                       .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond_right}, {cond_other}, {})
+                                       .join(
+                                           join_input.second,
+                                           tipb::JoinType::TypeRightOuterJoin,
+                                           {},
+                                           {},
+                                           {cond_right},
+                                           {cond_other},
+                                           {})
                                        .build(context);
                     executeAndAssertColumnsEqual(request, expected_cols[i++]);
                 }
@@ -843,12 +1263,36 @@ CATCH
 TEST_F(JoinExecutorTestRunner, CrossJoinWithoutCondition)
 try
 {
-    context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
-    context.addMockTable("cross_join", "t1_not_null", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, {toVec<String>("a", {"1", "2", "5", "1"}), toVec<String>("b", {"3", "4", "3", "6"})});
-    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
-    context.addMockTable("cross_join", "t2_not_null", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, {toVec<String>("a", {"1", "3", "7", "2"}), toVec<String>("b", {"3", "4", "3", "8"})});
-    context.addMockTable("cross_join", "empty_table", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
-    context.addMockTable("cross_join", "empty_table_not_null", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, {toVec<String>("a", {}), toVec<String>("b", {})});
+    context.addMockTable(
+        "cross_join",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable(
+        "cross_join",
+        "t1_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {"1", "2", "5", "1"}), toVec<String>("b", {"3", "4", "3", "6"})});
+    context.addMockTable(
+        "cross_join",
+        "t2",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable(
+        "cross_join",
+        "t2_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {"1", "3", "7", "2"}), toVec<String>("b", {"3", "4", "3", "8"})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {}), toVec<String>("b", {})});
 
     const auto gen_join_inputs = [&]() -> std::vector<std::pair<DAGRequestBuilder, DAGRequestBuilder>> {
         return {
@@ -1076,8 +1520,12 @@ try
         {},
         {},
         // non-empty left outer semi non-empty
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
         // empty left outer semi non-empty
@@ -1086,8 +1534,12 @@ try
         {},
         {},
         // non-empty left outer semi empty
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
         // empty left outer semi empty
@@ -1096,8 +1548,12 @@ try
         {},
         {},
         // non-empty anti left outer semi non-empty
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
         // empty anti left outer semi non-empty
@@ -1106,8 +1562,12 @@ try
         {},
         {},
         // non-empty anti left outer semi empty
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
         {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
         // empty anti left outer semi empty
@@ -1121,16 +1581,16 @@ try
 
     for (const auto shallow_copy_threshold : shallow_copy_thresholds)
     {
-        context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+        context.context->setSetting(
+            "shallow_copy_cross_probe_threshold",
+            Field(static_cast<UInt64>(shallow_copy_threshold)));
         size_t i = 0;
         for (const auto & join_type : join_types)
         {
             auto join_inputs = gen_join_inputs();
             for (auto & join_input : join_inputs)
             {
-                auto request = join_input.first
-                                   .join(join_input.second, join_type, {}, {}, {}, {}, {})
-                                   .build(context);
+                auto request = join_input.first.join(join_input.second, join_type, {}, {}, {}, {}, {}).build(context);
                 executeAndAssertColumnsEqual(request, expected_cols[i++]);
             }
         }
@@ -1141,29 +1601,38 @@ CATCH
 TEST_F(JoinExecutorTestRunner, JoinWithTableScan)
 try
 {
-    auto request = context
-                       .scan("test_db", "l_table")
+    auto request = context.scan("test_db", "l_table")
                        .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
-        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", "banana"}),
+             toNullableVec<String>({"apple", "banana"}),
+             toNullableVec<String>({"banana", "banana"}),
+             toNullableVec<String>({"apple", "banana"})});
     }
 
-    request = context
-                  .scan("test_db", "l_table")
+    request = context.scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                   .project({"s", "join_c"})
                   .build(context);
     {
-        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
 
-    request = context
-                  .scan("test_db", "l_table")
+    request = context.scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table_2"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                   .build(context);
     {
-        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+             toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+             toNullableVec<String>({"banana", "banana", "banana", {}}),
+             toNullableVec<String>({"apple", "apple", "apple", {}})});
     }
 }
 CATCH
@@ -1171,12 +1640,16 @@ CATCH
 TEST_F(JoinExecutorTestRunner, JoinWithExchangeReceiver)
 try
 {
-    auto request = context
-                       .receive("exchange_l_table")
+    auto request = context.receive("exchange_l_table")
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
-        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", "banana"}),
+             toNullableVec<String>({"apple", "banana"}),
+             toNullableVec<String>({"banana", "banana"}),
+             toNullableVec<String>({"apple", "banana"})});
     }
 }
 CATCH
@@ -1184,12 +1657,16 @@ CATCH
 TEST_F(JoinExecutorTestRunner, JoinWithTableScanAndReceiver)
 try
 {
-    auto request = context
-                       .scan("test_db", "l_table")
+    auto request = context.scan("test_db", "l_table")
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
-        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", "banana"}),
+             toNullableVec<String>({"apple", "banana"}),
+             toNullableVec<String>({"banana", "banana"}),
+             toNullableVec<String>({"apple", "banana"})});
     }
 }
 CATCH
@@ -1197,8 +1674,18 @@ CATCH
 TEST_F(JoinExecutorTestRunner, JoinWithNullTable)
 try
 {
-    context.addMockTable("null_test", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
-    context.addMockTable("null_test", "null_table", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toVec<Int32>("c", {})});
+    context.addMockTable(
+        "null_test",
+        "t",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+         toVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+         toVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+    context.addMockTable(
+        "null_test",
+        "null_table",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toVec<Int32>("c", {})});
 
     std::shared_ptr<tipb::DAGRequest> request;
 
@@ -1214,7 +1701,14 @@ try
         request = context.scan("null_test", "t")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
                       .build(context);
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({})});
 
         // null table join null table
         request = context.scan("null_test", "null_table")
@@ -1227,42 +1721,109 @@ try
     const auto cond = gt(col("a"), lit(Field(static_cast<Int64>(5))));
     // non-null table join null table
     {
-        request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+        request
+            = context.scan("null_test", "t")
+                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                  .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({}),
+             toNullableVec<Int32>({})});
 
         request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeLeftOuterJoin,
+                          {},
+                          {cond},
+                          {},
+                          {},
+                          {})
                       .build(context);
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}),
+             toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+             toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+             toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}})});
 
         request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeRightOuterJoin,
+                          {},
+                          {},
+                          {cond},
+                          {},
+                          {})
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
 
-        request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
+        request
+            = context.scan("null_test", "t")
+                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                  .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({}), toNullableVec<Int32>({}), toNullableVec<Int32>({})});
 
         request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeAntiSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
 
         request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeLeftOuterSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
         // the 4th col is left outer semi helper col.
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}),
+             toNullableVec<Int8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})});
 
         request = context.scan("null_test", "t")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
         // the 4th col is left outer semi helper col.
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}),
+             toNullableVec<Int8>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
     }
 
     // null table join non-null table
@@ -1280,7 +1841,14 @@ try
         request = context.scan("null_test", "null_table")
                       .join(context.scan("null_test", "t"), tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
                       .build(context);
-        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}), toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+             toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+             toNullableVec<Int32>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+             toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+             toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
 
         request = context.scan("null_test", "null_table")
                       .join(context.scan("null_test", "t"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
@@ -1302,51 +1870,96 @@ try
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
 
-        request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                      .build(context);
+        request
+            = context.scan("null_test", "null_table")
+                  .join(context.scan("null_test", "t"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                  .build(context);
         executeAndAssertColumnsEqual(request, {});
 
         request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .join(
+                          context.scan("null_test", "t"),
+                          tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
     }
 
     // null table join null table
     {
+        request
+            = context.scan("null_test", "null_table")
+                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                  .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
         request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeLeftOuterJoin,
+                          {},
+                          {cond},
+                          {},
+                          {},
+                          {})
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
 
         request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeRightOuterJoin,
+                          {},
+                          {},
+                          {cond},
+                          {},
+                          {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request
+            = context.scan("null_test", "null_table")
+                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                  .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeAntiSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
 
         request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeLeftOuterSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
 
         request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, {});
-
-        request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, {});
-
-        request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, {});
-
-        request = context.scan("null_test", "null_table")
-                      .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                      .join(
+                          context.scan("null_test", "null_table"),
+                          tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                          {},
+                          {},
+                          {},
+                          {cond},
+                          {})
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
     }
@@ -1359,7 +1972,11 @@ TEST_F(JoinExecutorTestRunner, RawQuery)
 try
 {
     String query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
-    auto cols = {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})};
+    auto cols
+        = {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+           toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+           toNullableVec<String>({"banana", "banana", "banana", {}}),
+           toNullableVec<String>({"apple", "apple", "apple", {}})};
     WRAP_FOR_JOIN_TEST_BEGIN
     ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
     WRAP_FOR_JOIN_TEST_END
@@ -1369,16 +1986,27 @@ CATCH
 TEST_F(JoinExecutorTestRunner, SplitJoinResult)
 try
 {
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
+    context.addMockTable(
+        "split_test",
+        "t1",
+        {{"a", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
     context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
 
-    auto request = context
-                       .scan("split_test", "t1")
+    auto request = context.scan("split_test", "t1")
                        .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
                        .build(context);
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
-    std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
+    std::vector<std::vector<size_t>> expect{
+        {5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+        {5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+        {5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+        {25, 25},
+        {45, 5},
+        {50},
+        {50},
+        {50}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
@@ -1397,18 +2025,18 @@ CATCH
 TEST_F(JoinExecutorTestRunner, MergeAfterSplit)
 try
 {
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
-    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1}), toVec<Int32>("c", {1, 2, 3, 4, 5})});
+    context.addMockTable(
+        "split_test",
+        "t1",
+        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
+    context.addMockTable(
+        "split_test",
+        "t2",
+        {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {toVec<Int32>("a", {1, 1, 1, 1, 1}), toVec<Int32>("c", {1, 2, 3, 4, 5})});
 
-    std::vector<size_t> block_sizes{
-        1,
-        2,
-        7,
-        25,
-        49,
-        50,
-        51,
-        DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
     auto join_types = {tipb::JoinType::TypeInnerJoin, tipb::JoinType::TypeSemiJoin};
     std::vector<std::vector<std::vector<size_t>>> expects{
         {
@@ -1434,9 +2062,15 @@ try
     };
     for (size_t index = 0; index < join_types.size(); index++)
     {
-        auto request = context
-                           .scan("split_test", "t1")
-                           .join(context.scan("split_test", "t2"), *(join_types.begin() + index), {col("a")}, {}, {}, {gt(col("b"), col("c"))}, {})
+        auto request = context.scan("split_test", "t1")
+                           .join(
+                               context.scan("split_test", "t2"),
+                               *(join_types.begin() + index),
+                               {col("a")},
+                               {},
+                               {},
+                               {gt(col("b"), col("c"))},
+                               {})
                            .build(context);
         auto & expect = expects[index];
 
@@ -1462,15 +2096,27 @@ try
     UInt64 max_block_size = 800;
     size_t original_max_streams = 20;
     size_t original_max_streams_small = 4;
-    std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
-    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
+    std::vector<String> left_table_names
+        = {"left_table_1_concurrency",
+           "left_table_3_concurrency",
+           "left_table_5_concurrency",
+           "left_table_10_concurrency"};
+    std::vector<String> right_table_names
+        = {"right_table_1_concurrency",
+           "right_table_3_concurrency",
+           "right_table_5_concurrency",
+           "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
     /// case 1, right join without right condition
-    auto request = context
-                       .scan("outer_join_test", right_table_names[0])
-                       .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
-                       .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
-                       .build(context);
+    auto request
+        = context.scan("outer_join_test", right_table_names[0])
+              .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
+              .project(
+                  {fmt::format("{}.a", left_table_names[0]),
+                   fmt::format("{}.b", left_table_names[0]),
+                   fmt::format("{}.a", right_table_names[0]),
+                   fmt::format("{}.b", right_table_names[0])})
+              .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
@@ -1480,12 +2126,15 @@ try
     {
         for (auto & right_table_name : right_table_names)
         {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
+            request = context.scan("outer_join_test", left_table_name)
+                          .join(
+                              context.scan("outer_join_test", right_table_name),
+                              tipb::JoinType::TypeRightOuterJoin,
+                              {col("a")})
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -1494,22 +2143,46 @@ try
     {
         for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
         {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
+            request = context.scan("outer_join_test", left_table_name)
+                          .join(
+                              context.receive(
+                                  fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency),
+                                  exchange_concurrency),
+                              tipb::JoinType::TypeRightOuterJoin,
+                              {col("a")},
+                              {},
+                              {},
+                              {},
+                              {},
+                              exchange_concurrency)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                << "left_table_name = " << left_table_name
+                << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
             if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+                    << "left_table_name = " << left_table_name
+                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
             WRAP_FOR_JOIN_TEST_END
         }
     }
     /// case 2, right join with right condition
-    request = context
-                  .scan("outer_join_test", right_table_names[0])
-                  .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
-                  .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
+    request = context.scan("outer_join_test", right_table_names[0])
+                  .join(
+                      context.scan("outer_join_test", left_table_names[0]),
+                      tipb::JoinType::TypeLeftOuterJoin,
+                      {col("a")},
+                      {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))},
+                      {},
+                      {},
+                      {},
+                      0)
+                  .project(
+                      {fmt::format("{}.a", left_table_names[0]),
+                       fmt::format("{}.b", left_table_names[0]),
+                       fmt::format("{}.a", right_table_names[0]),
+                       fmt::format("{}.b", right_table_names[0])})
                   .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
@@ -1519,12 +2192,20 @@ try
     {
         for (auto & right_table_name : right_table_names)
         {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
+            request = context.scan("outer_join_test", left_table_name)
+                          .join(
+                              context.scan("outer_join_test", right_table_name),
+                              tipb::JoinType::TypeRightOuterJoin,
+                              {col("a")},
+                              {},
+                              {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))},
+                              {},
+                              {},
+                              0)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -1534,14 +2215,27 @@ try
         for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
         {
             String exchange_name = fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency);
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
+            request = context.scan("outer_join_test", left_table_name)
+                          .join(
+                              context.receive(
+                                  fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency),
+                                  exchange_concurrency),
+                              tipb::JoinType::TypeRightOuterJoin,
+                              {col("a")},
+                              {},
+                              {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))},
+                              {},
+                              {},
+                              exchange_concurrency)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                << "left_table_name = " << left_table_name
+                << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
             if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small)) << "left_table_name = " << left_table_name << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+                    << "left_table_name = " << left_table_name
+                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -1550,7 +2244,10 @@ CATCH
 
 namespace
 {
-ColumnsWithTypeAndName genSemiJoinResult(tipb::JoinType type, const ColumnsWithTypeAndName & left, const ColumnWithTypeAndName & left_semi_res)
+ColumnsWithTypeAndName genSemiJoinResult(
+    tipb::JoinType type,
+    const ColumnsWithTypeAndName & left,
+    const ColumnWithTypeAndName & left_semi_res)
 {
     ColumnsWithTypeAndName res = left;
     if (type == tipb::JoinType::TypeLeftOuterSemiJoin)
@@ -1561,7 +2258,8 @@ ColumnsWithTypeAndName genSemiJoinResult(tipb::JoinType type, const ColumnsWithT
     {
         auto new_column = left_semi_res.column->cloneEmpty();
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_res.column.get());
-        const auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        const auto & nested_column_data
+            = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
         for (size_t i = 0; i < nullable_column->size(); ++i)
         {
             if (nullable_column->isNullAt(i))
@@ -1580,7 +2278,8 @@ ColumnsWithTypeAndName genSemiJoinResult(tipb::JoinType type, const ColumnsWithT
     {
         IColumn::Filter filter(left_semi_res.column->size());
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_res.column.get());
-        const auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        const auto & nested_column_data
+            = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
         for (size_t i = 0; i < nullable_column->size(); ++i)
         {
             if (nullable_column->isNullAt(i) || nested_column_data[i])
@@ -1604,73 +2303,69 @@ try
     std::vector<UInt64> cross_join_shallow_copy_thresholds{1, DEFAULT_BLOCK_SIZE * 100};
     /// One join key(t.a = s.a) + no other condition.
     /// left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, {}, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {6, 7, 8, 9, 10})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 8, 9, 10})},
-            toNullableVec<Int8>({1, 1, {}, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
-            {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
-            toNullableVec<Int8>({1, {}, 1, {}, {}}),
-        }};
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1
+        = {{
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toNullableVec<Int32>("a", {})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, {}, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
+               toNullableVec<Int8>({1, 1, 1, 1, 1}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toNullableVec<Int32>("a", {6, 7, 8, 9, 10})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, 8, 9, 10})},
+               toNullableVec<Int8>({1, 1, {}, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
+               {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
+               toNullableVec<Int8>({1, {}, 1, {}, {}}),
+           }};
 
     for (const auto & [left, right, res] : t1)
     {
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
-        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             /// nullaware hash join
             auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"),
-                                     type,
-                                     {col("a")},
-                                     {},
-                                     {},
-                                     {},
-                                     {},
-                                     0,
-                                     true)
+                               .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, true)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             /// nullaware cross join
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
-                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                context.context->setSetting(
+                    "shallow_copy_cross_probe_threshold",
+                    Field(static_cast<UInt64>(shallow_copy_threshold)));
                 request = context.scan("null_aware_semi", "t")
-                              .join(context.scan("null_aware_semi", "s"),
-                                    type,
-                                    {},
-                                    {},
-                                    {},
-                                    {},
-                                    {eq(col("t.a"), col("s.a"))},
-                                    0,
-                                    false)
+                              .join(
+                                  context.scan("null_aware_semi", "s"),
+                                  type,
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {eq(col("t.a"), col("s.a"))},
+                                  0,
+                                  false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
             }
@@ -1679,71 +2374,76 @@ try
 
     /// One join key(t.a = s.a) + other condition(t.c < s.c).
     /// left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, {}, 5}), toNullableVec<Int32>("c", {2, {}, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("c", {})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, {}, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, 1, {}, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, {}, 1, {}, {}}),
-        }};
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2
+        = {{
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               toNullableVec<Int8>({1, 1, 1, 1, 1}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, {}, {}, 5}), toNullableVec<Int32>("c", {2, {}, 2, 2, 2})},
+               {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("c", {})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, {}, {}, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {1, 2, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               toNullableVec<Int8>({1, 1, {}, 0, 0}),
+           },
+           {
+               {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               toNullableVec<Int8>({1, {}, 1, {}, {}}),
+           }};
 
     for (const auto & [left, right, res] : t2)
     {
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
-        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"),
-                                     type,
-                                     {col("a")},
-                                     {},
-                                     {},
-                                     {lt(col("t.c"), col("s.c"))},
-                                     {},
-                                     0,
-                                     true)
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a")},
+                                   {},
+                                   {},
+                                   {lt(col("t.c"), col("s.c"))},
+                                   {},
+                                   0,
+                                   true)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
-                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                context.context->setSetting(
+                    "shallow_copy_cross_probe_threshold",
+                    Field(static_cast<UInt64>(shallow_copy_threshold)));
                 request = context.scan("null_aware_semi", "t")
-                              .join(context.scan("null_aware_semi", "s"),
-                                    type,
-                                    {},
-                                    {},
-                                    {},
-                                    {lt(col("t.c"), col("s.c"))},
-                                    {eq(col("t.a"), col("s.a"))},
-                                    0,
-                                    false)
+                              .join(
+                                  context.scan("null_aware_semi", "s"),
+                                  type,
+                                  {},
+                                  {},
+                                  {},
+                                  {lt(col("t.c"), col("s.c"))},
+                                  {eq(col("t.a"), col("s.a"))},
+                                  0,
+                                  false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
             }
@@ -1779,7 +2479,8 @@ try
             toNullableVec<Int8>({1, {}, {}, {}}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5, {}, 4, {}}), toNullableVec<Int32>("b", {{}, 3, 2, 4, 5, 1, {}, {}})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5, {}, 4, {}}),
+             toNullableVec<Int32>("b", {{}, 3, 2, 4, 5, 1, {}, {}})},
             {toNullableVec<Int32>("a", {2, 2, 2, 3, 4, 4}), toNullableVec<Int32>("b", {1, 3, {}, {}, 4, {}})},
             toNullableVec<Int8>({0, 1, {}, 1, 0, {}, {}, {}}),
         },
@@ -1790,34 +2491,31 @@ try
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
-        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"),
-                                     type,
-                                     {col("a"), col("b")},
-                                     {},
-                                     {},
-                                     {},
-                                     {},
-                                     0,
-                                     true)
-                               .build(context);
+            auto request
+                = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, true)
+                      .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
-                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                context.context->setSetting(
+                    "shallow_copy_cross_probe_threshold",
+                    Field(static_cast<UInt64>(shallow_copy_threshold)));
                 request = context.scan("null_aware_semi", "t")
-                              .join(context.scan("null_aware_semi", "s"),
-                                    type,
-                                    {},
-                                    {},
-                                    {},
-                                    {},
-                                    {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
-                                    0,
-                                    false)
+                              .join(
+                                  context.scan("null_aware_semi", "s"),
+                                  type,
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
+                                  0,
+                                  false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
             }
@@ -1828,47 +2526,79 @@ try
     /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({1, 1, 1, 1, 1}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
             {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("b", {}), toNullableVec<Int32>("c", {})},
             toNullableVec<Int8>({0, 0, 0, 0, 0}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {6, 7, 8, 9, 10}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({0, 0, 0, 0, 0}),
         },
         {
-            {toNullableVec<Int32>("a", {{}, {}, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {2, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {{}, {}, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {2, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({0, {}, 1, 1, 1}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
             toNullableVec<Int8>({0, 0, 0, 0, 0}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}),
+             toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2, 2})},
             toNullableVec<Int8>({1, {}, {}, 1, 0}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, {}}), toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("c", {2, 1, 2, 1, 2})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}),
+             toNullableVec<Int32>("b", {1, 2, 3, {}, {}}),
+             toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, {}}),
+             toNullableVec<Int32>("c", {2, 1, 2, 1, 2})},
             toNullableVec<Int8>({1, 0, {}, 0, 0}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 3, {}, 6}), toNullableVec<Int32>("b", {1, 2, 3, 3, {}, {}}), toNullableVec<Int32>("c", {1, 3, 1, 2, 3, 1})},
-            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {{}, 2, 3, 4, {}}), toNullableVec<Int32>("c", {3, 1, 2, 1, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 3, {}, 6}),
+             toNullableVec<Int32>("b", {1, 2, 3, 3, {}, {}}),
+             toNullableVec<Int32>("c", {1, 3, 1, 2, 3, 1})},
+            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {{}, 2, 3, 4, {}}),
+             toNullableVec<Int32>("c", {3, 1, 2, 1, 2})},
             toNullableVec<Int8>({{}, 0, 1, {}, 0, {}}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             {toNullableVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, {}, 4, 4, 4}),
              toNullableVec<Int32>("b", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, {}}),
              toNullableVec<Int32>("c", {1, 2, 3, 1, 2, 2, 1, 2, 2, 1, 2, 3})},
@@ -1878,37 +2608,50 @@ try
 
     for (const auto & [left, right, res] : t4)
     {
-        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+        context.addMockTable(
+            "null_aware_semi",
+            "t",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            left);
+        context.addMockTable(
+            "null_aware_semi",
+            "s",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            right);
 
-        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"),
-                                     type,
-                                     {col("a"), col("b")},
-                                     {},
-                                     {},
-                                     {lt(col("t.c"), col("s.c"))},
-                                     {},
-                                     0,
-                                     true)
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {lt(col("t.c"), col("s.c"))},
+                                   {},
+                                   0,
+                                   true)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
-                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                context.context->setSetting(
+                    "shallow_copy_cross_probe_threshold",
+                    Field(static_cast<UInt64>(shallow_copy_threshold)));
                 request = context.scan("null_aware_semi", "t")
-                              .join(context.scan("null_aware_semi", "s"),
-                                    type,
-                                    {},
-                                    {},
-                                    {},
-                                    {lt(col("t.c"), col("s.c"))},
-                                    {eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b"))},
-                                    0,
-                                    false)
+                              .join(
+                                  context.scan("null_aware_semi", "s"),
+                                  type,
+                                  {},
+                                  {},
+                                  {},
+                                  {lt(col("t.c"), col("s.c"))},
+                                  {eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b"))},
+                                  0,
+                                  false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
             }
@@ -1922,50 +2665,71 @@ try
     /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t5 = {
         {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, {}, 3, 4, 5}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, {}, 3, 4, 5}),
+             toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({{}, {}, {}, 1, 1}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, 5}), toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("d", {2, 1, 2, 1, 2})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}),
+             toNullableVec<Int32>("b", {1, 2, 3, {}, 5}),
+             toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("b", {1, 2, 3, 4, {}}),
+             toNullableVec<Int32>("d", {2, 1, 2, 1, 2})},
             toNullableVec<Int8>({1, 1, {}, {}, 0}),
         },
     };
 
     for (const auto & [left, right, res] : t5)
     {
-        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
+        context.addMockTable(
+            "null_aware_semi",
+            "t",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            left);
+        context.addMockTable(
+            "null_aware_semi",
+            "s",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
+            right);
 
-        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"),
-                                     type,
-                                     {col("a"), col("b")},
-                                     {},
-                                     {},
-                                     {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
-                                     {},
-                                     0,
-                                     true)
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
+                                   {},
+                                   0,
+                                   true)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
-                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                context.context->setSetting(
+                    "shallow_copy_cross_probe_threshold",
+                    Field(static_cast<UInt64>(shallow_copy_threshold)));
                 request = context.scan("null_aware_semi", "t")
-                              .join(context.scan("null_aware_semi", "s"),
-                                    type,
-                                    {},
-                                    {},
-                                    {},
-                                    {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
-                                    {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
-                                    0,
-                                    false)
+                              .join(
+                                  context.scan("null_aware_semi", "s"),
+                                  type,
+                                  {},
+                                  {},
+                                  {},
+                                  {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
+                                  {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
+                                  0,
+                                  false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
             }
@@ -1977,8 +2741,10 @@ try
     context.setCollation(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t6 = {
         {
-            {toNullableVec<String>("a", {"a", "b", "c", "d", "e"}), toNullableVec<String>("b", {"A", "b", "c", "dd", "e"})},
-            {toNullableVec<String>("a", {"a", {}, "c", {}, "D", "E"}), toNullableVec<String>("b", {"a", "b", {}, "dD", "DD", {}})},
+            {toNullableVec<String>("a", {"a", "b", "c", "d", "e"}),
+             toNullableVec<String>("b", {"A", "b", "c", "dd", "e"})},
+            {toNullableVec<String>("a", {"a", {}, "c", {}, "D", "E"}),
+             toNullableVec<String>("b", {"a", "b", {}, "dD", "DD", {}})},
             toNullableVec<Int8>({1, {}, {}, 1, {}}),
         },
         {
@@ -1987,8 +2753,10 @@ try
             toNullableVec<Int8>({1, {}, {}, {}}),
         },
         {
-            {toNullableVec<String>("a", {"a", "Bb", {}, "d", "E", {}, "d", {}}), toNullableVec<String>("b", {{}, "CC", "bb", "dD", "EE", "AA", {}, {}})},
-            {toNullableVec<String>("a", {"b", "bb", "b", "C", "D", "d"}), toNullableVec<String>("b", {"AA", "cc", {}, {}, "Dd", {}})},
+            {toNullableVec<String>("a", {"a", "Bb", {}, "d", "E", {}, "d", {}}),
+             toNullableVec<String>("b", {{}, "CC", "bb", "dD", "EE", "AA", {}, {}})},
+            {toNullableVec<String>("a", {"b", "bb", "b", "C", "D", "d"}),
+             toNullableVec<String>("b", {"AA", "cc", {}, {}, "Dd", {}})},
             toNullableVec<Int8>({0, 1, {}, 1, 0, {}, {}, {}}),
         },
     };
@@ -1998,34 +2766,31 @@ try
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, right);
 
-        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"),
-                                     type,
-                                     {col("a"), col("b")},
-                                     {},
-                                     {},
-                                     {},
-                                     {},
-                                     0,
-                                     true)
-                               .build(context);
+            auto request
+                = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, true)
+                      .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
-                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                context.context->setSetting(
+                    "shallow_copy_cross_probe_threshold",
+                    Field(static_cast<UInt64>(shallow_copy_threshold)));
                 request = context.scan("null_aware_semi", "t")
-                              .join(context.scan("null_aware_semi", "s"),
-                                    type,
-                                    {},
-                                    {},
-                                    {},
-                                    {},
-                                    {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
-                                    0,
-                                    false)
+                              .join(
+                                  context.scan("null_aware_semi", "s"),
+                                  type,
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
+                                  0,
+                                  false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
             }
@@ -2040,43 +2805,43 @@ try
     using tipb::JoinType;
     /// One join key(t.a = s.a) + no other condition.
     /// type + left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1 = {
-        {
-            JoinType::TypeSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 3, {}, 4})},
-            {toNullableVec<Int32>("a", {1, 4})},
-        },
-        {
-            JoinType::TypeSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {2, 3, {}, 7})},
-            {toNullableVec<Int32>("a", {2})},
-        },
-        {
-            JoinType::TypeSemiJoin,
-            {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 1, 4, 5})},
-        },
-        {
-            JoinType::TypeAntiSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 3, {}, 4})},
-            {toNullableVec<Int32>("a", {{}, 2, 5})},
-        },
-        {
-            JoinType::TypeAntiSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {{}})},
-        },
-        {
-            JoinType::TypeAntiSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
-            {toNullableVec<Int32>("a", {3, 2, {}, 7})},
-            {toNullableVec<Int32>("a", {{}, {}, 1, 5, 5})},
-        }};
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1
+        = {{
+               JoinType::TypeSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 3, {}, 4})},
+               {toNullableVec<Int32>("a", {1, 4})},
+           },
+           {
+               JoinType::TypeSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {2, 3, {}, 7})},
+               {toNullableVec<Int32>("a", {2})},
+           },
+           {
+               JoinType::TypeSemiJoin,
+               {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 1, 4, 5})},
+           },
+           {
+               JoinType::TypeAntiSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 3, {}, 4})},
+               {toNullableVec<Int32>("a", {{}, 2, 5})},
+           },
+           {
+               JoinType::TypeAntiSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+               {toNullableVec<Int32>("a", {{}})},
+           },
+           {
+               JoinType::TypeAntiSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
+               {toNullableVec<Int32>("a", {3, 2, {}, 7})},
+               {toNullableVec<Int32>("a", {{}, {}, 1, 5, 5})},
+           }};
 
     for (const auto & [type, left, right, res] : t1)
     {
@@ -2084,59 +2849,51 @@ try
         context.addMockTable("right_semi_family", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("right_semi_family", "t")
-                           .join(context.scan("right_semi_family", "s"),
-                                 type,
-                                 {col("a")},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 false,
-                                 0)
+                           .join(context.scan("right_semi_family", "s"), type, {col("a")}, {}, {}, {}, {}, 0, false, 0)
                            .build(context);
         executeAndAssertColumnsEqual(request, res);
     }
 
     /// One join key(t.a = s.a) + other condition(t.c < s.c).
     /// left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2 = {
-        {
-            JoinType::TypeSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {1, 2, 5}), toNullableVec<Int32>("c", {1, 1, 1})},
-        },
-        {
-            JoinType::TypeSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {2, 4}), toNullableVec<Int32>("c", {1, 1})},
-        },
-        {
-            JoinType::TypeSemiJoin,
-            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
-            {toNullableVec<Int32>("a", {1, 4}), toNullableVec<Int32>("c", {2, 9})},
-            {toNullableVec<Int32>("a", {1, 4, 4}), toNullableVec<Int32>("c", {1, 5, 6})},
-        },
-        {
-            JoinType::TypeAntiSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
-            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
-            {toNullableVec<Int32>("a", {{}, 1, 2, 4}), toNullableVec<Int32>("c", {2, 1, 1, 7})},
-        },
-        {
-            JoinType::TypeAntiSemiJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
-            {toNullableVec<Int32>("a", {{}, 1, 2}), toNullableVec<Int32>("c", {3, 1, 2})},
-        },
-        {
-            JoinType::TypeAntiSemiJoin,
-            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
-            {toNullableVec<Int32>("a", {{}, {}, 1, 2, 2, 4, 5}), toNullableVec<Int32>("c", {5, 6, 2, 3, 4, 7, 8})},
-        }};
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2
+        = {{
+               JoinType::TypeSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               {toNullableVec<Int32>("a", {1, 2, 5}), toNullableVec<Int32>("c", {1, 1, 1})},
+           },
+           {
+               JoinType::TypeSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               {toNullableVec<Int32>("a", {2, 4}), toNullableVec<Int32>("c", {1, 1})},
+           },
+           {
+               JoinType::TypeSemiJoin,
+               {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+               {toNullableVec<Int32>("a", {1, 4}), toNullableVec<Int32>("c", {2, 9})},
+               {toNullableVec<Int32>("a", {1, 4, 4}), toNullableVec<Int32>("c", {1, 5, 6})},
+           },
+           {
+               JoinType::TypeAntiSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+               {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+               {toNullableVec<Int32>("a", {{}, 1, 2, 4}), toNullableVec<Int32>("c", {2, 1, 1, 7})},
+           },
+           {
+               JoinType::TypeAntiSemiJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+               {toNullableVec<Int32>("a", {{}, 1, 2}), toNullableVec<Int32>("c", {3, 1, 2})},
+           },
+           {
+               JoinType::TypeAntiSemiJoin,
+               {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}),
+                toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+               {toNullableVec<Int32>("a", {{}, {}, 1, 2, 2, 4, 5}), toNullableVec<Int32>("c", {5, 6, 2, 3, 4, 7, 8})},
+           }};
 
     for (const auto & [type, left, right, res] : t2)
     {
@@ -2144,16 +2901,17 @@ try
         context.addMockTable("right_semi_family", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("right_semi_family", "t")
-                           .join(context.scan("right_semi_family", "s"),
-                                 type,
-                                 {col("a")},
-                                 {},
-                                 {},
-                                 {lt(col("t.c"), col("s.c"))},
-                                 {},
-                                 0,
-                                 false,
-                                 0)
+                           .join(
+                               context.scan("right_semi_family", "s"),
+                               type,
+                               {col("a")},
+                               {},
+                               {},
+                               {lt(col("t.c"), col("s.c"))},
+                               {},
+                               0,
+                               false,
+                               0)
                            .build(context);
         executeAndAssertColumnsEqual(request, res);
     }
@@ -2180,25 +2938,25 @@ try
     using tipb::JoinType;
     /// One join key(t.a = s.a) + no left/right condition + no other condition.
     /// type + left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1 = {
-        {JoinType::TypeRightOuterJoin,
-         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-         {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
-        {JoinType::TypeRightOuterJoin,
-         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-         {toNullableVec<Int32>("a", {2, 3, {}, 7})}},
-        {JoinType::TypeRightOuterJoin,
-         {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
-         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
-        {JoinType::TypeRightOuterJoin,
-         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-         {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
-        {JoinType::TypeRightOuterJoin,
-         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
-        {JoinType::TypeRightOuterJoin,
-         {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
-         {toNullableVec<Int32>("a", {3, 2, {}, 7})}}};
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1
+        = {{JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
+           {JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {2, 3, {}, 7})}},
+           {JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
+           {JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
+           {JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
+           {JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 7})}}};
 
     for (const auto & [type, left, right] : t1)
     {
@@ -2206,67 +2964,60 @@ try
         context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("right_outer", "s")
-                           .join(context.scan("right_outer", "t"),
-                                 JoinType::TypeLeftOuterJoin,
-                                 {col("a")},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 false,
-                                 1)
+                           .join(
+                               context.scan("right_outer", "t"),
+                               JoinType::TypeLeftOuterJoin,
+                               {col("a")},
+                               {},
+                               {},
+                               {},
+                               {},
+                               0,
+                               false,
+                               1)
                            .build(context);
         auto expect = executeStreams(request, 1);
         auto swap_expect = swapLeftRightTableColumns(expect);
         auto request2 = context.scan("right_outer", "t")
-                            .join(context.scan("right_outer", "s"),
-                                  type,
-                                  {col("a")},
-                                  {},
-                                  {},
-                                  {},
-                                  {},
-                                  0,
-                                  false,
-                                  1)
+                            .join(context.scan("right_outer", "s"), type, {col("a")}, {}, {}, {}, {}, 0, false, 1)
                             .build(context);
         executeAndAssertColumnsEqual(request2, swap_expect);
     }
 
     /// One join key(t.a = s.a) + no left/right condition + other condition(t.c < s.c).
     /// left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2 = {
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
-            {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
-            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
-        }};
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2
+        = {{
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+               {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+               {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}),
+                toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+           }};
 
     for (const auto & [type, left, right] : t2)
     {
@@ -2274,67 +3025,70 @@ try
         context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("right_outer", "s")
-                           .join(context.scan("right_outer", "t"),
-                                 JoinType::TypeLeftOuterJoin,
-                                 {col("a")},
-                                 {},
-                                 {},
-                                 {lt(col("t.c"), col("s.c"))},
-                                 {},
-                                 0,
-                                 false,
-                                 1)
+                           .join(
+                               context.scan("right_outer", "t"),
+                               JoinType::TypeLeftOuterJoin,
+                               {col("a")},
+                               {},
+                               {},
+                               {lt(col("t.c"), col("s.c"))},
+                               {},
+                               0,
+                               false,
+                               1)
                            .build(context);
         auto expect = executeStreams(request, 1);
         auto swap_expect = swapLeftRightTableColumns(expect);
         auto request2 = context.scan("right_outer", "t")
-                            .join(context.scan("right_outer", "s"),
-                                  type,
-                                  {col("a")},
-                                  {},
-                                  {},
-                                  {lt(col("t.c"), col("s.c"))},
-                                  {},
-                                  0,
-                                  false,
-                                  1)
+                            .join(
+                                context.scan("right_outer", "s"),
+                                type,
+                                {col("a")},
+                                {},
+                                {},
+                                {lt(col("t.c"), col("s.c"))},
+                                {},
+                                0,
+                                false,
+                                1)
                             .build(context);
         executeAndAssertColumnsEqual(request2, swap_expect);
     }
 
     /// One join key(t.a = s.a) + left/right condition + other condition(t.c < s.c).
     /// left table(t) + right table(s) + result column.
-    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t3 = {
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
-            {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
-            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
-        },
-        {
-            JoinType::TypeRightOuterJoin,
-            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
-        }};
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t3
+        = {{
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+               {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+               {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+           },
+           {
+               JoinType::TypeRightOuterJoin,
+               {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}),
+                toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+               {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+           }};
 
     auto literal_integer = lit(Field(static_cast<Int64>(2)));
     for (const auto & [type, left, right] : t3)
@@ -2343,30 +3097,32 @@ try
         context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("right_outer", "s")
-                           .join(context.scan("right_outer", "t"),
-                                 JoinType::TypeLeftOuterJoin,
-                                 {col("a")},
-                                 {lt(col("s.a"), literal_integer)},
-                                 {},
-                                 {lt(col("t.c"), col("s.c"))},
-                                 {},
-                                 0,
-                                 false,
-                                 1)
+                           .join(
+                               context.scan("right_outer", "t"),
+                               JoinType::TypeLeftOuterJoin,
+                               {col("a")},
+                               {lt(col("s.a"), literal_integer)},
+                               {},
+                               {lt(col("t.c"), col("s.c"))},
+                               {},
+                               0,
+                               false,
+                               1)
                            .build(context);
         auto expect = executeStreams(request, 1);
         auto swap_expect = swapLeftRightTableColumns(expect);
         auto request2 = context.scan("right_outer", "t")
-                            .join(context.scan("right_outer", "s"),
-                                  type,
-                                  {col("a")},
-                                  {},
-                                  {lt(col("s.a"), literal_integer)},
-                                  {lt(col("t.c"), col("s.c"))},
-                                  {},
-                                  0,
-                                  false,
-                                  1)
+                            .join(
+                                context.scan("right_outer", "s"),
+                                type,
+                                {col("a")},
+                                {},
+                                {lt(col("s.a"), literal_integer)},
+                                {lt(col("t.c"), col("s.c"))},
+                                {},
+                                0,
+                                false,
+                                1)
                             .build(context);
         executeAndAssertColumnsEqual(request2, swap_expect);
     }

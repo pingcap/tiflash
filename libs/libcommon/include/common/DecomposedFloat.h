@@ -14,15 +14,17 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-#include <cstring>
 #include <common/types.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 
 /// Allows to check the internals of IEEE-754 floating point number.
 
-template <typename T> struct FloatTraits;
+template <typename T>
+struct FloatTraits;
 
 template <>
 struct FloatTraits<float>
@@ -50,53 +52,31 @@ struct DecomposedFloat
 {
     using Traits = FloatTraits<T>;
 
-    DecomposedFloat(T x)
-    {
-        memcpy(&x_uint, &x, sizeof(x));
-    }
+    DecomposedFloat(T x) { memcpy(&x_uint, &x, sizeof(x)); }
 
     typename Traits::UInt x_uint;
 
-    bool is_negative() const
-    {
-        return x_uint >> (Traits::bits - 1);
-    }
+    bool is_negative() const { return x_uint >> (Traits::bits - 1); }
 
     /// Returns 0 for both +0. and -0.
-    int sign() const
-    {
-        return (exponent() == 0 && mantissa() == 0)
-            ? 0
-            : (is_negative()
-                ? -1
-                : 1);
-    }
+    int sign() const { return (exponent() == 0 && mantissa() == 0) ? 0 : (is_negative() ? -1 : 1); }
 
     uint16_t exponent() const
     {
         return (x_uint >> (Traits::mantissa_bits)) & (((1ull << (Traits::exponent_bits + 1)) - 1) >> 1);
     }
 
-    int16_t normalized_exponent() const
-    {
-        return int16_t(exponent()) - ((1ull << (Traits::exponent_bits - 1)) - 1);
-    }
+    int16_t normalized_exponent() const { return int16_t(exponent()) - ((1ull << (Traits::exponent_bits - 1)) - 1); }
 
-    uint64_t mantissa() const
-    {
-        return x_uint & ((1ull << Traits::mantissa_bits) - 1);
-    }
+    uint64_t mantissa() const { return x_uint & ((1ull << Traits::mantissa_bits) - 1); }
 
-    int64_t mantissa_with_sign() const
-    {
-        return is_negative() ? -mantissa() : mantissa();
-    }
+    int64_t mantissa_with_sign() const { return is_negative() ? -mantissa() : mantissa(); }
 
     /// NOTE Probably floating point instructions can be better.
     bool is_integer_in_representable_range() const
     {
         return x_uint == 0
-            || (normalized_exponent() >= 0  /// The number is not less than one
+            || (normalized_exponent() >= 0 /// The number is not less than one
                 /// The number is inside the range where every integer has exact representation in float
                 && normalized_exponent() <= static_cast<int16_t>(Traits::mantissa_bits)
                 /// After multiplying by 2^exp, the fractional part becomes zero, means the number is integer
@@ -180,7 +160,8 @@ struct DecomposedFloat
             return is_negative() ? -1 : 1;
 
         /// Float has no fractional part means that the numbers are equal.
-        if (large_and_always_integer || (mantissa() & ((1ULL << (Traits::mantissa_bits - normalized_exponent())) - 1)) == 0)
+        if (large_and_always_integer
+            || (mantissa() & ((1ULL << (Traits::mantissa_bits - normalized_exponent())) - 1)) == 0)
             return 0;
         else
             /// Float has fractional part means its abs value is larger.

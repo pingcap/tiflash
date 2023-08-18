@@ -34,10 +34,7 @@ public:
 
     explicit operator bool() const noexcept { return !is_ignored; }
 
-    void operator()(const Block & block) const
-    {
-        handler(block);
-    }
+    void operator()(const Block & block) const { handler(block); }
 
 private:
     Handler handler;

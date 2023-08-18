@@ -43,7 +43,8 @@ public:
     {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cout);
         // Poco::AutoPtr<Poco::FileChannel> channel(new Poco::FileChannel("/tmp/logger_test"));
-        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter("[%H:%M:%S.%i %Z] [%p] [%U(%u)]: %t"));
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(
+            new Poco::PatternFormatter("[%H:%M:%S.%i %Z] [%p] [%U(%u)]: %t"));
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Poco::Logger::root().setChannel(formatting_channel);
         Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);

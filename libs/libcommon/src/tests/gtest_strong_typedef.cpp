@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <common/strong_typedef.h>
-#include <set>
-#include <unordered_set>
-#include <memory>
-#include <type_traits>
-
 #include <gtest/gtest.h>
+
+#include <memory>
+#include <set>
+#include <type_traits>
+#include <unordered_set>
 
 
 TEST(StrongTypedefSuite, TypedefsOfTheSameType)

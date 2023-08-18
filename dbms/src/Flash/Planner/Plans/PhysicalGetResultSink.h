@@ -40,21 +40,12 @@ public:
         assert(result_queue);
     }
 
-    void finalize(const Names &) override
-    {
-        throw Exception("Unsupport");
-    }
+    void finalize(const Names &) override { throw Exception("Unsupport"); }
 
-    const Block & getSampleBlock() const override
-    {
-        throw Exception("Unsupport");
-    }
+    const Block & getSampleBlock() const override { throw Exception("Unsupport"); }
 
 private:
-    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
-    {
-        throw Exception("Unsupport");
-    }
+    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override { throw Exception("Unsupport"); }
 
     void buildPipelineExecGroupImpl(
         PipelineExecutorContext & exec_context,

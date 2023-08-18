@@ -55,9 +55,13 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     auto child_header = child->getSchema();
     for (const auto & one : child_header)
     {
-        expand_output_columns.emplace_back(one.name, expand_action.expand->isInGroupSetColumn(one.name) ? makeNullable(one.type) : one.type);
+        expand_output_columns.emplace_back(
+            one.name,
+            expand_action.expand->isInGroupSetColumn(one.name) ? makeNullable(one.type) : one.type);
     }
-    expand_output_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
+    expand_output_columns.emplace_back(
+        Expand::grouping_identifier_column_name,
+        Expand::grouping_identifier_column_type);
 
     auto physical_expand = std::make_shared<PhysicalExpand>(
         executor_id,
@@ -72,7 +76,10 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 
 void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 {
-    String expand_extra_info = fmt::format("expand, expand_executor_id = {}: grouping set {}", execId(), shared_expand->getGroupingSetsDes());
+    String expand_extra_info = fmt::format(
+        "expand, expand_executor_id = {}: grouping set {}",
+        execId(),
+        shared_expand->getGroupingSetsDes());
     executeExpression(child_pipeline, expand_actions, log, expand_extra_info);
 }
 

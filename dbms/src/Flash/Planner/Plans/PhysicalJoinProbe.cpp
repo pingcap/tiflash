@@ -32,7 +32,12 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     {
         // When the join build operator spilled, the probe operator requires at least two or more threads to restore spilled hash partitions.
         auto restore_concurrency = std::max(2, concurrency);
-        restoreConcurrency(exec_context, group_builder, restore_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        restoreConcurrency(
+            exec_context,
+            group_builder,
+            restore_concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
     }
 
     executeExpression(exec_context, group_builder, prepare_actions, log);

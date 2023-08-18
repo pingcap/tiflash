@@ -29,8 +29,7 @@ class SIMD
 public:
     using Poly64Pair = std::pair<poly64_t, poly64_t>;
 
-    SIMD(uint64_t high, uint64_t low)
-    noexcept;
+    SIMD(uint64_t high, uint64_t low) noexcept;
 
     [[nodiscard]] SIMD fold16(SIMD coeff) const noexcept;
 

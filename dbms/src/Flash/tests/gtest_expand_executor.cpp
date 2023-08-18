@@ -25,14 +25,16 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-        context.addMockTable({"test_db", "test_table"},
-                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                             {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                              toNullableVec<String>("s2", {"apple", {}, "banana"})});
-        context.addExchangeReceiver("exchange1",
-                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                                     toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addMockTable(
+            {"test_db", "test_table"},
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+             toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addExchangeReceiver(
+            "exchange1",
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+             toNullableVec<String>("s2", {"apple", {}, "banana"})});
     }
 };
 
@@ -45,14 +47,15 @@ try
     fields[2].set_tp(TiDB::TypeLongLong);
     fields[2].set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
-                           .build(context);
+        auto request
+            = context.scan("test_db", "test_table")
+                  .expand2(
+                      std::vector<MockAstVec>{
+                          {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                          {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
+                      std::vector<String>{"grouping_id"},
+                      fields)
+                  .build(context);
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", {}, {}, {}, "banana", {}}),
@@ -61,43 +64,39 @@ try
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .filter(eq(col("s1"), col("s2")))
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
-                           .build(context);
+        auto request
+            = context.scan("test_db", "test_table")
+                  .filter(eq(col("s1"), col("s2")))
+                  .expand2(
+                      std::vector<MockAstVec>{
+                          {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                          {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
+                      std::vector<String>{"grouping_id"},
+                      fields)
+                  .build(context);
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", {}}),
-             toNullableVec<String>({{}, "banana"}),
-             toVec<UInt64>({1, 2})});
+            {toNullableVec<String>({"banana", {}}), toNullableVec<String>({{}, "banana"}), toVec<UInt64>({1, 2})});
     }
 
     {
         auto const_false = lit(Field(static_cast<UInt64>(0)));
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .filter(const_false) // refuse all rows.
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
-                           .build(context);
-        executeAndAssertColumnsEqual(
-            request,
-            {});
+        auto request
+            = context.scan("test_db", "test_table")
+                  .filter(const_false) // refuse all rows.
+                  .expand2(
+                      std::vector<MockAstVec>{
+                          {col("test_db.test_table.s1"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                          {lit(Field(Null())), col("test_db.test_table.s2"), lit(Field(static_cast<UInt64>(2)))}},
+                      std::vector<String>{"grouping_id"},
+                      fields)
+                  .build(context);
+        executeAndAssertColumnsEqual(request, {});
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .aggregation({Count(col("s1"))}, {col("s2")})
-                           .build(context);
+        auto request
+            = context.scan("test_db", "test_table").aggregation({Count(col("s1"))}, {col("s2")}).build(context);
         executeAndAssertColumnsEqual(
             request,
             {
@@ -112,14 +111,14 @@ try
     fields[2].set_tp(TiDB::TypeLongLong);
     fields[2].set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .aggregation({Count(col("s1"))}, {col("s2")})
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
+                           .expand2(
+                               std::vector<MockAstVec>{
+                                   {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                   {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                               std::vector<String>{"grouping_id"},
+                               fields)
                            .build(context);
         executeAndAssertColumnsEqual(
             request,
@@ -129,32 +128,33 @@ try
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .aggregation({Count(col("s1"))}, {col("s2")})
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
+                           .expand2(
+                               std::vector<MockAstVec>{
+                                   {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                   {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                               std::vector<String>{"grouping_id"},
+                               fields)
                            .project({"count(s1)"})
                            .topN({{"count(s1)", true}}, 2)
                            .build(context);
-        executeAndAssertColumnsEqual(
-            request,
-            {toNullableVec<UInt64>({1, 1})});
+        executeAndAssertColumnsEqual(request, {toNullableVec<UInt64>({1, 1})});
     }
 
     {
-        auto request = context
-                           .receive("exchange1")
+        auto request = context.receive("exchange1")
                            .aggregation({Count(col("s1"))}, {col("s2")})
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
-                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .expand2(
+                               std::vector<MockAstVec>{
+                                   {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                   {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                               std::vector<String>{"grouping_id"},
+                               fields)
+                           .join(
+                               context.scan("test_db", "test_table").project({"s2"}),
+                               tipb::JoinType::TypeInnerJoin,
+                               {col("s2")})
                            .project({"count(s1)", "grouping_id"})
                            .topN({{"grouping_id", true}}, 2)
                            .build(context);
@@ -172,8 +172,7 @@ TEST_F(ExpandExecutorTestRunner, ExpandLogical)
 try
 {
     /// case 1
-    auto request = context
-                       .scan("test_db", "test_table")
+    auto request = context.scan("test_db", "test_table")
                        .expand(MockVVecColumnNameVec{
                            MockVecColumnNameVec{
                                MockColumnNameVec{"s1"},
@@ -206,8 +205,7 @@ try
          toVec<UInt64>({1, 2, 1, 2, 1, 2})});
 
     /// case 2
-    request = context
-                  .scan("test_db", "test_table")
+    request = context.scan("test_db", "test_table")
                   .filter(eq(col("s1"), col("s2")))
                   .expand(MockVVecColumnNameVec{
                       MockVecColumnNameVec{
@@ -236,13 +234,10 @@ try
     ///
     executeAndAssertColumnsEqual(
         request,
-        {toNullableVec<String>({"banana", {}}),
-         toNullableVec<String>({{}, "banana"}),
-         toVec<UInt64>({1, 2})});
+        {toNullableVec<String>({"banana", {}}), toNullableVec<String>({{}, "banana"}), toVec<UInt64>({1, 2})});
 
     /// case 3: this case is only for non-planner mode.
-    request = context
-                  .scan("test_db", "test_table")
+    request = context.scan("test_db", "test_table")
                   .expand(MockVVecColumnNameVec{
                       MockVecColumnNameVec{
                           MockColumnNameVec{"s1"},
@@ -256,15 +251,15 @@ try
     /// data flow: TiFlash isn't aware of the operation sequence, this filter here will be run before expand does just like the second test case above.
     /// this case is only succeed under planner-disabled mode.
     enablePlanner(false);
-    ColumnsWithTypeAndName expect{toNullableVec<String>({"banana", {}}),
-                                  toNullableVec<String>({{}, "banana"}),
-                                  toVec<UInt64>({1, 2})};
+    ColumnsWithTypeAndName expect{
+        toNullableVec<String>({"banana", {}}),
+        toNullableVec<String>({{}, "banana"}),
+        toVec<UInt64>({1, 2})};
     ASSERT_COLUMNS_EQ_R(expect, executeStreams(request));
 
     /// case 4
     auto const_false = lit(Field(static_cast<UInt64>(0)));
-    request = context
-                  .scan("test_db", "test_table")
+    request = context.scan("test_db", "test_table")
                   .filter(const_false) // refuse all rows
                   .expand(MockVVecColumnNameVec{
                       MockVecColumnNameVec{
@@ -275,15 +270,10 @@ try
                       },
                   })
                   .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {});
+    executeAndAssertColumnsEqual(request, {});
 
     /// case 5   (test integrated with aggregation)
-    request = context
-                  .scan("test_db", "test_table")
-                  .aggregation({Count(col("s1"))}, {col("s2")})
-                  .build(context);
+    request = context.scan("test_db", "test_table").aggregation({Count(col("s1"))}, {col("s2")}).build(context);
     executeAndAssertColumnsEqual(
         request,
         {
@@ -291,8 +281,7 @@ try
             toNullableVec<String>({"apple", {}, "banana"}),
         });
 
-    request = context
-                  .scan("test_db", "test_table")
+    request = context.scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
                   .expand(MockVVecColumnNameVec{
                       MockVecColumnNameVec{
@@ -332,8 +321,7 @@ try
          toVec<UInt64>({1, 2, 1, 2, 1, 2})});
 
     /// case 5   (test integrated with aggregation and projection)
-    request = context
-                  .scan("test_db", "test_table")
+    request = context.scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
                   .expand(MockVVecColumnNameVec{
                       MockVecColumnNameVec{
@@ -345,9 +333,7 @@ try
                   })
                   .project({"count(s1)"})
                   .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {toNullableVec<UInt64>({1, {}, 0, {}, 1, {}})});
+    executeAndAssertColumnsEqual(request, {toNullableVec<UInt64>({1, {}, 0, {}, 1, {}})});
 
     /// case 6   (test integrated with aggregation and projection and limit) 1
     /// note: by now, limit is executed before expand does to reduce unnecessary row expand work.
@@ -399,8 +385,7 @@ try
     ///   {toNullableVec<UInt64>({1, {}, 0, {}})});
 
     /// case 7   (test integrated with aggregation and projection and limit) 2
-    request = context
-                  .scan("test_db", "test_table")
+    request = context.scan("test_db", "test_table")
                   .aggregation({Count(col("s1"))}, {col("s2")})
                   .expand(MockVVecColumnNameVec{
                       MockVecColumnNameVec{
@@ -464,36 +449,34 @@ try
     ///        couldn't guarantee that letting expand OP run after limit does, which can't reduce unnecessary replication work. DAG query block
     ///        division should be blamed here.
     ///
-    executeAndAssertColumnsEqual(
-        request,
-        {toNullableVec<UInt64>({1, 1})});
+    executeAndAssertColumnsEqual(request, {toNullableVec<UInt64>({1, 1})});
 
     /// case 8  (test integrated with receiver and join)
-    request = context
-                  .receive("exchange1")
-                  .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
-                  .build(context);
+    request
+        = context.receive("exchange1")
+              .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+              .build(context);
     executeAndAssertColumnsEqual(
         request,
         {toNullableVec<String>({"banana", "banana"}),
          toNullableVec<String>({"apple", "banana"}),
          toNullableVec<String>({"apple", "banana"})});
 
-    request = context
-                  .receive("exchange1")
-                  .aggregation({Count(col("s1"))}, {col("s2")})
-                  .expand(MockVVecColumnNameVec{
-                      MockVecColumnNameVec{
-                          MockColumnNameVec{"count(s1)"},
-                      },
-                      MockVecColumnNameVec{
-                          MockColumnNameVec{"s2"},
-                      },
-                  })
-                  .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
-                  .project({"count(s1)", "groupingID"})
-                  .topN({{"groupingID", true}}, 2)
-                  .build(context);
+    request
+        = context.receive("exchange1")
+              .aggregation({Count(col("s1"))}, {col("s2")})
+              .expand(MockVVecColumnNameVec{
+                  MockVecColumnNameVec{
+                      MockColumnNameVec{"count(s1)"},
+                  },
+                  MockVecColumnNameVec{
+                      MockColumnNameVec{"s2"},
+                  },
+              })
+              .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+              .project({"count(s1)", "groupingID"})
+              .topN({{"groupingID", true}}, 2)
+              .build(context);
     /// data flow:
     ///
     ///    s1       s2                                         ---------------+

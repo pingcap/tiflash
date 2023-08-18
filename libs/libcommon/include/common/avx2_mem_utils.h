@@ -114,9 +114,7 @@ FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(const void * 
     uint32_t mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(load_block32(p1), load_block32(p2)));
     return mask;
 }
-FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(
-    const void * s,
-    const Block32 & check_block)
+FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(const void * s, const Block32 & check_block)
 {
     const auto block = load_block32(s);
     uint32_t mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(block, check_block));
@@ -127,9 +125,7 @@ FLATTEN_INLINE_PURE static inline uint32_t get_block16_cmp_eq_mask(const void * 
     uint32_t mask = _mm_movemask_epi8(_mm_cmpeq_epi8(load_block16(p1), load_block16(p2)));
     return mask;
 }
-FLATTEN_INLINE_PURE static inline uint32_t get_block16_cmp_eq_mask(
-    const void * s,
-    const Block16 & check_block)
+FLATTEN_INLINE_PURE static inline uint32_t get_block16_cmp_eq_mask(const void * s, const Block16 & check_block)
 {
     const auto block = load_block16(s);
     uint32_t mask = _mm_movemask_epi8(_mm_cmpeq_epi8(block, check_block));
@@ -137,9 +133,7 @@ FLATTEN_INLINE_PURE static inline uint32_t get_block16_cmp_eq_mask(
 }
 FLATTEN_INLINE_PURE static inline bool check_block32_eq(const char * a, const char * b)
 {
-    auto data = _mm256_xor_si256(
-        load_block32(a),
-        load_block32(b));
+    auto data = _mm256_xor_si256(load_block32(a), load_block32(b));
     return 0 != _mm256_testz_si256(data, data);
 }
 FLATTEN_INLINE_PURE static inline int cmp_block1(const void * p1, const void * p2)
@@ -168,8 +162,7 @@ FLATTEN_INLINE_PURE static inline int cmp_block16(const char * p1, const char * 
 }
 
 template <bool must_not_eq = false>
-FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1,
-                                                  const char * p2)
+FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1, const char * p2)
 {
     uint32_t mask = get_block32_cmp_eq_mask(p1, p2); // mask is up to 0xffffffff
     mask -= Block32Mask;
@@ -197,7 +190,9 @@ FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const 
         auto all_ones = _mm256_set1_epi8(0xFF);
         Block32 data = all_ones;
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-            data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(a + i * BLOCK32_SIZE), load_block32(b + i * BLOCK32_SIZE)));
+            data = _mm256_and_si256(
+                data,
+                _mm256_cmpeq_epi8(load_block32(a + i * BLOCK32_SIZE), load_block32(b + i * BLOCK32_SIZE)));
         return 0 != _mm256_testc_si256(data, all_ones);
     }
     else
@@ -564,7 +559,10 @@ template <size_t bytes>
 ALWAYS_INLINE inline void memcpy_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size);
 
 template <size_t n>
-ALWAYS_INLINE inline void memcpy_block32_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size);
+ALWAYS_INLINE inline void memcpy_block32_ignore_overlap(
+    char * __restrict dst,
+    const char * __restrict src,
+    size_t size);
 
 template <typename T>
 ALWAYS_INLINE inline void memcpy_ignore_overlap(char * __restrict dst, const char * __restrict src, size_t size)

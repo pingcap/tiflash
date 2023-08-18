@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <cstring>
-
 #include <common/DateLUT.h>
+
+#include <cstring>
+#include <iostream>
 
 
 static std::string toString(time_t Value)
@@ -24,8 +24,16 @@ static std::string toString(time_t Value)
     char buf[96];
 
     localtime_r(&Value, &tm);
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    snprintf(
+        buf,
+        sizeof(buf),
+        "%04d-%02d-%02d %02d:%02d:%02d",
+        tm.tm_year + 1900,
+        tm.tm_mon + 1,
+        tm.tm_mday,
+        tm.tm_hour,
+        tm.tm_min,
+        tm.tm_sec);
 
     return buf;
 }
@@ -50,10 +58,7 @@ void loop(time_t begin, time_t end, int step)
     const auto & date_lut = DateLUT::instance();
 
     for (time_t t = begin; t < end; t += step)
-        std::cout << toString(t)
-            << ", " << toString(date_lut.toTime(t))
-            << ", " << date_lut.toHour(t)
-            << std::endl;
+        std::cout << toString(t) << ", " << toString(date_lut.toTime(t)) << ", " << date_lut.toHour(t) << std::endl;
 }
 
 

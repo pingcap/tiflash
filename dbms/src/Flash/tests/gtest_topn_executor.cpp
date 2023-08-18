@@ -30,28 +30,31 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.addMockTable({db_name, table_single_name},
-                             {{single_col_name, TiDB::TP::TypeString}},
-                             {toNullableVec<String>(single_col_name, col0)});
+        context.addMockTable(
+            {db_name, table_single_name},
+            {{single_col_name, TiDB::TP::TypeString}},
+            {toNullableVec<String>(single_col_name, col0)});
 
-        context.addMockTable({db_name, table_name},
-                             {{col_name[0], TiDB::TP::TypeLong},
-                              {col_name[1], TiDB::TP::TypeString},
-                              {col_name[2], TiDB::TP::TypeString},
-                              {col_name[3], TiDB::TP::TypeLong}},
-                             {toNullableVec<Int32>(col_name[0], col_age),
-                              toNullableVec<String>(col_name[1], col_gender),
-                              toNullableVec<String>(col_name[2], col_country),
-                              toNullableVec<Int32>(col_name[3], col_salary)});
-        context.addMockTable({db_name, empty_name},
-                             {{col_name[0], TiDB::TP::TypeLong},
-                              {col_name[1], TiDB::TP::TypeString},
-                              {col_name[2], TiDB::TP::TypeString},
-                              {col_name[3], TiDB::TP::TypeLong}},
-                             {toNullableVec<Int32>(col_name[0], {}),
-                              toNullableVec<String>(col_name[1], {}),
-                              toNullableVec<String>(col_name[2], {}),
-                              toNullableVec<Int32>(col_name[3], {})});
+        context.addMockTable(
+            {db_name, table_name},
+            {{col_name[0], TiDB::TP::TypeLong},
+             {col_name[1], TiDB::TP::TypeString},
+             {col_name[2], TiDB::TP::TypeString},
+             {col_name[3], TiDB::TP::TypeLong}},
+            {toNullableVec<Int32>(col_name[0], col_age),
+             toNullableVec<String>(col_name[1], col_gender),
+             toNullableVec<String>(col_name[2], col_country),
+             toNullableVec<Int32>(col_name[3], col_salary)});
+        context.addMockTable(
+            {db_name, empty_name},
+            {{col_name[0], TiDB::TP::TypeLong},
+             {col_name[1], TiDB::TP::TypeString},
+             {col_name[2], TiDB::TP::TypeString},
+             {col_name[3], TiDB::TP::TypeLong}},
+            {toNullableVec<Int32>(col_name[0], {}),
+             toNullableVec<String>(col_name[1], {}),
+             toNullableVec<String>(col_name[2], {}),
+             toNullableVec<Int32>(col_name[3], {})});
 
         /// table with 200 rows
         {
@@ -86,17 +89,30 @@ public:
         }
     }
 
-    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(
+        const String & table_name,
+        const String & col_name,
+        bool is_desc,
+        int limit_num)
     {
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
     }
 
-    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItemVec order_by_items, int limit, MockAstVec func_proj_ast = {}, MockAstVec out_proj_ast = {})
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(
+        const String & table_name,
+        MockOrderByItemVec order_by_items,
+        int limit,
+        MockAstVec func_proj_ast = {},
+        MockAstVec out_proj_ast = {})
     {
         if (func_proj_ast.empty())
             return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
         else
-            return context.scan(db_name, table_name).project(func_proj_ast).topN(order_by_items, limit).project(out_proj_ast).build(context);
+            return context.scan(db_name, table_name)
+                .project(func_proj_ast)
+                .topN(order_by_items, limit)
+                .project(out_proj_ast)
+                .build(context);
     }
 
     /// Prepare some names
@@ -146,7 +162,9 @@ try
             /// select * from clerk order by gender DESC, salary ASC;
             {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[3], false)},
             /// select * from clerk order by gender DESC, country ASC, salary DESC;
-            {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)}};
+            {MockOrderByItem(col_name[1], true),
+             MockOrderByItem(col_name[2], false),
+             MockOrderByItem(col_name[3], true)}};
 
         std::vector<SortInfos> infos{
             {{0, true}, {1, true}},
@@ -230,10 +248,7 @@ try
         std::vector<size_t> limits{0, 1, 10, 20, 199, 200, 300};
         for (auto limit_num : limits)
         {
-            auto request = context
-                               .scan(db_name, table)
-                               .topN("key", false, limit_num)
-                               .build(context);
+            auto request = context.scan(db_name, table).topN("key", false, limit_num).build(context);
             SortInfos sort_infos{{0, false}};
             executeAndAssertSortedBlocks(request, sort_infos);
         }
@@ -246,10 +261,7 @@ try
 {
     for (size_t i = 0; i < col_name.size(); ++i)
     {
-        auto request = context
-                           .scan(db_name, empty_name)
-                           .topN(col_name[i], false, 100)
-                           .build(context);
+        auto request = context.scan(db_name, empty_name).topN(col_name[i], false, 100).build(context);
         SortInfos sort_infos{{i, false}};
         executeAndAssertSortedBlocks(request, sort_infos);
     }
@@ -273,8 +285,7 @@ try
         order_by_item->children.push_back(lit(Field(static_cast<UInt64>(1))));
         order_by_items->children.push_back(order_by_item);
     }
-    auto request = context
-                       .scan("test_db", "big_table_2")
+    auto request = context.scan("test_db", "big_table_2")
                        .topN(order_by_items, lit(Field(static_cast<UInt64>(50))))
                        .build(context);
     SortInfos sort_infos{{0, true}};
@@ -288,8 +299,7 @@ try
         order_by_item->children.push_back(lit(Field(static_cast<UInt64>(1))));
         order_by_items->children.push_back(order_by_item);
     }
-    request = context
-                  .scan("test_db", "big_table_2")
+    request = context.scan("test_db", "big_table_2")
                   .topN(order_by_items, lit(Field(static_cast<UInt64>(10))))
                   .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(35)));

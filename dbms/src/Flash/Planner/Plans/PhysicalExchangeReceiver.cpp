@@ -104,12 +104,11 @@ void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
 
     for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
     {
-        group_builder.addConcurrency(
-            std::make_unique<ExchangeReceiverSourceOp>(
-                exec_context,
-                log->identifier(),
-                mpp_exchange_receiver,
-                /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
+        group_builder.addConcurrency(std::make_unique<ExchangeReceiverSourceOp>(
+            exec_context,
+            log->identifier(),
+            mpp_exchange_receiver,
+            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
     }
     context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
 }

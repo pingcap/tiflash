@@ -17,9 +17,7 @@
 
 namespace DB
 {
-EventTask::EventTask(
-    PipelineExecutorContext & exec_context_,
-    const EventPtr & event_)
+EventTask::EventTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
     : Task(exec_context_)
     , event(event_)
 {

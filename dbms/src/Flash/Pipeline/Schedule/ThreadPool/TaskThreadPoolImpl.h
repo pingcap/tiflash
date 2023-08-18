@@ -27,15 +27,9 @@ struct CPUImpl
 
     static constexpr bool is_cpu = true;
 
-    static bool isTargetStatus(ExecTaskStatus status)
-    {
-        return status == ExecTaskStatus::RUNNING;
-    }
+    static bool isTargetStatus(ExecTaskStatus status) { return status == ExecTaskStatus::RUNNING; }
 
-    static ExecTaskStatus exec(TaskPtr & task)
-    {
-        return task->execute();
-    }
+    static ExecTaskStatus exec(TaskPtr & task) { return task->execute(); }
 
     static TaskQueuePtr newTaskQueue(TaskQueueType type);
 };
@@ -51,10 +45,7 @@ struct IOImpl
         return status == ExecTaskStatus::IO_IN || status == ExecTaskStatus::IO_OUT;
     }
 
-    static ExecTaskStatus exec(TaskPtr & task)
-    {
-        return task->executeIO();
-    }
+    static ExecTaskStatus exec(TaskPtr & task) { return task->executeIO(); }
 
     static TaskQueuePtr newTaskQueue(TaskQueueType type);
 };

@@ -64,10 +64,7 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
         return (op_status);                                                                            \
     }
 
-PipelineExec::PipelineExec(
-    SourceOpPtr && source_op_,
-    TransformOps && transform_ops_,
-    SinkOpPtr && sink_op_)
+PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
@@ -118,7 +115,8 @@ OperatorStatus PipelineExec::executeImpl()
         return op_status;
 
     // start from the next transform op after fetched block transform op.
-    for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
+    for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size();
+         ++transform_op_index)
     {
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);

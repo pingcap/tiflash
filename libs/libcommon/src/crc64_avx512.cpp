@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <common/crc64_fast.h>
-#if defined(TIFLASH_CRC64_HAS_SIMD_SUPPORT) && defined(TIFLASH_ENABLE_AVX512_SUPPORT) && TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
+#if defined(TIFLASH_CRC64_HAS_SIMD_SUPPORT) && defined(TIFLASH_ENABLE_AVX512_SUPPORT) \
+    && TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
 #include <common/crc64.h>
 #include <common/crc64_arch/crc64_x86.h>
 #include <common/crc64_table.h>
@@ -41,14 +42,15 @@ uint64_t update_vpclmulqdq_avx512(uint64_t state, const void * src, size_t lengt
     ptr += 2;
     x[0] = _mm512_xor_si512(x[0], _mm512_set_epi64(0, 0, 0, 0, 0, 0, 0, static_cast<int64_t>(state)));
 
-    auto coeff = _mm512_set_epi64(static_cast<int64_t>(K_1023),
-                                  static_cast<int64_t>(K_1087),
-                                  static_cast<int64_t>(K_1023),
-                                  static_cast<int64_t>(K_1087),
-                                  static_cast<int64_t>(K_1023),
-                                  static_cast<int64_t>(K_1087),
-                                  static_cast<int64_t>(K_1023),
-                                  static_cast<int64_t>(K_1087));
+    auto coeff = _mm512_set_epi64(
+        static_cast<int64_t>(K_1023),
+        static_cast<int64_t>(K_1087),
+        static_cast<int64_t>(K_1023),
+        static_cast<int64_t>(K_1087),
+        static_cast<int64_t>(K_1023),
+        static_cast<int64_t>(K_1087),
+        static_cast<int64_t>(K_1023),
+        static_cast<int64_t>(K_1087));
 
     auto fold = [](avx512_t a, avx512_t b) -> avx512_t {
         auto h = _mm512_clmulepi64_epi128(a, b, 0x11);

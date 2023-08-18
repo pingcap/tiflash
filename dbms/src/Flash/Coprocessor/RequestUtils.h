@@ -41,13 +41,16 @@ void setUpRegion(const pingcap::coprocessor::RegionInfo & region_info, PbRegion 
 }
 
 template <typename RequestPtr>
-std::vector<pingcap::kv::RegionVerID>
-setUpRegionInfos(const pingcap::coprocessor::BatchCopTask & batch_cop_task, const RequestPtr & req)
+std::vector<pingcap::kv::RegionVerID> setUpRegionInfos(
+    const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+    const RequestPtr & req)
 {
-    RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
-                      "region_infos and table_regions should not exist at the same time, single table region info: {}, partition table region info: {}",
-                      batch_cop_task.region_infos.size(),
-                      batch_cop_task.table_regions.size());
+    RUNTIME_CHECK_MSG(
+        batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
+        "region_infos and table_regions should not exist at the same time, single table region info: {}, partition "
+        "table region info: {}",
+        batch_cop_task.region_infos.size(),
+        batch_cop_task.table_regions.size());
 
     std::vector<pingcap::kv::RegionVerID> region_ids;
     if (!batch_cop_task.region_infos.empty())
@@ -78,7 +81,8 @@ setUpRegionInfos(const pingcap::coprocessor::BatchCopTask & batch_cop_task, cons
 template <typename Context>
 pingcap::pd::KeyspaceID deriveKeyspaceID(const Context & ctx)
 {
-    return ctx.api_version() == kvrpcpb::APIVersion::V1 ? pingcap::pd::NullspaceID : static_cast<pingcap::pd::KeyspaceID>(ctx.keyspace_id());
+    return ctx.api_version() == kvrpcpb::APIVersion::V1 ? pingcap::pd::NullspaceID
+                                                        : static_cast<pingcap::pd::KeyspaceID>(ctx.keyspace_id());
 }
 
 } // namespace DB::RequestUtils

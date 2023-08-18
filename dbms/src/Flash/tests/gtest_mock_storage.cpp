@@ -24,10 +24,7 @@ namespace tests
 class MockStorageTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 
     // single column table
     const ColumnWithNullableString col1{"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"};
@@ -40,13 +37,13 @@ TEST_F(MockStorageTestRunner, DeltaMergeStorageBasic)
 try
 {
     ColumnsWithTypeAndName columns{toVec<Int64>("col0", col0), toNullableVec<String>("col1", col1)};
-    auto table_id = mock_storage.addTableSchemaForDeltaMerge("test", {{"col0", TiDB::TP::TypeLongLong}, {"col1", TiDB::TP::TypeString}});
+    auto table_id = mock_storage.addTableSchemaForDeltaMerge(
+        "test",
+        {{"col0", TiDB::TP::TypeLongLong}, {"col1", TiDB::TP::TypeString}});
     mock_storage.addTableDataForDeltaMerge(*context.context, "test", columns);
     auto in = mock_storage.getStreamFromDeltaMerge(*context.context, table_id);
 
-    ASSERT_INPUTSTREAM_BLOCK_UR(
-        in,
-        Block(columns));
+    ASSERT_INPUTSTREAM_BLOCK_UR(in, Block(columns));
 
     mock_storage.clear();
 }

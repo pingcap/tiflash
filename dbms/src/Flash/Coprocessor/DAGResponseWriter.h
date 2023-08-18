@@ -25,9 +25,7 @@ class DAGContext;
 class DAGResponseWriter
 {
 public:
-    DAGResponseWriter(
-        Int64 records_per_chunk_,
-        DAGContext & dag_context_);
+    DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_);
     /// prepared with sample block
     virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;

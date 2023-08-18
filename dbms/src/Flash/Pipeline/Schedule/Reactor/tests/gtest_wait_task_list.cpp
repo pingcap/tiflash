@@ -44,9 +44,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     WaitingTaskList list;
 
