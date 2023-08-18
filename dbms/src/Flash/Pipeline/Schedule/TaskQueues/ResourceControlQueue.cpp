@@ -117,13 +117,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             if (group_info.task_queue->empty())
             {
                 // Nested task queue is empty, continue and try next resource group.
-                size_t erase_num = resource_group_task_queues.erase(group_info.name);
-                RUNTIME_CHECK_MSG(
-                    erase_num == 1,
-                    "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
-                    group_info.name,
-                    erase_num);
-                resource_group_infos.pop();
+                mustEraseResourceGroupInfoWithoutLock(group_info.name);
             }
             else
             {
@@ -162,11 +156,16 @@ void ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutL
     while (!resource_group_infos.empty())
     {
         const ResourceGroupInfo & group_info = resource_group_infos.top();
-        if (group_info.task_queue->empty())
-            continue;
-        auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
-        new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
-        resource_group_infos.pop();
+        if (!group_info.task_queue->empty())
+        {
+            auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+            new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
+            resource_group_infos.pop();
+        }
+        else
+        {
+            mustEraseResourceGroupInfoWithoutLock(group_info.name);
+        }
     }
     resource_group_infos = new_resource_group_infos;
 }
@@ -218,6 +217,18 @@ void ResourceControlQueue<NestedTaskQueueType>::cancel(const String & query_id, 
             iter->second->collectCancelledTasks(cancel_task_queue, query_id);
         }
     }
+}
+
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::mustEraseResourceGroupInfoWithoutLock(const String & name)
+{
+    size_t erase_num = resource_group_task_queues.erase(name);
+    RUNTIME_CHECK_MSG(
+            erase_num == 1,
+            "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
+            name,
+            erase_num);
+    resource_group_infos.pop();
 }
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;

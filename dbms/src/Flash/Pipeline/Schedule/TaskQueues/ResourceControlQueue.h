@@ -84,6 +84,9 @@ private:
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();
 
+    // Erase resource group info and task_queue.
+    void mustEraseResourceGroupInfoWithoutLock(const String & name);
+
     // Submit task into task queue of specific resource group.
     void submitWithoutLock(TaskPtr && task);
 
