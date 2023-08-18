@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#RETURN
+
 mysql> drop table if exists test.t
 mysql> create table test.t(a int)
 mysql> insert into test.t values(1), (20201212)
