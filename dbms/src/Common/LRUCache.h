@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,11 @@ struct TrivialWeightFunction
 /// Cache starts to evict entries when their total weight exceeds max_size and when expiration time of these
 /// entries is due.
 /// Value weight should not change after insertion.
-template <typename TKey,
-          typename TMapped,
-          typename HashFunction = std::hash<TKey>,
-          typename WeightFunction = TrivialWeightFunction<TMapped>>
+template <
+    typename TKey,
+    typename TMapped,
+    typename HashFunction = std::hash<TKey>,
+    typename WeightFunction = TrivialWeightFunction<TMapped>>
 class LRUCache
 {
 public:
@@ -223,7 +224,9 @@ private:
             ++token->refcount;
         }
 
-        void cleanup([[maybe_unused]] std::lock_guard<std::mutex> & token_lock, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+        void cleanup(
+            [[maybe_unused]] std::lock_guard<std::mutex> & token_lock,
+            [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
         {
             token->cache.insert_tokens.erase(*key);
             token->cleaned_up = true;
@@ -307,10 +310,15 @@ private:
 
     void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
+<<<<<<< HEAD
         auto res = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
 
         Cell & cell = res.first->second;
         bool inserted = res.second;
+=======
+        auto [it, inserted]
+            = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         if (inserted)
         {
@@ -356,7 +364,13 @@ private:
     {
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
+<<<<<<< HEAD
         while ((current_size > max_size) && (queue_size > 1))
+=======
+
+        while ((current_weight > max_weight || (max_elements_size != 0 && queue_size > max_elements_size))
+               && (queue_size > 1))
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         {
             const Key & key = queue.front();
 

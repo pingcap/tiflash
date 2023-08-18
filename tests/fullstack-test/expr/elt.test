@@ -1,0 +1,82 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (a int, b varchar(200), c varchar(200));
+mysql> insert into test.t values(-1, 'abc', 'def');
+mysql> insert into test.t values(0, '▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕', 'hello world');
+mysql> insert into test.t values(1, 'թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ', 'world hello');
+mysql> insert into test.t values(2, NULL, '11111');
+mysql> insert into test.t values(3, NULL, '11111');
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(a, b, c) as v from test.t;
+v
+NULL
+NULL
+թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ
+11111
+NULL
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(NULL, b, c) as v from test.t;
+v
+NULL
+NULL
+NULL
+NULL
+NULL
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(-1, b, c) as v from test.t;
+v
+NULL
+NULL
+NULL
+NULL
+NULL
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(0, b, c) as v from test.t;
+v
+NULL
+NULL
+NULL
+NULL
+NULL
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(1, b, c) as v from test.t;
+v
+abc
+▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕
+թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ
+NULL
+NULL
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(2, b, c) as v from test.t;
+v
+def
+hello world
+world hello
+11111
+11111
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(3, b, c) as v from test.t;
+v
+NULL
+NULL
+NULL
+NULL
+NULL
+
+mysql> drop table if exists test.t

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,64 @@ namespace MPMCQueueDetail
 /// Double link is to support remove self from the mid of the list when timeout.
 struct WaitingNode : public SimpleIntrusiveNode<WaitingNode>
 {
+<<<<<<< HEAD
+=======
+public:
+    ALWAYS_INLINE void notifyNext()
+    {
+        if (next != this)
+        {
+            next->cv.notify_one();
+            next->detach(); // avoid being notified more than once
+        }
+    }
+
+    ALWAYS_INLINE void notifyAll()
+    {
+        for (auto * p = this; p->next != this; p = p->next)
+            p->next->cv.notify_one();
+    }
+
+    template <typename Pred>
+    ALWAYS_INLINE void wait(std::unique_lock<std::mutex> & lock, Pred pred)
+    {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
+        thread_local WaitingNode node;
+#endif
+        while (!pred())
+        {
+            node.prependTo(this);
+            node.cv.wait(lock);
+            node.detach();
+        }
+    }
+
+    template <typename Pred>
+    ALWAYS_INLINE bool waitFor(
+        std::unique_lock<std::mutex> & lock,
+        Pred pred,
+        const std::chrono::steady_clock::time_point & deadline)
+    {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
+        thread_local WaitingNode node;
+#endif
+        while (!pred())
+        {
+            node.prependTo(this);
+            auto res = node.cv.wait_until(lock, deadline);
+            node.detach();
+            if (res == std::cv_status::timeout)
+                return false;
+        }
+        return true;
+    }
+
+private:
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     std::condition_variable cv;
 };
 } // namespace MPMCQueueDetail
@@ -61,6 +119,7 @@ class MPMCQueue
 public:
     using Status = MPMCQueueStatus;
 
+<<<<<<< HEAD
     explicit MPMCQueue(Int64 capacity_)
         : capacity(capacity_)
         , data(capacity * sizeof(T))
@@ -81,6 +140,39 @@ public:
     {
         return popObj(obj);
     }
+=======
+    MPMCQueue(
+        const CapacityLimits & capacity_limits_,
+        ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; })
+        : capacity_limits(capacity_limits_)
+        , get_auxiliary_memory_usage(
+              capacity_limits.max_bytes == std::numeric_limits<Int64>::max()
+                  ? [](const T &) {
+                        return 0;
+                    }
+                  : std::move(get_auxiliary_memory_usage_))
+        , element_auxiliary_memory(capacity_limits.max_size, 0)
+        , data(capacity_limits.max_size * sizeof(T))
+    {}
+
+    ~MPMCQueue() { drain(); }
+
+    // Cannot to use copy/move constructor,
+    // because MPMCQueue maybe used by different threads.
+    // Copy and move it is dangerous.
+    DISALLOW_COPY_AND_MOVE(MPMCQueue);
+
+    /*
+    * | Queue Status     | Empty      | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Pop and return OK        |
+    * | Finished         | Yes        | return FINISHED          |
+    * | Finished         | No         | Pop and return OK        |
+    * | Cancelled        | Yes/No     | return CANCELLED         |
+    * */
+    ALWAYS_INLINE Result pop(T & obj) { return popObj<true>(obj); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     /// Besides all conditions mentioned at `pop`, `tryPop` will return false if `timeout` is exceeded.
     template <typename Duration>
@@ -91,10 +183,25 @@ public:
         return popObj(obj, &deadline);
     }
 
+<<<<<<< HEAD
     /// Block util:
     /// 1. Push succeeds and return true.
     /// 2. The queue is cancelled and return false.
     /// 3. The queue has finished and return false.
+=======
+    /// Non-blocking function.
+    /// Besides all conditions mentioned at `pop`, `tryPop` will immediately return EMPTY if queue is `NORMAL` but empty.
+    ALWAYS_INLINE Result tryPop(T & obj) { return popObj<false>(obj); }
+
+    /*
+    * | Queue Status     | Empty      | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Pop and return OK        |
+    * | Finished         | Yes/No     | return FINISHED          |
+    * | Cancelled        | Yes/No     | return CANCELLED         |
+    * */
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     template <typename U>
     ALWAYS_INLINE bool push(U && u)
     {
@@ -129,11 +236,19 @@ public:
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
     /// After `cancel()` the queue can't be pushed or popped any more.
     /// That means some objects may leave at the queue without poped.
+<<<<<<< HEAD
     void cancel()
     {
         std::unique_lock lock(mu);
         if (isNormal())
         {
+=======
+    bool cancel() { return cancelWith(""); }
+
+    bool cancelWith(String reason)
+    {
+        return changeStatus([&] {
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             status = Status::CANCELLED;
             notifyAll();
         }
@@ -145,6 +260,7 @@ public:
     /// Return true if the previous status is NORMAL.
     bool finish()
     {
+<<<<<<< HEAD
         std::unique_lock lock(mu);
         if (isNormal())
         {
@@ -154,6 +270,9 @@ public:
         }
         else
             return false;
+=======
+        return changeStatus([&] { status = Status::FINISHED; });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     bool isNextPopNonBlocking() const
@@ -284,6 +403,7 @@ private:
             return write_pos - read_pos < capacity || !isNormal();
         };
 
+<<<<<<< HEAD
         std::unique_lock lock(mu);
 
         wait(lock, writer_head, node, pred, deadline);
@@ -291,6 +411,24 @@ private:
         /// double check status after potential wait
         /// check write_pos because timeouted will also reach here.
         if (isNormal() && write_pos - read_pos < capacity)
+=======
+        if constexpr (need_wait)
+        {
+            auto pred = [&] {
+                return (write_pos - read_pos < capacity_limits.max_size
+                        && current_auxiliary_memory_usage < capacity_limits.max_bytes)
+                    || !isNormal();
+            };
+            if (!wait(lock, writer_head, pred, deadline))
+                is_timeout = true;
+        }
+
+        /// double check status after potential wait
+        /// check write_pos because timeouted will also reach here.
+        if (isNormal()
+            && (write_pos - read_pos < capacity_limits.max_size
+                && current_auxiliary_memory_usage < capacity_limits.max_bytes))
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         {
             void * addr = getObjAddr(write_pos);
             assigner(addr);
@@ -299,8 +437,31 @@ private:
             ++write_pos;
 
             /// See comments in `popObj`.
+<<<<<<< HEAD
             notifyNext(reader_head);
             return true;
+=======
+            reader_head.notifyNext();
+            if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max()
+                && current_auxiliary_memory_usage < capacity_limits.max_bytes
+                && write_pos - read_pos < capacity_limits.max_size)
+                writer_head.notifyNext();
+            return Result::OK;
+        }
+        if constexpr (need_wait)
+        {
+            if (is_timeout)
+                return Result::TIMEOUT;
+        }
+        switch (status)
+        {
+        case Status::NORMAL:
+            return Result::FULL;
+        case Status::CANCELLED:
+            return Result::CANCELLED;
+        case Status::FINISHED:
+            return Result::FINISHED;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         }
         return false;
     }
@@ -317,15 +478,9 @@ private:
         return assignObj(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
     }
 
-    ALWAYS_INLINE bool isNormal() const
-    {
-        return likely(status == Status::NORMAL);
-    }
+    ALWAYS_INLINE bool isNormal() const { return likely(status == Status::NORMAL); }
 
-    ALWAYS_INLINE bool isCancelled() const
-    {
-        return unlikely(status == Status::CANCELLED);
-    }
+    ALWAYS_INLINE bool isCancelled() const { return unlikely(status == Status::CANCELLED); }
 
     ALWAYS_INLINE void * getObjAddr(Int64 pos)
     {
@@ -333,10 +488,7 @@ private:
         return &data[pos];
     }
 
-    ALWAYS_INLINE T & getObj(Int64 pos)
-    {
-        return *reinterpret_cast<T *>(getObjAddr(pos));
-    }
+    ALWAYS_INLINE T & getObj(Int64 pos) { return *reinterpret_cast<T *>(getObjAddr(pos)); }
 
     ALWAYS_INLINE void destruct(T & obj)
     {

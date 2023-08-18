@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,10 +29,7 @@ struct AggImpl
 
     static constexpr auto type = "Agg";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_aggregation();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_aggregation(); }
 };
 using AggStatistics = ExecutorStatistics<AggImpl>;
 
@@ -38,10 +39,7 @@ struct WindowImpl
 
     static constexpr auto type = "Window";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_window();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_window(); }
 };
 using WindowStatistics = ExecutorStatistics<WindowImpl>;
 
@@ -51,23 +49,30 @@ struct SortImpl
 
     static constexpr auto type = "Sort";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_sort();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_sort(); }
 };
 using SortStatistics = ExecutorStatistics<SortImpl>;
 
+<<<<<<< HEAD
+=======
+struct ExpandImpl
+{
+    static constexpr bool has_extra_info = false;
+
+    static constexpr auto type = "Expand";
+
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_expand() || executor->has_expand2(); }
+};
+using ExpandStatistics = ExecutorStatistics<ExpandImpl>;
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 struct FilterImpl
 {
     static constexpr bool has_extra_info = false;
 
     static constexpr auto type = "Selection";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_selection();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_selection(); }
 };
 using FilterStatistics = ExecutorStatistics<FilterImpl>;
 
@@ -77,10 +82,7 @@ struct LimitImpl
 
     static constexpr auto type = "Limit";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_limit();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_limit(); }
 };
 using LimitStatistics = ExecutorStatistics<LimitImpl>;
 
@@ -90,10 +92,7 @@ struct ProjectImpl
 
     static constexpr auto type = "Projection";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_projection();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_projection(); }
 };
 using ProjectStatistics = ExecutorStatistics<ProjectImpl>;
 
@@ -103,10 +102,7 @@ struct TopNImpl
 
     static constexpr auto type = "TopN";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_topn();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_topn(); }
 };
 using TopNStatistics = ExecutorStatistics<TopNImpl>;
 } // namespace DB

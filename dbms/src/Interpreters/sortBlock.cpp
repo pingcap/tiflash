@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,9 @@ extern const int BAD_COLLATION;
 
 using ColumnsWithSortDescriptions = std::vector<std::pair<const IColumn *, SortColumnDescription>>;
 
-static ColumnsWithSortDescriptions getColumnsWithSortDescription(const Block & block, const SortDescription & description)
+static ColumnsWithSortDescriptions getColumnsWithSortDescription(
+    const Block & block,
+    const SortDescription & description)
 {
     size_t size = description.size();
     ColumnsWithSortDescriptions res;
@@ -51,7 +53,12 @@ static inline bool needCollation(const IColumn * column, const SortColumnDescrip
 {
     if (!description.collator)
         return false;
+<<<<<<< HEAD
     auto not_null_column = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
+=======
+    const auto * not_null_column
+        = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     if (not_null_column->isColumnConst())
         return false;
@@ -62,6 +69,225 @@ static inline bool needCollation(const IColumn * column, const SortColumnDescrip
     return true;
 }
 
+<<<<<<< HEAD
+=======
+#define APPLY_FOR_TYPE(M) \
+    M(UInt64)             \
+    M(Int64)              \
+    M(StringBin)          \
+    M(StringBinPadding)   \
+    M(StringWithCollatorGeneric)
+
+#define CONCAT(x, y) x##y
+
+enum class FastPathType
+{
+#define M(NAME) NAME,
+    APPLY_FOR_TYPE(M)
+#undef M
+};
+
+constexpr size_t max_fast_path_num = 2;
+
+template <typename T>
+struct ColumnVecCompare
+{
+    static inline const ColumnVector<T> * intoTarget(const IColumn * column)
+    {
+        return static_cast<const ColumnVector<T> *>(column);
+    }
+
+    template <size_t index>
+    ALWAYS_INLINE static inline int compareAt(
+        size_t a,
+        size_t b,
+        const ColumnsWithSortDescriptions & columns_with_sort_desc)
+    {
+        const auto & desc = columns_with_sort_desc[index];
+        const auto * column = intoTarget(desc.first);
+        return column->compareAt(a, b, *column, 0) * desc.second.direction;
+    }
+};
+
+template <FastPathType type>
+struct ColumnStringCompare
+{
+    static inline const ColumnString * intoTarget(const IColumn * column)
+    {
+        return static_cast<const ColumnString *>(column);
+    }
+
+    template <size_t index>
+    ALWAYS_INLINE static inline int compareAt(
+        size_t a,
+        size_t b,
+        const ColumnsWithSortDescriptions & columns_with_sort_desc)
+    {
+        const auto & desc = columns_with_sort_desc[index];
+        const auto * column = intoTarget(desc.first);
+        int ret = 0;
+        {
+            auto str_a = column->getDataAt(a);
+            auto str_b = column->getDataAt(b);
+
+            if constexpr (type == FastPathType::StringBinPadding)
+            {
+                ret = BinCollatorCompare<true>(str_a.data, str_a.size, str_b.data, str_b.size);
+            }
+            else if constexpr (type == FastPathType::StringBin)
+            {
+                ret = BinCollatorCompare<false>(str_a.data, str_a.size, str_b.data, str_b.size);
+            }
+            else
+            {
+                ret = desc.second.collator->compare(str_a.data, str_a.size, str_b.data, str_b.size);
+            }
+        }
+        return desc.second.direction * ret;
+    }
+};
+
+using ColumnCompareUInt64 = ColumnVecCompare<UInt64>;
+using ColumnCompareInt64 = ColumnVecCompare<Int64>;
+using ColumnCompareStringBinPadding = ColumnStringCompare<FastPathType::StringBinPadding>;
+using ColumnCompareStringBin = ColumnStringCompare<FastPathType::StringBin>;
+using ColumnCompareStringWithCollatorGeneric = ColumnStringCompare<FastPathType::StringWithCollatorGeneric>;
+
+// only for uint64, int64, string
+template <typename ColumnCmpA, typename ColumnCmpB>
+struct MultiColumnSortFastPath
+{
+    const ColumnsWithSortDescriptions & columns_with_sort_desc;
+
+    explicit MultiColumnSortFastPath(const ColumnsWithSortDescriptions & columns_with_sort_desc_)
+        : columns_with_sort_desc(columns_with_sort_desc_)
+    {}
+
+    ALWAYS_INLINE inline int compareAt(size_t a, size_t b) const
+    {
+        constexpr size_t index_a = 0, index_b = 1;
+
+        int ret = 0;
+        {
+            ret = ColumnCmpA::template compareAt<index_a>(a, b, columns_with_sort_desc);
+        }
+        if (!ret)
+        {
+            ret = ColumnCmpB::template compareAt<index_b>(a, b, columns_with_sort_desc);
+        }
+        return ret;
+    }
+
+    ALWAYS_INLINE inline bool operator()(size_t a, size_t b) const
+    {
+        int ret = compareAt(a, b);
+        return ret < 0;
+    }
+};
+
+struct FastSortDesc : boost::noncopyable
+{
+    const ColumnsWithSortDescriptions & columns_with_sort_desc;
+    std::vector<bool> need_collations;
+
+    bool has_collation{false};
+
+    bool can_use_fast_path = false;
+    std::array<FastPathType, max_fast_path_num> type_for_fast_path{};
+    size_t fast_path_cnt = 0;
+
+    ALWAYS_INLINE static bool isUInt64(const IColumn * column) { return typeid_cast<const ColumnUInt64 *>(column); }
+    ALWAYS_INLINE static bool isInt64(const IColumn * column) { return typeid_cast<const ColumnInt64 *>(column); }
+    ALWAYS_INLINE static bool isString(const IColumn * column) { return typeid_cast<const ColumnString *>(column); }
+
+    inline void addFastPathType(FastPathType tp) { type_for_fast_path[fast_path_cnt++] = tp; }
+
+    explicit FastSortDesc(const ColumnsWithSortDescriptions & columns_with_sort_desc_)
+        : columns_with_sort_desc(columns_with_sort_desc_)
+    {
+        need_collations.reserve(columns_with_sort_desc.size());
+
+        can_use_fast_path = columns_with_sort_desc.size() == max_fast_path_num;
+
+        for (const auto & sort_desc : columns_with_sort_desc)
+        {
+            auto need_collation = DB::NeedCollation(sort_desc.first, sort_desc.second);
+            if (need_collation)
+            {
+                has_collation = true;
+                if (isString(sort_desc.first))
+                {
+                    // only when column is string(not nullable)
+                    auto collator_type = TiDB::GetTiDBCollatorType(sort_desc.second.collator);
+                    if (can_use_fast_path)
+                    {
+                        switch (collator_type)
+                        {
+                        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+                        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+                        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+                        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+                        {
+                            addFastPathType(FastPathType::StringBinPadding);
+                            break;
+                        }
+                        case TiDB::ITiDBCollator::CollatorType::BINARY:
+                        {
+                            addFastPathType(FastPathType::StringBin);
+                            break;
+                        }
+                        default:
+                        {
+                            addFastPathType(FastPathType::StringWithCollatorGeneric);
+                            break;
+                        }
+                        }
+                    }
+                }
+                else
+                {
+                    // nullable
+                    can_use_fast_path = false;
+                }
+            }
+            else if (can_use_fast_path)
+            {
+                if (isUInt64(sort_desc.first))
+                {
+                    addFastPathType(FastPathType::UInt64);
+                }
+                else if (isInt64(sort_desc.first))
+                {
+                    addFastPathType(FastPathType::Int64);
+                }
+                else
+                {
+                    can_use_fast_path = false;
+                }
+            }
+            need_collations.emplace_back(need_collation);
+        }
+    }
+
+    ALWAYS_INLINE inline size_t size() const { return columns_with_sort_desc.size(); }
+
+    ALWAYS_INLINE inline int compareAt(size_t col_index, size_t a, size_t b) const
+    {
+        const auto & column = columns_with_sort_desc[col_index];
+
+        if (!need_collations[col_index])
+        {
+            return column.second.direction
+                * column.first->compareAt(a, b, *column.first, column.second.nulls_direction);
+        }
+        else
+        {
+            return column.second.direction
+                * column.first->compareAt(a, b, *column.first, column.second.nulls_direction, *column.second.collator);
+        }
+    }
+};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 struct PartialSortingLess
 {
@@ -113,6 +339,74 @@ struct PartialSortingLessWithCollation
     }
 };
 
+<<<<<<< HEAD
+=======
+template <typename F>
+ALWAYS_INLINE static inline void PermutationSort(IColumn::Permutation & perm, size_t limit, F && fn_cmp)
+{
+    if (limit)
+        std::partial_sort(perm.begin(), perm.begin() + limit, perm.end(), fn_cmp);
+    else
+        std::sort(perm.begin(), perm.end(), fn_cmp);
+}
+
+template <size_t N>
+struct FastPathPermutationSort
+{
+};
+
+template <>
+struct FastPathPermutationSort<2>
+{
+    template <typename A, typename B>
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P2(
+        const FastSortDesc & desc,
+        IColumn::Permutation & perm,
+        size_t limit)
+    {
+        MultiColumnSortFastPath<A, B> cmp{desc.columns_with_sort_desc};
+        return PermutationSort(perm, limit, cmp);
+    }
+
+    template <typename A>
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P1(
+        const FastSortDesc & desc,
+        IColumn::Permutation & perm,
+        size_t limit)
+    {
+        constexpr size_t index = 1;
+
+#define M(NAME)                                                                               \
+    case FastPathType::NAME:                                                                  \
+    {                                                                                         \
+        return FastPathPermutationSort_P2<A, CONCAT(ColumnCompare, NAME)>(desc, perm, limit); \
+    }
+
+        switch (desc.type_for_fast_path[index])
+        {
+            APPLY_FOR_TYPE(M)
+        }
+#undef M
+    }
+
+    void operator()(const FastSortDesc & desc, IColumn::Permutation & perm, size_t limit) const
+    {
+        constexpr size_t index = 0;
+
+#define M(NAME)                                                                            \
+    case FastPathType::NAME:                                                               \
+    {                                                                                      \
+        return FastPathPermutationSort_P1<CONCAT(ColumnCompare, NAME)>(desc, perm, limit); \
+    }
+
+        switch (desc.type_for_fast_path[index])
+        {
+            APPLY_FOR_TYPE(M)
+        }
+#undef M
+    }
+};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 void sortBlock(Block & block, const SortDescription & description, size_t limit)
 {
@@ -186,7 +480,10 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
 }
 
 
-void stableGetPermutation(const Block & block, const SortDescription & description, IColumn::Permutation & out_permutation)
+void stableGetPermutation(
+    const Block & block,
+    const SortDescription & description,
+    IColumn::Permutation & out_permutation)
 {
     if (!block)
         return;

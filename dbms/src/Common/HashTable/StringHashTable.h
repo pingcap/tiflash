@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,10 +86,7 @@ struct StringHashTableHash
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
     }
 #endif
-    size_t ALWAYS_INLINE operator()(StringRef key) const
-    {
-        return StringRefHash()(key);
-    }
+    size_t ALWAYS_INLINE operator()(StringRef key) const { return StringRefHash()(key); }
 };
 
 template <typename Cell>
@@ -235,16 +232,14 @@ public:
         , m2{reserve_for_num_elements / 4}
         , m3{reserve_for_num_elements / 4}
         , ms{reserve_for_num_elements / 4}
-    {
-    }
+    {}
 
     StringHashTable(StringHashTable && rhs)
         : m1(std::move(rhs.m1))
         , m2(std::move(rhs.m2))
         , m3(std::move(rhs.m3))
         , ms(std::move(rhs.ms))
-    {
-    }
+    {}
 
     ~StringHashTable() = default;
 
@@ -367,20 +362,11 @@ public:
         }
     };
 
-    LookupResult ALWAYS_INLINE find(const Key & x)
-    {
-        return dispatch(*this, x, FindCallable{});
-    }
+    LookupResult ALWAYS_INLINE find(const Key & x) { return dispatch(*this, x, FindCallable{}); }
 
-    ConstLookupResult ALWAYS_INLINE find(const Key & x) const
-    {
-        return dispatch(*this, x, FindCallable{});
-    }
+    ConstLookupResult ALWAYS_INLINE find(const Key & x) const { return dispatch(*this, x, FindCallable{}); }
 
-    bool ALWAYS_INLINE has(const Key & x, size_t = 0) const
-    {
-        return dispatch(*this, x, FindCallable{}) != nullptr;
-    }
+    bool ALWAYS_INLINE has(const Key & x, size_t = 0) const { return dispatch(*this, x, FindCallable{}) != nullptr; }
 
     void write(DB::WriteBuffer & wb) const
     {
@@ -432,8 +418,8 @@ public:
 
     size_t getBufferSizeInBytes() const
     {
-        return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes() + m3.getBufferSizeInBytes()
-            + ms.getBufferSizeInBytes();
+        return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes()
+            + m3.getBufferSizeInBytes() + ms.getBufferSizeInBytes();
     }
 
     void clearAndShrink()

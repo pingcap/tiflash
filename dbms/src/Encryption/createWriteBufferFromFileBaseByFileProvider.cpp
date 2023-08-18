@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,8 +32,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<WriteBufferFromFileBase>
-createWriteBufferFromFileBaseByFileProvider(
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -69,8 +68,7 @@ createWriteBufferFromFileBaseByFileProvider(
     }
 }
 
-std::unique_ptr<WriteBufferFromFileBase>
-createWriteBufferFromFileBaseByFileProvider(
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -81,9 +79,20 @@ createWriteBufferFromFileBaseByFileProvider(
     int flags_,
     mode_t mode)
 {
+<<<<<<< HEAD
     ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
     auto file_ptr
         = file_provider->newWritableFile(filename_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags_, mode);
+=======
+    auto file_ptr = file_provider->newWritableFile(
+        filename_,
+        encryption_path_,
+        true,
+        create_new_encryption_info_,
+        write_limiter_,
+        flags_,
+        mode);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     switch (checksum_algorithm)
     {
     case ChecksumAlgo::None:
@@ -100,4 +109,29 @@ createWriteBufferFromFileBaseByFileProvider(
     throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }
 
+<<<<<<< HEAD
+=======
+
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByWriterBuffer(
+    std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size)
+{
+    auto file_ptr = writer_buffer->file;
+    switch (checksum_algorithm)
+    {
+    case ChecksumAlgo::None:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::None>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::CRC32:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::CRC32>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::CRC64:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::CRC64>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::City128:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::City128>>(file_ptr, checksum_frame_size);
+    case ChecksumAlgo::XXH3:
+        return std::make_unique<FramedChecksumWriteBuffer<Digest::XXH3>>(file_ptr, checksum_frame_size);
+    }
+    throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
+}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

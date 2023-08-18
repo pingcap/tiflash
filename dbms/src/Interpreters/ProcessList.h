@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,27 +133,19 @@ public:
             memory_tracker.setFaultProbability(memory_tracker_fault_probability);
     }
 
-    ~ProcessListElement()
-    {
-        current_memory_tracker = nullptr;
-    }
+    ~ProcessListElement() { current_memory_tracker = nullptr; }
 
-    const ClientInfo & getClientInfo() const
-    {
-        return client_info;
-    }
+    const ClientInfo & getClientInfo() const { return client_info; }
 
-    ProgressValues getProgressIn() const
-    {
-        return progress_in.getValues();
-    }
+    ProgressValues getProgressIn() const { return progress_in.getValues(); }
 
-    ProgressValues getProgressOut() const
-    {
-        return progress_out.getValues();
-    }
+    ProgressValues getProgressOut() const { return progress_out.getValues(); }
 
     ThrottlerPtr getUserNetworkThrottler();
+<<<<<<< HEAD
+=======
+    MemoryTrackerPtr getMemoryTrackerPtr() { return memory_tracker; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     bool updateProgressIn(const Progress & value)
     {
@@ -310,7 +302,17 @@ public:
       * If timeout is passed - throw an exception.
       * Don't count KILL QUERY queries.
       */
+<<<<<<< HEAD
     EntryPtr insert(const String & query_, const IAST * ast, const ClientInfo & client_info, const Settings & settings);
+=======
+    EntryPtr insert(
+        const String & query_,
+        const IAST * ast,
+        const ClientInfo & client_info,
+        const Settings & settings,
+        const UInt64 total_memory,
+        bool is_dag_task);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     /// Number of currently executing queries.
     size_t size() const { return cur_size; }

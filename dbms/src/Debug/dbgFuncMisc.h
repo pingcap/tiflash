@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,4 +33,13 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
 //   ./storage-client.sh "DBGInvoke trigger_global_storage_pool_gc()"
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+<<<<<<< HEAD
+=======
+// Wait until no active threads in dynamic thread pool finish, if timeout, return 1, else return 0
+void dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool(
+    Context & context,
+    const ASTs & /*args*/,
+    DBGInvoker::Printer /*output*/);
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

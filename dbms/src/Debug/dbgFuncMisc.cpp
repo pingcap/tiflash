@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,6 +90,7 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         }
     }
     // try parse the first number following the key
+<<<<<<< HEAD
     auto sub_line = target_line.substr(target_line.find(key));
     std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
     std::smatch m;
@@ -97,6 +98,27 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         output(m[1]);
     else
         output("Invalid");
+=======
+    try
+    {
+        std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
+        std::smatch m;
+        auto pos = target_line.find(key);
+        if (pos != std::string::npos && regex_search(target_line.cbegin() + pos, target_line.cend(), m, rx))
+        {
+            output(m[1]);
+        }
+        else
+        {
+            output("Invalid");
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(
+            fmt::format("Parse 'RSFilter exclude rate' failed, exception: {}, target_line {}", e.what(), target_line));
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)

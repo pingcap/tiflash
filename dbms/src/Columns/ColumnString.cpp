@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,7 +85,8 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
     if (start + length > src_concrete.offsets.size())
         throw Exception(
             fmt::format(
-                "Parameters are out of bound in ColumnString::insertRangeFrom method, start={}, length={}, src.size()={}",
+                "Parameters are out of bound in ColumnString::insertRangeFrom method, start={}, length={}, "
+                "src.size()={}",
                 start,
                 length,
                 src_concrete.size()),
@@ -191,7 +192,10 @@ struct ColumnString::less
         size_t left_len = parent.sizeAt(lhs);
         size_t right_len = parent.sizeAt(rhs);
 
-        int res = memcmp(&parent.chars[parent.offsetAt(lhs)], &parent.chars[parent.offsetAt(rhs)], std::min(left_len, right_len));
+        int res = memcmp(
+            &parent.chars[parent.offsetAt(lhs)],
+            &parent.chars[parent.offsetAt(rhs)],
+            std::min(left_len, right_len));
 
         if (res != 0)
             return positive ? (res < 0) : (res > 0);
@@ -226,6 +230,15 @@ void ColumnString::getPermutation(bool reverse, size_t limit, int /*nan_directio
     }
 }
 
+<<<<<<< HEAD
+=======
+ColumnPtr ColumnString::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets)
+    const
+{
+    size_t col_rows = size();
+    if (col_rows != replicate_offsets.size())
+        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
 {
@@ -344,11 +357,81 @@ struct ColumnString::lessWithCollation
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]),
             parent.sizeAt(rhs));
 
+<<<<<<< HEAD
         return positive ? (res < 0) : (res > 0);
+=======
+        if constexpr (positive)
+        {
+            return (res < 0);
+        }
+        else
+        {
+            return (res > 0);
+        }
     }
 };
 
-void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const
+template <bool padding>
+struct CompareBinCollator
+{
+    static FLATTEN_INLINE_PURE inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
+    {
+        return DB::BinCollatorCompare<padding>(s1, length1, s2, length2);
+    }
+};
+
+// common util functions
+template <>
+struct ColumnString::LessWithCollation<false, void>
+{
+    // `CollationCmpImpl` must implement function `int compare(const char *, size_t, const char *, size_t)`.
+    template <typename CollationCmpImpl>
+    static void getPermutationWithCollationImpl(
+        const ColumnString & src,
+        const CollationCmpImpl & collator_cmp_impl,
+        bool reverse,
+        size_t limit,
+        Permutation & res)
+    {
+        size_t s = src.offsets.size();
+        res.resize(s);
+        for (size_t i = 0; i < s; ++i)
+            res[i] = i;
+
+        if (limit >= s)
+            limit = 0;
+
+        if (limit)
+        {
+            if (reverse)
+                std::partial_sort(
+                    res.begin(),
+                    res.begin() + limit,
+                    res.end(),
+                    LessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
+            else
+                std::partial_sort(
+                    res.begin(),
+                    res.begin() + limit,
+                    res.end(),
+                    LessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
+        }
+        else
+        {
+            if (reverse)
+                std::sort(res.begin(), res.end(), LessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
+            else
+                std::sort(res.begin(), res.end(), LessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
+    }
+};
+
+void ColumnString::getPermutationWithCollationImpl(
+    const ICollator & collator,
+    bool reverse,
+    size_t limit,
+    Permutation & res) const
 {
     size_t s = offsets.size();
     res.resize(s);
@@ -374,12 +457,24 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
     }
 }
 
-void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnString::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     auto s = offsets.size();
 
     if (hash.getData().size() != s)
+<<<<<<< HEAD
         throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+=======
+        throw Exception(
+            fmt::format(
+                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+                s,
+                hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     const UInt8 * pos = chars.data();
     UInt32 * hash_data = hash.getData().data();
@@ -389,6 +484,7 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
     {
         for (const auto & offset : offsets)
         {
+<<<<<<< HEAD
             auto str_size = offset - prev_offset;
             /// Skip last zero byte.
             auto sort_key = collator->sortKey(reinterpret_cast<const char *>(pos), str_size - 1, sort_key_container);
@@ -397,6 +493,101 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
             pos += str_size;
             prev_offset = offset;
             ++hash_data;
+=======
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+                auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
+                *hash_data
+                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+                ++hash_data;
+            });
+            break;
+        }
+        case TiDB::ITiDBCollator::CollatorType::BINARY:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+                auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
+                *hash_data
+                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+                ++hash_data;
+            });
+            break;
+        }
+        default:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+                auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
+                *hash_data
+                    = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+                ++hash_data;
+            });
+            break;
+        }
+        }
+    }
+    else
+    {
+        // Skip last zero byte.
+        LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), *hash_data);
+            ++hash_data;
+        });
+    }
+}
+
+void ColumnString::updateHashWithValues(
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    if (collator != nullptr)
+    {
+        switch (collator->getCollatorType())
+        {
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
+                auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
+                size_t string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            });
+            break;
+        }
+        case TiDB::ITiDBCollator::CollatorType::BINARY:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
+                auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
+                size_t string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            });
+            break;
+        }
+        default:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
+                auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
+                size_t string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            });
+            break;
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         }
     }
     else

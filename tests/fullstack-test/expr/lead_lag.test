@@ -1,0 +1,285 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.test_str
+mysql> CREATE TABLE test.test_str (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_str varchar(20) DEFAULT NULL, value_char CHAR DEFAULT NULL);
+mysql> insert into test.test_str values (1, 1, '1', '1'), (1, 2, '', ''), (1, 3, '3', '3'), (1, 4, '4', '4'), (2, 5, '5', '5'), (2, 6, NULL, NULL), (2, 7, '7', '7'), (2, 8, '8', '8');
+mysql> alter table test.test_str set tiflash replica 1
+
+mysql> drop table if exists test.test_int
+mysql> CREATE TABLE test.test_int (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_tinyint TINYINT DEFAULT NULL, value_smallint SMALLINT DEFAULT NULL, value_mediumint MEDIUMINT DEFAULT NULL, value_int INT DEFAULT NULL, value_bigint bigint DEFAULT NULL);
+mysql> insert into test.test_int values (1, 1, 1, 1, 1, 1, 1), (1, 2, 0, 0, 0, 0, 0), (1, 3, 99, 999, 9999, 99999, 999999), (1, 4, -4, -4, -4, -4, -4), (2, 5, 5, 5, 5, 5, 5), (2, 6, NULL, NULL, NULL, NULL, NULL), (2, 7, -99, -999, -9999, -99999, -999999), (2, 8, 8, 8, 8, 8, 8);
+mysql> alter table test.test_int set tiflash replica 1
+
+mysql> drop table if exists test.test_float
+mysql> CREATE TABLE test.test_float (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_float float DEFAULT NULL, value_double double DEFAULT NULL);
+mysql> insert into test.test_float values (1, 1, 1.11, 1.11), (1, 2, 0, 0), (1, 3, 99.99, 999.999), (1, 4, -4.4, -4.4), (2, 5, 5.55, 5.55), (2, 6, NULL, NULL), (2, 7, -99.99, -999.999), (2, 8, 8, 8);
+mysql> alter table test.test_float set tiflash replica 1
+
+mysql> drop table if exists test.test_decimal
+mysql> CREATE TABLE test.test_decimal (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_decimal32 decimal(9, 5) DEFAULT NULL, value_decimal64 decimal(18, 5) DEFAULT NULL, value_decimal128 decimal(38, 5) DEFAULT NULL, value_decimal256 decimal(65, 5) DEFAULT NULL);
+mysql> insert into test.test_decimal values (1, 1, 1.11, 1.11, 1.11, 1.11), (1, 2, 0, 0, 0, 0), (1, 3, 99.99, 99.99, 99.99, 99.99), (1, 4, -4.4, -4.4, -4.4, -4.4), (2, 5, 5.55, 5.55, 5.55, 5.55), (2, 6, NULL, NULL, NULL, NULL), (2, 7, -99.99, -99.99, -99.99, -99.99), (2, 8, 8, 8, 8, 8);
+mysql> alter table test.test_decimal set tiflash replica 1
+
+mysql> drop table if exists test.test_time
+mysql> CREATE TABLE test.test_time (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_date DATE DEFAULT NULL, value_time TIME DEFAULT NULL, value_datetime DATETIME DEFAULT NULL, value_timestamp TIMESTAMP DEFAULT NULL);
+mysql> insert into test.test_time values (1, 1, '2010-01-01', '10:00:00', '2010-01-01 11:00:00', '2010-01-01 11:00:00'), (1, 2, '0000-01-01', '00:00:00', '0000-01-01 00:00:00', '1970-01-02 00:00:01'), (2, 5, '9999-01-01', '23:59:59', '9999-01-01 23:59:59', '2038-01-19 03:14:07'), (2, 6, NULL, NULL, NULL, NULL);
+mysql> alter table test.test_time set tiflash replica 1
+
+func> wait_table test test_str
+func> wait_table test test_int
+func> wait_table test test_float
+func> wait_table test test_decimal
+func> wait_table test test_time
+
+## test_str
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_str, 1, 'default') over w, lead(value_str, 1, 123) over w, lead(value_char, 1, 'default') over w, lead(value_char, 1, 123) over w,lag(value_str, 1, 'default') over w,lag(value_str, 1, 123) over w,lag(value_char, 1, 'default') over w,lag(value_char, 1, 123) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
+| lead(value_str, 1, 'default') over w | lead(value_str, 1, 123) over w | lead(value_char, 1, 'default') over w | lead(value_char, 1, 123) over w | lag(value_str, 1, 'default') over w | lag(value_str, 1, 123) over w | lag(value_char, 1, 'default') over w | lag(value_char, 1, 123) over w |
++--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
+|                                      |                                |                                       |                                 | default                             | 123                           | default                              | 123                            |
+| 3                                    | 3                              | 3                                     | 3                               | 1                                   | 1                             | 1                                    | 1                              |
+| 4                                    | 4                              | 4                                     | 4                               |                                     |                               |                                      |                                |
+| default                              | 123                            | default                               | 123                             | 3                                   | 3                             | 3                                    | 3                              |
+| NULL                                 | NULL                           | NULL                                  | NULL                            | default                             | 123                           | default                              | 123                            |
+| 7                                    | 7                              | 7                                     | 7                               | 5                                   | 5                             | 5                                    | 5                              |
+| 8                                    | 8                              | 8                                     | 8                               | NULL                                | NULL                          | NULL                                 | NULL                           |
+| default                              | 123                            | default                               | 123                             | 7                                   | 7                             | 7                                    | 7                              |
++--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_str, 1, value_str) over w, value_str from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------------------+-----------+
+| lead(value_str, 1, value_str) over w | value_str |
++--------------------------------------+-----------+
+|                                      | 1         |
+| 3                                    |           |
+| 4                                    | 3         |
+| 4                                    | 4         |
+| NULL                                 | 5         |
+| 7                                    | NULL      |
+| 8                                    | 7         |
+| 8                                    | 8         |
++--------------------------------------+-----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('5', 1) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---------------------+
+| lead('5', 1) over w |
++---------------------+
+| 5                   |
+| 5                   |
+| 5                   |
+| NULL                |
+| 5                   |
+| 5                   |
+| 5                   |
+| NULL                |
++---------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('5', 2, value_str) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------------+
+| lead('5', 2, value_str) over w |
++--------------------------------+
+| 5                              |
+| 5                              |
+| 3                              |
+| 4                              |
+| 5                              |
+| 5                              |
+| 7                              |
+| 8                              |
++--------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('5', 2, '6') over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------+
+| lead('5', 2, '6') over w |
++--------------------------+
+| 5                        |
+| 5                        |
+| 6                        |
+| 6                        |
+| 5                        |
+| 5                        |
+| 6                        |
+| 6                        |
++--------------------------+
+
+## test_int
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_tinyint) over w,lead(value_smallint, 1, 'default') over w,lag(value_mediumint, 1, NULL) over w,lag(value_int, 1, 88888) over w,lag(value_bigint, 1, '100') over w from test.test_int window w as(PARTITION BY part ORDER BY orde) order by orde;
++----------------------------+-------------------------------------------+--------------------------------------+---------------------------------+------------------------------------+
+| lead(value_tinyint) over w | lead(value_smallint, 1, 'default') over w | lag(value_mediumint, 1, NULL) over w | lag(value_int, 1, 88888) over w | lag(value_bigint, 1, '100') over w |
++----------------------------+-------------------------------------------+--------------------------------------+---------------------------------+------------------------------------+
+|                          0 | 0                                         |                                 NULL |                           88888 | 100                                |
+|                         99 | 999                                       |                                    1 |                               1 | 1                                  |
+|                         -4 | -4                                        |                                    0 |                               0 | 0                                  |
+|                       NULL | default                                   |                                 9999 |                           99999 | 999999                             |
+|                       NULL | NULL                                      |                                 NULL |                           88888 | 100                                |
+|                        -99 | -999                                      |                                    5 |                               5 | 5                                  |
+|                          8 | 8                                         |                                 NULL |                            NULL | NULL                               |
+|                       NULL | default                                   |                                -9999 |                          -99999 | -999999                            |
++----------------------------+-------------------------------------------+--------------------------------------+---------------------------------+------------------------------------+
+
+## test_float
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_float) over w,lead(value_double, 1, 'default') over w,lag(value_float, 1, NULL) over w,lag(value_float, 1, 88888) over w,lag(value_float, 1, 1.11) over w,lag(value_double, 1, 99.99) over w from test.test_float window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------+-----------------------------------------+----------------------------------+-----------------------------------+----------------------------------+------------------------------------+
+| lead(value_float) over w | lead(value_double, 1, 'default') over w | lag(value_float, 1, NULL) over w | lag(value_float, 1, 88888) over w | lag(value_float, 1, 1.11) over w | lag(value_double, 1, 99.99) over w |
++--------------------------+-----------------------------------------+----------------------------------+-----------------------------------+----------------------------------+------------------------------------+
+|                        0 | 0                                       |                             NULL |                             88888 |                             1.11 |                              99.99 |
+|                    99.99 | 999.999                                 |                             1.11 |                              1.11 |               1.1100000143051147 |                               1.11 |
+|                     -4.4 | -4.4                                    |                                0 |                                 0 |                                0 |                                  0 |
+|                     NULL | default                                 |                            99.99 |                             99.99 |                99.98999786376953 |                            999.999 |
+|                     NULL | NULL                                    |                             NULL |                             88888 |                             1.11 |                              99.99 |
+|                   -99.99 | -999.999                                |                             5.55 |                              5.55 |                5.550000190734863 |                               5.55 |
+|                        8 | 8                                       |                             NULL |                              NULL |                             NULL |                               NULL |
+|                     NULL | default                                 |                           -99.99 |                            -99.99 |               -99.98999786376953 |                           -999.999 |
++--------------------------+-----------------------------------------+----------------------------------+-----------------------------------+----------------------------------+------------------------------------+
+
+## test_decimal
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_decimal32) over w,lead(value_decimal32, 1, 'default') over w,lead(value_decimal64, 1, NULL) over w,lag(value_decimal128, 1, 88888) over w,lag(value_decimal256, 1, 1.11) over w,lag(value_decimal256, 1, 99.99) over w from test.test_decimal window w as(PARTITION BY part ORDER BY orde) order by orde;
++------------------------------+--------------------------------------------+---------------------------------------+----------------------------------------+---------------------------------------+----------------------------------------+
+| lead(value_decimal32) over w | lead(value_decimal32, 1, 'default') over w | lead(value_decimal64, 1, NULL) over w | lag(value_decimal128, 1, 88888) over w | lag(value_decimal256, 1, 1.11) over w | lag(value_decimal256, 1, 99.99) over w |
++------------------------------+--------------------------------------------+---------------------------------------+----------------------------------------+---------------------------------------+----------------------------------------+
+|                      0.00000 | 0.00000                                    |                               0.00000 |                            88888.00000 |                               1.11000 |                               99.99000 |
+|                     99.99000 | 99.99000                                   |                              99.99000 |                                1.11000 |                               1.11000 |                                1.11000 |
+|                     -4.40000 | -4.40000                                   |                              -4.40000 |                                0.00000 |                               0.00000 |                                0.00000 |
+|                         NULL | default                                    |                                  NULL |                               99.99000 |                              99.99000 |                               99.99000 |
+|                         NULL | NULL                                       |                                  NULL |                            88888.00000 |                               1.11000 |                               99.99000 |
+|                    -99.99000 | -99.99000                                  |                             -99.99000 |                                5.55000 |                               5.55000 |                                5.55000 |
+|                      8.00000 | 8.00000                                    |                               8.00000 |                                   NULL |                                  NULL |                                   NULL |
+|                         NULL | default                                    |                                  NULL |                              -99.99000 |                             -99.99000 |                              -99.99000 |
++------------------------------+--------------------------------------------+---------------------------------------+----------------------------------------+---------------------------------------+----------------------------------------+
+
+## test_time
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_date) over w, lead(value_time, 1) over w, lag(value_datetime, 1, NULL) over w, lag(value_timestamp, 1, 88888) over w from test.test_time window w as(PARTITION BY part ORDER BY orde) order by orde;
++-------------------------+----------------------------+-------------------------------------+---------------------------------------+
+| lead(value_date) over w | lead(value_time, 1) over w | lag(value_datetime, 1, NULL) over w | lag(value_timestamp, 1, 88888) over w |
++-------------------------+----------------------------+-------------------------------------+---------------------------------------+
+| 0000-01-01              | 00:00:00                   | NULL                                | 88888                                 |
+| NULL                    | NULL                       | 2010-01-01 11:00:00                 | 2010-01-01 11:00:00                   |
+| NULL                    | NULL                       | NULL                                | 88888                                 |
+| NULL                    | NULL                       | 9999-01-01 23:59:59                 | 2038-01-19 03:14:07                   |
++-------------------------+----------------------------+-------------------------------------+---------------------------------------+
+
+## test_null
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(NULL) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++-------------------+
+| lead(NULL) over w |
++-------------------+
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
++-------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(NULL, 2) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++----------------------+
+| lead(NULL, 2) over w |
++----------------------+
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(NULL, 2, '6') over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---------------------------+
+| lead(NULL, 2, '6') over w |
++---------------------------+
+| NULL                      |
+| NULL                      |
+| 6                         |
+| 6                         |
+| NULL                      |
+| NULL                      |
+| 6                         |
+| 6                         |
++---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('6', 2, NULL) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---------------------------+
+| lead('6', 2, NULL) over w |
++---------------------------+
+| 6                         |
+| 6                         |
+| NULL                      |
+| NULL                      |
+| 6                         |
+| 6                         |
+| NULL                      |
+| NULL                      |
++---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lag(NULL, 2, NULL) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++------------------------------------------------------+
+| lag(NULL, 2, NULL) over w                            |
++------------------------------------------------------+
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
++------------------------------------------------------+
+
+## test offset
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, -1) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
+{#REGEXP}.*You have an error in your SQL syntax.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 0) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---+---------------------------+
+| a | lead(value_str, 0) over w |
++---+---------------------------+
+| a | 1                         |
+| a |                           |
+| a | 3                         |
+| a | 4                         |
+| a | 5                         |
+| a | NULL                      |
+| a | 7                         |
+| a | 8                         |
++---+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 1) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---+---------------------------+
+| a | lead(value_str, 1) over w |
++---+---------------------------+
+| a |                           |
+| a | 3                         |
+| a | 4                         |
+| a | NULL                      |
+| a | NULL                      |
+| a | 7                         |
+| a | 8                         |
+| a | NULL                      |
++---+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', orde, part, value_str, lead(value_str, 18446744073709551615) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---+------+------+-----------+----------------------------------------------+
+| a | orde | part | value_str | lead(value_str, 18446744073709551615) over w |
++---+------+------+-----------+----------------------------------------------+
+| a |    1 |    1 | 1         | NULL                                         |
+| a |    2 |    1 |           | 1                                            |
+| a |    3 |    1 | 3         |                                              |
+| a |    4 |    1 | 4         | 3                                            |
+| a |    5 |    2 | 5         | NULL                                         |
+| a |    6 |    2 | NULL      | 5                                            |
+| a |    7 |    2 | 7         | NULL                                         |
+| a |    8 |    2 | 8         | 7                                            |
++---+------+------+-----------+----------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 18446744073709551616) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
+{#REGEXP}.*Incorrect arguments.*
+
+mysql> drop table if exists test.test_str
+mysql> drop table if exists test.test_int
+mysql> drop table if exists test.test_float
+mysql> drop table if exists test.test_decimal
+mysql> drop table if exists test.test_time

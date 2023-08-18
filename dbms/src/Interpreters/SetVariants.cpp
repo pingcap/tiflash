@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,7 +86,14 @@ size_t SetVariantsTemplate<Variant>::getTotalByteCount() const
 }
 
 template <typename Variant>
+<<<<<<< HEAD
 typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+=======
+typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::chooseMethod(
+    const ColumnRawPtrs & key_columns,
+    Sizes & key_sizes,
+    const TiDB::TiDBCollators & collators)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     /// Check if at least one of the specified keys is nullable.
     /// Create a set of nested key columns from the corresponding key columns.
@@ -137,8 +144,9 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
             if ((size_of_field == 1) || (size_of_field == 2) || (size_of_field == 4) || (size_of_field == 8))
                 return Type::nullable_keys128;
             else
-                throw Exception{"Logical error: numeric column has sizeOfField not in 1, 2, 4, 8.",
-                                ErrorCodes::LOGICAL_ERROR};
+                throw Exception{
+                    "Logical error: numeric column has sizeOfField not in 1, 2, 4, 8.",
+                    ErrorCodes::LOGICAL_ERROR};
         }
 
         if (all_fixed && !has_dec)
@@ -173,7 +181,9 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
             return Type::keys128;
         //        if (size_of_field == sizeof(Decimal))
         //            return Type::key_decimal;
-        throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.",
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     /// If the keys fit in N bits, we will use a hash table for N-bit-packed keys
@@ -185,8 +195,40 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
     /// If there is single string key, use hash table of it's values.
     if (keys_size == 1
         && (typeid_cast<const ColumnString *>(nested_key_columns[0])
+<<<<<<< HEAD
             || (nested_key_columns[0]->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(nested_key_columns[0])->getDataColumn()))))
         return Type::key_string;
+=======
+            || (nested_key_columns[0]->isColumnConst()
+                && typeid_cast<const ColumnString *>(
+                    &static_cast<const ColumnConst *>(nested_key_columns[0])->getDataColumn()))))
+    {
+        if (collators.empty() || !collators[0])
+            return Type::key_strbin;
+        else
+        {
+            switch (collators[0]->getCollatorType())
+            {
+            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+            {
+                return Type::key_strbinpadding;
+            }
+            case TiDB::ITiDBCollator::CollatorType::BINARY:
+            {
+                return Type::key_strbin;
+            }
+            default:
+            {
+                // for CI COLLATION, use original way
+                return Type::key_string;
+            }
+            }
+        }
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(nested_key_columns[0]))
         return Type::key_fixed_string;

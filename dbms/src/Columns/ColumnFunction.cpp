@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,10 +25,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-ColumnFunction::ColumnFunction(
-    size_t size,
-    FunctionBasePtr function,
-    const ColumnsWithTypeAndName & columns_to_capture)
+ColumnFunction::ColumnFunction(size_t size, FunctionBasePtr function, const ColumnsWithTypeAndName & columns_to_capture)
     : column_size(size)
     , function(function)
 {
@@ -141,6 +138,15 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     return columns;
 }
 
+<<<<<<< HEAD
+=======
+void ColumnFunction::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]])
+    const
+{
+    throw TiFlashException("ColumnFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void ColumnFunction::insertDefault()
 {
     for (auto & column : captured_columns)

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,14 +36,20 @@ void TiFlashErrorRegistry::initialize()
         }                                                                                           \
         __VA_ARGS__                                                                                 \
     }
-#define E(error_code, desc, workaround, message_template) registerError(NAME, #error_code, desc, workaround, message_template);
+#define E(error_code, desc, workaround, message_template) \
+    registerError(NAME, #error_code, desc, workaround, message_template);
 
     ERROR_CLASS_LIST
 #undef C
 #undef E
 }
 
-void TiFlashErrorRegistry::registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
+void TiFlashErrorRegistry::registerError(
+    const std::string & error_class,
+    const std::string & error_code,
+    const std::string & description,
+    const std::string & workaround,
+    const std::string & message_template)
 {
     TiFlashError error{error_class, error_code, description, workaround, message_template};
     if (all_errors.find({error_class, error_code}) == all_errors.end())
@@ -56,7 +62,12 @@ void TiFlashErrorRegistry::registerError(const std::string & error_class, const 
     }
 }
 
-void TiFlashErrorRegistry::registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
+void TiFlashErrorRegistry::registerErrorWithNumericCode(
+    const std::string & error_class,
+    int error_code,
+    const std::string & description,
+    const std::string & workaround,
+    const std::string & message_template)
 {
     std::string error_code_str = std::to_string(error_code);
     registerError(error_class, error_code_str, description, workaround, message_template);
@@ -77,4 +88,55 @@ std::string TiFlashException::standardText() const
     return text;
 }
 
+<<<<<<< HEAD
+=======
+std::optional<TiFlashError> TiFlashErrorRegistry::get(const std::string & error_class, const std::string & error_code)
+    const
+{
+    auto error = errors().find({error_class, error_code});
+    if (error != errors().end())
+    {
+        return error->second;
+    }
+    else
+    {
+        return {};
+    }
+}
+std::optional<TiFlashError> TiFlashErrorRegistry::get(const std::string & error_class, int error_code) const
+{
+    return get(error_class, std::to_string(error_code));
+}
+
+std::vector<TiFlashError> TiFlashErrorRegistry::allErrors() const
+{
+    std::vector<TiFlashError> res;
+    res.reserve(errors().size());
+    for (const auto & error : errors())
+    {
+        res.push_back(error.second);
+    }
+    return res;
+}
+
+TiFlashError TiFlashErrorRegistry::simpleGet(const std::string & error_class, const std::string & error_code)
+{
+    auto & m_instance = instance();
+    auto error = m_instance.get(error_class, error_code);
+    if (error.has_value())
+    {
+        return error.value();
+    }
+    else
+    {
+        throw Exception("Unregistered TiFlashError: FLASH:" + error_class + ":" + error_code);
+    }
+}
+TiFlashError TiFlashErrorRegistry::simpleGet(const std::string & error_class, int error_code)
+{
+    return simpleGet(error_class, std::to_string(error_code));
+}
+
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

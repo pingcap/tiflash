@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,8 @@ public:
      *  row_num is number of row which should be added.
      *  Additional parameter arena should be used instead of standard memory allocator if the addition requires memory allocation.
      */
-    virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const = 0;
+    virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const = 0;
 
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
@@ -207,7 +208,12 @@ template <typename Derived>
 class IAggregateFunctionHelper : public IAggregateFunction
 {
 private:
-    static void addFree(const IAggregateFunction * that, AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena)
+    static void addFree(
+        const IAggregateFunction * that,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        size_t row_num,
+        Arena * arena)
     {
         static_cast<const Derived &>(*that).add(place, columns, row_num, arena);
     }
@@ -531,7 +537,14 @@ public:
 
         if (func.allocatesMemoryInArena() || sizeof(Data) > 16 || func.sizeOfData() != sizeof(Data))
         {
-            IAggregateFunctionHelper<Derived>::addBatchLookupTable8(batch_size, map, place_offset, init, key, columns, arena);
+            IAggregateFunctionHelper<Derived>::addBatchLookupTable8(
+                batch_size,
+                map,
+                place_offset,
+                init,
+                key,
+                columns,
+                arena);
             return;
         }
 

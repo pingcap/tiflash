@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ public:
         : path(std::move(path_))
     {}
 
+<<<<<<< HEAD
     bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
     {
         return true;
@@ -67,6 +68,26 @@ public:
     {
         return path;
     }
+=======
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const override { return true; }
+
+    size_t numPaths() const override { return 1; }
+
+    String defaultPath() const override { return path; }
+
+    String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const override { return path; }
+
+    void removePageFile(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*file_size*/,
+        bool /*meta_left*/,
+        bool /*remove_from_default_path*/) override
+    {}
+
+    Strings listPaths() const override { return Strings{path}; }
+
+    String choosePath(const PageFileIdAndLevel & /*id_lvl*/) override { return path; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     size_t addPageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
@@ -99,6 +120,7 @@ public:
             throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
     }
 
+<<<<<<< HEAD
     bool fileExist(const PageFileIdAndLevel & id_lvl) const
     {
         return page_path_map.find(id_lvl) != page_path_map.end();
@@ -114,9 +136,18 @@ public:
     {
         return paths[0];
     }
+=======
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override { return page_path_map.exist(id_lvl); }
+
+
+    size_t numPaths() const override { return paths.size(); }
+
+    String defaultPath() const override { return paths[0]; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const
     {
+<<<<<<< HEAD
         auto iter = page_path_map.find(id_lvl);
         if (likely(iter != page_path_map.end()))
         {
@@ -131,6 +162,25 @@ public:
     {
         return paths;
     }
+=======
+        auto idx_opt = page_path_map.getIndex(id_lvl);
+        RUNTIME_CHECK_MSG(
+            idx_opt.has_value(),
+            "Can not find path for PageFile [id={}_{}]",
+            id_lvl.first,
+            id_lvl.second);
+        return paths[*idx_opt];
+    }
+
+    void removePageFile(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*file_size*/,
+        bool /*meta_left*/,
+        bool /*remove_from_default_path*/) override
+    {}
+
+    Strings listPaths() const override { return paths; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     String choosePath(const PageFileIdAndLevel & /*id_lvl*/)
     {

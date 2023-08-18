@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,30 +32,61 @@ public:
         return *this;
     }
 
+<<<<<<< HEAD
     FmtBuffer & append(StringRef s)
     {
         buffer.append(s.data, s.data + s.size);
+=======
+    template <
+        typename CompiledFormat, //
+        typename... Args,
+        fmt::enable_if_t<(fmt::detail::is_compiled_format<CompiledFormat>::value), int> = 0>
+    constexpr FmtBuffer & fmtAppend(const CompiledFormat & cf, const Args &... args)
+    {
+        fmt::format_to(std::back_inserter(buffer), cf, std::forward<Args>(args)...);
         return *this;
     }
 
-    std::string toString() const
+    template <
+        typename S, //
+        typename... Args,
+        fmt::enable_if_t<(fmt::detail::is_compiled_string<S>::value), int> = 0>
+    constexpr FmtBuffer & fmtAppend(const S & s, Args &&... args)
     {
-        return fmt::to_string(buffer);
+        fmt::format_to(std::back_inserter(buffer), s, std::forward<Args>(args)...);
+        return *this;
     }
 
+    FmtBuffer & append(std::string_view s)
+    {
+        buffer.append(s.data(), s.data() + s.size());
+        return *this;
+    }
+
+    FmtBuffer & append(const char ch)
+    {
+        buffer.push_back(ch);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
+        return *this;
+    }
+
+    std::string toString() const { return fmt::to_string(buffer); }
+
     template <typename Iter>
-    FmtBuffer & joinStr(
-        Iter first,
-        Iter end)
+    FmtBuffer & joinStr(Iter first, Iter end)
     {
         return joinStr(first, end, ", ");
     }
 
     template <typename Iter>
+<<<<<<< HEAD
     FmtBuffer & joinStr(
         Iter first,
         Iter end,
         StringRef delimiter)
+=======
+    FmtBuffer & joinStr(Iter first, Iter end, std::string_view delimiter)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         auto func = [](const auto & s, FmtBuffer & fb) {
             fb.append(s);

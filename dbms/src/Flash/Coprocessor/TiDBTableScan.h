@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ namespace DB
 class TiDBTableScan
 {
 public:
+<<<<<<< HEAD
     TiDBTableScan(
         const tipb::Executor * table_scan_,
         const String & executor_id_,
@@ -51,6 +52,25 @@ public:
     {
         return executor_id;
     }
+=======
+    TiDBTableScan(const tipb::Executor * table_scan_, const String & executor_id_, const DAGContext & dag_context);
+    bool isPartitionTableScan() const { return is_partition_table_scan; }
+    Int64 getColumnSize() const { return columns.size(); }
+    const ColumnInfos & getColumns() const { return columns; }
+    void constructTableScanForRemoteRead(tipb::TableScan * tipb_table_scan, TableID table_id) const;
+    Int64 getLogicalTableID() const { return logical_table_id; }
+    const std::vector<Int64> & getPhysicalTableIDs() const { return physical_table_ids; }
+    const String & getTableScanExecutorID() const { return executor_id; }
+    bool keepOrder() const { return keep_order; }
+
+    bool isFastScan() const { return is_fast_scan; }
+
+    const tipb::Executor * getTableScanPB() const { return table_scan; }
+    const std::vector<Int32> & getRuntimeFilterIDs() const { return runtime_filter_ids; }
+    int getMaxWaitTimeMs() const { return max_wait_time_ms; }
+
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const { return pushed_down_filters; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 private:
     const tipb::Executor * table_scan;

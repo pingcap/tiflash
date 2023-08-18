@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,9 @@ extern const int CANNOT_DECOMPRESS;
 /// Read compressed data into compressed_buffer. Get size of decompressed data from block header. Checksum if need.
 /// Returns number of compressed bytes read.
 template <bool has_checksum>
-size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_decompressed, size_t & size_compressed_without_checksum)
+size_t CompressedReadBufferBase<has_checksum>::readCompressedData(
+    size_t & size_decompressed,
+    size_t & size_compressed_without_checksum)
 {
     if (compressed_in->eof())
         return 0;
@@ -71,7 +73,18 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
 
     size_t & size_compressed = size_compressed_without_checksum;
 
+<<<<<<< HEAD
     if (method == static_cast<UInt8>(CompressionMethodByte::LZ4) || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
+=======
+#if USE_QPL
+    if (method == static_cast<UInt8>(CompressionMethodByte::LZ4)
+        || method == static_cast<UInt8>(CompressionMethodByte::QPL)
+        || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
+        || method == static_cast<UInt8>(CompressionMethodByte::NONE))
+#else
+    if (method == static_cast<UInt8>(CompressionMethodByte::LZ4)
+        || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         || method == static_cast<UInt8>(CompressionMethodByte::NONE))
     {
         size_compressed = unalignedLoad<UInt32>(&own_compressed_buffer[1]);
@@ -81,7 +94,9 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
         throw Exception("Unknown compression method: " + toString(method), ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 
     if (size_compressed > DBMS_MAX_COMPRESSED_SIZE)
-        throw Exception("Too large size_compressed. Most likely corrupted data.", ErrorCodes::TOO_LARGE_SIZE_COMPRESSED);
+        throw Exception(
+            "Too large size_compressed. Most likely corrupted data.",
+            ErrorCodes::TOO_LARGE_SIZE_COMPRESSED);
 
     ProfileEvents::increment(ProfileEvents::ReadCompressedBytes, size_compressed + sizeof(checksum));
 
@@ -97,7 +112,9 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
     {
         own_compressed_buffer.resize(size_compressed);
         compressed_buffer = &own_compressed_buffer[0];
-        compressed_in->readStrict(compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed - COMPRESSED_BLOCK_HEADER_SIZE);
+        compressed_in->readStrict(
+            compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
+            size_compressed - COMPRESSED_BLOCK_HEADER_SIZE);
     }
 
     if constexpr (has_checksum)
@@ -113,7 +130,10 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
 }
 
 template <bool has_checksum>
-void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_decompressed, size_t size_compressed_without_checksum)
+void CompressedReadBufferBase<has_checksum>::decompress(
+    char * to,
+    size_t size_decompressed,
+    size_t size_compressed_without_checksum)
 {
     ProfileEvents::increment(ProfileEvents::CompressedReadBufferBlocks);
     ProfileEvents::increment(ProfileEvents::CompressedReadBufferBytes, size_decompressed);
@@ -122,16 +142,49 @@ void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_d
 
     if (method == static_cast<UInt8>(CompressionMethodByte::LZ4))
     {
+<<<<<<< HEAD
         if (LZ4_decompress_fast(compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, to, size_decompressed) < 0)
             throw Exception("Cannot LZ4_decompress_fast", ErrorCodes::CANNOT_DECOMPRESS);
+=======
+        if (unlikely(
+                LZ4_decompress_safe(
+                    compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
+                    to,
+                    size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE,
+                    size_decompressed)
+                < 0))
+            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     else if (method == static_cast<UInt8>(CompressionMethodByte::ZSTD))
     {
-        size_t res = ZSTD_decompress(to, size_decompressed, compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE);
+        size_t res = ZSTD_decompress(
+            to,
+            size_decompressed,
+            compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
+            size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE);
 
         if (ZSTD_isError(res))
-            throw Exception("Cannot ZSTD_decompress: " + std::string(ZSTD_getErrorName(res)), ErrorCodes::CANNOT_DECOMPRESS);
+            throw Exception(
+                "Cannot ZSTD_decompress: " + std::string(ZSTD_getErrorName(res)),
+                ErrorCodes::CANNOT_DECOMPRESS);
     }
+<<<<<<< HEAD
+=======
+#if USE_QPL
+    else if (method == static_cast<UInt8>(CompressionMethodByte::QPL))
+    {
+        if (unlikely(
+                QPL::QPL_decompress(
+                    compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
+                    size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE,
+                    to,
+                    size_decompressed)
+                < 0))
+            throw Exception("Cannot QplDecompressData", ErrorCodes::CANNOT_DECOMPRESS);
+    }
+#endif
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     else if (method == static_cast<UInt8>(CompressionMethodByte::NONE))
     {
         memcpy(to, &compressed_buffer[COMPRESSED_BLOCK_HEADER_SIZE], size_decompressed);

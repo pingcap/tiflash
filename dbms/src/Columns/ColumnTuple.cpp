@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,7 +109,9 @@ void ColumnTuple::insert(const Field & x)
 
     const size_t tuple_size = columns.size();
     if (tuple.size() != tuple_size)
-        throw Exception("Cannot insert value of different size into tuple", ErrorCodes::CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE);
+        throw Exception(
+            "Cannot insert value of different size into tuple",
+            ErrorCodes::CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE);
 
     for (size_t i = 0; i < tuple_size; ++i)
         columns[i]->assumeMutableRef().insert(tuple[i]);
@@ -121,7 +123,9 @@ void ColumnTuple::insertFrom(const IColumn & src_, size_t n)
 
     const size_t tuple_size = columns.size();
     if (src.columns.size() != tuple_size)
-        throw Exception("Cannot insert value of different size into tuple", ErrorCodes::CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE);
+        throw Exception(
+            "Cannot insert value of different size into tuple",
+            ErrorCodes::CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE);
 
     for (size_t i = 0; i < tuple_size; ++i)
         columns[i]->assumeMutableRef().insertFrom(*src.columns[i], n);
@@ -139,7 +143,12 @@ void ColumnTuple::popBack(size_t n)
         column->assumeMutableRef().popBack(n);
 }
 
-StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+StringRef ColumnTuple::serializeValueIntoArena(
+    size_t n,
+    Arena & arena,
+    char const *& begin,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     size_t values_size = 0;
     for (const auto & column : columns)
@@ -156,24 +165,37 @@ const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
-void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnTuple::updateHashWithValue(
+    size_t n,
+    SipHash & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     for (const auto & column : columns)
         column->updateHashWithValue(n, hash, collator, sort_key_container);
 }
 
-void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnTuple::updateHashWithValues(
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     for (const auto & column : columns)
         column->updateHashWithValues(hash_values, collator, sort_key_container);
 }
 
-void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnTuple::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     auto s = size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
+                + std::to_string(hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     for (const auto & column : columns)
         column->updateWeakHash32(hash, collator, sort_key_container);
@@ -243,11 +265,41 @@ MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & se
     return res;
 }
 
+<<<<<<< HEAD
+=======
+void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const
+{
+    const size_t tuple_size = columns.size();
+    ColumnIndex scattered_num_columns = scatterColumns.size();
+    std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
+    for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
+    {
+        for (size_t scatter_idx = 0; scatter_idx < scattered_num_columns; ++scatter_idx)
+        {
+            auto col = static_cast<ColumnTuple &>(scatterColumns[scatter_idx]->assumeMutableRef())
+                           .columns[tuple_element_idx]
+                           ->assumeMutable();
+            scattered_tuple_elements[tuple_element_idx].push_back(std::move(col));
+        }
+        columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
+    }
+
+    for (size_t scattered_idx = 0; scattered_idx < scattered_num_columns; ++scattered_idx)
+    {
+        MutableColumns new_columns(tuple_size);
+        for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
+            new_columns[tuple_element_idx] = std::move(scattered_tuple_elements[tuple_element_idx][scattered_idx]);
+        scatterColumns[scattered_idx] = ColumnTuple::create(std::move(new_columns));
+    }
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 int ColumnTuple::compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const
 {
     const size_t tuple_size = columns.size();
     for (size_t i = 0; i < tuple_size; ++i)
-        if (int res = columns[i]->compareAt(n, m, *static_cast<const ColumnTuple &>(rhs).columns[i], nan_direction_hint))
+        if (int res
+            = columns[i]->compareAt(n, m, *static_cast<const ColumnTuple &>(rhs).columns[i], nan_direction_hint))
             return res;
 
     return 0;

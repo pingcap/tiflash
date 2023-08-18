@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -105,6 +105,7 @@ using Exceptions = std::vector<std::exception_ptr>;
 
 
 /** Try to write an exception to the log (and forget about it).
+<<<<<<< HEAD
   * Can be used in destructors in the catch-all block.
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
@@ -117,6 +118,19 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
   * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
   *  only this stack trace will be printed.
   */
+=======
+ * Can be used in destructors in the catch-all block.
+ */
+void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
+void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
+void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
+
+/** Prints current exception in canonical format.
+ * with_stacktrace - prints stack trace for DB::Exception.
+ * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
+ *  only this stack trace will be printed.
+ */
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace = false);
 
 /// Returns error code from ErrorCodes
@@ -175,6 +189,7 @@ namespace exception_details
 template <typename T, typename... Args>
 inline std::string generateLogMessage(const char * condition, T && fmt_str, Args &&... args)
 {
+<<<<<<< HEAD
     return fmt::format(std::forward<T>(fmt_str), condition, std::forward<Args>(args)...);
 }
 } // namespace exception_details
@@ -184,6 +199,135 @@ inline std::string generateLogMessage(const char * condition, T && fmt_str, Args
     {                                                \
         if (unlikely(!(condition)))                  \
             throw ExceptionType(__VA_ARGS__);        \
+=======
+    return fmt::format("Assert {} fail!", condition);
+}
+
+template <typename... Args>
+inline std::string generateFormattedMessage(const char * condition, const char * fmt_str, Args &&... args)
+{
+    return FmtBuffer()
+        .fmtAppend("Assert {} fail! ", condition)
+        .fmtAppend(fmt::runtime(fmt_str), std::forward<Args>(args)...)
+        .toString();
+}
+
+template <typename... Args>
+inline Poco::Message generateLogMessage(
+    const std::string & logger_name,
+    const char * filename,
+    int lineno,
+    const char * condition,
+    Args &&... args)
+{
+    return Poco::Message(
+        logger_name,
+        generateFormattedMessage(condition, std::forward<Args>(args)...),
+        Poco::Message::PRIO_FATAL,
+        filename,
+        lineno);
+}
+
+const LoggerPtr & getDefaultFatalLogger();
+
+template <typename... Args>
+inline void logAndTerminate(
+    const char * filename,
+    int lineno,
+    const char * condition,
+    const LoggerPtr & logger,
+    Args &&... args)
+{
+    auto message = generateLogMessage(logger->name(), filename, lineno, condition, std::forward<Args>(args)...);
+    if (logger->is(Poco::Message::Priority::PRIO_FATAL))
+        logger->log(message);
+    try
+    {
+        throw Exception(message.getText());
+    }
+    catch (...)
+    {
+        std::terminate();
+    }
+}
+
+inline void logAndTerminate(const char * filename, int lineno, const char * condition)
+{
+    logAndTerminate(filename, lineno, condition, getDefaultFatalLogger());
+}
+
+template <typename... Args>
+inline void logAndTerminate(
+    const char * filename,
+    int lineno,
+    const char * condition,
+    const char * fmt_str,
+    Args &&... args)
+{
+    logAndTerminate(filename, lineno, condition, getDefaultFatalLogger(), fmt_str, std::forward<Args>(args)...);
+}
+
+/**
+ * Roughly check whether the passed in string may be a string literal expression.
+ */
+constexpr auto maybeStringLiteralExpr(const std::string_view sv)
+{
+    return sv.front() == '"' && sv.back() == '"';
+}
+} // namespace exception_details
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem)                                                   \
+    .fmtAppend(                                                                                            \
+        [] {                                                                                               \
+            static_assert(!::DB::exception_details::maybeStringLiteralExpr(                                \
+                BOOST_PP_STRINGIZE(elem)),                                                                 \
+                "Unexpected " BOOST_PP_STRINGIZE(elem) ": Seems that you may be passing a string literal " \
+                                                       "to RUNTIME_CHECK? Use RUNTIME_CHECK_MSG instead. " \
+                                                       "See tiflash/pull/5777 for details.");              \
+            return ", " BOOST_PP_STRINGIZE(elem) " = {}";                                                  \
+        }(),                                                                                               \
+        elem)
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARGS(...) \
+    BOOST_PP_SEQ_FOR_EACH(INTERNAL_RUNTIME_CHECK_APPEND_ARG, _, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(...)            \
+    BOOST_PP_IF(                                                   \
+        BOOST_PP_EQUAL(BOOST_PP_TUPLE_SIZE((, ##__VA_ARGS__)), 1), \
+        BOOST_PP_EXPAND,                                           \
+        INTERNAL_RUNTIME_CHECK_APPEND_ARGS)                        \
+    (__VA_ARGS__)
+
+/**
+ * RUNTIME_CHECK checks the condition, and throws a `DB::Exception` with `LOGICAL_ERROR` error code
+ * when the condition does not meet. It is a good practice to check expected conditions in your
+ * program frequently to detect errors as early as possible.
+ *
+ * Unlike RUNTIME_ASSERT, this function is softer that it does not terminate the application.
+ *
+ * Usually you use this function to verify your code logic, instead of verifying external inputs, as
+ * this function exposes internal variables and the conditions you are checking with, while external
+ * callers are expecting some non-internal descriptions for their invalid inputs.
+ *
+ * Examples:
+ *
+ * ```
+ * RUNTIME_CHECK(a != b);         // DB::Exception("Check a != b failed")
+ * RUNTIME_CHECK(a != b, a, b);   // DB::Exception("Check a != b failed, a = .., b = ..")
+ * ```
+ */
+#define RUNTIME_CHECK(condition, ...)                                                                              \
+    do                                                                                                             \
+    {                                                                                                              \
+        if (unlikely(!(condition)))                                                                                \
+        {                                                                                                          \
+            throw ::DB::Exception(                                                                                 \
+                ::DB::FmtBuffer()                                                                                  \
+                    .append("Check " #condition " failed") INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(__VA_ARGS__) \
+                    .toString(),                                                                                   \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                                                                  \
+        }                                                                                                          \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     } while (false)
 
 #define RUNTIME_ASSERT(condition, logger, ...)                                                                      \

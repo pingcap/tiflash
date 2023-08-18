@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,13 +27,9 @@ protected:
         if (with_null)
             expected = createConstColumn<Nullable<Int64>>(5, std::nullopt);
 
-        ASSERT_COLUMN_EQ(
-            expected,
-            executeFunction(func, createOnlyNullColumn(5)));
+        ASSERT_COLUMN_EQ(expected, executeFunction(func, createOnlyNullColumn(5)));
 
-        ASSERT_COLUMN_EQ(
-            expected,
-            executeFunction(func, createOnlyNullColumnConst(5)));
+        ASSERT_COLUMN_EQ(expected, executeFunction(func, createOnlyNullColumnConst(5)));
     }
 };
 
@@ -65,20 +61,16 @@ CATCH
     M(Float32)                       \
     M(Float64)
 
-#define TEST_IS_TRUE_NON_NULLABLE(TYPE)                                                    \
-    TEST_F(IsTrueFalseTest, isTrue_##TYPE##_NonNullable)                                   \
-    try                                                                                    \
-    {                                                                                      \
-        ASSERT_COLUMN_EQ(                                                                  \
-            createColumn<Int64>({0, 1, 1}),                                                \
-            executeFunction("isTrue", createColumn<TYPE>({0, 1, static_cast<TYPE>(-1)}))); \
-        ASSERT_COLUMN_EQ(                                                                  \
-            createConstColumn<Int64>(5, 0),                                                \
-            executeFunction("isTrue", createConstColumn<TYPE>(5, 0)));                     \
-        ASSERT_COLUMN_EQ(                                                                  \
-            createConstColumn<Int64>(5, 1),                                                \
-            executeFunction("isTrue", createConstColumn<TYPE>(5, 2)));                     \
-    }                                                                                      \
+#define TEST_IS_TRUE_NON_NULLABLE(TYPE)                                                                             \
+    TEST_F(IsTrueFalseTest, isTrue_##TYPE##_NonNullable)                                                            \
+    try                                                                                                             \
+    {                                                                                                               \
+        ASSERT_COLUMN_EQ(                                                                                           \
+            createColumn<Int64>({0, 1, 1}),                                                                         \
+            executeFunction("isTrue", createColumn<TYPE>({0, 1, static_cast<TYPE>(-1)})));                          \
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(5, 0), executeFunction("isTrue", createConstColumn<TYPE>(5, 0))); \
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(5, 1), executeFunction("isTrue", createConstColumn<TYPE>(5, 2))); \
+    }                                                                                                               \
     CATCH
 
 #define TEST_IS_TRUE_NULLABLE(TYPE)                                                                                \
@@ -116,6 +108,7 @@ CATCH
     }                                                                                              \
     CATCH
 
+<<<<<<< HEAD
 #define TEST_IS_TRUE_WITH_NULL_NULLABLE(TYPE)                                                                              \
     TEST_F(IsTrueFalseTest, isTrueWithNull_##TYPE##_Nullable)                                                              \
     try                                                                                                                    \
@@ -133,22 +126,39 @@ CATCH
             createConstColumn<Nullable<Int64>>(5, std::nullopt),                                                           \
             executeFunction("isTrueWithNull", createConstColumn<Nullable<TYPE>>(5, std::nullopt)));                        \
     }                                                                                                                      \
+=======
+#define TEST_IS_TRUE_WITH_NULL_NULLABLE(TYPE)                                                       \
+    TEST_F(IsTrueFalseTest, isTrueWithNull_##TYPE##_Nullable)                                       \
+    try                                                                                             \
+    {                                                                                               \
+        ASSERT_COLUMN_EQ(                                                                           \
+            createColumn<Nullable<Int64>>({0, 1, 1, std::nullopt}),                                 \
+            executeFunction(                                                                        \
+                "isTrueWithNull",                                                                   \
+                createColumn<Nullable<TYPE>>({0, 1, static_cast<TYPE>(-1), std::nullopt})));        \
+        ASSERT_COLUMN_EQ(                                                                           \
+            createConstColumn<Int64>(5, 0),                                                         \
+            executeFunction("isTrueWithNull", createConstColumn<Nullable<TYPE>>(5, 0)));            \
+        ASSERT_COLUMN_EQ(                                                                           \
+            createConstColumn<Int64>(5, 1),                                                         \
+            executeFunction("isTrueWithNull", createConstColumn<Nullable<TYPE>>(5, 2)));            \
+        ASSERT_COLUMN_EQ(                                                                           \
+            createConstColumn<Nullable<Int64>>(5, std::nullopt),                                    \
+            executeFunction("isTrueWithNull", createConstColumn<Nullable<TYPE>>(5, std::nullopt))); \
+    }                                                                                               \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     CATCH
 
-#define TEST_IS_FALSE_NON_NULLABLE(TYPE)                                                    \
-    TEST_F(IsTrueFalseTest, isFalse_##TYPE##_NonNullable)                                   \
-    try                                                                                     \
-    {                                                                                       \
-        ASSERT_COLUMN_EQ(                                                                   \
-            createColumn<Int64>({1, 0, 0}),                                                 \
-            executeFunction("isFalse", createColumn<TYPE>({0, 1, static_cast<TYPE>(-1)}))); \
-        ASSERT_COLUMN_EQ(                                                                   \
-            createConstColumn<Int64>(5, 1),                                                 \
-            executeFunction("isFalse", createConstColumn<TYPE>(5, 0)));                     \
-        ASSERT_COLUMN_EQ(                                                                   \
-            createConstColumn<Int64>(5, 0),                                                 \
-            executeFunction("isFalse", createConstColumn<TYPE>(5, 2)));                     \
-    }                                                                                       \
+#define TEST_IS_FALSE_NON_NULLABLE(TYPE)                                                                             \
+    TEST_F(IsTrueFalseTest, isFalse_##TYPE##_NonNullable)                                                            \
+    try                                                                                                              \
+    {                                                                                                                \
+        ASSERT_COLUMN_EQ(                                                                                            \
+            createColumn<Int64>({1, 0, 0}),                                                                          \
+            executeFunction("isFalse", createColumn<TYPE>({0, 1, static_cast<TYPE>(-1)})));                          \
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(5, 1), executeFunction("isFalse", createConstColumn<TYPE>(5, 0))); \
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(5, 0), executeFunction("isFalse", createConstColumn<TYPE>(5, 2))); \
+    }                                                                                                                \
     CATCH
 
 #define TEST_IS_FALSE_NULLABLE(TYPE)                                                                                \
@@ -186,6 +196,7 @@ CATCH
     }                                                                                               \
     CATCH
 
+<<<<<<< HEAD
 #define TEST_IS_FALSE_WITH_NULL_NULLABLE(TYPE)                                                                              \
     TEST_F(IsTrueFalseTest, isFalseWithNull_##TYPE##_Nullable)                                                              \
     try                                                                                                                     \
@@ -203,6 +214,27 @@ CATCH
             createConstColumn<Nullable<Int64>>(5, std::nullopt),                                                            \
             executeFunction("isFalseWithNull", createConstColumn<Nullable<TYPE>>(5, std::nullopt)));                        \
     }                                                                                                                       \
+=======
+#define TEST_IS_FALSE_WITH_NULL_NULLABLE(TYPE)                                                       \
+    TEST_F(IsTrueFalseTest, isFalseWithNull_##TYPE##_Nullable)                                       \
+    try                                                                                              \
+    {                                                                                                \
+        ASSERT_COLUMN_EQ(                                                                            \
+            createColumn<Nullable<Int64>>({1, 0, 0, std::nullopt}),                                  \
+            executeFunction(                                                                         \
+                "isFalseWithNull",                                                                   \
+                createColumn<Nullable<TYPE>>({0, 1, static_cast<TYPE>(-1), std::nullopt})));         \
+        ASSERT_COLUMN_EQ(                                                                            \
+            createConstColumn<Int64>(5, 1),                                                          \
+            executeFunction("isFalseWithNull", createConstColumn<Nullable<TYPE>>(5, 0)));            \
+        ASSERT_COLUMN_EQ(                                                                            \
+            createConstColumn<Int64>(5, 0),                                                          \
+            executeFunction("isFalseWithNull", createConstColumn<Nullable<TYPE>>(5, 2)));            \
+        ASSERT_COLUMN_EQ(                                                                            \
+            createConstColumn<Nullable<Int64>>(5, std::nullopt),                                     \
+            executeFunction("isFalseWithNull", createConstColumn<Nullable<TYPE>>(5, std::nullopt))); \
+    }                                                                                                \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     CATCH
 
 APPLY_FOR_INT_FLOAT_TYPES(TEST_IS_TRUE_NON_NULLABLE)
@@ -225,25 +257,27 @@ TEST_F(IsTrueFalseTest, isTrueFalse_Decimal)
 try
 {
     ColumnWithTypeAndName input;
-#define M(DECIMAL)                                                                                                      \
-    input = createColumn<DECIMAL>(                                                                                      \
-        std::make_tuple(maxDecimalPrecision<DECIMAL>(), 0),                                                             \
-        {DecimalField<DECIMAL>(DECIMAL::NativeType(0), 0),                                                              \
-         DecimalField<DECIMAL>(DECIMAL::NativeType(1), 0),                                                              \
-         DecimalField<DECIMAL>(DECIMAL::NativeType(-1), 0)});                                                           \
-    ASSERT_COLUMN_EQ(createColumn<Int64>({0, 1, 1}), executeFunction("isTrue", input));                                 \
-    ASSERT_COLUMN_EQ(createColumn<Int64>({0, 1, 1}), executeFunction("isTrueWithNull", input));                         \
-    ASSERT_COLUMN_EQ(createColumn<Int64>({1, 0, 0}), executeFunction("isFalse", input));                                \
-    ASSERT_COLUMN_EQ(createColumn<Int64>({1, 0, 0}), executeFunction("isFalseWithNull", input));                        \
-    input = createColumn<Nullable<DECIMAL>>(                                                                            \
-        std::make_tuple(maxDecimalPrecision<DECIMAL>(), 0),                                                             \
-        {DecimalField<DECIMAL>(DECIMAL::NativeType(0), 0),                                                              \
-         DecimalField<DECIMAL>(DECIMAL::NativeType(1), 0),                                                              \
-         DecimalField<DECIMAL>(DECIMAL::NativeType(-1), 0),                                                             \
-         std::nullopt});                                                                                                \
-    ASSERT_COLUMN_EQ(createColumn<Int64>({0, 1, 1, 0}), executeFunction("isTrue", input));                              \
-    ASSERT_COLUMN_EQ(createColumn<Nullable<Int64>>({0, 1, 1, std::nullopt}), executeFunction("isTrueWithNull", input)); \
-    ASSERT_COLUMN_EQ(createColumn<Int64>({1, 0, 0, 0}), executeFunction("isFalse", input));                             \
+#define M(DECIMAL)                                                                               \
+    input = createColumn<DECIMAL>(                                                               \
+        std::make_tuple(maxDecimalPrecision<DECIMAL>(), 0),                                      \
+        {DecimalField<DECIMAL>(DECIMAL::NativeType(0), 0),                                       \
+         DecimalField<DECIMAL>(DECIMAL::NativeType(1), 0),                                       \
+         DecimalField<DECIMAL>(DECIMAL::NativeType(-1), 0)});                                    \
+    ASSERT_COLUMN_EQ(createColumn<Int64>({0, 1, 1}), executeFunction("isTrue", input));          \
+    ASSERT_COLUMN_EQ(createColumn<Int64>({0, 1, 1}), executeFunction("isTrueWithNull", input));  \
+    ASSERT_COLUMN_EQ(createColumn<Int64>({1, 0, 0}), executeFunction("isFalse", input));         \
+    ASSERT_COLUMN_EQ(createColumn<Int64>({1, 0, 0}), executeFunction("isFalseWithNull", input)); \
+    input = createColumn<Nullable<DECIMAL>>(                                                     \
+        std::make_tuple(maxDecimalPrecision<DECIMAL>(), 0),                                      \
+        {DecimalField<DECIMAL>(DECIMAL::NativeType(0), 0),                                       \
+         DecimalField<DECIMAL>(DECIMAL::NativeType(1), 0),                                       \
+         DecimalField<DECIMAL>(DECIMAL::NativeType(-1), 0),                                      \
+         std::nullopt});                                                                         \
+    ASSERT_COLUMN_EQ(createColumn<Int64>({0, 1, 1, 0}), executeFunction("isTrue", input));       \
+    ASSERT_COLUMN_EQ(                                                                            \
+        createColumn<Nullable<Int64>>({0, 1, 1, std::nullopt}),                                  \
+        executeFunction("isTrueWithNull", input));                                               \
+    ASSERT_COLUMN_EQ(createColumn<Int64>({1, 0, 0, 0}), executeFunction("isFalse", input));      \
     ASSERT_COLUMN_EQ(createColumn<Nullable<Int64>>({1, 0, 0, std::nullopt}), executeFunction("isFalseWithNull", input));
 
     APPLY_FOR_DECIMAL_TYPES(M)

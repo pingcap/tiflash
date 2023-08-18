@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -285,25 +285,18 @@ struct HashTableGrower
     bool overflow(size_t elems) const { return elems > maxFill(); }
 
     /// Increase the size of the hash table.
-    void increaseSize()
-    {
-        size_degree += size_degree >= 23 ? 1 : 2;
-    }
+    void increaseSize() { size_degree += size_degree >= 23 ? 1 : 2; }
 
     /// Set the buffer size by the number of elements in the hash table. Used when deserializing a hash table.
     void set(size_t num_elems)
     {
-        size_degree = num_elems <= 1
-            ? initial_size_degree
-            : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
-                   ? initial_size_degree
-                   : (static_cast<size_t>(log2(num_elems - 1)) + 2));
+        size_degree = num_elems <= 1 ? initial_size_degree
+                                     : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
+                                            ? initial_size_degree
+                                            : (static_cast<size_t>(log2(num_elems - 1)) + 2));
     }
 
-    void setBufSize(size_t buf_size_)
-    {
-        size_degree = static_cast<size_t>(log2(buf_size_ - 1) + 1);
-    }
+    void setBufSize(size_t buf_size_) { size_degree = static_cast<size_t>(log2(buf_size_ - 1) + 1); }
 };
 
 
@@ -400,13 +393,9 @@ struct AllocatorBufferDeleter<true, Allocator, Cell>
 
 
 // The HashTable
-template <
-    typename KeyType,
-    typename CellType,
-    typename HashType,
-    typename GrowerType,
-    typename AllocatorType>
-class HashTable : private boost::noncopyable
+template <typename KeyType, typename CellType, typename HashType, typename GrowerType, typename AllocatorType>
+class HashTable
+    : private boost::noncopyable
     , protected HashType
     , protected AllocatorType
     , protected CellType::State
@@ -536,7 +525,8 @@ protected:
             memcpy(reinterpret_cast<void *>(buf), reinterpret_cast<const void *>(old_buffer.get()), old_buffer_size);
         }
         else
-            buf = reinterpret_cast<Cell *>(Allocator::realloc(buf, old_buffer_size, new_grower.bufSize() * sizeof(Cell)));
+            buf = reinterpret_cast<Cell *>(
+                Allocator::realloc(buf, old_buffer_size, new_grower.bufSize() * sizeof(Cell)));
 
         grower = new_grower;
 
@@ -574,9 +564,8 @@ protected:
 
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
         watch.stop();
-        std::cerr << std::fixed << std::setprecision(3)
-                  << "Resize from " << old_size << " to " << grower.bufSize() << " took " << watch.elapsedSeconds() << " sec."
-                  << std::endl;
+        std::cerr << std::fixed << std::setprecision(3) << "Resize from " << old_size << " to " << grower.bufSize()
+                  << " took " << watch.elapsedSeconds() << " sec." << std::endl;
 #endif
     }
 
@@ -769,8 +758,7 @@ public:
     public:
         explicit Reader(DB::ReadBuffer & in_)
             : in(in_)
-        {
-        }
+        {}
 
         DISALLOW_COPY(Reader);
 
@@ -866,15 +854,9 @@ public:
         return const_iterator(this, buf ? buf + grower.bufSize() : buf);
     }
 
-    const_iterator cend() const
-    {
-        return end();
-    }
+    const_iterator cend() const { return end(); }
 
-    iterator end()
-    {
-        return iterator(this, buf ? buf + grower.bufSize() : buf);
-    }
+    iterator end() { return iterator(this, buf ? buf + grower.bufSize() : buf); }
 
 
 protected:
@@ -914,7 +896,12 @@ protected:
     }
 
     template <typename KeyHolder>
-    void ALWAYS_INLINE emplaceNonZeroImpl(size_t place_value, KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplaceNonZeroImpl(
+        size_t place_value,
+        KeyHolder && key_holder,
+        LookupResult & it,
+        bool & inserted,
+        size_t hash_value)
     {
         it = &buf[place_value];
 
@@ -969,10 +956,7 @@ protected:
 
 
 public:
-    void reserve(size_t num_elements)
-    {
-        resize(num_elements);
-    }
+    void reserve(size_t num_elements) { resize(num_elements); }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
     std::pair<LookupResult, bool> ALWAYS_INLINE insert(const value_type & x)
@@ -1075,14 +1059,13 @@ public:
         return const_cast<std::decay_t<decltype(*this)> *>(this)->find(x, hash_value);
     }
 
-    std::enable_if_t<Grower::performs_linear_probing_with_single_step, bool>
-        ALWAYS_INLINE erase(const Key & x)
+    std::enable_if_t<Grower::performs_linear_probing_with_single_step, bool> ALWAYS_INLINE erase(const Key & x)
     {
         return erase(x, hash(x));
     }
 
-    std::enable_if_t<Grower::performs_linear_probing_with_single_step, bool>
-        ALWAYS_INLINE erase(const Key & x, size_t hash_value)
+    std::enable_if_t<Grower::performs_linear_probing_with_single_step, bool> ALWAYS_INLINE
+    erase(const Key & x, size_t hash_value)
     {
         /** Deletion from open addressing hash table without tombstones
           *
@@ -1161,8 +1144,8 @@ public:
             /// so, the next elem should be moved to position of erased elem
 
             /// The case of non overlapping part of chain
-            if (next_position > erased_key_position
-                && (optimal_position > erased_key_position) && (optimal_position < next_position))
+            if (next_position > erased_key_position && (optimal_position > erased_key_position)
+                && (optimal_position < next_position))
             {
                 continue;
             }
@@ -1176,7 +1159,10 @@ public:
             }
 
             /// Move the element to the freed place
-            memcpy(static_cast<void *>(&buf[erased_key_position]), static_cast<void *>(&buf[next_position]), sizeof(Cell));
+            memcpy(
+                static_cast<void *>(&buf[erased_key_position]),
+                static_cast<void *>(&buf[next_position]),
+                sizeof(Cell));
 
             if constexpr (Cell::need_to_notify_cell_during_move)
                 Cell::move(&buf[next_position], &buf[erased_key_position]);
@@ -1302,15 +1288,9 @@ public:
     }
 
 
-    size_t size() const
-    {
-        return m_size;
-    }
+    size_t size() const { return m_size; }
 
-    bool empty() const
-    {
-        return 0 == m_size;
-    }
+    bool empty() const { return 0 == m_size; }
 
     void clear()
     {
@@ -1331,15 +1311,9 @@ public:
         free();
     }
 
-    size_t getBufferSizeInBytes() const
-    {
-        return grower.bufSize() * sizeof(Cell);
-    }
+    size_t getBufferSizeInBytes() const { return grower.bufSize() * sizeof(Cell); }
 
-    size_t getBufferSizeInCells() const
-    {
-        return grower.bufSize();
-    }
+    size_t getBufferSizeInCells() const { return grower.bufSize(); }
 
     /// Return offset for result in internal buffer.
     /// Result can have value up to `getBufferSizeInCells() + 1`
@@ -1353,10 +1327,7 @@ public:
     }
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    size_t getCollisions() const
-    {
-        return collisions;
-    }
+    size_t getCollisions() const { return collisions; }
 #endif
 };
 
@@ -1410,7 +1381,8 @@ public:
         it.second = std::make_unique<LockGuard>(mutex);
         return hash_table.emplace(x, it.first, inserted);
     }
-    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE
+    emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted, size_t hash_value)
     {
         it.second = std::make_unique<LockGuard>(mutex);
         return hash_table.emplace(x, it.first, inserted, hash_value);
@@ -1425,14 +1397,8 @@ public:
         LockGuard lk(mutex);
         return hash_table.has(x, hash_value);
     }
-    size_t getBufferSizeInBytes() const
-    {
-        return hash_table.getBufferSizeInBytes();
-    }
-    size_t size() const
-    {
-        return hash_table.size();
-    }
+    size_t getBufferSizeInBytes() const { return hash_table.getBufferSizeInBytes(); }
+    size_t size() const { return hash_table.size(); }
 
 private:
     HashTableType hash_table;
@@ -1440,7 +1406,8 @@ private:
 };
 
 template <typename HashTableType>
-class ConcurrentHashTable : private boost::noncopyable
+class ConcurrentHashTable
+    : private boost::noncopyable
     , protected HashTableType::Hash
     , protected HashTableType::Allocator
     , protected HashTableType::Cell::State
@@ -1479,21 +1446,34 @@ public:
         return segments[segment_index]->getHashTable();
     }
 
+<<<<<<< HEAD
     std::mutex & getSegmentMutex(size_t segment_index)
     {
         return segments[segment_index]->getMutex();
     }
+=======
+    size_t resetSegmentTable(size_t segment_index)
+    {
+        size_t ret = 0;
+        std::unique_ptr<SegmentType> segment_ptr = nullptr;
+        {
+            /// release the lock before destruct related segment
+            assert(segments[segment_index]);
+            std::unique_lock lock(segments[segment_index]->getMutex());
+            ret = segments[segment_index]->getBufferSizeInBytes();
+            segment_ptr.swap(segments[segment_index]);
+            segments[segment_index].reset();
+        }
+        return ret;
+    }
+
+    std::mutex & getSegmentMutex(size_t segment_index) { return segments[segment_index]->getMutex(); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     size_t getSegmentSize() const { return segment_size; }
 
-    size_t hash(const Key & x) const
-    {
-        return Hash::operator()(x);
-    }
-    bool isZero(const Key & x) const
-    {
-        return Cell::isZero(x, *this);
-    }
+    size_t hash(const Key & x) const { return Hash::operator()(x); }
+    bool isZero(const Key & x) const { return Cell::isZero(x, *this); }
 
     typename SegmentType::IteratorWithLock ALWAYS_INLINE find(const Key & x)
     {
@@ -1540,7 +1520,8 @@ public:
     }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename SegmentType::IteratorWithLock, bool> ALWAYS_INLINE insert(const typename SegmentType::HashTable::value_type & x)
+    std::pair<typename SegmentType::IteratorWithLock, bool> ALWAYS_INLINE
+    insert(const typename SegmentType::HashTable::value_type & x)
     {
         size_t segment_index = 0;
         if (!isZero(Cell::getKey(x)))
@@ -1563,7 +1544,8 @@ public:
         return segments[segment_index]->emplace(x, it, inserted);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::ConstIteratorWithLock & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE
+    emplace(const Key & x, typename SegmentType::ConstIteratorWithLock & it, bool & inserted, size_t hash_value)
     {
         size_t segment_index = 0;
         if (!isZero(x))

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -150,7 +150,8 @@ public:
     struct Monotonicity
     {
         bool is_monotonic = false; /// Is the function monotonous (nondecreasing or nonincreasing).
-        bool is_positive = true; /// true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
+        bool is_positive
+            = true; /// true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
         bool is_always_monotonic = false; /// Is true if function is monotonic on the whole input range I
 
         Monotonicity(bool is_monotonic_ = false, bool is_positive_ = true, bool is_always_monotonic_ = false)
@@ -163,9 +164,18 @@ public:
     /** Get information about monotonicity on a range of values. Call only if hasInformationAboutMonotonicity.
       * NULL can be passed as one of the arguments. This means that the corresponding range is unlimited on the left or on the right.
       */
-    virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
+    virtual Monotonicity getMonotonicityForRange(
+        const IDataType & /*type*/,
+        const Field & /*left*/,
+        const Field & /*right*/) const
     {
+<<<<<<< HEAD
         throw Exception("Function " + getName() + " has no information about its monotonicity.", ErrorCodes::NOT_IMPLEMENTED);
+=======
+        throw Exception(
+            fmt::format("Function {} has no information about its monotonicity.", getName()),
+            ErrorCodes::NOT_IMPLEMENTED);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 };
 
@@ -177,7 +187,8 @@ class IFunctionBuilder
 public:
     virtual ~IFunctionBuilder() = default;
 
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr) const;
+    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr)
+        const;
 
     DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
 
@@ -200,7 +211,9 @@ protected:
     /// This function will replace it with DataTypeFunction containing actual types.
     virtual void getLambdaArgumentTypesImpl(DataTypes & /*arguments*/) const
     {
-        throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+            "Function " + getName() + " can't have lambda-expressions as arguments",
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     /// Get the result type by argument type. If the function does not apply to these arguments, throw an exception.
@@ -259,9 +272,18 @@ public:
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 
     using Monotonicity = IFunctionBase::Monotonicity;
-    virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
+    virtual Monotonicity getMonotonicityForRange(
+        const IDataType & /*type*/,
+        const Field & /*left*/,
+        const Field & /*right*/) const
     {
+<<<<<<< HEAD
         throw Exception("Function " + getName() + " has no information about its monotonicity.", ErrorCodes::NOT_IMPLEMENTED);
+=======
+        throw Exception(
+            fmt::format("Function {} has no information about its monotonicity.", getName()),
+            ErrorCodes::NOT_IMPLEMENTED);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     /// For non-variadic functions, return number of arguments; otherwise return zero (that should be ignored).
@@ -286,7 +308,13 @@ public:
 
     virtual void getLambdaArgumentTypes(DataTypes & /*arguments*/) const
     {
+<<<<<<< HEAD
         throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+=======
+        throw Exception(
+            fmt::format("Function {} can't have lambda-expressions as arguments", getName()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     virtual void setCollator(const TiDB::TiDBCollatorPtr &) {}
@@ -310,7 +338,10 @@ protected:
     }
     bool useDefaultImplementationForNulls() const final { return function->useDefaultImplementationForNulls(); }
     bool useDefaultImplementationForConstants() const final { return function->useDefaultImplementationForConstants(); }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return function->getArgumentsThatAreAlwaysConstant(); }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const final
+    {
+        return function->getArgumentsThatAreAlwaysConstant();
+    }
 
 private:
     std::shared_ptr<IFunction> function;
@@ -330,7 +361,10 @@ public:
     const DataTypes & getArgumentTypes() const override { return arguments; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override { return std::make_shared<DefaultExecutable>(function); }
+    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
+    {
+        return std::make_shared<DefaultExecutable>(function);
+    }
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
 
@@ -342,7 +376,8 @@ public:
 
     bool hasInformationAboutMonotonicity() const override { return function->hasInformationAboutMonotonicity(); }
 
-    IFunctionBase::Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override
+    IFunctionBase::Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right)
+        const override
     {
         return function->getMonotonicityForRange(type, left, right);
     }
@@ -364,8 +399,14 @@ public:
     bool isVariadic() const override { return function->isVariadic(); }
     size_t getNumberOfArguments() const override { return function->getNumberOfArguments(); }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return function->getReturnTypeImpl(arguments); }
-    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override { return function->getReturnTypeImpl(arguments); }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        return function->getReturnTypeImpl(arguments);
+    }
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        return function->getReturnTypeImpl(arguments);
+    }
 
     bool useDefaultImplementationForNulls() const override { return function->useDefaultImplementationForNulls(); }
 
@@ -382,7 +423,10 @@ public:
         return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
     }
 
-    void getLambdaArgumentTypesImpl(DataTypes & arguments) const override { function->getLambdaArgumentTypes(arguments); }
+    void getLambdaArgumentTypesImpl(DataTypes & arguments) const override
+    {
+        function->getLambdaArgumentTypes(arguments);
+    }
 
 private:
     std::shared_ptr<IFunction> function;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,12 @@ protected:
     void writeStatistics();
 
     WriteBuffer & dst_ostr;
+<<<<<<< HEAD
     std::unique_ptr<WriteBuffer> validating_ostr;    /// Validates UTF-8 sequences, replaces bad sequences with replacement character.
+=======
+    std::unique_ptr<WriteBuffer>
+        validating_ostr; /// Validates UTF-8 sequences, replaces bad sequences with replacement character.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     WriteBuffer * ostr;
 
     size_t field_number = 0;

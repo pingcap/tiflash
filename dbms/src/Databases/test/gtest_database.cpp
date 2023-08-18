@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,19 +69,13 @@ public:
         FailPointHelper::enableFailPoint(FailPoints::force_context_path);
     }
 
-    static void TearDownTestCase()
-    {
-        FailPointHelper::disableFailPoint(FailPoints::force_context_path);
-    }
+    static void TearDownTestCase() { FailPointHelper::disableFailPoint(FailPoints::force_context_path); }
 
     DatabaseTiFlashTest()
         : log(&Poco::Logger::get("DatabaseTiFlashTest"))
     {}
 
-    void SetUp() override
-    {
-        recreateMetadataPath();
-    }
+    void SetUp() override { recreateMetadataPath(); }
 
     void TearDown() override
     {
@@ -120,14 +114,15 @@ ASTPtr parseCreateStatement(const String & statement)
     ParserCreateQuery parser;
     const char * pos = statement.data();
     std::string error_msg;
-    auto ast = tryParseQuery(parser,
-                             pos,
-                             pos + statement.size(),
-                             error_msg,
-                             /*hilite=*/false,
-                             String("in ") + __PRETTY_FUNCTION__,
-                             /*allow_multi_statements=*/false,
-                             0);
+    auto ast = tryParseQuery(
+        parser,
+        pos,
+        pos + statement.size(),
+        error_msg,
+        /*hilite=*/false,
+        String("in ") + __PRETTY_FUNCTION__,
+        /*allow_multi_statements=*/false,
+        0);
     if (!ast)
         throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
     return ast;
@@ -276,7 +271,12 @@ try
     const String to_tbl_name = "t_112";
     {
         // Rename table
+<<<<<<< HEAD
         typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, to_tbl_name, db_name, to_tbl_name);
+=======
+        typeid_cast<DatabaseTiFlash *>(db.get())
+            ->renameTable(*ctx, tbl_name, *db, tbl_name, db_name, to_tbl_display_name);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         auto old_storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(old_storage, nullptr);
@@ -394,7 +394,12 @@ try
     const String to_tbl_name = "t_112";
     {
         // Rename table
+<<<<<<< HEAD
         typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name);
+=======
+        typeid_cast<DatabaseTiFlash *>(db.get())
+            ->renameTable(*ctx, tbl_name, *db2, tbl_name, db2_name, to_tbl_display_name);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         auto old_storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(old_storage, nullptr);
@@ -603,7 +608,12 @@ try
     const String new_display_tbl_name = "accounts";
     {
         // Rename table with only display table name updated.
+<<<<<<< HEAD
         typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, tbl_name, db_name, new_display_tbl_name);
+=======
+        typeid_cast<DatabaseTiFlash *>(db.get())
+            ->renameTable(*ctx, tbl_name, *db, tbl_name, db_name, new_display_tbl_name);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         auto storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_NE(storage, nullptr);

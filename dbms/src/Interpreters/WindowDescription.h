@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,12 +78,8 @@ struct WindowFrame
     {
         // We don't compare is_default because it's not a real property of the
         // frame, and only influences how we display it.
-        return other.type == type
-            && other.begin_type == begin_type
-            && other.begin_offset == begin_offset
-            && other.begin_preceding == begin_preceding
-            && other.end_type == end_type
-            && other.end_offset == end_offset
+        return other.type == type && other.begin_type == begin_type && other.begin_offset == begin_offset
+            && other.begin_preceding == begin_preceding && other.end_type == end_type && other.end_offset == end_offset
             && other.end_preceding == end_preceding;
     }
 };

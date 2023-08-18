@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 }
 
 
+<<<<<<< HEAD
 #define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display)                                             \
     do                                                                                                                                            \
     {                                                                                                                                             \
@@ -60,11 +61,35 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         auto result = assertEqual(#expected_value, #actual_value, expected_v, actual_v, expected_v, actual_v, title); \
         if (!result)                                                                                                  \
             return result;                                                                                            \
+=======
+#define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display) \
+    do                                                                                                \
+    {                                                                                                 \
+        if (auto result = assertEqual(                                                                \
+                #expected_value,                                                                      \
+                #actual_value,                                                                        \
+                (expected_value),                                                                     \
+                (actual_value),                                                                       \
+                (expected_display),                                                                   \
+                (actual_display),                                                                     \
+                title);                                                                               \
+            !result)                                                                                  \
+            return result;                                                                            \
     } while (false)
 
-::testing::AssertionResult dataTypeEqual(
-    const DataTypePtr & expected,
-    const DataTypePtr & actual)
+#define ASSERT_EQUAL(expected_value, actual_value, title)                                                     \
+    do                                                                                                        \
+    {                                                                                                         \
+        auto expected_v = (expected_value);                                                                   \
+        auto actual_v = (actual_value);                                                                       \
+        if (auto result                                                                                       \
+            = assertEqual(#expected_value, #actual_value, expected_v, actual_v, expected_v, actual_v, title); \
+            !result)                                                                                          \
+            return result;                                                                                    \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
+    } while (false)
+
+::testing::AssertionResult dataTypeEqual(const DataTypePtr & expected, const DataTypePtr & actual)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "DataType name mismatch");
     return ::testing::AssertionSuccess();
@@ -77,12 +102,66 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
 
+<<<<<<< HEAD
+=======
+    if unlikely (typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
+    {
+        /// ColumnNothing compares size only
+        const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
+        const ColumnNothing * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
+        ASSERT_EQUAL(
+            expected_nothing && actual_nothing,
+            true,
+            "One of columns is ColumnNothing, while the other is not");
+        ASSERT_EQUAL(
+            expected_nothing->size(),
+            actual_nothing->size(),
+            fmt::format(
+                "Column size not match, expected {} actual {}",
+                actual_nothing->size(),
+                expected_nothing->size()));
+        return ::testing::AssertionSuccess();
+    }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     for (size_t i = 0, size = expected->size(); i < size; ++i)
     {
         auto expected_field = (*expected)[i];
         auto actual_field = (*actual)[i];
 
+<<<<<<< HEAD
         ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value {} mismatch", i), expected_field.toString(), actual_field.toString());
+=======
+        if (!is_floating_point)
+        {
+            if (collator != nullptr && !expected_field.isNull() && !actual_field.isNull())
+            {
+                auto e_string = expected_field.get<String>();
+                auto a_string = actual_field.get<String>();
+                if (collator->compare(e_string.data(), e_string.size(), a_string.data(), a_string.size()) == 0)
+                    continue;
+                /// if not equal, fallback to the original compare so we can reuse the code to get error message
+            }
+            ASSERT_EQUAL_WITH_TEXT(
+                expected_field,
+                actual_field,
+                fmt::format("Value at index {} mismatch", i),
+                expected_field.toString(),
+                actual_field.toString());
+        }
+        else
+        {
+            auto expected_field_expr = expected_field.toString();
+            auto actual_field_expr = actual_field.toString();
+            if (auto res = ::testing::internal::CmpHelperFloatingPointEQ(
+                    expected_field_expr.c_str(),
+                    actual_field_expr.c_str(),
+                    expected_field.safeGet<Float64>(),
+                    actual_field.safeGet<Float64>());
+                !res)
+                return ::testing::AssertionFailure() << fmt::format("Value at index {} mismatch, ", i) << res.message();
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     return ::testing::AssertionSuccess();
 }
@@ -98,13 +177,27 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column);
 }
 
+<<<<<<< HEAD
 void blockEqual(
     const Block & expected,
     const Block & actual)
+=======
+::testing::AssertionResult blockEqual(const Block & expected, const Block & actual)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     size_t columns = actual.columns();
 
+<<<<<<< HEAD
     ASSERT_TRUE(expected.columns() == columns);
+=======
+    ASSERT_EQUAL(
+        expected_columns,
+        columns,
+        fmt::format(
+            "Block column size mismatch\nexpected_structure: {}\nstructure: {}",
+            expected.dumpJsonStructure(),
+            actual.dumpJsonStructure()));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -120,8 +213,125 @@ ColumnWithTypeAndName executeFunction(Context & context, const String & func_nam
 {
     auto & factory = FunctionFactory::instance();
 
+<<<<<<< HEAD
     Block block(columns);
     ColumnNumbers cns;
+=======
+    size_t cols_size = cols.size();
+    std::vector<Row> rows{cols[0].column->size()};
+
+    for (auto & r : rows)
+    {
+        r.resize(cols_size, true);
+    }
+
+    for (auto && [col_id, col] : ext::enumerate(cols))
+    {
+        for (size_t i = 0, size = col.column->size(); i < size; ++i)
+        {
+            new (rows[i].place(col_id)) Field((*col.column)[i]);
+        }
+    }
+    return {std::make_move_iterator(rows.begin()), std::make_move_iterator(rows.end())};
+}
+
+::testing::AssertionResult columnsEqual(
+    const ColumnsWithTypeAndName & expected,
+    const ColumnsWithTypeAndName & actual,
+    bool _restrict)
+{
+    if (_restrict)
+        return blockEqual(Block(expected), Block(actual));
+
+    auto expect_cols_size = expected.size();
+    auto actual_cols_size = actual.size();
+
+    ASSERT_EQUAL(expect_cols_size, actual_cols_size, "Columns size mismatch");
+
+    for (size_t i = 0; i < expect_cols_size; ++i)
+    {
+        auto const & expect_col = expected[i];
+        auto const & actual_col = actual[i];
+        ASSERT_EQUAL(
+            expect_col.column->getName(),
+            actual_col.column->getName(),
+            fmt::format("Column {} name mismatch", i));
+        ASSERT_EQUAL(expect_col.column->size(), actual_col.column->size(), fmt::format("Column {} size mismatch", i));
+        auto type_eq = dataTypeEqual(expected[i].type, actual[i].type);
+        if (!type_eq)
+            return type_eq;
+    }
+
+    auto const expected_row_set = columnsToRowSet(expected);
+    auto const actual_row_set = columnsToRowSet(actual);
+
+    if (expected_row_set != actual_row_set)
+    {
+        FmtBuffer buf;
+
+        auto expect_it = expected_row_set.begin();
+        auto actual_it = actual_row_set.begin();
+
+        buf.append("Columns row set mismatch\n").append("expected_row_set:\n");
+        for (; expect_it != expected_row_set.end(); ++expect_it, ++actual_it)
+        {
+            buf.joinStr(
+                   expect_it->begin(),
+                   expect_it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
+            if (*expect_it != *actual_it)
+                break;
+        }
+
+        ++actual_it;
+
+        buf.append("...\nactual_row_set:\n");
+        for (auto it = actual_row_set.begin(); it != actual_it; ++it)
+        {
+            buf.joinStr(
+                   it->begin(),
+                   it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
+        }
+        buf.append("...\n");
+
+        return testing::AssertionFailure() << buf.toString();
+    }
+
+    return testing::AssertionSuccess();
+}
+
+std::pair<ExpressionActionsPtr, String> buildFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val)
+{
+    tipb::Expr tipb_expr = columnsToTiPBExpr(func_name, argument_column_numbers, columns, collator, val);
+
+    NamesAndTypes source_columns;
+    for (size_t index : argument_column_numbers)
+        source_columns.emplace_back(columns[index].name, columns[index].type);
+    DAGExpressionAnalyzer analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+    auto & last_step = analyzer.initAndGetLastStep(chain);
+    auto result_name = DB::DAGExpressionAnalyzerHelper::buildFunction(&analyzer, tipb_expr, last_step.actions);
+    last_step.required_output.push_back(result_name);
+    chain.finalize();
+    return std::make_pair(last_step.actions, result_name);
+}
+
+ColumnsWithTypeAndName toColumnsWithUniqueName(const ColumnsWithTypeAndName & columns)
+{
+    ColumnsWithTypeAndName columns_with_distinct_name = columns;
+    std::string base_name = "col";
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     for (size_t i = 0; i < columns.size(); ++i)
         cns.push_back(i);
 
@@ -136,6 +346,7 @@ ColumnWithTypeAndName executeFunction(Context & context, const String & func_nam
 
 ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
 {
+<<<<<<< HEAD
     auto & factory = FunctionFactory::instance();
     Block block(columns);
     ColumnsWithTypeAndName arguments;
@@ -148,6 +359,83 @@ ColumnWithTypeAndName executeFunction(Context & context, const String & func_nam
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, argument_column_numbers, columns.size());
     return block.getByPosition(columns.size());
+=======
+    ColumnsWithTypeAndName columns_reordered(columns.size());
+    for (auto && [i, offset] : ext::enumerate(new_offsets))
+    {
+        columns_reordered[offset] = columns[i];
+    }
+    return columns_reordered;
+}
+
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val,
+    bool raw_function_test)
+{
+    ColumnNumbers argument_column_numbers;
+    for (size_t i = 0; i < columns.size(); ++i)
+        argument_column_numbers.push_back(i);
+
+    /// shuffle input columns to assure function correctly use physical offsets instead of logical offsets
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
+    const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
+
+    return executeFunction(
+        context,
+        func_name,
+        argument_column_numbers,
+        columns_reordered,
+        collator,
+        val,
+        raw_function_test);
+}
+
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val,
+    bool raw_function_test)
+{
+    if (raw_function_test)
+    {
+        auto & factory = FunctionFactory::instance();
+
+        ColumnsWithTypeAndName arguments;
+        for (const auto argument_column_number : argument_column_numbers)
+            arguments.push_back(columns.at(argument_column_number));
+
+        auto builder = factory.tryGet(func_name, context);
+        if (!builder)
+            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+
+        Block block(columns);
+        auto func = builder->build(arguments, collator);
+
+        block.insert({nullptr, func->getReturnType(), "res"});
+        func->execute(block, argument_column_numbers, columns.size());
+
+        return block.getByPosition(columns.size());
+    }
+
+    auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+    auto [actions, result_name]
+        = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator, val);
+
+    Block block(columns_with_unique_name);
+    actions->execute(block);
+
+    return block.getByName(result_name);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 DataTypePtr getReturnTypeForFunction(
@@ -163,11 +451,30 @@ DataTypePtr getReturnTypeForFunction(
     for (size_t i = 0; i < columns.size(); ++i)
         cns.push_back(i);
 
+<<<<<<< HEAD
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
     auto func = bp->build(columns, collator);
     return func->getReturnType();
+=======
+        auto bp = factory.tryGet(func_name, context);
+        if (!bp)
+            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+        auto func = bp->build(columns, collator);
+        return func->getReturnType();
+    }
+    else
+    {
+        ColumnNumbers argument_column_numbers;
+        for (size_t i = 0; i < columns.size(); ++i)
+            argument_column_numbers.push_back(i);
+        auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+        auto [actions, result_name]
+            = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator, "");
+        return actions->getSampleBlock().getByName(result_name).type;
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name)
 {
@@ -237,5 +544,68 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     return fmt_buf.toString();
 }
 
+<<<<<<< HEAD
+=======
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols)
+{
+    return cols;
+}
+
+FunctionTest::FunctionTest()
+    : context(TiFlashTestEnv::getContext())
+{}
+
+void FunctionTest::initializeDAGContext()
+{
+    dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context->setDAGContext(dag_context_ptr.get());
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunction(
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    TiDB::TiDBCollatorPtr const & collator,
+    bool raw_function_test)
+{
+    return DB::tests::executeFunction(*context, func_name, columns, collator, "", raw_function_test);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunction(
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    TiDB::TiDBCollatorPtr const & collator,
+    bool raw_function_test)
+{
+    return DB::tests::executeFunction(
+        *context,
+        func_name,
+        argument_column_numbers,
+        columns,
+        collator,
+        "",
+        raw_function_test);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const FuncMetaData & meta,
+    const TiDB::TiDBCollatorPtr & collator)
+{
+    return DB::tests::executeFunction(*context, func_name, columns, collator, meta.val, false);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    const FuncMetaData & meta,
+    const TiDB::TiDBCollatorPtr & collator)
+{
+    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, meta.val, false);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace tests
 } // namespace DB

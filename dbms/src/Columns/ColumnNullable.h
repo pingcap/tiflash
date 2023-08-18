@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,12 @@ public:
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
+    StringRef serializeValueIntoArena(
+        size_t n,
+        Arena & arena,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr &,
+        String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
@@ -82,19 +87,40 @@ public:
     void popBack(size_t n) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
-    std::tuple<bool, int> compareAtCheckNull(size_t n, size_t m, const ColumnNullable & rhs, int null_direction_hint) const;
+    std::tuple<bool, int> compareAtCheckNull(size_t n, size_t m, const ColumnNullable & rhs, int null_direction_hint)
+        const;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
+<<<<<<< HEAD
     int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator) const override;
     void getPermutation(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const;
+=======
+    int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator)
+        const override;
+    void getPermutation(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
+    void getPermutation(
+        const ICollator & collator,
+        bool reverse,
+        size_t limit,
+        int null_direction_hint,
+        Permutation & res) const override;
+    void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res)
+        const;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void reserve(size_t n) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
+<<<<<<< HEAD
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
+=======
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets)
+        const override;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+        const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void getExtremes(Field & min, Field & max) const override;
 
@@ -114,7 +140,10 @@ public:
     bool isColumnNullable() const override { return true; }
     bool isFixedAndContiguous() const override { return false; }
     bool valuesHaveFixedSize() const override { return nested_column->valuesHaveFixedSize(); }
-    size_t sizeOfValueIfFixed() const override { return null_map->sizeOfValueIfFixed() + nested_column->sizeOfValueIfFixed(); }
+    size_t sizeOfValueIfFixed() const override
+    {
+        return null_map->sizeOfValueIfFixed() + nested_column->sizeOfValueIfFixed();
+    }
     bool onlyNull() const override { return nested_column->isDummy(); }
 
 

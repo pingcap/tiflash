@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,13 +64,25 @@ void Connection::connect()
         if (connected)
             disconnect();
 
+<<<<<<< HEAD
         LOG_FMT_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}. {}, {}", (default_database.empty() ? "(not specified)" : default_database), user, (static_cast<bool>(secure) ? ". Secure" : ""), (static_cast<bool>(compression) ? "" : ". Uncompressed"));
+=======
+        LOG_TRACE(
+            log_wrapper.get(),
+            "Connecting. Database: {}. User: {}. {}, {}",
+            (default_database.empty() ? "(not specified)" : default_database),
+            user,
+            (static_cast<bool>(secure) ? ". Secure" : ""),
+            (static_cast<bool>(compression) ? "" : ". Uncompressed"));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         if (static_cast<bool>(secure))
         {
 #if Poco_NetSSL_FOUND
             socket = std::make_unique<Poco::Net::SecureStreamSocket>();
 #else
-            throw Exception{"tcp_secure protocol is disabled because poco library was built without NetSSL support.", ErrorCodes::SUPPORT_IS_DISABLED};
+            throw Exception{
+                "tcp_secure protocol is disabled because poco library was built without NetSSL support.",
+                ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
         }
         else
@@ -90,7 +102,17 @@ void Connection::connect()
         sendHello();
         receiveHello();
 
+<<<<<<< HEAD
         LOG_FMT_TRACE(log_wrapper.get(), "Connected to {} server version {}.{}.{}.", server_name, server_version_major, server_version_minor, server_revision);
+=======
+        LOG_TRACE(
+            log_wrapper.get(),
+            "Connected to {} server version {}.{}.{}.",
+            server_name,
+            server_version_major,
+            server_version_minor,
+            server_revision);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     catch (Poco::Net::NetException & e)
     {
@@ -388,7 +410,8 @@ void Connection::sendData(const Block & block, const String & name)
         else
             maybe_compressed_out = out;
 
-        block_out = std::make_shared<NativeBlockOutputStream>(*maybe_compressed_out, server_revision, block.cloneEmpty());
+        block_out
+            = std::make_shared<NativeBlockOutputStream>(*maybe_compressed_out, server_revision, block.cloneEmpty());
     }
 
     writeVarUInt(Protocol::Client::Data, *out);
@@ -468,7 +491,11 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
             maybe_compressed_out_bytes / 1048576.0 / elapsed_seconds);
 
         if (compression == Protocol::Compression::Enable)
-            fmt_buf.fmtAppend(", compressed {:.3f} times to {:.3f} MiB ({:.3f} MiB/sec.)", 1.0 * maybe_compressed_out_bytes / out_bytes, out_bytes / 1048576.0, out_bytes / 1048576.0 / elapsed_seconds);
+            fmt_buf.fmtAppend(
+                ", compressed {:.3f} times to {:.3f} MiB ({:.3f} MiB/sec.)",
+                1.0 * maybe_compressed_out_bytes / out_bytes,
+                out_bytes / 1048576.0,
+                out_bytes / 1048576.0 / elapsed_seconds);
         else
             fmt_buf.append(", no compression.");
         return fmt_buf.toString();
@@ -533,10 +560,9 @@ Connection::Packet Connection::receivePacket()
         default:
             /// In unknown state, disconnect - to not leave unsynchronised connection.
             disconnect();
-            throw Exception("Unknown packet "
-                                + toString(res.type)
-                                + " from server " + getDescription(),
-                            ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
+            throw Exception(
+                "Unknown packet " + toString(res.type) + " from server " + getDescription(),
+                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
         }
     }
     catch (Exception & e)
@@ -634,8 +660,8 @@ void Connection::fillBlockExtraInfo(BlockExtraInfo & info) const
 void Connection::throwUnexpectedPacket(UInt64 packet_type, const char * expected) const
 {
     throw NetException(
-        "Unexpected packet from server " + getDescription() + " (expected " + expected
-            + ", got " + String(Protocol::Server::toString(packet_type)) + ")",
+        "Unexpected packet from server " + getDescription() + " (expected " + expected + ", got "
+            + String(Protocol::Server::toString(packet_type)) + ")",
         ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
 }
 

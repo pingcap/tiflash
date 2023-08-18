@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,10 +53,7 @@ public:
         return ColumnWithTypeAndName(std::move(column), data_type, name);
     }
 
-    const std::string & getName() const override
-    {
-        return name;
-    }
+    const std::string & getName() const override { return name; }
 
 private:
     String name;
@@ -83,10 +80,7 @@ public:
         return ColumnWithTypeAndName(std::move(column), data_type, name);
     }
 
-    const std::string & getName() const override
-    {
-        return name;
-    }
+    const std::string & getName() const override { return name; }
 
 private:
     String name;
@@ -116,10 +110,7 @@ public:
         return ColumnWithTypeAndName(std::move(column), data_type, name);
     }
 
-    const std::string & getName() const override
-    {
-        return name;
-    }
+    const std::string & getName() const override { return name; }
 
 private:
     String name;
@@ -163,26 +154,15 @@ public:
         }
     }
 
-    void writeSuffix() override
-    {
-        output->writeSuffix();
-    }
+    void writeSuffix() override { output->writeSuffix(); }
 
-    void writePrefix() override
-    {
-        output->writePrefix();
-    }
+    void writePrefix() override { output->writePrefix(); }
 
-    void flush() override
-    {
-        output->flush();
-    }
+    void flush() override { output->flush(); }
 
-    void setRowsBeforeLimit(size_t rows_before_limit) override
-    {
-        output->setRowsBeforeLimit(rows_before_limit);
-    }
+    void setRowsBeforeLimit(size_t rows_before_limit) override { output->setRowsBeforeLimit(rows_before_limit); }
 
+<<<<<<< HEAD
     void setTotals(const Block & totals) override
     {
         output->setTotals(totals);
@@ -192,16 +172,13 @@ public:
     {
         output->setExtremes(extremes);
     }
+=======
+    void setExtremes(const Block & extremes) override { output->setExtremes(extremes); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
-    void onProgress(const Progress & progress) override
-    {
-        output->onProgress(progress);
-    }
+    void onProgress(const Progress & progress) override { output->onProgress(progress); }
 
-    std::string getContentType() const override
-    {
-        return output->getContentType();
-    }
+    std::string getContentType() const override { return output->getContentType(); }
 
 private:
     BlockOutputStreamPtr output;

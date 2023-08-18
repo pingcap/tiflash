@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,9 @@ void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_)
     CPUCores::number_of_logical_cpu_cores = number_of_logical_cpu_cores_;
 }
 
-void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores_, UInt16 number_of_hardware_physical_cores)
+void computeAndSetNumberOfPhysicalCPUCores(
+    UInt16 number_of_logical_cpu_cores_,
+    UInt16 number_of_hardware_physical_cores)
 {
     // First of all, we need to take consideration of two situation:
     //   1. tiflash on physical machine.
@@ -60,12 +62,20 @@ void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores_, 
     // - `(hardware_logical_cpu_cores / number_of_hardware_physical_cores)` means how many logical cpu core a physical cpu core has.
     // - `number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores)` means how many physical cpu cores the tiflash process could use. (Actually, it's needless to get physical cpu cores in virtual environment, but we must ensure the behavior `1` is not broken)
     auto hardware_logical_cpu_cores = std::thread::hardware_concurrency();
-    UInt16 physical_cpu_cores = number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores);
+    UInt16 physical_cpu_cores
+        = number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores);
     CPUCores::number_of_physical_cpu_cores = physical_cpu_cores > 0 ? physical_cpu_cores : 1;
+<<<<<<< HEAD:dbms/src/Common/getNumberOfLogicalCPUCores.cpp
     auto log = DB::Logger::get("CPUCores");
     LOG_FMT_INFO(
         log,
         "logical cpu cores: {}, hardware logical cpu cores: {}, hardware physical cpu cores: {}, physical cpu cores: {}, number_of_physical_cpu_cores: {}",
+=======
+    LOG_INFO(
+        DB::Logger::get(),
+        "logical cpu cores: {}, hardware logical cpu cores: {}, hardware physical cpu cores: {}, physical cpu cores: "
+        "{}, number_of_physical_cpu_cores: {}",
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Common/getNumberOfCPUCores.cpp
         number_of_logical_cpu_cores_,
         hardware_logical_cpu_cores,
         number_of_hardware_physical_cores,

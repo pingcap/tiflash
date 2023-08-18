@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,9 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 2 || args.size() > 3)
-        throw Exception("Args not matched, should be: database-name, table-name[, qualify = 'true']", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database-name, table-name[, qualify = 'true']",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -128,4 +130,75 @@ BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
     return executeQuery(query, context, true).in;
 }
 
+<<<<<<< HEAD
+=======
+
+void dbgFuncGetTiflashReplicaCount(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.empty() || args.size() != 2)
+        throw Exception("Args not matched, should be: database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    FmtBuffer fmt_buf;
+
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    auto mapped = mappedTableWithOptional(context, database_name, table_name);
+    if (!mapped.has_value())
+    {
+        output("0");
+        return;
+    }
+    auto storage = context.getTable(mapped->first, mapped->second);
+    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (!managed_storage)
+        throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
+
+    fmt_buf.append((std::to_string(managed_storage->getTableInfo().replica_info.count)));
+
+    output(fmt_buf.toString());
+}
+
+void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.empty() || args.size() != 2)
+        throw Exception("Args not matched, should be: database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    FmtBuffer fmt_buf;
+
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    auto mapped = mappedTableWithOptional(context, database_name, table_name);
+
+    if (!mapped.has_value())
+    {
+        output("not find the table");
+        return;
+    }
+    auto storage = context.getTable(mapped->first, mapped->second);
+    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (!managed_storage)
+        throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
+
+    auto table_info = managed_storage->getTableInfo();
+
+    if (!table_info.isLogicalPartitionTable())
+        throw Exception(
+            database_name + "." + table_name + " is not logical partition table",
+            ErrorCodes::BAD_ARGUMENTS);
+
+    SchemaNameMapper name_mapper;
+    for (const auto & part_def : table_info.partition.definitions)
+    {
+        auto paritition_table_info = table_info.producePartitionTableInfo(part_def.id, name_mapper);
+        auto partition_storage = context.getTMTContext().getStorages().get(NullspaceID, paritition_table_info->id);
+        if (partition_storage && partition_storage->getTombstone() == 0)
+        {
+            fmt_buf.append((std::to_string(partition_storage->getTableInfo().replica_info.count)));
+            fmt_buf.append("/");
+        }
+    }
+
+    output(fmt_buf.toString());
+}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

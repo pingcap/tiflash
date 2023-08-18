@@ -1,0 +1,94 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+## test correctness in simple case
+mysql> drop table if exists test.t
+mysql> create table test.t (a int, b int)
+mysql> alter table test.t set tiflash replica 1
+
+func> wait_table test t
+
+mysql> insert into test.t values(1,2);
+mysql> insert into test.t values(2,4);
+mysql> insert into test.t values(5,7);
+
+mysql> set session tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> delete from test.t where a = 1;
+
+mysql> set session tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+## verify session variable tiflash_fastscan will not effect global variable
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> set session tiflash_fastscan=OFF; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+## verfiy set global session tiflash_fastscan will not make other current session take effect.
+mysql> set global tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+## verfiy set global session tiflash_fastscan will make other new session take effect.
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> set global tiflash_fastscan=OFF;
+mysql> drop table if exists test.t

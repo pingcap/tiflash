@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,13 +39,15 @@ void ASTQueryWithOutput::formatImpl(const FormatSettings & s, FormatState & stat
 
     if (out_file)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "INTO OUTFILE " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "INTO OUTFILE "
+               << (s.hilite ? hilite_none : "");
         out_file->formatImpl(s, state, frame);
     }
 
     if (format)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FORMAT " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FORMAT "
+               << (s.hilite ? hilite_none : "");
         format->formatImpl(s, state, frame);
     }
 }
@@ -63,4 +65,4 @@ bool ASTQueryWithOutput::resetOutputASTIfExist(IAST & ast)
 }
 
 
-}
+} // namespace DB

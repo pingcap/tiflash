@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,10 +22,17 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 
 VerticalRowOutputStream::VerticalRowOutputStream(
     WriteBuffer & ostr_, const Block & sample_, size_t max_rows_)
     : ostr(ostr_), sample(sample_), max_rows(max_rows_)
+=======
+VerticalRowOutputStream::VerticalRowOutputStream(WriteBuffer & ostr_, const Block & sample_, size_t max_rows_)
+    : ostr(ostr_)
+    , sample(sample_)
+    , max_rows(max_rows_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     size_t columns = sample.columns();
 
@@ -46,7 +53,8 @@ VerticalRowOutputStream::VerticalRowOutputStream(
             writeEscapedString(name, out);
         }
 
-        name_widths[i] = UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(serialized_value.data()), serialized_value.size());
+        name_widths[i]
+            = UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(serialized_value.data()), serialized_value.size());
 
         if (name_widths[i] > max_name_width)
             max_name_width = name_widths[i];

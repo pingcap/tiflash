@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,10 @@ bool run_perf_test(const int type, const size_t run_times)
             alloc.free(p, old_size);
         }
         auto b = std::chrono::high_resolution_clock::now();
-        fmt::print("50mb+50mb+..       ok. cost {}ms for {} times\n", std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(), run_times);
+        fmt::print(
+            "50mb+50mb+..       ok. cost {}ms for {} times\n",
+            std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(),
+            run_times);
     }
 
     if (type == 2)
@@ -66,7 +69,10 @@ bool run_perf_test(const int type, const size_t run_times)
             alloc.free(p, old_size);
         }
         auto b = std::chrono::high_resolution_clock::now();
-        fmt::print("1,2,4,8,..,1G      ok. cost {}ms for {} times\n", std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(), run_times);
+        fmt::print(
+            "1,2,4,8,..,1G      ok. cost {}ms for {} times\n",
+            std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(),
+            run_times);
     }
 
     if (type == 3)
@@ -85,7 +91,10 @@ bool run_perf_test(const int type, const size_t run_times)
             alloc.free(p, old_size);
         }
         auto b = std::chrono::high_resolution_clock::now();
-        fmt::print("1gb,512mb,128mb,.. ok. cost {}ms for {} times\n", std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(), run_times);
+        fmt::print(
+            "1gb,512mb,128mb,.. ok. cost {}ms for {} times\n",
+            std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(),
+            run_times);
     }
     return true;
 }

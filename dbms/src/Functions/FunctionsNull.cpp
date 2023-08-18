@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,13 +65,23 @@ void FunctionIsNull::executeImpl(Block & block, const ColumnNumbers & arguments,
     {
         /// Since all element is null, return a one-constant column representing
         /// a one-filled null map.
+<<<<<<< HEAD
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), UInt64(1));
+=======
+        block.getByPosition(result).column
+            = DataTypeUInt8().createColumnConst(elem.column->size(), static_cast<UInt64>(1));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     else
     {
         /// Since no element is nullable, return a zero-constant column representing
         /// a zero-filled null map.
+<<<<<<< HEAD
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), UInt64(0));
+=======
+        block.getByPosition(result).column
+            = DataTypeUInt8().createColumnConst(elem.column->size(), static_cast<UInt64>(0));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 }
 
@@ -96,12 +106,8 @@ void FunctionIsNotNull::executeImpl(Block & block, const ColumnNumbers & argumen
 {
     Block temp_block{
         block.getByPosition(arguments[0]),
-        {nullptr,
-         std::make_shared<DataTypeUInt8>(),
-         ""},
-        {nullptr,
-         std::make_shared<DataTypeUInt8>(),
-         ""}};
+        {nullptr, std::make_shared<DataTypeUInt8>(), ""},
+        {nullptr, std::make_shared<DataTypeUInt8>(), ""}};
 
     DefaultExecutable(std::make_shared<FunctionIsNull>()).execute(temp_block, {0}, 1);
     DefaultExecutable(std::make_shared<FunctionNot>()).execute(temp_block, {1}, 2);
@@ -218,7 +224,8 @@ void FunctionCoalesce::executeImpl(Block & block, const ColumnNumbers & argument
     /// If all arguments appeared to be NULL.
     if (multi_if_args.empty())
     {
-        block.getByPosition(result).column = block.getByPosition(result).type->createColumnConstWithDefaultValue(block.rows());
+        block.getByPosition(result).column
+            = block.getByPosition(result).type->createColumnConstWithDefaultValue(block.rows());
         return;
     }
 
@@ -309,7 +316,8 @@ std::string FunctionNullIf::getName() const
 
 DataTypePtr FunctionNullIf::getReturnTypeImpl(const DataTypes & arguments) const
 {
-    return FunctionIf{}.getReturnTypeImpl({std::make_shared<DataTypeUInt8>(), makeNullable(arguments[0]), arguments[0]});
+    return FunctionIf{}.getReturnTypeImpl(
+        {std::make_shared<DataTypeUInt8>(), makeNullable(arguments[0]), arguments[0]});
 }
 
 void FunctionNullIf::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const

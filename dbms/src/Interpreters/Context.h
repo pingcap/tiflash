@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -183,12 +183,21 @@ public:
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
 
+<<<<<<< HEAD
     void setPathPool(const Strings & main_data_paths,
                      const Strings & latest_data_paths,
                      const Strings & kvstore_paths,
                      bool enable_raft_compatible_mode,
                      PathCapacityMetricsPtr global_capacity_,
                      FileProviderPtr file_provider);
+=======
+    void setPathPool(
+        const Strings & main_data_paths,
+        const Strings & latest_data_paths,
+        const Strings & kvstore_paths,
+        PathCapacityMetricsPtr global_capacity_,
+        FileProviderPtr file_provider);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -204,14 +213,22 @@ public:
     ConfigurationPtr getUsersConfig();
 
     /// Must be called before getClientInfo.
-    void setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address, const String & quota_key);
+    void setUser(
+        const String & name,
+        const String & password,
+        const Poco::Net::SocketAddress & address,
+        const String & quota_key);
     /// Compute and set actual user settings, client_info.current_user should be set
     void calculateUserSettings();
 
     ClientInfo & getClientInfo() { return client_info; };
     const ClientInfo & getClientInfo() const { return client_info; };
 
-    void setQuota(const String & name, const String & quota_key, const String & user_name, const Poco::Net::IPAddress & address);
+    void setQuota(
+        const String & name,
+        const String & quota_key,
+        const String & user_name,
+        const Poco::Net::IPAddress & address);
     QuotaForIntervals & getQuota();
 
     void addDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where);
@@ -228,7 +245,10 @@ public:
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.
       */
-    void assertTableDoesntExist(const String & database_name, const String & table_name, bool check_database_access_rights = true) const;
+    void assertTableDoesntExist(
+        const String & database_name,
+        const String & table_name,
+        bool check_database_access_rights = true) const;
     void assertDatabaseExists(const String & database_name, bool check_database_access_rights = true) const;
 
     void assertDatabaseDoesntExist(const String & database_name) const;
@@ -250,7 +270,10 @@ public:
     /// If such an object already exists, an exception is thrown.
     std::unique_ptr<DDLGuard> getDDLGuard(const String & database, const String & table, const String & message) const;
     /// If the table already exists, it returns nullptr, otherwise guard is created.
-    std::unique_ptr<DDLGuard> getDDLGuardIfTableDoesntExist(const String & database, const String & table, const String & message) const;
+    std::unique_ptr<DDLGuard> getDDLGuardIfTableDoesntExist(
+        const String & database,
+        const String & table,
+        const String & message) const;
 
     String getCurrentDatabase() const;
     String getCurrentQueryId() const;
@@ -283,7 +306,11 @@ public:
     void tryCreateExternalModels() const;
 
     /// I/O formats.
-    BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, size_t max_block_size) const;
+    BlockInputStreamPtr getInputFormat(
+        const String & name,
+        ReadBuffer & buf,
+        const Block & sample,
+        size_t max_block_size) const;
     BlockOutputStreamPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
 
     /// The port that the server listens for executing SQL queries.
@@ -402,7 +429,10 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const;
+    void initializeRateLimiter(
+        Poco::Util::AbstractConfiguration & config,
+        BackgroundProcessingPool & bg_pool,
+        BackgroundProcessingPool & blockable_bg_pool) const;
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
@@ -492,7 +522,12 @@ public:
     /// NOTE: using std::map here (and not std::unordered_map) to avoid iterator invalidation on insertion.
     using Map = std::map<String, String>;
 
-    DDLGuard(Map & map_, std::mutex & mutex_, std::unique_lock<std::mutex> && lock, const String & elem, const String & message);
+    DDLGuard(
+        Map & map_,
+        std::mutex & mutex_,
+        std::unique_lock<std::mutex> && lock,
+        const String & elem,
+        const String & message);
     ~DDLGuard();
 
 private:

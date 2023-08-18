@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,15 @@ bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int excepti
     if (max_rows && rows > max_rows)
     {
         if (overflow_mode == OverflowMode::THROW)
+<<<<<<< HEAD
             throw Exception("Limit for " + std::string(what) + " exceeded, max rows: " + formatReadableQuantity(max_rows)
                 + ", current rows: " + formatReadableQuantity(rows), exception_code);
+=======
+            throw Exception(
+                "Limit for " + std::string(what) + " exceeded, max rows: " + formatReadableQuantity(max_rows)
+                    + ", current rows: " + formatReadableQuantity(rows),
+                exception_code);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         else
             return false;
     }
@@ -35,8 +42,16 @@ bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int excepti
     if (max_bytes && bytes > max_bytes)
     {
         if (overflow_mode == OverflowMode::THROW)
+<<<<<<< HEAD
             throw Exception("Limit for " + std::string(what) + " exceeded, max bytes: " + formatReadableSizeWithBinarySuffix(max_bytes)
                 + ", current bytes: " + formatReadableSizeWithBinarySuffix(bytes), exception_code);
+=======
+            throw Exception(
+                "Limit for " + std::string(what)
+                    + " exceeded, max bytes: " + formatReadableSizeWithBinarySuffix(max_bytes)
+                    + ", current bytes: " + formatReadableSizeWithBinarySuffix(bytes),
+                exception_code);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         else
             return false;
     }

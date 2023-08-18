@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ namespace DB
 /// Response with "Ok.\n". Used for availability checks.
 class PingRequestHandler : public Poco::Net::HTTPRequestHandler
 {
+<<<<<<< HEAD:dbms/src/Server/PingRequestHandler.h
 private:
     IServer & server;
 
@@ -32,6 +33,14 @@ public:
     explicit PingRequestHandler(IServer & server_) : server(server_)
     {
     }
+=======
+struct DataTypeWithTypeName
+{
+    DataTypeWithTypeName(const DataTypePtr & t, const String & n)
+        : type(t)
+        , name(n)
+    {}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Coprocessor/CodecUtils.h
 
     void handleRequest(
         Poco::Net::HTTPServerRequest & request,

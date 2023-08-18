@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,6 +96,24 @@ public:
         }
     }
 
+<<<<<<< HEAD
+=======
+    template <class T>
+    __attribute__((always_inline)) void writeFixed(const T * __restrict from)
+    {
+        if (likely(working_buffer.end() - pos >= static_cast<ptrdiff_t>(sizeof(T))))
+        {
+            tiflash_compiler_builtin_memcpy(pos, from, sizeof(T));
+            pos += sizeof(T);
+        }
+        else
+        {
+            [&]() __attribute__((noinline)) { write(reinterpret_cast<const char *>(from), sizeof(T)); }
+            ();
+        }
+    }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     inline void write(char x)
     {
@@ -108,7 +126,10 @@ private:
     /** Write the data in the buffer (from the beginning of the buffer to the current position).
       * Throw an exception if something is wrong.
       */
-    virtual void nextImpl() { throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER); };
+    virtual void nextImpl()
+    {
+        throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER);
+    };
 };
 
 

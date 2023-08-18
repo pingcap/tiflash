@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,9 +43,13 @@ WindowFrame::FrameType getFrameTypeFromTipb(const tipb::WindowFrameType & type)
     case tipb::WindowFrameType::Groups:
         return WindowFrame::FrameType::Groups;
     default:
+<<<<<<< HEAD
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Unknowed frame type {}",
                         type);
+=======
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", type);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 }
 
@@ -60,4 +64,52 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
     frame.is_default = false;
 }
+<<<<<<< HEAD
+=======
+
+void WindowDescription::fillArgColumnNumbers()
+{
+    const auto & before_window_header = before_window->getSampleBlock();
+    for (auto & descr : window_functions_descriptions)
+    {
+        if (descr.arguments.empty())
+        {
+            for (const auto & name : descr.argument_names)
+            {
+                descr.arguments.emplace_back(before_window_header.getPositionByName(name));
+            }
+        }
+    }
+}
+
+String frameTypeToString(const WindowFrame::FrameType & type)
+{
+    switch (type)
+    {
+    case WindowFrame::FrameType::Rows:
+        return "Rows";
+    case WindowFrame::FrameType::Groups:
+        return "Groups";
+    case WindowFrame::FrameType::Ranges:
+        return "Ranges";
+    default:
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", static_cast<Int32>(type));
+    }
+}
+
+String boundaryTypeToString(const WindowFrame::BoundaryType & type)
+{
+    switch (type)
+    {
+    case WindowFrame::BoundaryType::Unbounded:
+        return "Unbounded";
+    case WindowFrame::BoundaryType::Current:
+        return "Current";
+    case WindowFrame::BoundaryType::Offset:
+        return "Offset";
+    default:
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown boundary type {}", magic_enum::enum_name(type));
+    }
+}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

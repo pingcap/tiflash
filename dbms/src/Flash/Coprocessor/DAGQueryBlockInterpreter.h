@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +64,7 @@ private:
     void executeImpl(DAGPipeline & pipeline);
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
+<<<<<<< HEAD
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -84,6 +89,25 @@ private:
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
     void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
+=======
+    void handleJoin(
+        const tipb::Join & join,
+        DAGPipeline & pipeline,
+        SubqueryForSet & right_query,
+        size_t fine_grained_shuffle_count);
+    void handleExchangeReceiver(DAGPipeline & pipeline);
+    void handleMockExchangeReceiver(DAGPipeline & pipeline);
+    void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
+    void handleWindow(DAGPipeline & pipeline, const tipb::Window & window, bool enable_fine_grained_shuffle);
+    void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort, bool enable_fine_grained_shuffle);
+    void handleExpand2(DAGPipeline & pipeline, const tipb::Expand2 & expand2);
+    void executeWhere(
+        DAGPipeline & pipeline,
+        const ExpressionActionsPtr & expressionActionsPtr,
+        String & filter_column,
+        const String & extra_info = "");
+    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeWindow(

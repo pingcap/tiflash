@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,7 +72,8 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
                 name),
             ErrorCodes::ILLEGAL_COLUMN);
     }
-    const auto * duration_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
+    const auto * duration_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(
+        block.getByPosition(arguments[0]).column.get());
     if (duration_col != nullptr)
     {
         const auto & vec_duration = duration_col->getData();
@@ -97,40 +98,86 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
             ErrorCodes::ILLEGAL_COLUMN);
 };
 
+<<<<<<< HEAD
+=======
+template <typename Impl>
+DataTypePtr FunctionMyDurationToSec<Impl>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
+{
+    if (!arguments[0].type->isMyTime())
+    {
+        throw Exception(
+            fmt::format(
+                "Illegal type {} of the first argument of function {}",
+                arguments[0].type->getName(),
+                getName()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    return std::make_shared<DataTypeInt64>();
+}
+
+template <typename Impl>
+void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
+{
+    const auto * from_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+    if (from_type == nullptr)
+    {
+        throw Exception(
+            fmt::format(
+                "Illegal column {} of the first argument of function {}",
+                block.getByPosition(arguments[0]).column->getName(),
+                name),
+            ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    using FromFieldType = typename DataTypeMyDuration::FieldType;
+    const auto * col_from
+        = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+    if (col_from != nullptr)
+    {
+        const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+        const size_t size = vec_from.size();
+        auto col_to = ColumnVector<Int64>::create(size);
+        typename ColumnVector<Int64>::Container & vec_to = col_to->getData();
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            MyDuration val(vec_from[i], from_type->getFsp());
+            vec_to[i] = Impl::apply(val);
+        }
+        block.getByPosition(result).column = std::move(col_to);
+    }
+    else
+        throw Exception(
+            fmt::format(
+                "Illegal column {} of the first argument of function {}",
+                block.getByPosition(arguments[0]).column->getName(),
+                name),
+            ErrorCodes::ILLEGAL_COLUMN);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 struct DurationSplitHourImpl
 {
     static constexpr auto name = "hour";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.hours();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.hours(); }
 };
 
 struct DurationSplitMinuteImpl
 {
     static constexpr auto name = "minute";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.minutes();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.minutes(); }
 };
 
 struct DurationSplitSecondImpl
 {
     static constexpr auto name = "second";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.seconds();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.seconds(); }
 };
 
 struct DurationSplitMicroSecondImpl
 {
     static constexpr auto name = "microSecond";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.microSecond();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.microSecond(); }
 };
 
 using FunctionDurationHour = FunctionDurationSplit<DurationSplitHourImpl>;

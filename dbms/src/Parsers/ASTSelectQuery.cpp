@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,57 +81,56 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
     if (with_expression_list)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << "WITH " << (s.hilite ? hilite_none : "");
-        s.one_line
-            ? with_expression_list->formatImpl(s, state, frame)
-            : typeid_cast<const ASTExpressionList &>(*with_expression_list).formatImplMultiline(s, state, frame);
+        s.one_line ? with_expression_list->formatImpl(s, state, frame)
+                   : typeid_cast<const ASTExpressionList &>(*with_expression_list).formatImplMultiline(s, state, frame);
         s.ostr << s.nl_or_ws;
     }
 
-    s.ostr
-        << (s.hilite ? hilite_keyword : "")
-        << indent_str
-        << (raw_for_mutable ? "SELRAW " : "SELECT ")
-        << (no_kvstore ? "NOKVSTORE " : "")
-        << (distinct ? "DISTINCT " : "")
-        << (s.hilite ? hilite_none : "");
+    s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << (raw_for_mutable ? "SELRAW " : "SELECT ")
+           << (no_kvstore ? "NOKVSTORE " : "") << (distinct ? "DISTINCT " : "") << (s.hilite ? hilite_none : "");
 
-    s.one_line
-        ? select_expression_list->formatImpl(s, state, frame)
-        : typeid_cast<const ASTExpressionList &>(*select_expression_list).formatImplMultiline(s, state, frame);
+    s.one_line ? select_expression_list->formatImpl(s, state, frame)
+               : typeid_cast<const ASTExpressionList &>(*select_expression_list).formatImplMultiline(s, state, frame);
 
     if (tables)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FROM " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FROM "
+               << (s.hilite ? hilite_none : "");
         tables->formatImpl(s, state, frame);
     }
 
     if (partition_expression_list)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PARTITION " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PARTITION "
+               << (s.hilite ? hilite_none : "");
         partition_expression_list->formatImpl(s, state, frame);
     }
 
     if (partition_expression_list)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SEGMENT " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SEGMENT "
+               << (s.hilite ? hilite_none : "");
         segment_expression_list->formatImpl(s, state, frame);
     }
 
     if (prewhere_expression)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PREWHERE " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PREWHERE "
+               << (s.hilite ? hilite_none : "");
         prewhere_expression->formatImpl(s, state, frame);
     }
 
     if (where_expression)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "WHERE " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "WHERE "
+               << (s.hilite ? hilite_none : "");
         where_expression->formatImpl(s, state, frame);
     }
 
     if (group_expression_list)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY "
+               << (s.hilite ? hilite_none : "");
         s.one_line
             ? group_expression_list->formatImpl(s, state, frame)
             : typeid_cast<const ASTExpressionList &>(*group_expression_list).formatImplMultiline(s, state, frame);
@@ -142,13 +141,15 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (having_expression)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "HAVING " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "HAVING "
+               << (s.hilite ? hilite_none : "");
         having_expression->formatImpl(s, state, frame);
     }
 
     if (order_expression_list)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ORDER BY " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ORDER BY "
+               << (s.hilite ? hilite_none : "");
         s.one_line
             ? order_expression_list->formatImpl(s, state, frame)
             : typeid_cast<const ASTExpressionList &>(*order_expression_list).formatImplMultiline(s, state, frame);
@@ -156,7 +157,8 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (limit_by_value)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "LIMIT " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "LIMIT "
+               << (s.hilite ? hilite_none : "");
         limit_by_value->formatImpl(s, state, frame);
         s.ostr << (s.hilite ? hilite_keyword : "") << " BY " << (s.hilite ? hilite_none : "");
         s.one_line
@@ -166,7 +168,8 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (limit_length)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "LIMIT " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "LIMIT "
+               << (s.hilite ? hilite_none : "");
         if (limit_offset)
         {
             limit_offset->formatImpl(s, state, frame);
@@ -177,7 +180,8 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (settings)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SETTINGS " << (s.hilite ? hilite_none : "");
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SETTINGS "
+               << (s.hilite ? hilite_none : "");
         settings->formatImpl(s, state, frame);
     }
 }
@@ -195,7 +199,12 @@ static const ASTTableExpression * getFirstTableExpression(const ASTSelectQuery &
     if (tables_in_select_query.children.empty())
         return {};
 
+<<<<<<< HEAD
     const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*tables_in_select_query.children[0]);
+=======
+    const auto & tables_element
+        = static_cast<const ASTTablesInSelectQueryElement &>(*tables_in_select_query.children[0]);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     if (!tables_element.table_expression)
         return {};
 
@@ -261,7 +270,9 @@ static const ASTTablesInSelectQueryElement * getFirstTableJoin(const ASTSelectQu
             if (!joined_table)
                 joined_table = &tables_element;
             else
-                throw Exception("Support for more than one JOIN in query is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(
+                    "Support for more than one JOIN in query is not implemented",
+                    ErrorCodes::NOT_IMPLEMENTED);
         }
     }
 
@@ -272,7 +283,8 @@ static const ASTTablesInSelectQueryElement * getFirstTableJoin(const ASTSelectQu
 ASTPtr ASTSelectQuery::database() const
 {
     const ASTTableExpression * table_expression = getFirstTableExpression(*this);
-    if (!table_expression || !table_expression->database_and_table_name || table_expression->database_and_table_name->children.empty())
+    if (!table_expression || !table_expression->database_and_table_name
+        || table_expression->database_and_table_name->children.empty())
         return {};
 
     if (table_expression->database_and_table_name->children.size() != 2)
@@ -380,7 +392,8 @@ void ASTSelectQuery::setDatabaseIfNeeded(const String & database_name)
         ASTPtr table = table_expression->database_and_table_name;
 
         const String & old_name = static_cast<ASTIdentifier &>(*table_expression->database_and_table_name).name;
-        table_expression->database_and_table_name = std::make_shared<ASTIdentifier>(database_name + "." + old_name, ASTIdentifier::Table);
+        table_expression->database_and_table_name
+            = std::make_shared<ASTIdentifier>(database_name + "." + old_name, ASTIdentifier::Table);
         table_expression->database_and_table_name->children = {database, table};
     }
     else if (table_expression->database_and_table_name->children.size() != 2)
@@ -413,7 +426,8 @@ void ASTSelectQuery::replaceDatabaseAndTable(const String & database_name, const
     {
         ASTPtr database = std::make_shared<ASTIdentifier>(database_name, ASTIdentifier::Database);
 
-        table_expression->database_and_table_name = std::make_shared<ASTIdentifier>(database_name + "." + table_name, ASTIdentifier::Table);
+        table_expression->database_and_table_name
+            = std::make_shared<ASTIdentifier>(database_name + "." + table_name, ASTIdentifier::Table);
         table_expression->database_and_table_name->children = {database, table};
     }
     else

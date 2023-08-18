@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,9 @@ Collator::Collator(const std::string & locale_)
         throw DB::Exception("Unsupported collation locale: " + locale, DB::ErrorCodes::UNSUPPORTED_COLLATION_LOCALE);
     }
 #else
-    throw DB::Exception("Collations support is disabled, because ClickHouse was built without ICU library", DB::ErrorCodes::SUPPORT_IS_DISABLED);
+    throw DB::Exception(
+        "Collations support is disabled, because ClickHouse was built without ICU library",
+        DB::ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
 }
 
@@ -81,8 +83,9 @@ int Collator::compare(const char * str1, size_t length1, const char * str2, size
     UCollationResult compare_result = ucol_strcollIter(collator, &iter1, &iter2, &status);
 
     if (status != U_ZERO_ERROR)
-        throw DB::Exception("ICU collation comparison failed with error code: " + DB::toString<int>(status),
-                            DB::ErrorCodes::COLLATION_COMPARISON_FAILED);
+        throw DB::Exception(
+            "ICU collation comparison failed with error code: " + DB::toString<int>(status),
+            DB::ErrorCodes::COLLATION_COMPARISON_FAILED);
 
     /** Values of enum UCollationResult are equals to what exactly we need:
      *     UCOL_EQUAL = 0

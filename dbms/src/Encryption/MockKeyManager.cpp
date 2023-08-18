@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,15 +29,23 @@ extern const int LOGICAL_ERROR;
 }
 
 const EncryptionMethod MockKeyManager::default_method = EncryptionMethod::Aes256Ctr;
-const unsigned char MockKeyManager::default_key[]
-    = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
+const unsigned char MockKeyManager::default_key[] = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e"
+                                                    "\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
 const unsigned char MockKeyManager::default_iv[] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
 
 MockKeyManager::MockKeyManager(bool encryption_enabled_)
-    : MockKeyManager(default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16), encryption_enabled_)
+    : MockKeyManager(
+        default_method,
+        String(reinterpret_cast<const char *>(default_key), 32),
+        String(reinterpret_cast<const char *>(default_iv), 16),
+        encryption_enabled_)
 {}
 
-MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_)
+MockKeyManager::MockKeyManager(
+    EncryptionMethod method_,
+    const String & key_,
+    const String & iv,
+    bool encryption_enabled_)
     : method{method_}
     , key{key_}
     , iv{iv}
@@ -83,7 +91,9 @@ void MockKeyManager::linkFile(const String & src_fname, const String & dst_fname
     {
         if (!fileExist(src_fname))
         {
-            throw DB::Exception(fmt::format("Can't find file which name is {}", src_fname), DB::ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception(
+                fmt::format("Can't find file which name is {}", src_fname),
+                DB::ErrorCodes::LOGICAL_ERROR);
         }
         LOG_FMT_TRACE(logger, "Link mock encryption file [src_file={}] [dst_file={}]", src_fname, dst_fname);
         files.emplace_back(dst_fname);

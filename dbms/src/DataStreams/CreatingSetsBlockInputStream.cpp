@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,10 +131,26 @@ void CreatingSetsBlockInputStream::createAll()
             {
                 if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
                 {
+<<<<<<< HEAD
                     if (isCancelledOrThrowIfKilled())
                         return;
                     thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
+=======
+                    if (elem.second
+                            .source) /// There could be prepared in advance Set/Join - no source is specified for them.
+                    {
+                        if (isCancelledOrThrowIfKilled())
+                        {
+                            thread_manager->wait();
+                            return;
+                        }
+                        thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] {
+                            createOne(item);
+                        });
+                        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
+                    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
                 }
             }
         }
@@ -150,10 +166,14 @@ void CreatingSetsBlockInputStream::createAll()
                 exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
         }
+<<<<<<< HEAD
         LOG_FMT_DEBUG(
             log,
             "Creating all tasks takes {} sec. ",
             watch.elapsedSeconds());
+=======
+        LOG_INFO(log, "Creating all tasks takes {} sec. ", watch.elapsedSeconds());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         created = true;
     }
@@ -254,9 +274,29 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
             head_rows = profile_info.rows;
 
+<<<<<<< HEAD
             if (subquery.join)
                 subquery.join->setTotals(profiling_in->getTotals());
         }
+=======
+        // avoid generate log message when log level > INFO.
+        auto gen_finish_log_msg = [&] {
+            FmtBuffer msg;
+            msg.append("Created. ");
+
+            if (subquery.set)
+                msg.fmtAppend(
+                    "Set with {} entries from {} rows. ",
+                    head_rows > 0 ? subquery.set->getTotalRowCount() : 0,
+                    head_rows);
+            if (subquery.join)
+                msg.fmtAppend(
+                    "Join with {} entries from {} rows. ",
+                    head_rows > 0 ? subquery.join->getTotalRowCount() : 0,
+                    head_rows);
+            if (subquery.table)
+                msg.fmtAppend("Table with {} rows. ", head_rows);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         if (head_rows != 0)
         {

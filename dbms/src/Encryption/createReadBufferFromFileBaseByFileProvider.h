@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ namespace DB
   * Otherwise, the read operations are performed asynchronously.
   */
 
-std::unique_ptr<ReadBufferFromFileBase>
-createReadBufferFromFileBaseByFileProvider(
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(
     FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -49,8 +48,7 @@ createReadBufferFromFileBaseByFileProvider(
 
 /// @attention: estimated_size should be at least DBMS_DEFAULT_BUFFER_SIZE if one want to do seeking; however, if one knows that target file
 /// only consists of a single small frame, one can use a smaller estimated_size to reduce memory footprint.
-std::unique_ptr<ReadBufferFromFileBase>
-createReadBufferFromFileBaseByFileProvider(
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -59,4 +57,15 @@ createReadBufferFromFileBaseByFileProvider(
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size,
     int flags_ = -1);
+<<<<<<< HEAD
+=======
+
+
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromData(
+    String && data,
+    const String & file_name,
+    size_t estimated_size,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

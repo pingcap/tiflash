@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,11 @@ public:
         friend class MockTiDB;
 
     public:
-        Table(const String & database_name, DatabaseID database_id, const String & table_name, TiDB::TableInfo && table_info);
+        Table(
+            const String & database_name,
+            DatabaseID database_id,
+            const String & table_name,
+            TiDB::TableInfo && table_info);
 
         TableID id() { return table_info.id; }
         DatabaseID dbID() { return database_id; }
@@ -89,7 +93,17 @@ public:
 
     DatabaseID newDataBase(const String & database_name);
 
+<<<<<<< HEAD
     void newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool);
+=======
+    TableID newPartition(
+        const String & database_name,
+        const String & table_name,
+        TableID partition_id,
+        Timestamp tso,
+        bool);
+    TableID newPartition(TableID belong_logical_table, const String & partition_name, Timestamp tso, bool);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     void dropPartition(const String & database_name, const String & table_name, TableID partition_id);
 
@@ -138,7 +152,21 @@ public:
     TableID newTableID() { return table_id_allocator++; }
 
 private:
+<<<<<<< HEAD
     TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
+=======
+    TableID newPartitionImpl(
+        const TablePtr & logical_table,
+        TableID partition_id,
+        const String & partition_name,
+        Timestamp tso,
+        bool is_add_part);
+    TablePtr dropTableInternal(
+        Context & context,
+        const String & database_name,
+        const String & table_name,
+        bool drop_regions);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
 
 private:

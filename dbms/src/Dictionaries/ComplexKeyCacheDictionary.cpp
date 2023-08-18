@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ inline UInt64 ComplexKeyCacheDictionary::getCellIdx(const StringRef key) const
 }
 
 
+<<<<<<< HEAD
 ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const std::string & name, const DictionaryStructure & dict_struct,
     DictionarySourcePtr source_ptr, const DictionaryLifetime dict_lifetime,
     const size_t size)
@@ -71,6 +72,21 @@ ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const std::string & name, c
     size{roundUpToPowerOfTwoOrZero(std::max(size, size_t(max_collision_length)))},
     size_overlap_mask{this->size - 1},
     rnd_engine(randomSeed())
+=======
+ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(
+    const std::string & name,
+    const DictionaryStructure & dict_struct,
+    DictionarySourcePtr source_ptr,
+    const DictionaryLifetime dict_lifetime,
+    const size_t size)
+    : name{name}
+    , dict_struct(dict_struct)
+    , source_ptr{std::move(source_ptr)}
+    , dict_lifetime(dict_lifetime)
+    , size{roundUpToPowerOfTwoOrZero(std::max(size, size_t(max_collision_length)))}
+    , size_overlap_mask{this->size - 1}
+    , rnd_engine(randomSeed())
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     if (!this->source_ptr->supportsSelectiveLoad())
         throw Exception{
@@ -81,7 +97,12 @@ ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const std::string & name, c
 }
 
 ComplexKeyCacheDictionary::ComplexKeyCacheDictionary(const ComplexKeyCacheDictionary & other)
-    : ComplexKeyCacheDictionary{other.name, other.dict_struct, other.source_ptr->clone(), other.dict_lifetime, other.size}
+    : ComplexKeyCacheDictionary{
+        other.name,
+        other.dict_struct,
+        other.source_ptr->clone(),
+        other.dict_lifetime,
+        other.size}
 {}
 
 void ComplexKeyCacheDictionary::getString(
@@ -138,7 +159,10 @@ void ComplexKeyCacheDictionary::getString(
 /// true  true    impossible
 ///
 /// todo: split this func to two: find_for_get and find_for_set
-ComplexKeyCacheDictionary::FindResult ComplexKeyCacheDictionary::findCellIdx(const StringRef & key, const CellMetadata::time_point_t now, const size_t hash) const
+ComplexKeyCacheDictionary::FindResult ComplexKeyCacheDictionary::findCellIdx(
+    const StringRef & key,
+    const CellMetadata::time_point_t now,
+    const size_t hash) const
 {
     auto pos = hash;
     auto oldest_id = pos;
@@ -174,7 +198,10 @@ ComplexKeyCacheDictionary::FindResult ComplexKeyCacheDictionary::findCellIdx(con
     return {oldest_id, false, false};
 }
 
-void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<UInt8> & out) const
+void ComplexKeyCacheDictionary::has(
+    const Columns & key_columns,
+    const DataTypes & key_types,
+    PaddedPODArray<UInt8> & out) const
 {
     dict_struct.validateKeyTypes(key_types);
 
@@ -231,8 +258,14 @@ void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes
         return;
 
     std::vector<size_t> required_rows(outdated_keys.size());
+<<<<<<< HEAD
     std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows),
         [] (auto & pair) { return pair.getMapped().front(); });
+=======
+    std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) {
+        return pair.getMapped().front();
+    });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     /// request new values
     update(key_columns, keys_array, required_rows,
@@ -272,9 +305,7 @@ ComplexKeyCacheDictionary::Attribute & ComplexKeyCacheDictionary::getAttribute(c
 {
     const auto it = attribute_index_by_name.find(attribute_name);
     if (it == std::end(attribute_index_by_name))
-        throw Exception{
-            name + ": no such attribute '" + attribute_name + "'",
-            ErrorCodes::BAD_ARGUMENTS};
+        throw Exception{name + ": no such attribute '" + attribute_name + "'", ErrorCodes::BAD_ARGUMENTS};
 
     return attributes[it->second];
 }
@@ -351,8 +382,12 @@ template StringRef ComplexKeyCacheDictionary::placeKeysInPool<ArenaWithFreeLists
     const std::vector<DictionaryAttribute> & key_attributes, ArenaWithFreeLists & pool);
 
 
+<<<<<<< HEAD
 StringRef ComplexKeyCacheDictionary::placeKeysInFixedSizePool(
     const size_t row, const Columns & key_columns) const
+=======
+StringRef ComplexKeyCacheDictionary::placeKeysInFixedSizePool(const size_t row, const Columns & key_columns) const
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     const auto res = fixed_size_keys_pool->alloc();
     auto place = res;
@@ -384,19 +419,26 @@ StringRef ComplexKeyCacheDictionary::copyKey(const StringRef key) const
 
 bool ComplexKeyCacheDictionary::isEmptyCell(const UInt64 idx) const
 {
+<<<<<<< HEAD
     return (cells[idx].key == StringRef{} && (idx != zero_cell_idx
         || cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t())));
+=======
+    return (
+        cells[idx].key == StringRef{}
+        && (idx != zero_cell_idx
+            || cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t())));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
-BlockInputStreamPtr ComplexKeyCacheDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
+BlockInputStreamPtr ComplexKeyCacheDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size)
+    const
 {
     std::vector<StringRef> keys;
     {
         const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
 
         for (auto idx : ext::range(0, cells.size()))
-            if (!isEmptyCell(idx)
-                && !cells[idx].isDefault())
+            if (!isEmptyCell(idx) && !cells[idx].isDefault())
                 keys.push_back(cells[idx].key);
     }
 

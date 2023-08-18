@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,6 +87,7 @@ public:
 
     Block getHeader() const override { return in->getHeader(); }
 
+<<<<<<< HEAD
 protected:
     Block readImpl() override
     {
@@ -169,10 +170,32 @@ DAGProperties getDAGProperties(const String & prop_string)
         ret.mpp_timeout = std::stoi(properties[MPP_TIMEOUT]);
 
     return ret;
+=======
+    auto [query_tasks, func_wrap_output_stream] = compileQuery(
+        context,
+        query,
+        [&](const String & database_name, const String & table_name) {
+            auto mapped_database_name = mappedDatabase(context, database_name);
+            auto mapped_table_name = mappedTable(context, database_name, table_name);
+            auto storage = context.getTable(mapped_database_name, mapped_table_name.second);
+            auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+            if (!managed_storage //
+                || !(
+                    managed_storage->engineType() == ::TiDB::StorageEngine::DT
+                    || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+                throw Exception(
+                    database_name + "." + table_name + " is not ManageableStorage",
+                    ErrorCodes::BAD_ARGUMENTS);
+            return managed_storage->getTableInfo();
+        },
+        properties);
+    return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
 {
+<<<<<<< HEAD
     tipb_region_info->set_region_id(region.first);
     auto * meta = tipb_region_info->mutable_region_epoch();
     meta->set_conf_ver(region.second->confVer());
@@ -181,6 +204,36 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     auto handle_range = getHandleRangeByTable(region.second->getRange()->rawKeys(), table_id);
     range->set_start(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
+=======
+    if (args.size() < 2 || args.size() > 4)
+        throw Exception(
+            "Args not matched, should be: query, region-id[, start-ts, dag_prop_string]",
+            ErrorCodes::BAD_ARGUMENTS);
+
+    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
+    if (args.size() >= 3)
+        start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    if (start_ts == 0)
+        start_ts = context.getTMTContext().getPDClient()->getTS();
+
+    String prop_string;
+    if (args.size() == 4)
+        prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    DAGProperties properties = getDAGProperties(prop_string);
+    properties.start_ts = start_ts;
+
+    auto [query_tasks, func_wrap_output_stream] = compileQuery(
+        context,
+        query,
+        [&](const String & database_name, const String & table_name) {
+            return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
+        },
+        properties);
+
+    return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
@@ -382,7 +435,9 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         fmt_buf.joinStr(
             failed_req_msg_vec.begin(),
             failed_req_msg_vec.end(),
-            [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
+            [](const auto & pair, FmtBuffer & fb) {
+                fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second);
+            },
             "\n");
         throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }

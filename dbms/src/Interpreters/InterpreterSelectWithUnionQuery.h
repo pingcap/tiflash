@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,9 +45,7 @@ public:
 
     Block getSampleBlock();
 
-    static Block getSampleBlock(
-        const ASTPtr & query_ptr_,
-        const Context & context_);
+    static Block getSampleBlock(const ASTPtr & query_ptr_, const Context & context_);
 
     void ignoreWithTotals();
 

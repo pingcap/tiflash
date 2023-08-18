@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,23 @@ struct BitShiftRightImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
+<<<<<<< HEAD
         return static_cast<Result>(a) >> static_cast<Result>(b);
+=======
+        // It is an undefined behavior for shift operation in c++ that the right operand is negative or greater than
+        // or equal to the number of digits of the bits in the (promoted) left operand.
+        // See https://en.cppreference.com/w/cpp/language/operator_arithmetic for details.
+        if (static_cast<Result>(b) >= std::numeric_limits<decltype(static_cast<Result>(a))>::digits)
+        {
+            return static_cast<Result>(0);
+        }
+        // Note that we do not consider the case that the right operand is negative,
+        // since other types will all be cast to uint64 before shift operation
+        // according to DAGExpressionAnalyzerHelper::buildBitwiseFunction.
+        // Therefore, we simply suppress clang-tidy checking here.
+        return static_cast<Result>(a)
+            >> static_cast<Result>(b); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)

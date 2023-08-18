@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,32 @@ public:
         : limit(limit_)
     {}
 
+<<<<<<< HEAD
+=======
+    explicit MemoryTracker(Int64 limit_, bool is_global_root)
+        : limit(limit_)
+        , is_global_root(is_global_root)
+    {}
+
+    void reportAmount();
+
+public:
+    /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
+    static MemoryTrackerPtr create(Int64 limit = 0)
+    {
+        if (limit == 0)
+        {
+            return std::shared_ptr<MemoryTracker>(new MemoryTracker);
+        }
+        else
+        {
+            return std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
+        }
+    }
+
+    static MemoryTrackerPtr createGlobalRoot() { return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true)); }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     ~MemoryTracker();
 
     /** Call the following functions before calling of corresponding operations with memory allocators.
@@ -77,6 +103,14 @@ public:
       */
     void setOrRaiseLimit(Int64 value);
 
+<<<<<<< HEAD
+=======
+    void setBytesThatRssLargerThanLimit(Int64 value)
+    {
+        bytes_rss_larger_than_limit.store(value, std::memory_order_relaxed);
+    }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void setFaultProbability(double value) { fault_probability = value; }
 
     /// next should be changed only once: from nullptr to some value.

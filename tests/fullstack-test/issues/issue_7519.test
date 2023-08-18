@@ -1,0 +1,88 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.t
+mysql> create table test.t (x int, a varchar(50), y int, t time) partition by range (x) (partition p0 values less than (5), partition p1 values less than (10));
+
+mysql> insert into test.t values (1, 'a', 1, '700:11:11.1234'), (2, 'b', 2, '711:12:12.1234');
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t values (8, 'c', 8, '500:21:21.1234');
+
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> analyze table test.t;
+
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.t;
++----------+
+| count(*) |
++----------+
+|    16385 |
++----------+
+
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select * from test.t where x >= 5 and x < 10;
++------+------+------+-----------+
+| x    | a    | y    | t         |
++------+------+------+-----------+
+|    8 | c    |    8 | 500:21:21 |
++------+------+------+-----------+
+
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select x, a, y, hour(t) from test.t where x >= 5 and x < 10;
++------+------+------+---------+
+| x    | a    | y    | hour(t) |
++------+------+------+---------+
+|    8 | c    |    8 |     500 |
++------+------+------+---------+
+
+=> DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
+
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.t;
++----------+
+| count(*) |
++----------+
+|    16385 |
++----------+
+
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select * from test.t where x >= 5 and x < 10;
++------+------+------+-----------+
+| x    | a    | y    | t         |
++------+------+------+-----------+
+|    8 | c    |    8 | 500:21:21 |
++------+------+------+-----------+
+
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select x, a, y, hour(t) from test.t where x >= 5 and x < 10;
++------+------+------+---------+
+| x    | a    | y    | hour(t) |
++------+------+------+---------+
+|    8 | c    |    8 |     500 |
++------+------+------+---------+
+
+=> DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
+
+# Clean up.
+mysql> drop table if exists test.t;

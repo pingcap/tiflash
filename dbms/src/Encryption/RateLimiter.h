@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -290,7 +290,8 @@ public:
     String toString() const
     {
         return fmt::format(
-            "alloc_bytes {} elapsed_ms {} refill_period_ms {} refill_bytes_per_period {} avg_bytes_per_sec {} max_bytes_per_sec {} pct {}",
+            "alloc_bytes {} elapsed_ms {} refill_period_ms {} refill_bytes_per_period {} avg_bytes_per_sec {} "
+            "max_bytes_per_sec {} pct {}",
             alloc_bytes,
             elapsed_ms,
             refill_period_ms,
@@ -329,12 +330,13 @@ public:
 
     String toString() const
     {
-        return fmt::format("bg_write {} fg_write {} bg_read {} fg_read {} io_config {}",
-                           bg_write_stat ? bg_write_stat->toString() : "null",
-                           fg_write_stat ? fg_write_stat->toString() : "null",
-                           bg_read_stat ? bg_read_stat->toString() : "null",
-                           fg_read_stat ? fg_read_stat->toString() : "null",
-                           io_config.toString());
+        return fmt::format(
+            "bg_write {} fg_write {} bg_read {} fg_read {} io_config {}",
+            bg_write_stat ? bg_write_stat->toString() : "null",
+            fg_write_stat ? fg_write_stat->toString() : "null",
+            bg_read_stat ? bg_read_stat->toString() : "null",
+            fg_read_stat ? fg_read_stat->toString() : "null",
+            io_config.toString());
     }
 
     struct TuneResult
@@ -349,20 +351,22 @@ public:
 
         String toString() const
         {
-            return fmt::format("max_bg_read_bytes_per_sec {} max_fg_read_bytes_per_sec {} read_tuned {} max_bg_write_bytes_per_sec {} "
-                               "max_fg_write_bytes_per_sec {} write_tuned {}",
-                               max_bg_read_bytes_per_sec,
-                               max_fg_read_bytes_per_sec,
-                               read_tuned,
-                               max_bg_write_bytes_per_sec,
-                               max_fg_write_bytes_per_sec,
-                               write_tuned);
+            return fmt::format(
+                "max_bg_read_bytes_per_sec {} max_fg_read_bytes_per_sec {} read_tuned {} max_bg_write_bytes_per_sec {} "
+                "max_fg_write_bytes_per_sec {} write_tuned {}",
+                max_bg_read_bytes_per_sec,
+                max_fg_read_bytes_per_sec,
+                read_tuned,
+                max_bg_write_bytes_per_sec,
+                max_fg_write_bytes_per_sec,
+                write_tuned);
         };
 
         bool operator==(const TuneResult & a) const
         {
-            return max_bg_read_bytes_per_sec == a.max_bg_read_bytes_per_sec && max_fg_read_bytes_per_sec == a.max_fg_read_bytes_per_sec
-                && read_tuned == a.read_tuned && max_bg_write_bytes_per_sec == a.max_bg_write_bytes_per_sec
+            return max_bg_read_bytes_per_sec == a.max_bg_read_bytes_per_sec
+                && max_fg_read_bytes_per_sec == a.max_fg_read_bytes_per_sec && read_tuned == a.read_tuned
+                && max_bg_write_bytes_per_sec == a.max_bg_write_bytes_per_sec
                 && max_fg_write_bytes_per_sec == a.max_fg_write_bytes_per_sec && write_tuned == a.write_tuned;
         }
     };
@@ -372,27 +376,20 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    int limiterCount() const
-    {
-        return writeLimiterCount() + readLimiterCount();
-    }
-    int writeLimiterCount() const
-    {
-        return (bg_write_stat != nullptr) + (fg_write_stat != nullptr);
-    }
-    int readLimiterCount() const
-    {
-        return (bg_read_stat != nullptr) + (fg_read_stat != nullptr);
-    }
+    int limiterCount() const { return writeLimiterCount() + readLimiterCount(); }
+    int writeLimiterCount() const { return (bg_write_stat != nullptr) + (fg_write_stat != nullptr); }
+    int readLimiterCount() const { return (bg_read_stat != nullptr) + (fg_read_stat != nullptr); }
 
     // Background write and foreground write
     Int64 avgWriteBytesPerSec() const
     {
-        return (bg_write_stat ? bg_write_stat->avgBytesPerSec() : 0) + (fg_write_stat ? fg_write_stat->avgBytesPerSec() : 0);
+        return (bg_write_stat ? bg_write_stat->avgBytesPerSec() : 0)
+            + (fg_write_stat ? fg_write_stat->avgBytesPerSec() : 0);
     }
     Int64 maxWriteBytesPerSec() const
     {
-        return (bg_write_stat ? bg_write_stat->maxBytesPerSec() : 0) + (fg_write_stat ? fg_write_stat->maxBytesPerSec() : 0);
+        return (bg_write_stat ? bg_write_stat->maxBytesPerSec() : 0)
+            + (fg_write_stat ? fg_write_stat->maxBytesPerSec() : 0);
     }
     int writePct() const
     {
@@ -403,11 +400,13 @@ private:
     // Background read and foreground read
     Int64 avgReadBytesPerSec() const
     {
-        return (bg_read_stat ? bg_read_stat->avgBytesPerSec() : 0) + (fg_read_stat ? fg_read_stat->avgBytesPerSec() : 0);
+        return (bg_read_stat ? bg_read_stat->avgBytesPerSec() : 0)
+            + (fg_read_stat ? fg_read_stat->avgBytesPerSec() : 0);
     }
     Int64 maxReadBytesPerSec() const
     {
-        return (bg_read_stat ? bg_read_stat->maxBytesPerSec() : 0) + (fg_read_stat ? fg_read_stat->maxBytesPerSec() : 0);
+        return (bg_read_stat ? bg_read_stat->maxBytesPerSec() : 0)
+            + (fg_read_stat ? fg_read_stat->maxBytesPerSec() : 0);
     }
     int readPct() const
     {
@@ -423,6 +422,7 @@ private:
         High = 3,
         Emergency = 4
     };
+<<<<<<< HEAD
 
     Watermark writeWatermark() const
     {
@@ -433,6 +433,10 @@ private:
         return getWatermark(fg_read_stat, bg_read_stat, readPct());
     }
 
+=======
+    Watermark writeWatermark() const { return getWatermark(fg_write_stat, bg_write_stat, writePct()); }
+    Watermark readWatermark() const { return getWatermark(fg_read_stat, bg_read_stat, readPct()); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     Watermark getWatermark(int pct) const;
     Watermark getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const;
 

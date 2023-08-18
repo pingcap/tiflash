@@ -1,0 +1,728 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# TINYINT
+## clustered_index
+mysql> drop table if exists test.t_TINYINT_CI
+mysql> create table test.t_TINYINT_CI(pk TINYINT NOT NULL, col1 TINYINT, col2 TINYINT NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_TINYINT_CI values(0, NULL, 0);
+mysql> alter table test.t_TINYINT_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_TINYINT_NCI
+mysql> create table test.t_TINYINT_NCI(pk TINYINT NOT NULL, col1 TINYINT, col2 TINYINT NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_TINYINT_NCI values(0, NULL, 0);
+mysql> alter table test.t_TINYINT_NCI set tiflash replica 1
+
+# SMALLINT
+## clustered_index
+mysql> drop table if exists test.t_SMALLINT_CI
+mysql> create table test.t_SMALLINT_CI(pk SMALLINT NOT NULL, col1 SMALLINT, col2 SMALLINT NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_SMALLINT_CI values(0, NULL, 0);
+mysql> alter table test.t_SMALLINT_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_SMALLINT_NCI
+mysql> create table test.t_SMALLINT_NCI(pk SMALLINT NOT NULL, col1 SMALLINT, col2 SMALLINT NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_SMALLINT_NCI values(0, NULL, 0);
+mysql> alter table test.t_SMALLINT_NCI set tiflash replica 1
+
+# MEDIUMINT
+## clustered_index
+mysql> drop table if exists test.t_MEDIUMINT_CI
+mysql> create table test.t_MEDIUMINT_CI(pk MEDIUMINT NOT NULL, col1 MEDIUMINT, col2 MEDIUMINT NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_MEDIUMINT_CI values(0, NULL, 0);
+mysql> alter table test.t_MEDIUMINT_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_MEDIUMINT_NCI
+mysql> create table test.t_MEDIUMINT_NCI(pk MEDIUMINT NOT NULL, col1 MEDIUMINT, col2 MEDIUMINT NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_MEDIUMINT_NCI values(0, NULL, 0);
+mysql> alter table test.t_MEDIUMINT_NCI set tiflash replica 1
+
+# INT
+## clustered_index
+mysql> drop table if exists test.t_INT_CI
+mysql> create table test.t_INT_CI(pk INT NOT NULL, col1 INT, col2 INT NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_INT_CI values(0, NULL, 0);
+mysql> alter table test.t_INT_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_INT_NCI
+mysql> create table test.t_INT_NCI(pk INT NOT NULL, col1 INT, col2 INT NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_INT_NCI values(0, NULL, 0);
+mysql> alter table test.t_INT_NCI set tiflash replica 1
+
+# BIGINT
+## clustered_index
+mysql> drop table if exists test.t_BIGINT_CI
+mysql> create table test.t_BIGINT_CI(pk BIGINT NOT NULL, col1 BIGINT, col2 BIGINT NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_BIGINT_CI values(0, NULL, 0);
+mysql> alter table test.t_BIGINT_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_BIGINT_NCI
+mysql> create table test.t_BIGINT_NCI(pk BIGINT NOT NULL, col1 BIGINT, col2 BIGINT NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_BIGINT_NCI values(0, NULL, 0);
+mysql> alter table test.t_BIGINT_NCI set tiflash replica 1
+
+# FLOAT
+## clustered_index
+mysql> drop table if exists test.t_FLOAT_CI
+mysql> create table test.t_FLOAT_CI(pk FLOAT NOT NULL, col1 FLOAT, col2 FLOAT NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_FLOAT_CI values(0.0, NULL, 0.0);
+mysql> alter table test.t_FLOAT_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_FLOAT_NCI
+mysql> create table test.t_FLOAT_NCI(pk FLOAT NOT NULL, col1 FLOAT, col2 FLOAT NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_FLOAT_NCI values(0.0, NULL, 0.0);
+mysql> alter table test.t_FLOAT_NCI set tiflash replica 1
+
+# DOUBLE
+## clustered_index
+mysql> drop table if exists test.t_DOUBLE_CI
+mysql> create table test.t_DOUBLE_CI(pk DOUBLE NOT NULL, col1 DOUBLE, col2 DOUBLE NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DOUBLE_CI values(0.0, NULL, 0.0);
+mysql> alter table test.t_DOUBLE_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DOUBLE_NCI
+mysql> create table test.t_DOUBLE_NCI(pk DOUBLE NOT NULL, col1 DOUBLE, col2 DOUBLE NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DOUBLE_NCI values(0.0, NULL, 0.0);
+mysql> alter table test.t_DOUBLE_NCI set tiflash replica 1
+
+# DECIMAL32
+## clustered_index
+mysql> drop table if exists test.t_DECIMAL32_CI
+mysql> create table test.t_DECIMAL32_CI(pk decimal(9, 1) NOT NULL, col1 decimal(9, 1), col2 decimal(9, 1) NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DECIMAL32_CI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL32_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DECIMAL32_NCI
+mysql> create table test.t_DECIMAL32_NCI(pk decimal(9, 1) NOT NULL, col1 decimal(9, 1), col2 decimal(9, 1) NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DECIMAL32_NCI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL32_NCI set tiflash replica 1
+
+# DECIMAL64
+## clustered_index
+mysql> drop table if exists test.t_DECIMAL64_CI
+mysql> create table test.t_DECIMAL64_CI(pk decimal(18, 1) NOT NULL, col1 decimal(18, 1), col2 decimal(18, 1) NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DECIMAL64_CI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL64_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DECIMAL64_NCI
+mysql> create table test.t_DECIMAL64_NCI(pk decimal(18, 1) NOT NULL, col1 decimal(18, 1), col2 decimal(18, 1) NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DECIMAL64_NCI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL64_NCI set tiflash replica 1
+
+# DECIMAL128
+## clustered_index
+mysql> drop table if exists test.t_DECIMAL128_CI
+mysql> create table test.t_DECIMAL128_CI(pk decimal(38, 1) NOT NULL, col1 decimal(38, 1), col2 decimal(38, 1) NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DECIMAL128_CI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL128_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DECIMAL128_NCI
+mysql> create table test.t_DECIMAL128_NCI(pk decimal(38, 1) NOT NULL, col1 decimal(38, 1), col2 decimal(38, 1) NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DECIMAL128_NCI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL128_NCI set tiflash replica 1
+
+# DECIMAL256
+## clustered_index
+mysql> drop table if exists test.t_DECIMAL256_CI
+mysql> create table test.t_DECIMAL256_CI(pk decimal(65, 1) NOT NULL, col1 decimal(65, 1), col2 decimal(65, 1) NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DECIMAL256_CI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL256_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DECIMAL256_NCI
+mysql> create table test.t_DECIMAL256_NCI(pk decimal(65, 1) NOT NULL, col1 decimal(65, 1), col2 decimal(65, 1) NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DECIMAL256_NCI values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL256_NCI set tiflash replica 1
+
+# CHAR
+## clustered_index
+mysql> drop table if exists test.t_CHAR_CI
+mysql> create table test.t_CHAR_CI(pk CHAR NOT NULL, col1 CHAR, col2 CHAR NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_CHAR_CI values('a', NULL, 'b');
+mysql> alter table test.t_CHAR_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_CHAR_NCI
+mysql> create table test.t_CHAR_NCI(pk CHAR NOT NULL, col1 CHAR, col2 CHAR NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_CHAR_NCI values('a', NULL, 'b');
+mysql> alter table test.t_CHAR_NCI set tiflash replica 1
+
+# VARCHAR
+## clustered_index
+mysql> drop table if exists test.t_VARCHAR_CI
+mysql> create table test.t_VARCHAR_CI(pk VARCHAR(30) NOT NULL, col1 VARCHAR(30), col2 VARCHAR(30) NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_VARCHAR_CI values('a', NULL, 'b');
+mysql> alter table test.t_VARCHAR_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_VARCHAR_NCI
+mysql> create table test.t_VARCHAR_NCI(pk VARCHAR(30) NOT NULL, col1 VARCHAR(30), col2 VARCHAR(30) NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_VARCHAR_NCI values('a', NULL, 'b');
+mysql> alter table test.t_VARCHAR_NCI set tiflash replica 1
+
+# BINARY
+## clustered_index
+mysql> drop table if exists test.t_BINARY_CI
+mysql> create table test.t_BINARY_CI(pk BINARY NOT NULL, col1 BINARY, col2 BINARY NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_BINARY_CI values('1', NULL, '2');
+mysql> alter table test.t_BINARY_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_BINARY_NCI
+mysql> create table test.t_BINARY_NCI(pk BINARY NOT NULL, col1 BINARY, col2 BINARY NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_BINARY_NCI values('1', NULL, '2');
+mysql> alter table test.t_BINARY_NCI set tiflash replica 1
+
+# VARBINARY
+## clustered_index
+mysql> drop table if exists test.t_VARBINARY_CI
+mysql> create table test.t_VARBINARY_CI(pk VARBINARY(30) NOT NULL, col1 VARBINARY(30), col2 VARBINARY(30) NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_VARBINARY_CI values('1234', NULL, '5678');
+mysql> alter table test.t_VARBINARY_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_VARBINARY_NCI
+mysql> create table test.t_VARBINARY_NCI(pk VARBINARY(30) NOT NULL, col1 VARBINARY(30), col2 VARBINARY(30) NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_VARBINARY_NCI values('1234', NULL, '5678');
+mysql> alter table test.t_VARBINARY_NCI set tiflash replica 1
+
+# BLOB
+mysql> drop table if exists test.t_BLOB
+mysql> create table test.t_BLOB(col1 BLOB, col2 BLOB NOT NULL);
+mysql> insert into test.t_BLOB values(NULL, '1234');
+mysql> alter table test.t_BLOB set tiflash replica 1
+
+# TEXT
+mysql> drop table if exists test.t_TEXT
+mysql> create table test.t_TEXT(col1 TEXT, col2 TEXT NOT NULL);
+mysql> insert into test.t_TEXT values(NULL, 'b');
+mysql> alter table test.t_TEXT set tiflash replica 1
+
+# ENUM
+## clustered_index
+mysql> drop table if exists test.t_ENUM_CI
+mysql> create table test.t_ENUM_CI(pk enum('a','b') NOT NULL, col1 enum('a','b'), col2 enum('a','b') NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_ENUM_CI values('a', NULL, 'b');
+mysql> alter table test.t_ENUM_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_ENUM_NCI
+mysql> create table test.t_ENUM_NCI(pk enum('a','b') NOT NULL, col1 enum('a','b'), col2 enum('a','b') NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_ENUM_NCI values('a', NULL, 'b');
+mysql> alter table test.t_ENUM_NCI set tiflash replica 1
+
+# SET
+## clustered_index
+mysql> drop table if exists test.t_SET_CI
+mysql> create table test.t_SET_CI(pk set('a','b') NOT NULL, col1 set('a','b'), col2 set('a','b') NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_SET_CI values('a', NULL, 'b');
+mysql> alter table test.t_SET_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_SET_NCI
+mysql> create table test.t_SET_NCI(pk set('a','b') NOT NULL, col1 set('a','b'), col2 set('a','b') NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_SET_NCI values('a', NULL, 'b');
+mysql> alter table test.t_SET_NCI set tiflash replica 1
+
+# DATE
+## clustered_index
+mysql> drop table if exists test.t_DATE_CI
+mysql> create table test.t_DATE_CI(pk DATE NOT NULL, col1 DATE, col2 DATE NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DATE_CI values('2010-01-01', NULL, '2010-01-02');
+mysql> alter table test.t_DATE_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DATE_NCI
+mysql> create table test.t_DATE_NCI(pk DATE NOT NULL, col1 DATE, col2 DATE NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DATE_NCI values('2010-01-01', NULL, '2010-01-02');
+mysql> alter table test.t_DATE_NCI set tiflash replica 1
+
+# TIME
+## clustered_index
+mysql> drop table if exists test.t_TIME_CI
+mysql> create table test.t_TIME_CI(pk TIME NOT NULL, col1 TIME, col2 TIME NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_TIME_CI values('10:00:00', NULL, '11:00:00');
+mysql> alter table test.t_TIME_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_TIME_NCI
+mysql> create table test.t_TIME_NCI(pk TIME NOT NULL, col1 TIME, col2 TIME NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_TIME_NCI values('10:00:00', NULL, '11:00:00');
+mysql> alter table test.t_TIME_NCI set tiflash replica 1
+
+# DATETIME
+## clustered_index
+mysql> drop table if exists test.t_DATETIME_CI
+mysql> create table test.t_DATETIME_CI(pk DATETIME NOT NULL, col1 DATETIME, col2 DATETIME NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_DATETIME_CI values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
+mysql> alter table test.t_DATETIME_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_DATETIME_NCI
+mysql> create table test.t_DATETIME_NCI(pk DATETIME NOT NULL, col1 DATETIME, col2 DATETIME NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_DATETIME_NCI values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
+mysql> alter table test.t_DATETIME_NCI set tiflash replica 1
+
+# TIMESTAMP
+## clustered_index
+mysql> drop table if exists test.t_TIMESTAMP_CI
+mysql> create table test.t_TIMESTAMP_CI(pk TIMESTAMP NOT NULL, col1 TIMESTAMP, col2 TIMESTAMP NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_TIMESTAMP_CI values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
+mysql> alter table test.t_TIMESTAMP_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_TIMESTAMP_NCI
+mysql> create table test.t_TIMESTAMP_NCI(pk TIMESTAMP NOT NULL, col1 TIMESTAMP, col2 TIMESTAMP NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_TIMESTAMP_NCI values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
+mysql> alter table test.t_TIMESTAMP_NCI set tiflash replica 1
+
+# YEAR
+## clustered_index
+mysql> drop table if exists test.t_YEAR_CI
+mysql> create table test.t_YEAR_CI(pk YEAR NOT NULL, col1 YEAR, col2 YEAR NOT NULL, PRIMARY KEY CLUSTERED (pk));
+mysql> insert into test.t_YEAR_CI values('2021', NULL, '2022');
+mysql> alter table test.t_YEAR_CI set tiflash replica 1
+## nonclustered_index
+mysql> drop table if exists test.t_YEAR_NCI
+mysql> create table test.t_YEAR_NCI(pk YEAR NOT NULL, col1 YEAR, col2 YEAR NOT NULL, PRIMARY KEY NONCLUSTERED (pk));
+mysql> insert into test.t_YEAR_NCI values('2021', NULL, '2022');
+mysql> alter table test.t_YEAR_NCI set tiflash replica 1
+
+# JSON
+mysql> drop table if exists test.t_JSON;
+mysql> create table test.t_JSON(col1 JSON, col2 JSON NOT NULL);
+mysql> insert into test.t_JSON values(NULL, '[1, 2, 3]');
+mysql> alter table test.t_JSON set tiflash replica 1
+
+
+# wait table
+func> wait_table test t_TINYINT_CI
+func> wait_table test t_TINYINT_NCI
+func> wait_table test t_SMALLINT_CI
+func> wait_table test t_SMALLINT_NCI
+func> wait_table test t_MEDIUMINT_CI
+func> wait_table test t_MEDIUMINT_NCI
+func> wait_table test t_INT_CI
+func> wait_table test t_INT_NCI
+func> wait_table test t_BIGINT_CI
+func> wait_table test t_BIGINT_NCI
+func> wait_table test t_FLOAT_CI
+func> wait_table test t_FLOAT_NCI
+func> wait_table test t_DOUBLE_CI
+func> wait_table test t_DOUBLE_NCI
+func> wait_table test t_DECIMAL32_CI
+func> wait_table test t_DECIMAL32_NCI
+func> wait_table test t_DECIMAL64_CI
+func> wait_table test t_DECIMAL64_NCI
+func> wait_table test t_DECIMAL128_CI
+func> wait_table test t_DECIMAL128_NCI
+func> wait_table test t_DECIMAL256_CI
+func> wait_table test t_DECIMAL256_NCI
+func> wait_table test t_CHAR_CI
+func> wait_table test t_CHAR_NCI
+func> wait_table test t_VARCHAR_CI
+func> wait_table test t_VARCHAR_NCI
+func> wait_table test t_BINARY_CI
+func> wait_table test t_BINARY_NCI
+func> wait_table test t_VARBINARY_CI
+func> wait_table test t_VARBINARY_NCI
+func> wait_table test t_BLOB
+func> wait_table test t_TEXT
+func> wait_table test t_ENUM_CI
+func> wait_table test t_ENUM_NCI
+func> wait_table test t_SET_CI
+func> wait_table test t_SET_NCI
+func> wait_table test t_DATE_CI
+func> wait_table test t_DATE_NCI
+func> wait_table test t_TIME_CI
+func> wait_table test t_TIME_NCI
+func> wait_table test t_DATETIME_CI
+func> wait_table test t_DATETIME_NCI
+func> wait_table test t_TIMESTAMP_CI
+func> wait_table test t_TIMESTAMP_NCI
+func> wait_table test t_YEAR_CI
+func> wait_table test t_YEAR_NCI
+func> wait_table test t_JSON
+
+
+# TINYINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TINYINT_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TINYINT_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# SMALLINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_SMALLINT_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_SMALLINT_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# MEDIUMINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_MEDIUMINT_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_MEDIUMINT_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# INT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_INT_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_INT_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# BIGINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BIGINT_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BIGINT_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# FLOAT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_FLOAT_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_FLOAT_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# DOUBLE
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DOUBLE_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DOUBLE_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+# DECIMAL32
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL32_CI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL32_NCI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+
+# DECIMAL64
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL64_CI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL64_NCI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+
+# DECIMAL128
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL128_CI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL128_NCI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+
+# DECIMAL256
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL256_CI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL256_NCI;
++-----+------+------+
+| pk  | col1 | col2 |
++-----+------+------+
+| 0.1 | NULL |  0.1 |
++-----+------+------+
+
+# CHAR
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_CHAR_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_CHAR_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+
+# VARCHAR
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_VARCHAR_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_VARCHAR_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+
+# BINARY
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BINARY_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  1 | NULL |    2 |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BINARY_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  1 | NULL |    2 |
++----+------+------+
+
+# VARBINARY
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_VARBINARY_CI;
++------+------+------+
+| pk   | col1 | col2 |
++------+------+------+
+| 1234 | NULL | 5678 |
++------+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_VARBINARY_NCI;
++------+------+------+
+| pk   | col1 | col2 |
++------+------+------+
+| 1234 | NULL | 5678 |
++------+------+------+
+
+# BLOB
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BLOB;
++------+------+
+| col1 | col2 |
++------+------+
+| NULL | 1234 |
++------+------+
+
+# TEXT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TEXT;
++------+------+
+| col1 | col2 |
++------+------+
+| NULL | b    |
++------+------+
+
+# ENUM
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_ENUM_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_ENUM_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+
+# SET
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_SET_CI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_SET_NCI;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+| a  | NULL | b    |
++----+------+------+
+
+# DATE
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DATE_CI;
++------------+------+------------+
+| pk         | col1 | col2       |
++------------+------+------------+
+| 2010-01-01 | NULL | 2010-01-02 |
++------------+------+------------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DATE_NCI;
++------------+------+------------+
+| pk         | col1 | col2       |
++------------+------+------------+
+| 2010-01-01 | NULL | 2010-01-02 |
++------------+------+------------+
+
+# TIME
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TIME_CI;
++----------+------+----------+
+| pk       | col1 | col2     |
++----------+------+----------+
+| 10:00:00 | NULL | 11:00:00 |
++----------+------+----------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TIME_NCI;
++----------+------+----------+
+| pk       | col1 | col2     |
++----------+------+----------+
+| 10:00:00 | NULL | 11:00:00 |
++----------+------+----------+
+
+# DATETIME
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DATETIME_CI;
++---------------------+------+---------------------+
+| pk                  | col1 | col2                |
++---------------------+------+---------------------+
+| 2010-01-01 11:00:00 | NULL | 2011-01-01 12:00:00 |
++---------------------+------+---------------------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DATETIME_NCI;
++---------------------+------+---------------------+
+| pk                  | col1 | col2                |
++---------------------+------+---------------------+
+| 2010-01-01 11:00:00 | NULL | 2011-01-01 12:00:00 |
++---------------------+------+---------------------+
+
+# TIMESTAMP
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TIMESTAMP_CI;
++---------------------+------+---------------------+
+| pk                  | col1 | col2                |
++---------------------+------+---------------------+
+| 2010-01-01 11:00:00 | NULL | 2011-01-01 12:00:00 |
++---------------------+------+---------------------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TIMESTAMP_NCI;
++---------------------+------+---------------------+
+| pk                  | col1 | col2                |
++---------------------+------+---------------------+
+| 2010-01-01 11:00:00 | NULL | 2011-01-01 12:00:00 |
++---------------------+------+---------------------+
+
+# YEAR
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_YEAR_CI;
++------+------+------+
+| pk   | col1 | col2 |
++------+------+------+
+| 2021 | NULL | 2022 |
++------+------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_YEAR_NCI;
++------+------+------+
+| pk   | col1 | col2 |
++------+------+------+
+| 2021 | NULL | 2022 |
++------+------+------+
+
+# JSON
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_JSON;
++------+-----------+
+| col1 | col2      |
++------+-----------+
+| NULL | [1, 2, 3] |
++------+-----------+
+
+
+# drop table
+mysql> drop table if exists test.t_TINYINT_CI
+mysql> drop table if exists test.t_TINYINT_NCI
+mysql> drop table if exists test.t_SMALLINT_CI
+mysql> drop table if exists test.t_SMALLINT_NCI
+mysql> drop table if exists test.t_MEDIUMINT_CI
+mysql> drop table if exists test.t_MEDIUMINT_NCI
+mysql> drop table if exists test.t_INT_CI
+mysql> drop table if exists test.t_INT_NCI
+mysql> drop table if exists test.t_BIGINT_CI
+mysql> drop table if exists test.t_BIGINT_NCI
+mysql> drop table if exists test.t_FLOAT_CI
+mysql> drop table if exists test.t_FLOAT_NCI
+mysql> drop table if exists test.t_DOUBLE_CI
+mysql> drop table if exists test.t_DOUBLE_NCI
+mysql> drop table if exists test.t_DECIMAL32_CI
+mysql> drop table if exists test.t_DECIMAL32_NCI
+mysql> drop table if exists test.t_DECIMAL64_CI
+mysql> drop table if exists test.t_DECIMAL64_NCI
+mysql> drop table if exists test.t_DECIMAL128_CI
+mysql> drop table if exists test.t_DECIMAL128_NCI
+mysql> drop table if exists test.t_DECIMAL256_CI
+mysql> drop table if exists test.t_DECIMAL256_NCI
+mysql> drop table if exists test.t_CHAR_CI
+mysql> drop table if exists test.t_CHAR_NCI
+mysql> drop table if exists test.t_VARCHAR_CI
+mysql> drop table if exists test.t_VARCHAR_NCI
+mysql> drop table if exists test.t_BINARY_CI
+mysql> drop table if exists test.t_BINARY_NCI
+mysql> drop table if exists test.t_VARBINARY_CI
+mysql> drop table if exists test.t_VARBINARY_NCI
+mysql> drop table if exists test.t_BLOB
+mysql> drop table if exists test.t_TEXT
+mysql> drop table if exists test.t_ENUM_CI
+mysql> drop table if exists test.t_ENUM_NCI
+mysql> drop table if exists test.t_SET_CI
+mysql> drop table if exists test.t_SET_NCI
+mysql> drop table if exists test.t_DATE_CI
+mysql> drop table if exists test.t_DATE_NCI
+mysql> drop table if exists test.t_TIME_CI
+mysql> drop table if exists test.t_TIME_NCI
+mysql> drop table if exists test.t_DATETIME_CI
+mysql> drop table if exists test.t_DATETIME_NCI
+mysql> drop table if exists test.t_TIMESTAMP_CI
+mysql> drop table if exists test.t_TIMESTAMP_NCI
+mysql> drop table if exists test.t_YEAR_CI
+mysql> drop table if exists test.t_YEAR_NCI
+mysql> drop table if exists test.t_JSON

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,9 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
         return 0;
 
     if (level > max_depth)
-        throw Exception(fmt::format("Query pipeline is too deep. Maximum: {}", max_depth), ErrorCodes::TOO_DEEP_PIPELINE);
+        throw Exception(
+            fmt::format("Query pipeline is too deep. Maximum: {}", max_depth),
+            ErrorCodes::TOO_DEEP_PIPELINE);
 
     size_t res = 0;
     for (const auto & child : children)
@@ -80,12 +82,20 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
 
 void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)
 {
+<<<<<<< HEAD
     // todo append getHeader().dumpStructure()
     buffer.fmtAppend(
         "{}{}{}\n",
         String(indent, ' '),
         getName(),
         multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
+=======
+    buffer.fmtAppend("{}{}{}", String(indent, ' '), getName(), multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
+    if (!extra_info.empty())
+        buffer.fmtAppend(": <{}>", extra_info);
+    appendInfo(buffer);
+    buffer.append("\n");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     ++indent;
 
     /// If the subtree is repeated several times, then we output it once with the multiplier.

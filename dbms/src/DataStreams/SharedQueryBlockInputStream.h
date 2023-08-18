@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,9 +32,19 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
+<<<<<<< HEAD
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
         : queue(clients)
         , log(Logger::get(NAME, req_id))
+=======
+    SharedQueryBlockInputStream(
+        size_t clients,
+        Int64 max_buffered_bytes,
+        const BlockInputStreamPtr & in_,
+        const String & req_id)
+        : queue(CapacityLimits(clients, max_buffered_bytes), [](const Block & block) { return block.allocatedBytes(); })
+        , log(Logger::get(req_id))
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , in(in_)
     {
         children.push_back(in);
@@ -100,10 +110,7 @@ public:
         ptr->cancel(kill);
     }
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
-    {
-        ++cnt;
-    }
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override { ++cnt; }
 
 protected:
     Block readImpl() override
@@ -128,6 +135,10 @@ protected:
 
         return block;
     }
+<<<<<<< HEAD
+=======
+    Block readImpl() override { throw Exception("Unsupport"); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     void fetchBlocks()
     {

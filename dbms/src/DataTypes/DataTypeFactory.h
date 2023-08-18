@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,10 +53,16 @@ public:
     };
 
     /// Register a type family by its name.
-    void registerDataType(const String & family_name, Creator creator, CaseSensitiveness case_sensitiveness = CaseSensitive);
+    void registerDataType(
+        const String & family_name,
+        Creator creator,
+        CaseSensitiveness case_sensitiveness = CaseSensitive);
 
     /// Register a simple data type, that have no parameters.
-    void registerSimpleDataType(const String & name, SimpleCreator creator, CaseSensitiveness case_sensitiveness = CaseSensitive);
+    void registerSimpleDataType(
+        const String & name,
+        SimpleCreator creator,
+        CaseSensitiveness case_sensitiveness = CaseSensitive);
 
 private:
     DataTypesDictionary data_types;

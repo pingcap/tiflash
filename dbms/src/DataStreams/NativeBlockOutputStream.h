@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,12 @@ public:
     void write(const Block & block) override;
     void flush() override;
 
-    static void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
+    static void writeData(
+        const IDataType & type,
+        const ColumnPtr & column,
+        WriteBuffer & ostr,
+        size_t offset,
+        size_t limit);
 
     String getContentType() const override { return "application/octet-stream"; }
 

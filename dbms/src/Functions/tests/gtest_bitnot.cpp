@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,8 +35,7 @@ class TestFunctionBitNot : public DB::tests::FunctionTest
 {
 };
 
-#define ASSERT_BITNOT(t1, result) \
-    ASSERT_COLUMN_EQ(result, executeFunction("bitNot", {t1}))
+#define ASSERT_BITNOT(t1, result) ASSERT_COLUMN_EQ(result, executeFunction("bitNot", {t1}))
 
 TEST_F(TestFunctionBitNot, Simple)
 try
@@ -59,33 +58,54 @@ try
     ASSERT_BITNOT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<UInt32>>({UINT32_MAX - 1}));
     ASSERT_BITNOT(createColumn<Nullable<UInt64>>({1}), createColumn<Nullable<UInt64>>({UINT64_MAX - 1}));
 
+<<<<<<< HEAD
     ASSERT_BITNOT(createColumn<Int8>({0, 0, 1, 1}), createColumn<Int8>({-1, -1, -2, -2}));
     ASSERT_BITNOT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<Int8>>({-1, -2, std::nullopt, std::nullopt}));
     ASSERT_BITNOT(createConstColumn<Int8>(4, 0), createConstColumn<Int8>(4, -1));
     ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<Int8>>(4, -1));
     ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<Int8>>(4, std::nullopt));
+=======
+    ASSERT_BITNOT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createColumn<UInt64>({UINT64_MAX, UINT64_MAX, UINT64_MAX - 1, UINT64_MAX - 1}));
+    ASSERT_BITNOT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX - 1, std::nullopt, std::nullopt}));
+    ASSERT_BITNOT(createConstColumn<Int8>(4, 0), createConstColumn<UInt64>(4, UINT64_MAX));
+    ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<UInt64>(4, UINT64_MAX));
+    ASSERT_BITNOT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 CATCH
 
 TEST_F(TestFunctionBitNot, Boundary)
 try
 {
+<<<<<<< HEAD
     ASSERT_BITNOT(createColumn<Int64>({0, 1, -1, INT64_MAX, INT64_MIN}),
                   createColumn<Int64>({-1, -2, 0, INT64_MIN, INT64_MAX}));
+=======
+    ASSERT_BITNOT(
+        createColumn<Int64>({0, 1, -1, INT64_MAX, INT64_MIN}),
+        createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0, static_cast<UInt64>(INT64_MAX) + 1, INT64_MAX}));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
-    ASSERT_BITNOT(createColumn<UInt64>({0, 1, UINT64_MAX}),
-                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0}));
+    ASSERT_BITNOT(createColumn<UInt64>({0, 1, UINT64_MAX}), createColumn<UInt64>({UINT64_MAX, UINT64_MAX - 1, 0}));
 }
 CATCH
 
 TEST_F(TestFunctionBitNot, UINT64)
 try
 {
-    ASSERT_BITNOT(createColumn<UInt64>({0, 0, UINT64_MAX, UINT64_MAX}),
-                  createColumn<UInt64>({UINT64_MAX, UINT64_MAX, 0, 0}));
+    ASSERT_BITNOT(
+        createColumn<UInt64>({0, 0, UINT64_MAX, UINT64_MAX}),
+        createColumn<UInt64>({UINT64_MAX, UINT64_MAX, 0, 0}));
 
-    ASSERT_BITNOT(createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
-                  createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX, 0, 0, std::nullopt}));
+    ASSERT_BITNOT(
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
+        createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX, 0, 0, std::nullopt}));
 
 
     /*

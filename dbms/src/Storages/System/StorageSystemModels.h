@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,12 @@ class StorageSystemModels : public ext::SharedPtrHelper<StorageSystemModels>
     , public IStorage
 {
 public:
+<<<<<<< HEAD:dbms/src/Storages/System/StorageSystemModels.h
     std::string getName() const override { return "SystemModels"; }
     std::string getTableName() const override { return name; }
+=======
+    Planner(Context & context_, const PlanQuerySource & plan_source_);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Planner.h
 
     BlockInputStreams read(
         const Names & column_names,

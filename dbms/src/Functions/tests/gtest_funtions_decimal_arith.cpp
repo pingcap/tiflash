@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,8 +53,8 @@ TEST(DataTypeDecimal_test, A)
     const ScaleType scale_max = std::max(
         typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale(),
         (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale());
-    const ScaleType scale_sum
-        = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale() + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
+    const ScaleType scale_sum = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale()
+        + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
 
     Context context = TiFlashTestEnv::getContext();
     DataTypes args{lhs, rhs};

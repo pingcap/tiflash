@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -438,7 +438,8 @@ typename TypeTraits<T>::FieldType parseDecimal(
     }
     auto max_value = DecimalMaxValue::get(max_prec);
     if (parsed_value > max_value || parsed_value < -max_value)
-        throw TiFlashTestException(fmt::format("Input {} overflow for decimal({},{})", literal, max_prec, expected_scale));
+        throw TiFlashTestException(
+            fmt::format("Input {} overflow for decimal({},{})", literal, max_prec, expected_scale));
     auto value = static_cast<NativeType>(parsed_value);
     return DecimalField<DecimalType>(value, expected_scale);
 }
@@ -519,9 +520,19 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols);
 /// We can designate the range of columns printed with begin and end. range: [begin, end)
 String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
 
+<<<<<<< HEAD
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,
     const DataTypePtr & actual);
+=======
+// This wrapper function only serves to construct columns input for function-like macros,
+// since preprocessor recognizes `{col1, col2, col3}` as three arguments instead of one.
+// E.g. preprocessor does not allow us to write `ASSERT_COLUMNS_EQ_R({col1, col2, col3}, actual_cols)`,
+//  but with this func we can write `ASSERT_COLUMNS_EQ_R(createColumns{col1, col2, col3}, actual_cols)` instead.
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
+
+::testing::AssertionResult dataTypeEqual(const DataTypePtr & expected, const DataTypePtr & actual);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
@@ -532,9 +543,13 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
+<<<<<<< HEAD
 void blockEqual(
     const Block & expected,
     const Block & actual);
+=======
+::testing::AssertionResult blockEqual(const Block & expected, const Block & actual);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
@@ -655,13 +670,48 @@ ColumnWithTypeAndName createNullableColumn(
     return createNullableColumn<T>(data_type_args, vec, null_map, name, 0);
 }
 
+<<<<<<< HEAD
+=======
+template <typename T>
+ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toNullableVec(
+    String name,
+    const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v, name);
+}
+
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp);
+
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
+
+struct FuncMetaData
+{
+    String val; // This is for the val field of tipb::expr
+};
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 class FunctionTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        initializeDAGContext();
-    }
+    void SetUp() override { initializeDAGContext(); }
 
 public:
     static void SetUpTestCase()
@@ -690,7 +740,10 @@ public:
     }
 
     template <typename... Args>
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnWithTypeAndName & first_column,
+        const Args &... columns)
     {
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, vec);
@@ -702,7 +755,11 @@ public:
     }
 
     template <typename... Args>
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnNumbers & argument_column_numbers,
+        const ColumnWithTypeAndName & first_column,
+        const Args &... columns)
     {
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, argument_column_numbers, vec);

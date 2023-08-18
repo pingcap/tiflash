@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,4 +46,29 @@ void registerFunctionsTiDBConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionBuilderTiDBCast>();
 }
 
+<<<<<<< HEAD
+=======
+FunctionBasePtr FunctionBuilderTiDBCast::buildImpl(
+    const ColumnsWithTypeAndName & arguments,
+    const DataTypePtr & return_type,
+    const TiDB::TiDBCollatorPtr &) const
+{
+    DataTypes data_types(arguments.size());
+
+    for (size_t i = 0; i < arguments.size(); ++i)
+        data_types[i] = arguments[i].type;
+
+    auto monotonicity = getMonotonicityInformation(arguments.front().type, return_type.get());
+    return std::make_shared<FunctionTiDBCast<>>(
+        context,
+        name,
+        std::move(monotonicity),
+        data_types,
+        return_type,
+        in_union,
+        tidb_tp);
+}
+
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

@@ -1,0 +1,64 @@
+// Copyright 2023 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package DB.PS.V3.CheckpointProto;
+
+import "common.proto";
+
+/**
+ This prefix is only for debugging purpose. When reading the data
+ file, we will just seek to the specified offset and read desired data.
+
+ The content of this prefix is useful when we want to observe and parse this data file.
+ */
+message DataFilePrefix {
+    uint64 file_format = 1;
+
+    uint64 local_sequence = 11;
+
+    // The first Checkpoint Manifest File ID that contains this data file.
+    // The referred manifest file has identical `local_sequence` and `writer_info` apparently.
+    bytes manifest_file_id = 12;
+
+    // When data file is too large, one data file will be separated into multiples.
+    // This records which one it is.
+    uint32 sub_file_index = 13;
+
+    // The local timestamp this data file is created.
+    uint64 create_at_ms = 21;
+    WriterInfo writer_info = 22;
+}
+
+/**
+ This suffix is only for debugging purpose. When reading the data
+ file, we will just seek to the specified offset and read desired data.
+
+ The content of this suffix is useful when we want to observe and parse this data file.
+ */
+message DataFileSuffix {
+    // Records contained in this data file.
+    repeated EntryEditRecord records = 1;
+}
+
+message EntryEditRecord {
+    // Note page_id are not valid utf-8 string. Don't use string type.
+    bytes page_id = 1;
+    uint64 version_sequence = 2;
+    uint64 version_epoch = 3;
+
+    uint64 offset_in_file = 4;
+    uint64 size_in_file = 5;
+}

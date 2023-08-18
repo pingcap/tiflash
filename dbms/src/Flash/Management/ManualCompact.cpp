@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,10 +33,18 @@ ManualCompactManager::ManualCompactManager(const Context & global_context_, cons
     , settings(settings_)
     , log(&Poco::Logger::get("ManualCompactManager"))
 {
+<<<<<<< HEAD
     worker_pool = std::make_unique<ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
+=======
+    worker_pool = std::make_unique<legacy::ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] {
+        setThreadName("m-compact-pool");
+    });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
-grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+grpc::Status ManualCompactManager::handleRequest(
+    const ::kvrpcpb::CompactRequest * request,
+    ::kvrpcpb::CompactResponse * response)
 {
     {
         std::lock_guard lock(mutex);
@@ -66,15 +74,15 @@ grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest
         unsync_running_or_pending_tasks--;
     });
 
-    std::packaged_task<grpc::Status()> task([&] {
-        return this->doWorkWithCatch(request, response);
-    });
+    std::packaged_task<grpc::Status()> task([&] { return this->doWorkWithCatch(request, response); });
     std::future<grpc::Status> future = task.get_future();
     worker_pool->schedule([&task] { task(); });
     return future.get();
 }
 
-grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+grpc::Status ManualCompactManager::doWorkWithCatch(
+    const ::kvrpcpb::CompactRequest * request,
+    ::kvrpcpb::CompactResponse * response)
 {
     try
     {
@@ -97,7 +105,9 @@ grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactReque
     }
 }
 
-grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+grpc::Status ManualCompactManager::doWork(
+    const ::kvrpcpb::CompactRequest * request,
+    ::kvrpcpb::CompactResponse * response)
 {
     const auto & tmt_context = global_context.getTMTContext();
     auto storage = tmt_context.getStorages().get(request->physical_table_id());
@@ -162,7 +172,16 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 
     Stopwatch timer;
 
+<<<<<<< HEAD
     LOG_FMT_INFO(log, "Manual compaction begin for table {}, start_key = {}", request->physical_table_id(), start_key.toDebugString());
+=======
+    auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
+    LOG_INFO(
+        ks_log,
+        "Manual compaction begin for table {}, start_key = {}",
+        request->physical_table_id(),
+        start_key.toDebugString());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     // Repeatedly merge multiple segments as much as possible.
     while (true)
@@ -194,13 +213,35 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
         }
     }
 
-    if (unlikely(has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)))
+    if (unlikely(
+            has_remaining
+            && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)))
     {
+<<<<<<< HEAD
         LOG_FMT_ERROR(log, "Assert failed: has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)");
         throw Exception("Assert failed", ErrorCodes::LOGICAL_ERROR);
     }
 
     LOG_FMT_INFO(log, "Manual compaction finished for table {}, compacted_start_key = {}, compacted_end_key = {}, has_remaining = {}, compacted_segments = {}, elapsed_ms = {}", request->physical_table_id(), compacted_start_key ? compacted_start_key->toDebugString() : "(null)", compacted_end_key ? compacted_end_key->toDebugString() : "(null)", has_remaining, compacted_segments, timer.elapsedMilliseconds());
+=======
+        LOG_ERROR(
+            ks_log,
+            "Assert failed: has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt "
+            "|| compacted_segments == 0)");
+        throw Exception("Assert failed", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    LOG_INFO(
+        ks_log,
+        "Manual compaction finished for table {}, compacted_start_key = {}, compacted_end_key = {}, has_remaining = "
+        "{}, compacted_segments = {}, elapsed_ms = {}",
+        request->physical_table_id(),
+        compacted_start_key ? compacted_start_key->toDebugString() : "(null)",
+        compacted_end_key ? compacted_end_key->toDebugString() : "(null)",
+        has_remaining,
+        compacted_segments,
+        timer.elapsedMilliseconds());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     response->clear_error();
     response->set_has_remaining(has_remaining);

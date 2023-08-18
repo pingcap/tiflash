@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,13 @@ ColumnNullable::ColumnNullable(MutableColumnPtr && nested_column_, MutableColumn
         nested_column = nested_column_materialized;
 
     if (!getNestedColumn().canBeInsideNullable())
+<<<<<<< HEAD
         throw Exception{getNestedColumn().getName() + " cannot be inside Nullable column", ErrorCodes::ILLEGAL_COLUMN};
+=======
+        throw Exception(
+            fmt::format("{} cannot be inside Nullable column", getNestedColumn().getName()),
+            ErrorCodes::ILLEGAL_COLUMN);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     if (null_map->isColumnConst())
         throw Exception{"ColumnNullable cannot have constant null map", ErrorCodes::ILLEGAL_COLUMN};
@@ -101,12 +107,24 @@ void ColumnNullable::updateHashWithValues(
     }
 }
 
-void ColumnNullable::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnNullable::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     auto s = size();
 
     if (hash.getData().size() != s)
+<<<<<<< HEAD
         throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+=======
+        throw Exception(
+            fmt::format(
+                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+                s,
+                hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     WeakHash32 old_hash = hash;
     nested_column->updateWeakHash32(hash, collator, sort_key_container);
@@ -258,7 +276,11 @@ ColumnPtr ColumnNullable::permute(const Permutation & perm, size_t limit) const
     return ColumnNullable::create(permuted_data, permuted_null_map);
 }
 
-std::tuple<bool, int> ColumnNullable::compareAtCheckNull(size_t n, size_t m, const ColumnNullable & rhs, int null_direction_hint) const
+std::tuple<bool, int> ColumnNullable::compareAtCheckNull(
+    size_t n,
+    size_t m,
+    const ColumnNullable & rhs,
+    int null_direction_hint) const
 {
     /// NULL values share the properties of NaN values.
     /// Here the last parameter of compareAt is called null_direction_hint
@@ -329,7 +351,11 @@ void ColumnNullable::getPermutation(bool reverse, size_t limit, int null_directi
     adjustPermutationWithNullDirection(reverse, limit, null_direction_hint, res);
 }
 
-void ColumnNullable::adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const
+void ColumnNullable::adjustPermutationWithNullDirection(
+    bool reverse,
+    size_t limit,
+    int null_direction_hint,
+    Permutation & res) const
 {
     if ((null_direction_hint > 0) != reverse)
     {
@@ -565,9 +591,19 @@ void ColumnNullable::applyNullMap(const ColumnNullable & other)
 void ColumnNullable::checkConsistency() const
 {
     if (null_map->size() != getNestedColumn().size())
+<<<<<<< HEAD
         throw Exception("Logical error: Sizes of nested column and null map of Nullable column are not equal: null size is : "
                             + std::to_string(null_map->size()) + " column size is : " + std::to_string(getNestedColumn().size()),
                         ErrorCodes::SIZES_OF_NESTED_COLUMNS_ARE_INCONSISTENT);
+=======
+        throw Exception(
+            fmt::format(
+                "Logical error: Sizes of nested column and null map of Nullable column are not equal: null size is : "
+                "{} column size is : {}",
+                null_map->size(),
+                getNestedColumn().size()),
+            ErrorCodes::SIZES_OF_NESTED_COLUMNS_ARE_INCONSISTENT);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 
@@ -577,7 +613,9 @@ ColumnPtr makeNullable(const ColumnPtr & column)
         return column;
 
     if (column->isColumnConst())
-        return ColumnConst::create(makeNullable(static_cast<const ColumnConst &>(*column).getDataColumnPtr()), column->size());
+        return ColumnConst::create(
+            makeNullable(static_cast<const ColumnConst &>(*column).getDataColumnPtr()),
+            column->size());
 
     return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
 }

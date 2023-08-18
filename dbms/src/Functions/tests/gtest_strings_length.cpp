@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,8 @@ TEST_F(StringLength, strAndStrTest)
         }
 
         Block test_block;
-        ColumnWithTypeAndName ctn = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
+        ColumnWithTypeAndName ctn
+            = ColumnWithTypeAndName(std::move(csp), std::make_shared<DataTypeString>(), "test_ascii");
         ColumnsWithTypeAndName ctns{ctn};
         test_block.insert(ctn);
         ColumnNumbers cns{0};

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,23 @@ namespace DB
 class TableFunctionFile : public ITableFunction
 {
 public:
+<<<<<<< HEAD:dbms/src/TableFunctions/TableFunctionFile.h
     static constexpr auto name = "file";
     std::string getName() const override { return name; }
+=======
+    using Handler = std::function<void(const Block &)>;
+    explicit ResultHandler(Handler handler_)
+        : handler(handler_)
+        , is_ignored(false)
+    {}
+    ResultHandler()
+        : is_ignored(true)
+    {}
+
+    explicit operator bool() const noexcept { return !is_ignored; }
+
+    void operator()(const Block & block) const { handler(block); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Executor/ResultHandler.h
 
 private:
     StoragePtr executeImpl(const ASTPtr & ast_function, const Context & context) const override;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,17 @@ struct PushDownFilter
 {
     static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Executor * executor);
 
+<<<<<<< HEAD:dbms/src/Flash/Coprocessor/PushDownFilter.h
     PushDownFilter(
         const String & executor_id_,
         const std::vector<const tipb::Expr *> & conditions_);
+=======
+    static FilterConditions filterConditionsFrom(const String & executor_id, const tipb::Selection & selection);
+
+    FilterConditions() = default;
+
+    FilterConditions(const String & executor_id_, const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions_);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Coprocessor/FilterConditions.h
 
     bool hasValue() const { return !conditions.empty(); }
 

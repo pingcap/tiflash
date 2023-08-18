@@ -1,4 +1,8 @@
+<<<<<<< HEAD:dbms/src/TestUtils/executorSerializer.cpp
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/TestUtils/ExecutorSerializer.cpp
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,9 +105,7 @@ void serializeExpression(const tipb::Expr & expr, FmtBuffer & buf)
         buf.joinStr(
             expr.children().begin(),
             expr.children().end(),
-            [&](const auto & ex, FmtBuffer &) {
-                serializeExpression(ex, buf);
-            },
+            [&](const auto & ex, FmtBuffer &) { serializeExpression(ex, buf); },
             ", ");
         buf.append(")");
     }
@@ -120,9 +122,7 @@ void serializeSelection(const String & executor_id, const tipb::Selection & sel,
     buf.joinStr(
         sel.conditions().begin(),
         sel.conditions().end(),
-        [&](const auto & expr, FmtBuffer &) {
-            serializeExpression(expr, buf);
-        },
+        [&](const auto & expr, FmtBuffer &) { serializeExpression(expr, buf); },
         " and ");
     buf.append("}\n");
 }
@@ -138,9 +138,7 @@ void serializeProjection(const String & executor_id, const tipb::Projection & pr
     buf.joinStr(
         proj.exprs().begin(),
         proj.exprs().end(),
-        [&](const auto & expr, FmtBuffer &) {
-            serializeExpression(expr, buf);
-        },
+        [&](const auto & expr, FmtBuffer &) { serializeExpression(expr, buf); },
         ", ");
     buf.append("}\n");
 }
@@ -151,17 +149,13 @@ void serializeAggregation(const String & executor_id, const tipb::Aggregation & 
     buf.joinStr(
         agg.group_by().begin(),
         agg.group_by().end(),
-        [&](const auto & group_by, FmtBuffer &) {
-            serializeExpression(group_by, buf);
-        },
+        [&](const auto & group_by, FmtBuffer &) { serializeExpression(group_by, buf); },
         ", ");
     buf.append("}, agg_func: {");
     buf.joinStr(
         agg.agg_func().begin(),
         agg.agg_func().end(),
-        [&](const auto & func, FmtBuffer &) {
-            serializeExpression(func, buf);
-        },
+        [&](const auto & func, FmtBuffer &) { serializeExpression(func, buf); },
         ", ");
     buf.append("}\n");
 }
@@ -183,7 +177,11 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, FmtBuff
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffer & buf)
 {
-    buf.fmtAppend("{} | {}, {}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
+    buf.fmtAppend(
+        "{} | {}, {}. left_join_keys: {{",
+        executor_id,
+        getJoinTypeName(join.join_type()),
+        getJoinExecTypeName(join.join_exec_type()));
     toString(join.left_join_keys(), buf);
     buf.append("}, right_join_keys: {");
     toString(join.right_join_keys(), buf);
@@ -204,7 +202,130 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
     buf.append("}\n");
 }
 
+<<<<<<< HEAD:dbms/src/TestUtils/executorSerializer.cpp
 void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t level)
+=======
+void serializeWindow(const String & executor_id, const tipb::Window & window [[maybe_unused]], FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | partition_by: {{", executor_id);
+    buf.joinStr(
+        window.partition_by().begin(),
+        window.partition_by().end(),
+        [&](const auto & partition_by, FmtBuffer & fb) {
+            fb.append("(");
+            serializeExpression(partition_by.expr(), buf);
+            fb.fmtAppend(", desc: {})", partition_by.desc());
+        },
+        ", ");
+    buf.append("}}, order_by: {");
+    buf.joinStr(
+        window.order_by().begin(),
+        window.order_by().end(),
+        [&](const auto & order_by, FmtBuffer & fb) {
+            fb.append("(");
+            serializeExpression(order_by.expr(), buf);
+            fb.fmtAppend(", desc: {})", order_by.desc());
+        },
+        ", ");
+    buf.append("}, func_desc: {");
+    buf.joinStr(
+        window.func_desc().begin(),
+        window.func_desc().end(),
+        [&](const auto & func, FmtBuffer &) { serializeExpression(func, buf); },
+        ", ");
+    if (window.has_frame())
+    {
+        buf.append("}, frame: {");
+        if (window.frame().has_start())
+        {
+            buf.fmtAppend(
+                "start<{}, {}, {}>",
+                window.frame().start().type(),
+                window.frame().start().unbounded(),
+                window.frame().start().offset());
+        }
+        if (window.frame().has_end())
+        {
+            buf.fmtAppend(
+                ", end<{}, {}, {}>",
+                window.frame().end().type(),
+                window.frame().end().unbounded(),
+                window.frame().end().offset());
+        }
+    }
+    buf.append("}\n");
+}
+
+void serializeSort(const String & executor_id, const tipb::Sort & sort [[maybe_unused]], FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | isPartialSort: {}, partition_by: {{", executor_id, sort.ispartialsort());
+    buf.joinStr(
+        sort.byitems().begin(),
+        sort.byitems().end(),
+        [&](const auto & by, FmtBuffer & fb) {
+            fb.append("(");
+            serializeExpression(by.expr(), buf);
+            fb.fmtAppend(", desc: {})", by.desc());
+        },
+        ", ");
+    buf.append("}\n");
+}
+} // namespace
+
+String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
+{
+    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+    if (dag_request->has_root_executor())
+    {
+        serializeTreeStruct(dag_request->root_executor(), 0);
+    }
+    else
+    {
+        serializeListStruct(dag_request);
+    }
+    return buf.toString();
+}
+
+void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_request)
+{
+    String prefix;
+    traverseExecutors(dag_request, [this, &prefix](const tipb::Executor & executor) {
+        buf.append(prefix);
+        switch (executor.tp())
+        {
+        case tipb::ExecType::TypeTableScan:
+            serializeTableScan("TableScan", executor.tbl_scan(), buf);
+            break;
+        case tipb::ExecType::TypeSelection:
+            serializeSelection("Selection", executor.selection(), buf);
+            break;
+        case tipb::ExecType::TypeAggregation:
+        // stream agg is not supported, treated as normal agg
+        case tipb::ExecType::TypeStreamAgg:
+            serializeAggregation("Aggregation", executor.aggregation(), buf);
+            break;
+        case tipb::ExecType::TypeTopN:
+            serializeTopN("TopN", executor.topn(), buf);
+            break;
+        case tipb::ExecType::TypeLimit:
+            serializeLimit("Limit", executor.limit(), buf);
+            break;
+        case tipb::ExecType::TypeExpand:
+            serializeExpandSource("Expand", executor.expand(), buf);
+            break;
+        case tipb::ExecType::TypeExpand2:
+            serializeExpand2Source(executor.executor_id(), executor.expand2(), buf);
+            break;
+        default:
+            throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
+        }
+        prefix.append(" ");
+        return true;
+    });
+}
+
+void ExecutorSerializer::serializeTreeStruct(const tipb::Executor & root_executor, size_t level)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/TestUtils/ExecutorSerializer.cpp
 {
     auto append_str = [&level, this](const tipb::Executor & executor) {
         assert(executor.has_executor_id());
@@ -215,7 +336,9 @@ void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t 
             serializeTableScan(executor.executor_id(), executor.tbl_scan(), buf);
             break;
         case tipb::ExecType::TypePartitionTableScan:
-            throw TiFlashException("Partition table scan executor is not supported", Errors::Coprocessor::Unimplemented); // todo support partition table scan executor.
+            throw TiFlashException(
+                "Partition table scan executor is not supported",
+                Errors::Coprocessor::Unimplemented); // todo support partition table scan executor.
         case tipb::ExecType::TypeJoin:
             serializeJoin(executor.executor_id(), executor.join(), buf);
             break;

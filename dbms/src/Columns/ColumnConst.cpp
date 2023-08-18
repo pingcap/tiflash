@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,18 +97,43 @@ MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & se
     return res;
 }
 
+<<<<<<< HEAD
 void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res) const
+=======
+void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector) const
+{
+    if (s != selector.size())
+        throw Exception(
+            fmt::format("Size of selector ({}) doesn't match size of column ({})", selector.size(), s),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    ColumnIndex num_columns = columns.size();
+    std::vector<size_t> counts = countColumnsSizeInSelector(num_columns, selector);
+
+    for (size_t i = 0; i < num_columns; ++i)
+        columns[i]->insertRangeFrom(*this, 0, counts[i]);
+}
+
+void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res)
+    const
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     res.resize(s);
     for (size_t i = 0; i < s; ++i)
         res[i] = i;
 }
 
-void ColumnConst::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+void ColumnConst::updateWeakHash32(
+    WeakHash32 & hash,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
     if (hash.getData().size() != s)
         throw Exception(
-            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            fmt::format(
+                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+                s,
+                hash.getData().size()),
             ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 element_hash(1);

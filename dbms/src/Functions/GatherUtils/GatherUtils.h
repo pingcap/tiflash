@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,13 +58,21 @@ void sliceFromRightConstantOffsetBounded(IArraySource & src, IArraySink & sink, 
 
 void sliceDynamicOffsetUnbounded(IArraySource & src, IArraySink & sink, const IColumn & offset_column);
 
-void sliceDynamicOffsetBounded(IArraySource & src, IArraySink & sink, const IColumn & offset_column, const IColumn & length_column);
+void sliceDynamicOffsetBounded(
+    IArraySource & src,
+    IArraySink & sink,
+    const IColumn & offset_column,
+    const IColumn & length_column);
 
 void sliceHas(IArraySource & first, IArraySource & second, bool all, ColumnUInt8 & result);
 
 void push(IArraySource & array_source, IValueSource & value_source, IArraySink & sink, bool push_back);
 
-void resizeDynamicSize(IArraySource & array_source, IValueSource & value_source, IArraySink & sink, const IColumn & size_column);
+void resizeDynamicSize(
+    IArraySource & array_source,
+    IValueSource & value_source,
+    IArraySink & sink,
+    const IColumn & size_column);
 
 void resizeConstantSize(IArraySource & array_source, IValueSource & value_source, IArraySink & sink, ssize_t size);
 } // namespace DB::GatherUtils

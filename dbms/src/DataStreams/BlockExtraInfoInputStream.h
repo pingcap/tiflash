@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,11 +25,22 @@ namespace DB
 class BlockExtraInfoInputStream : public IProfilingBlockInputStream
 {
 public:
+<<<<<<< HEAD:dbms/src/DataStreams/BlockExtraInfoInputStream.h
     BlockExtraInfoInputStream(const BlockInputStreamPtr & input, const BlockExtraInfo & block_extra_info_)
         : block_extra_info(block_extra_info_)
     {
         children.push_back(input);
     }
+=======
+    MergingAndConvertingBlockInputStream(
+        const MergingBucketsPtr & merging_buckets_,
+        size_t concurrency_index_,
+        const String & req_id)
+        : merging_buckets(merging_buckets_)
+        , concurrency_index(concurrency_index_)
+        , log(Logger::get(req_id))
+    {}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/DataStreams/MergingAndConvertingBlockInputStream.h
 
     BlockExtraInfo getBlockExtraInfo() const override
     {
@@ -41,10 +52,14 @@ public:
     Block getHeader() const override { return children.back()->getHeader(); }
 
 protected:
+<<<<<<< HEAD:dbms/src/DataStreams/BlockExtraInfoInputStream.h
     Block readImpl() override
     {
         return children.back()->read();
     }
+=======
+    Block readImpl() override { return merging_buckets->getData(concurrency_index); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/DataStreams/MergingAndConvertingBlockInputStream.h
 
 private:
     BlockExtraInfo block_extra_info;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,7 +174,8 @@ TEST(WriteLimiterTest, LimiterStat)
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
     ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
-    ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+    ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec())
+        << stat.toString();
 }
 
 TEST(ReadLimiterTest, GetIOStatPeroid2000us)
@@ -352,7 +353,8 @@ TEST(ReadLimiterTest, LimiterStat)
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
     ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
-    ASSERT_EQ(stat.pct(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+    ASSERT_EQ(stat.pct(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec())
+        << stat.toString();
 }
 
 TEST(ReadLimiterTest, ReadMany)
@@ -401,7 +403,13 @@ TEST(IORateLimiterTest, IOStat)
     int buf_size = 4096;
     int ret = ::posix_memalign(&buf, buf_size, buf_size);
     ASSERT_EQ(ret, 0) << strerror(errno);
+<<<<<<< HEAD
     std::unique_ptr<void, std::function<void(void *)>> defer_free(buf, [](void * p) { ::free(p); });
+=======
+    std::unique_ptr<void, std::function<void(void *)>> defer_free(buf, [](void * p) {
+        ::free(p);
+    }); // NOLINT(cppcoreguidelines-no-malloc)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     ssize_t n = ::pwrite(fd, buf, buf_size, 0);
     ASSERT_EQ(n, buf_size) << strerror(errno);
@@ -443,7 +451,13 @@ TEST(IORateLimiterTest, IOStatMultiThread)
 
         void * buf = nullptr;
         int ret = ::posix_memalign(&buf, buf_size, buf_size);
+<<<<<<< HEAD
         std::unique_ptr<void, std::function<void(void *)>> auto_free(buf, [](void * p) { free(p); });
+=======
+        std::unique_ptr<void, std::function<void(void *)>> auto_free(buf, [](void * p) {
+            free(p);
+        }); // NOLINT(cppcoreguidelines-no-malloc)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         ASSERT_EQ(ret, 0) << strerror(errno);
 
         ssize_t n = ::pwrite(fd, buf, buf_size, 0);
@@ -493,7 +507,11 @@ TEST(IORateLimiterTest, IOStatMultiThread)
 }
 #endif
 
-LimiterStatUPtr createLimiterStat(UInt64 alloc_bytes, UInt64 elapsed_ms, UInt64 refill_period_ms, Int64 refill_bytes_per_period)
+LimiterStatUPtr createLimiterStat(
+    UInt64 alloc_bytes,
+    UInt64 elapsed_ms,
+    UInt64 refill_period_ms,
+    Int64 refill_bytes_per_period)
 {
     return std::make_unique<LimiterStat>(alloc_bytes, elapsed_ms, refill_period_ms, refill_bytes_per_period);
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,9 @@ void PrettySpaceBlockOutputStream::write(const Block & block)
 
         if (col.type->shouldAlignRightInPrettyFormats())
         {
-            for (ssize_t k = 0; k < std::max(static_cast<ssize_t>(0), static_cast<ssize_t>(max_widths[i] - name_widths[i])); ++k)
+            for (ssize_t k = 0;
+                 k < std::max(static_cast<ssize_t>(0), static_cast<ssize_t>(max_widths[i] - name_widths[i]));
+                 ++k)
                 writeChar(' ', ostr);
 
             if (!no_escapes)
@@ -70,7 +72,9 @@ void PrettySpaceBlockOutputStream::write(const Block & block)
             if (!no_escapes)
                 writeCString("\033[0m", ostr);
 
-            for (ssize_t k = 0; k < std::max(static_cast<ssize_t>(0), static_cast<ssize_t>(max_widths[i] - name_widths[i])); ++k)
+            for (ssize_t k = 0;
+                 k < std::max(static_cast<ssize_t>(0), static_cast<ssize_t>(max_widths[i] - name_widths[i]));
+                 ++k)
                 writeChar(' ', ostr);
         }
     }
@@ -83,7 +87,11 @@ void PrettySpaceBlockOutputStream::write(const Block & block)
             if (j != 0)
                 writeCString("   ", ostr);
 
-            writeValueWithPadding(block.getByPosition(j), i, widths[j].empty() ? max_widths[j] : widths[j][i], max_widths[j]);
+            writeValueWithPadding(
+                block.getByPosition(j),
+                i,
+                widths[j].empty() ? max_widths[j] : widths[j][i],
+                max_widths[j]);
         }
 
         writeChar('\n', ostr);

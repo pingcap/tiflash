@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,19 +39,22 @@ public:
     }
 
     String getName() const override { return NAME; }
+<<<<<<< HEAD
     Block getHeader() const override
     {
         Block block = children.back()->getHeader();
         insertColumns(block, /*insert_data=*/false);
         return block;
     }
+=======
 
-    static String getColumnName(UInt64 col_index)
-    {
-        return "generated_column_" + std::to_string(col_index);
-    }
+    Block getHeader() const override { return action.getHeader(); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
+
+    static String getColumnName(UInt64 col_index) { return "generated_column_" + std::to_string(col_index); }
 
 protected:
+<<<<<<< HEAD
     void readPrefix() override
     {
         RUNTIME_CHECK(!generated_column_infos.empty(), Exception, "generated_column_infos cannot be empty");
@@ -61,6 +64,9 @@ protected:
             RUNTIME_CHECK(std::get<0>(generated_column_infos[i]) > std::get<0>(generated_column_infos[i - 1]), Exception, "generated column index should be ordered");
         }
     }
+=======
+    void readPrefix() override { action.checkColumn(); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     Block readImpl() override
     {

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,9 +66,7 @@ public:
 
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
 
-    std::vector<NameAndTypePair> appendOrderBy(
-        ExpressionActionsChain & chain,
-        const tipb::TopN & topN);
+    std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
     /// May change the source columns.
@@ -81,8 +79,7 @@ public:
 
     WindowDescription buildWindowDescription(const tipb::Window & window);
 
-    SortDescription getWindowSortDescription(
-        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
+    SortDescription getWindowSortDescription(const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -111,10 +108,21 @@ public:
         const String & column_prefix,
         bool keep_session_timezone_info);
 
+<<<<<<< HEAD
     String getActions(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         bool output_as_uint8_type = false);
+=======
+    NamesWithAliases buildFinalProjection(
+        const ExpressionActionsPtr & actions,
+        const std::vector<tipb::FieldType> & schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info);
+
+    String getActions(const tipb::Expr & expr, const ExpressionActionsPtr & actions, bool output_as_uint8_type = false);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
     // 1) add timezone cast after table scan, this is used for session level timezone support
@@ -151,7 +159,42 @@ public:
     void appendCastAfterWindow(
         const ExpressionActionsPtr & actions,
         const tipb::Window & window,
+<<<<<<< HEAD
         const size_t window_columns_start_index);
+=======
+        size_t window_columns_start_index);
+
+    NamesAndTypes buildOrderColumns(
+        const ExpressionActionsPtr & actions,
+        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
+
+    String buildFilterColumn(
+        const ExpressionActionsPtr & actions,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
+    void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
+
+    std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
+        const ExpressionActionsPtr & actions,
+        const std::vector<UInt8> & may_need_add_cast_column,
+        const ColumnInfos & table_scan_columns);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -216,10 +259,7 @@ private:
         bool create_ordered_set,
         const String & left_arg_name);
 
-    String appendCast(
-        const DataTypePtr & target_type,
-        const ExpressionActionsPtr & actions,
-        const String & expr_name);
+    String appendCast(const DataTypePtr & target_type, const ExpressionActionsPtr & actions, const String & expr_name);
 
     String appendCastIfNeeded(
         const tipb::Expr & expr,
@@ -271,10 +311,9 @@ private:
         const String & func_name,
         const ExpressionActionsPtr & actions);
 
-    String convertToUInt8(
-        const ExpressionActionsPtr & actions,
-        const String & column_name);
+    String convertToUInt8(const ExpressionActionsPtr & actions, const String & column_name);
 
+<<<<<<< HEAD
     String buildFunction(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
@@ -288,6 +327,10 @@ private:
     NamesWithAliases genRootFinalProjectAliases(
         const String & column_prefix,
         const std::vector<Int32> & output_offsets) const;
+=======
+    NamesWithAliases genRootFinalProjectAliases(const String & column_prefix, const std::vector<Int32> & output_offsets)
+        const;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     // May change the source columns.
     void appendCastForRootFinalProjection(

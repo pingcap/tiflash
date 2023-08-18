@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 /// delta_mode means when for a streaming call, return the delta execution summary
 /// because TiDB is not aware of the streaming call when it handle the execution summaries
 /// so we need to "pretend to be a unary call", can be removed if TiDB support streaming
@@ -155,6 +156,9 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
 DAGResponseWriter::DAGResponseWriter(
     Int64 records_per_chunk_,
     DAGContext & dag_context_)
+=======
+DAGResponseWriter::DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     : records_per_chunk(records_per_chunk_)
     , dag_context(dag_context_)
 {

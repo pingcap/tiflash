@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,13 @@ class MockExchangeReceiverInputStream : public IProfilingBlockInputStream
 {
 public:
     MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_);
+<<<<<<< HEAD
     Block getHeader() const override { return Block(columns); }
+=======
+    MockExchangeReceiverInputStream(const ColumnsWithTypeAndName & columns, size_t max_block_size);
+    MockExchangeReceiverInputStream(const std::vector<ColumnsWithTypeAndName> & columns_vector, size_t max_block_size);
+    Block getHeader() const override { return Block(columns_vector[0]).cloneEmpty(); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     String getName() const override { return "MockExchangeReceiver"; }
     ColumnsWithTypeAndName columns;
     size_t output_index;

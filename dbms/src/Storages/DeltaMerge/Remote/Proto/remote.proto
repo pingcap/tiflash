@@ -1,0 +1,117 @@
+// Copyright 2023 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package DB.DM.RemotePb;
+
+message RemotePhysicalTable {
+    bytes snapshot_id = 1; // disaggregated.DisaggTaskMeta
+    uint64 table_id = 2;
+    uint32 keyspace_id = 4;
+    repeated RemoteSegment segments = 3;
+}
+
+message RemoteSegment {
+    uint64 segment_id = 1;
+    uint64 segment_epoch = 2;
+    uint64 delta_index_epoch = 3;
+
+    bytes key_range = 4;
+
+    repeated ColumnFileBig stable_pages = 10;
+    // serialized array of ColumnFileRemote
+    repeated ColumnFileRemote column_files_persisted = 11;
+
+    // TODO: We should defer mem_table resolution to a later request.
+    // bool has_mem_table = 5;
+    repeated ColumnFileRemote column_files_memtable = 12;
+
+    repeated bytes read_key_ranges = 21;
+}
+
+message RemotePage {
+    // The page is read as a cf in DeltaVS,
+    // so we can get the u64 page_id.
+    uint64 page_id = 1;
+    bytes data = 2;
+    repeated uint64 field_sizes = 4;
+}
+
+message ColumnFileRemote {
+    oneof column_file {
+        ColumnFileTiny tiny = 1;
+        ColumnFileBig big = 2;
+        ColumnFileDeleteRange delete_range = 3;
+
+        // TODO: To be dropped.
+        ColumnFileInMemory in_memory = 100;
+    }
+}
+
+message ColumnFileInMemory {
+    // serialized schema
+    bytes schema = 1;
+    // serialized block columns
+    repeated bytes block_columns = 2;
+
+    uint64 rows = 3;
+}
+
+message ColumnFileTiny {
+    uint64 page_id = 1;
+    uint64 page_size = 2;
+    CheckpointInfo checkpoint_info = 3;
+
+    // serialized schema
+    bytes schema = 5;
+
+    uint64 rows = 6;
+    uint64 bytes = 7;
+}
+
+message ColumnFileBig {
+    uint64 page_id = 1;
+    CheckpointInfo checkpoint_info = 2;
+
+    // TODO: We should better recalculate these fields from local DTFile.
+    uint64 valid_rows = 10;
+    uint64 valid_bytes = 11;
+}
+
+message ColumnFileDeleteRange {
+    bytes key_range = 1;
+}
+
+message CheckpointInfo {
+    bytes data_file_id = 1;
+    uint64 offset = 2;
+    uint64 size = 3;
+    // whether the data reclaimed on the write node or not
+    bool is_local_data_reclaimed = 4;
+}
+
+message TiFlashColumnInfo {
+    int64 column_id = 1;
+    // serialized name by IDataType::getName()
+    // TODO: deseri this name is costly, consider another way
+    // like the tipb.ColumnInfo
+    bytes type_full_name = 2;
+    // maybe this is not need
+    bytes column_name = 3;
+}
+
+message TiFlashSchema {
+    repeated TiFlashColumnInfo columns = 1;
+}

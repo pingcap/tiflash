@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,7 +93,8 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 #undef CLONE
 
 
-void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 
@@ -112,20 +113,35 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 
     if (final)
     {
+<<<<<<< HEAD
         settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
             << "FINAL" << (settings.hilite ? hilite_none : "");
+=======
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str << "FINAL"
+                      << (settings.hilite ? hilite_none : "");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     if (sample_size)
     {
+<<<<<<< HEAD
         settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
             << "SAMPLE " << (settings.hilite ? hilite_none : "");
+=======
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str << "SAMPLE "
+                      << (settings.hilite ? hilite_none : "");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         sample_size->formatImpl(settings, state, frame);
 
         if (sample_offset)
         {
+<<<<<<< HEAD
             settings.ostr << (settings.hilite ? hilite_keyword : "") << ' '
                 << "OFFSET " << (settings.hilite ? hilite_none : "");
+=======
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << ' ' << "OFFSET "
+                          << (settings.hilite ? hilite_none : "");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             sample_offset->formatImpl(settings, state, frame);
         }
     }
@@ -193,7 +209,8 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
 }
 
 
-void ASTTableJoin::formatImplAfterTable(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTableJoin::formatImplAfterTable(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     frame.need_parens = false;
 
@@ -220,6 +237,7 @@ void ASTTableJoin::formatImpl(const FormatSettings & settings, FormatState & sta
 }
 
 
+<<<<<<< HEAD
 void ASTArrayJoin::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "")
@@ -232,6 +250,12 @@ void ASTArrayJoin::formatImpl(const FormatSettings & settings, FormatState & sta
 
 
 void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+=======
+void ASTTablesInSelectQueryElement::formatImpl(
+    const FormatSettings & settings,
+    FormatState & state,
+    FormatStateStacked frame) const
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     if (table_expression)
     {
@@ -254,7 +278,8 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 }
 
 
-void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+    const
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 

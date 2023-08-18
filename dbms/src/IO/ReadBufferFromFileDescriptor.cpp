@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,13 +106,16 @@ off_t ReadBufferFromFileDescriptor::doSeek(off_t offset, int whence)
     if (whence == SEEK_CUR)
         new_pos = pos_in_file - (working_buffer.end() - pos) + offset;
     else if (whence != SEEK_SET)
-        throw Exception("ReadBufferFromFileDescriptor::seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(
+            "ReadBufferFromFileDescriptor::seek expects SEEK_SET or SEEK_CUR as whence",
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     /// Position is unchanged.
     if (new_pos + (working_buffer.end() - pos) == pos_in_file)
         return new_pos;
 
-    if (hasPendingData() && new_pos <= pos_in_file && new_pos >= pos_in_file - static_cast<off_t>(working_buffer.size()))
+    if (hasPendingData() && new_pos <= pos_in_file
+        && new_pos >= pos_in_file - static_cast<off_t>(working_buffer.size()))
     {
         /// Position is still inside buffer.
         pos = working_buffer.begin() + (new_pos - (pos_in_file - working_buffer.size()));

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,4 +31,18 @@ public:
     {}
 };
 
+<<<<<<< HEAD
+=======
+class ReadBufferFromOwnString
+    : public String
+    , public ReadBufferFromString
+{
+public:
+    explicit ReadBufferFromOwnString(std::string_view s_)
+        : String(s_)
+        , ReadBufferFromString(*this)
+    {}
+};
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

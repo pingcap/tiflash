@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -236,8 +236,7 @@ void PointInPolygonWithGrid<CoordinateType>::init()
 }
 
 template <typename CoordinateType>
-void PointInPolygonWithGrid<CoordinateType>::calcGridAttributes(
-    PointInPolygonWithGrid<CoordinateType>::Box & box)
+void PointInPolygonWithGrid<CoordinateType>::calcGridAttributes(PointInPolygonWithGrid<CoordinateType>::Box & box)
 {
     boost::geometry::envelope(polygon, box);
 
@@ -343,8 +342,7 @@ bool PointInPolygonWithGrid<CoordinateType>::contains(CoordinateType x, Coordina
 }
 
 template <typename CoordinateType>
-typename PointInPolygonWithGrid<CoordinateType>::Distance
-PointInPolygonWithGrid<CoordinateType>::distance(
+typename PointInPolygonWithGrid<CoordinateType>::Distance PointInPolygonWithGrid<CoordinateType>::distance(
     const PointInPolygonWithGrid<CoordinateType>::Point & point,
     const PointInPolygonWithGrid<CoordinateType>::Polygon & polygon)
 {
@@ -360,10 +358,10 @@ PointInPolygonWithGrid<CoordinateType>::distance(
 }
 
 template <typename CoordinateType>
-std::vector<typename PointInPolygonWithGrid<CoordinateType>::HalfPlane>
-PointInPolygonWithGrid<CoordinateType>::findHalfPlanes(
-    const PointInPolygonWithGrid<CoordinateType>::Box & box,
-    const PointInPolygonWithGrid<CoordinateType>::Polygon & intersection)
+std::vector<typename PointInPolygonWithGrid<CoordinateType>::HalfPlane> PointInPolygonWithGrid<CoordinateType>::
+    findHalfPlanes(
+        const PointInPolygonWithGrid<CoordinateType>::Box & box,
+        const PointInPolygonWithGrid<CoordinateType>::Polygon & intersection)
 {
     std::vector<HalfPlane> half_planes;
     Polygon bound;
@@ -588,13 +586,17 @@ struct CallPointInPolygon<>
     template <typename T, typename PointInPolygonImpl>
     static ColumnPtr call(const ColumnVector<T> &, const IColumn & y, PointInPolygonImpl &&)
     {
-        throw Exception(std::string("Unknown numeric column type: ") + demangle(typeid(y).name()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            std::string("Unknown numeric column type: ") + demangle(typeid(y).name()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     template <typename PointInPolygonImpl>
     static ColumnPtr call(const IColumn & x, const IColumn &, PointInPolygonImpl &&)
     {
-        throw Exception(std::string("Unknown numeric column type: ") + demangle(typeid(x).name()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            std::string("Unknown numeric column type: ") + demangle(typeid(x).name()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 };
 

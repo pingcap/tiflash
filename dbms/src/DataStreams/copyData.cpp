@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,11 @@ bool isAtomicSet(std::atomic<bool> * val)
 }
 
 template <typename TCancelCallback, typename TProgressCallback>
-void copyDataImpl(IBlockInputStream & from, IBlockOutputStream & to, TCancelCallback && is_cancelled, TProgressCallback && progress)
+void copyDataImpl(
+    IBlockInputStream & from,
+    IBlockOutputStream & to,
+    TCancelCallback && is_cancelled,
+    TProgressCallback && progress)
 {
     from.readPrefix();
     to.writePrefix();
@@ -84,8 +88,16 @@ void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::func
     copyDataImpl(from, to, is_cancelled, doNothing);
 }
 
+<<<<<<< HEAD
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled,
               const std::function<void(const Block & block)> & progress)
+=======
+void copyData(
+    IBlockInputStream & from,
+    IBlockOutputStream & to,
+    const std::function<bool()> & is_cancelled,
+    const std::function<void(const Block & block)> & progress)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     copyDataImpl(from, to, is_cancelled, progress);
 }

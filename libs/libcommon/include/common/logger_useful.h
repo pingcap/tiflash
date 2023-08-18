@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,9 +112,71 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
         }                                                                           \
     } while (false)
 
+<<<<<<< HEAD
 #define LOG_FMT_TRACE(logger, ...) LOG_FMT_IMPL(logger, Poco::Message::PRIO_TRACE, __VA_ARGS__)
 #define LOG_FMT_DEBUG(logger, ...) LOG_FMT_IMPL(logger, Poco::Message::PRIO_DEBUG, __VA_ARGS__)
 #define LOG_FMT_INFO(logger, ...) LOG_FMT_IMPL(logger, Poco::Message::PRIO_INFORMATION, __VA_ARGS__)
 #define LOG_FMT_WARNING(logger, ...) LOG_FMT_IMPL(logger, Poco::Message::PRIO_WARNING, __VA_ARGS__)
 #define LOG_FMT_ERROR(logger, ...) LOG_FMT_IMPL(logger, Poco::Message::PRIO_ERROR, __VA_ARGS__)
 #define LOG_FMT_FATAL(logger, ...) LOG_FMT_IMPL(logger, Poco::Message::PRIO_FATAL, __VA_ARGS__)
+=======
+
+#define LOG_IMPL_0(logger, PRIORITY, message)        \
+    do                                               \
+    {                                                \
+        if ((logger)->is(PRIORITY))                  \
+            LOG_INTERNAL(logger, PRIORITY, message); \
+    } while (false)
+
+#define LOG_IMPL_1(logger, PRIORITY, fmt_str, ...)                                          \
+    do                                                                                      \
+    {                                                                                       \
+        if ((logger)->is(PRIORITY))                                                         \
+        {                                                                                   \
+            LOG_INTERNAL(logger, PRIORITY, fmt::format(FMT_COMPILE(fmt_str), __VA_ARGS__)); \
+        }                                                                                   \
+    } while (false)
+
+#define LOG_IMPL_CHOSER(...) \
+    TF_GET_29TH_ARG(         \
+        __VA_ARGS__,         \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_1,          \
+        LOG_IMPL_0)
+
+// clang-format off
+#define LOG_IMPL(logger, PRIORITY, ...) LOG_IMPL_CHOSER(__VA_ARGS__)(logger, PRIORITY, __VA_ARGS__)
+// clang-format on
+
+#define LOG_TRACE(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_TRACE, __VA_ARGS__)
+#define LOG_DEBUG(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_DEBUG, __VA_ARGS__)
+#define LOG_INFO(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_INFORMATION, __VA_ARGS__)
+#define LOG_WARNING(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_WARNING, __VA_ARGS__)
+#define LOG_ERROR(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_ERROR, __VA_ARGS__)
+#define LOG_FATAL(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_FATAL, __VA_ARGS__)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))

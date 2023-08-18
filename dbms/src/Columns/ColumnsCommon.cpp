@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ namespace DB
 /// Transform 64-byte mask to 64-bit mask.
 static UInt64 toBits64(const Int8 * bytes64)
 {
+<<<<<<< HEAD
     static const __m128i zero16 = _mm_setzero_si128();
     UInt64 res
         = static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16)))
@@ -33,11 +34,37 @@ static UInt64 toBits64(const Int8 * bytes64)
         | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32)
         | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48);
 
+=======
+#if defined(__AVX2__)
+    const auto check_block = _mm256_setzero_si256();
+    uint64_t mask0 = mem_utils::details::get_block32_cmp_eq_mask(bytes64, check_block);
+    uint64_t mask1
+        = mem_utils::details::get_block32_cmp_eq_mask(bytes64 + mem_utils::details::BLOCK32_SIZE, check_block);
+    auto res = mask0 | (mask1 << mem_utils::details::BLOCK32_SIZE);
+    return ~res;
+#elif defined(__SSE2__)
+    const auto zero16 = _mm_setzero_si128();
+    UInt64 res = static_cast<UInt64>(_mm_movemask_epi8(
+                     _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16)))
+        | (static_cast<UInt64>(_mm_movemask_epi8(
+               _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16)))
+           << 16)
+        | (static_cast<UInt64>(_mm_movemask_epi8(
+               _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16)))
+           << 32)
+        | (static_cast<UInt64>(_mm_movemask_epi8(
+               _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16)))
+           << 48);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     return ~res;
 }
 #endif
 
+<<<<<<< HEAD
 size_t countBytesInFilter(const UInt8 * filt, size_t sz)
+=======
+ALWAYS_INLINE inline static size_t CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     size_t count = 0;
 
@@ -70,7 +97,25 @@ size_t countBytesInFilter(const IColumn::Filter & filt)
     return countBytesInFilter(filt.data(), filt.size());
 }
 
+<<<<<<< HEAD
 size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map)
+=======
+static inline size_t CountBytesInFilterWithNull(const Int8 * p1, const Int8 * p2, size_t size)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < size; ++i)
+    {
+        count += (p1[i] & ~p2[i]) != 0;
+    }
+    return count;
+}
+
+static inline size_t CountBytesInFilterWithNull(
+    const IColumn::Filter & filt,
+    const UInt8 * null_map,
+    size_t start,
+    size_t end)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     size_t count = 0;
 
@@ -126,10 +171,7 @@ struct ResultOffsetsBuilder
         : res_offsets(*res_offsets_)
     {}
 
-    void reserve(size_t result_size_hint)
-    {
-        res_offsets.reserve(result_size_hint);
-    }
+    void reserve(size_t result_size_hint) { res_offsets.reserve(result_size_hint); }
 
     void insertOne(size_t array_size)
     {
@@ -173,13 +215,8 @@ struct NoResultOffsetsBuilder
     void insertOne(size_t) {}
 
     template <size_t SIMD_BYTES>
-    void insertChunk(
-        const IColumn::Offset *,
-        bool,
-        IColumn::Offset,
-        size_t)
-    {
-    }
+    void insertChunk(const IColumn::Offset *, bool, IColumn::Offset, size_t)
+    {}
 };
 
 
@@ -194,7 +231,13 @@ void filterArraysImplGeneric(
 {
     const size_t size = src_offsets.size();
     if (size != filt.size())
+<<<<<<< HEAD
         throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+=======
+        throw Exception(
+            fmt::format("size of filter {} doesn't match size of column {}", filt.size(), size),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     ResultOffsetsBuilder result_offsets_builder(res_offsets);
 
@@ -234,9 +277,14 @@ void filterArraysImplGeneric(
 
     while (filt_pos < filt_end_aligned)
     {
+<<<<<<< HEAD
         const auto mask = _mm_movemask_epi8(_mm_cmpgt_epi8(
             _mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)),
             zero_vec));
+=======
+        uint32_t mask
+            = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero_vec));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         if (mask == 0)
         {
@@ -290,7 +338,13 @@ void filterArraysImpl(
     const IColumn::Filter & filt,
     ssize_t result_size_hint)
 {
-    return filterArraysImplGeneric<T, ResultOffsetsBuilder>(src_elems, src_offsets, res_elems, &res_offsets, filt, result_size_hint);
+    return filterArraysImplGeneric<T, ResultOffsetsBuilder>(
+        src_elems,
+        src_offsets,
+        res_elems,
+        &res_offsets,
+        filt,
+        result_size_hint);
 }
 
 template <typename T>
@@ -301,7 +355,13 @@ void filterArraysImplOnlyData(
     const IColumn::Filter & filt,
     ssize_t result_size_hint)
 {
-    return filterArraysImplGeneric<T, NoResultOffsetsBuilder>(src_elems, src_offsets, res_elems, nullptr, filt, result_size_hint);
+    return filterArraysImplGeneric<T, NoResultOffsetsBuilder>(
+        src_elems,
+        src_offsets,
+        res_elems,
+        nullptr,
+        filt,
+        result_size_hint);
 }
 
 

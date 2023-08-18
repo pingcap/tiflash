@@ -1,0 +1,35 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+mysql> drop table if exists test.f;
+mysql> CREATE TABLE test.f (a char(20),b int, id int);
+mysql> insert into test.f values('abc',1,1);
+mysql> insert into test.f values('pingcap',2,1);
+mysql> insert into test.f values('li',-1,1);
+mysql> insert into test.f values(null,4,1);
+mysql> insert into test.f values('ww',null,1);
+mysql> alter table test.f set tiflash replica 1;
+func> wait_table test f
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select a,b,repeat(a,b) from test.f;
++---------+------+----------------+
+| a       | b    | repeat(a,b)    |
++---------+------+----------------+
+| abc     |    1 | abc            |
+| pingcap |    2 | pingcappingcap |
+| li      |   -1 |                |
+| NULL    |    4 | NULL           |
+| ww      | NULL | NULL           |
++---------+------+----------------+
+

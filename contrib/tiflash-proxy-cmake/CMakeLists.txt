@@ -1,3 +1,28 @@
+<<<<<<< HEAD
+=======
+# Copyright 2022 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG)
+    set(_TIFLASH_PROXY_BUILD_PROFILE "debug")
+    set(_TIFLASH_PROXY_MAKE_COMMAND make debug)
+else()
+    set(_TIFLASH_PROXY_BUILD_PROFILE "release")
+    set(_TIFLASH_PROXY_MAKE_COMMAND make release)
+endif()
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
 set(_TIFLASH_PROXY_LIBRARY "${_TIFLASH_PROXY_SOURCE_DIR}/target/release/${CMAKE_SHARED_LIBRARY_PREFIX}tiflash_proxy${CMAKE_SHARED_LIBRARY_SUFFIX}")
 file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")

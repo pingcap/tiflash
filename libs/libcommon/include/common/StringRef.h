@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,11 @@ struct StringRef
 
     explicit operator std::string() const { return toString(); }
     constexpr explicit operator std::string_view() const { return {data, size}; }
+<<<<<<< HEAD
+=======
+
+    ALWAYS_INLINE inline int compare(const StringRef & tar) const { return mem_utils::CompareStrView({*this}, {tar}); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 /// Here constexpr doesn't implicate inline, see https://www.viva64.com/en/w/v1043/

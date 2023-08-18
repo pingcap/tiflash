@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,7 +83,22 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+<<<<<<< HEAD
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
+=======
+    static String buildGroupingFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
+    static String buildDefaultFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
+    using FunctionBuilder
+        = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
 
     static FunctionBuilderMap function_builder_map;

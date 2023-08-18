@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,9 +67,7 @@ public:
             std::unique_lock lock_cv(m_cv);
             has_receiver = true;
             cv.notify_all();
-            cv.wait(lock_cv, [this] {
-                return has_data || is_closing;
-            });
+            cv.wait(lock_cv, [this] { return has_data || is_closing; });
             if (is_closing)
                 return false;
             has_data = false; // consumes one data
@@ -90,9 +88,7 @@ public:
         auto is_wait_fulfilled = [this]() {
             std::unique_lock lock_send(m_send);
             std::unique_lock lock_cv(m_cv);
-            cv.wait(lock_cv, [this] {
-                return (has_receiver && !has_data) || is_closing;
-            });
+            cv.wait(lock_cv, [this] { return (has_receiver && !has_data) || is_closing; });
             if (is_closing)
                 return false;
             has_data = true;

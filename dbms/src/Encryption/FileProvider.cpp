@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,11 +32,27 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     const ReadLimiterPtr & read_limiter,
     int flags) const
 {
+<<<<<<< HEAD
     RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
+=======
+    RandomAccessFilePtr file;
+    if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
+    {
+        file = S3::S3RandomAccessFile::create(view.toFullKey());
+    }
+    else
+    {
+        // Unrecognized xx:// protocol.
+        RUNTIME_CHECK_MSG(file_path_.find("://") == std::string::npos, "Unsupported protocol in path {}", file_path_);
+        file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
     if (encryption_info.res != FileEncryptionRes::Disabled && encryption_info.method != EncryptionMethod::Plaintext)
     {
-        file = std::make_shared<EncryptedRandomAccessFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+        file = std::make_shared<EncryptedRandomAccessFile>(
+            file,
+            AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
     }
     return file;
 }
@@ -50,18 +66,37 @@ WritableFilePtr FileProvider::newWritableFile(
     int flags,
     mode_t mode) const
 {
+<<<<<<< HEAD
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
+=======
+    WritableFilePtr file;
+    if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
+    {
+        file = S3::S3WritableFile::create(view.toFullKey());
+    }
+    else
+    {
+        // Unrecognized xx:// protocol.
+        RUNTIME_CHECK_MSG(file_path_.find("://") == std::string::npos, "Unsupported protocol in path {}", file_path_);
+        file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-        file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+        file = std::make_shared<EncryptedWritableFile>(
+            file,
+            AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
     }
     else if (!create_new_encryption_info_)
     {
         auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-        if (encryption_info.method != EncryptionMethod::Unknown && encryption_info.method != EncryptionMethod::Plaintext)
+        if (encryption_info.method != EncryptionMethod::Unknown
+            && encryption_info.method != EncryptionMethod::Plaintext)
         {
-            file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+            file = std::make_shared<EncryptedWritableFile>(
+                file,
+                AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
         }
     }
     return file;
@@ -77,18 +112,29 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
     int flags,
     mode_t mode) const
 {
-    WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_, read_limiter);
+    WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(
+        file_path_,
+        truncate_if_exists_,
+        flags,
+        mode,
+        write_limiter_,
+        read_limiter);
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-        file = std::make_shared<EncryptedWriteReadableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+        file = std::make_shared<EncryptedWriteReadableFile>(
+            file,
+            AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
     }
     else if (!create_new_encryption_info_)
     {
         auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-        if (encryption_info.method != EncryptionMethod::Unknown && encryption_info.method != EncryptionMethod::Plaintext)
+        if (encryption_info.method != EncryptionMethod::Unknown
+            && encryption_info.method != EncryptionMethod::Plaintext)
         {
-            file = std::make_shared<EncryptedWriteReadableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+            file = std::make_shared<EncryptedWriteReadableFile>(
+                file,
+                AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
         }
     }
     return file;
@@ -140,7 +186,9 @@ void FileProvider::deleteRegularFile(const String & file_path_, const Encryption
     {
         if (unlikely(!data_file.isFile()))
         {
-            throw DB::TiFlashException("File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
+            throw DB::TiFlashException(
+                "File: " + data_file.path() + " is not a regular file",
+                Errors::Encryption::Internal);
         }
         // Remove the file on disk before removing the encryption key. Or we may leave an encrypted file without the encryption key
         // and the encrypted file can not be read.
@@ -164,7 +212,9 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
     key_manager->deleteFile(encryption_path_.full_path, throw_on_error);
 }
 
-void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & link_encryption_name_) const
+void FileProvider::linkEncryptionInfo(
+    const EncryptionPath & src_encryption_path_,
+    const EncryptionPath & link_encryption_name_) const
 {
     // delete the encryption info for dst_path if any
     if (isFileEncrypted(link_encryption_name_))
@@ -176,7 +226,8 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
 {
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
     // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted
-    return (encryption_info.res != FileEncryptionRes::Disabled) && (encryption_info.method != EncryptionMethod::Plaintext);
+    return (encryption_info.res != FileEncryptionRes::Disabled)
+        && (encryption_info.method != EncryptionMethod::Plaintext);
 }
 
 bool FileProvider::isEncryptionEnabled() const
@@ -198,18 +249,20 @@ void FileProvider::renameFile(
     }
     if (unlikely(src_encryption_path_.file_name != dst_encryption_path_.file_name))
     {
-        throw DB::TiFlashException("The src file name: " + src_encryption_path_.file_name
-                                       + " should be identical to dst file name: " + dst_encryption_path_.file_name,
-                                   Errors::Encryption::Internal);
+        throw DB::TiFlashException(
+            "The src file name: " + src_encryption_path_.file_name
+                + " should be identical to dst file name: " + dst_encryption_path_.file_name,
+            Errors::Encryption::Internal);
     }
 
     if (!rename_encryption_info_)
     {
         if (unlikely(src_encryption_path_.full_path != dst_encryption_path_.full_path))
         {
-            throw DB::TiFlashException("Src file encryption full path: " + src_encryption_path_.full_path
-                                           + " must be same with dst file encryption full path" + dst_encryption_path_.full_path,
-                                       Errors::Encryption::Internal);
+            throw DB::TiFlashException(
+                "Src file encryption full path: " + src_encryption_path_.full_path
+                    + " must be same with dst file encryption full path" + dst_encryption_path_.full_path,
+                Errors::Encryption::Internal);
         }
         data_file.renameTo(dst_file_path_);
         return;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,6 +98,22 @@ public:
         case EncryptionMethod::Aes256Ctr:
             cipher = EVP_aes_256_ctr();
             break;
+<<<<<<< HEAD
+=======
+        case EncryptionMethod::SM4Ctr:
+#if USE_GM_SSL
+            // Use sm4 in GmSSL, don't need to do anything here
+            break;
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+            throw DB::TiFlashException(
+                "Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
+                Errors::Encryption::Internal);
+#else
+            // Openssl support SM4 after 1.1.1 release version.
+            cipher = EVP_sm4_ctr();
+            break;
+#endif
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         default:
             DBMS_ASSERT(false);
         }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,10 +63,11 @@ Names ExpressionAction::getNeededColumns() const
 }
 
 
-ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & function_,
-                                                 const std::vector<std::string> & argument_names_,
-                                                 std::string result_name_,
-                                                 const TiDB::TiDBCollatorPtr & collator_)
+ExpressionAction ExpressionAction::applyFunction(
+    const FunctionBuilderPtr & function_,
+    const std::vector<std::string> & argument_names_,
+    std::string result_name_,
+    const TiDB::TiDBCollatorPtr & collator_)
 {
     if (result_name_.empty())
     {
@@ -134,6 +135,7 @@ ExpressionAction ExpressionAction::project(const Names & projected_columns_)
     return a;
 }
 
+<<<<<<< HEAD
 ExpressionAction ExpressionAction::arrayJoin(const NameSet & array_joined_columns, bool array_join_is_left, const Context & context)
 {
     if (array_joined_columns.empty())
@@ -150,6 +152,11 @@ ExpressionAction ExpressionAction::arrayJoin(const NameSet & array_joined_column
 }
 
 ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_)
+=======
+ExpressionAction ExpressionAction::ordinaryJoin(
+    std::shared_ptr<const Join> join_,
+    const NamesAndTypesList & columns_added_by_join_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     ExpressionAction a;
     a.type = JOIN;
@@ -268,6 +275,35 @@ void ExpressionAction::prepare(Block & sample_block)
         break;
     }
 
+<<<<<<< HEAD
+=======
+    case EXPAND:
+    {
+        // sample_block is just for schema check followed by later block, modify it if your schema has changed during this action.
+        auto name_set = expand->getAllGroupSetColumnNames();
+        // make grouping set column to be nullable.
+        for (const auto & col_name : name_set)
+        {
+            auto & column_with_name = sample_block.getByName(col_name);
+            column_with_name.type = makeNullable(column_with_name.type);
+            if (column_with_name.column != nullptr)
+                column_with_name.column = makeNullable(column_with_name.column);
+        }
+        // fill one more column: groupingID.
+        sample_block.insert(
+            {nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
+        break;
+    }
+    case CONVERT_TO_NULLABLE:
+    {
+        // sample block doesn't have the real column pointer, meaning sample_block.getByName(col_need_to_nullable).column will null.
+        // so expanding column if const for sample_block.getByName(col_need_to_nullable).column is meaningless.
+        if (!sample_block.getByName(col_need_to_nullable).type->isNullable())
+            convertColumnToNullable(sample_block.getByName(col_need_to_nullable));
+        break;
+    }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     case PROJECT:
     {
         Block new_block;
@@ -304,7 +340,8 @@ void ExpressionAction::prepare(Block & sample_block)
     case COPY_COLUMN:
     {
         result_type = sample_block.getByName(source_name).type;
-        sample_block.insert(ColumnWithTypeAndName(sample_block.getByName(source_name).column, result_type, result_name));
+        sample_block.insert(
+            ColumnWithTypeAndName(sample_block.getByName(source_name).column, result_type, result_name));
         break;
     }
 
@@ -318,7 +355,9 @@ void ExpressionAction::execute(Block & block) const
 {
     if (type == REMOVE_COLUMN || type == COPY_COLUMN)
         if (!block.has(source_name))
-            throw Exception("Not found column '" + source_name + "'. There are columns: " + block.dumpNames(), ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+            throw Exception(
+                "Not found column '" + source_name + "'. There are columns: " + block.dumpNames(),
+                ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 
     if (type == ADD_COLUMN || type == COPY_COLUMN || type == APPLY_FUNCTION)
         if (block.has(result_name))
@@ -468,8 +507,7 @@ std::string ExpressionAction::toString() const
     switch (type)
     {
     case ADD_COLUMN:
-        ss << "ADD " << result_name << " "
-           << (result_type ? result_type->getName() : "(no type)") << " "
+        ss << "ADD " << result_name << " " << (result_type ? result_type->getName() : "(no type)") << " "
            << (added_column ? added_column->getName() : "(no column)");
         break;
 
@@ -482,8 +520,7 @@ std::string ExpressionAction::toString() const
         break;
 
     case APPLY_FUNCTION:
-        ss << "FUNCTION " << result_name << " "
-           << (result_type ? result_type->getName() : "(no type)") << " = "
+        ss << "FUNCTION " << result_name << " " << (result_type ? result_type->getName() : "(no type)") << " = "
            << (function ? function->getName() : "(no function)") << "(";
         for (size_t i = 0; i < argument_names.size(); ++i)
         {
@@ -602,7 +639,9 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
         for (size_t i = 0; i < action.argument_names.size(); ++i)
         {
             if (!sample_block.has(action.argument_names[i]))
-                throw Exception("Unknown identifier: '" + action.argument_names[i] + "'", ErrorCodes::UNKNOWN_IDENTIFIER);
+                throw Exception(
+                    "Unknown identifier: '" + action.argument_names[i] + "'",
+                    ErrorCodes::UNKNOWN_IDENTIFIER);
             arguments[i] = sample_block.getByName(action.argument_names[i]);
         }
 
@@ -734,9 +773,9 @@ void ExpressionActions::finalize(const Names & output_columns)
     for (const auto & name : output_columns)
     {
         if (!sample_block.has(name))
-            throw Exception("Unknown column: " + name + ", there are only columns "
-                                + sample_block.dumpNames(),
-                            ErrorCodes::UNKNOWN_IDENTIFIER);
+            throw Exception(
+                "Unknown column: " + name + ", there are only columns " + sample_block.dumpNames(),
+                ErrorCodes::UNKNOWN_IDENTIFIER);
         final_columns.insert(name);
     }
 
@@ -795,7 +834,9 @@ void ExpressionActions::finalize(const Names & output_columns)
             if (!out.empty())
             {
                 /// If the result is not used and there are no side effects, throw out the action.
-                if (!needed_columns.count(out) && (action.type == ExpressionAction::APPLY_FUNCTION || action.type == ExpressionAction::ADD_COLUMN || action.type == ExpressionAction::COPY_COLUMN))
+                if (!needed_columns.count(out)
+                    && (action.type == ExpressionAction::APPLY_FUNCTION || action.type == ExpressionAction::ADD_COLUMN
+                        || action.type == ExpressionAction::COPY_COLUMN))
                 {
                     actions.erase(actions.begin() + i);
 
@@ -1088,8 +1129,7 @@ std::string ExpressionActionsChain::dumpChain()
         ss << "required output:\n";
         for (const std::string & name : steps[i].required_output)
             ss << name << "\n";
-        ss << "\n"
-           << steps[i].actions->dumpActions() << "\n";
+        ss << "\n" << steps[i].actions->dumpActions() << "\n";
     }
 
     return ss.str();

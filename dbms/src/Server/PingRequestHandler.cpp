@@ -1,4 +1,8 @@
+<<<<<<< HEAD:dbms/src/Server/PingRequestHandler.cpp
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Executor/ExecutionResult.h
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +37,7 @@ void PingRequestHandler::handleRequest(
         const auto & config = server.config();
         setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
 
+<<<<<<< HEAD:dbms/src/Server/PingRequestHandler.cpp
         const char * data = "Ok.\n";
         response.sendBuffer(data, strlen(data));
     }
@@ -41,5 +46,8 @@ void PingRequestHandler::handleRequest(
         tryLogCurrentException("PingRequestHandler");
     }
 }
+=======
+    static ExecutionResult success() { return {true, nullptr}; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Executor/ExecutionResult.h
 
 }

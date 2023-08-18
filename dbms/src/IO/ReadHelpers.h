@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -594,7 +594,8 @@ ReturnType readMyDateTextImpl(UInt64 & date, ReadBuffer & buf)
     /// Optimistic path, when whole value is in buffer.
     if (buf.position() + 10 <= buf.buffer().end())
     {
-        UInt16 year = (buf.position()[0] - '0') * 1000 + (buf.position()[1] - '0') * 100 + (buf.position()[2] - '0') * 10 + (buf.position()[3] - '0');
+        UInt16 year = (buf.position()[0] - '0') * 1000 + (buf.position()[1] - '0') * 100
+            + (buf.position()[2] - '0') * 10 + (buf.position()[3] - '0');
         buf.position() += 5;
 
         UInt8 month = buf.position()[0] - '0';
@@ -650,7 +651,8 @@ inline void readDateText(LocalDate & date, ReadBuffer & buf)
     /// Optimistic path, when whole value is in buffer.
     if (buf.position() + 10 <= buf.buffer().end())
     {
-        UInt16 year = (buf.position()[0] - '0') * 1000 + (buf.position()[1] - '0') * 100 + (buf.position()[2] - '0') * 10 + (buf.position()[3] - '0');
+        UInt16 year = (buf.position()[0] - '0') * 1000 + (buf.position()[1] - '0') * 100
+            + (buf.position()[2] - '0') * 10 + (buf.position()[3] - '0');
         buf.position() += 5;
 
         UInt8 month = buf.position()[0] - '0';
@@ -696,7 +698,9 @@ inline void readUUIDText(UUID & uuid, ReadBuffer & buf)
         throw Exception(std::string("Cannot parse uuid ") + s, ErrorCodes::CANNOT_PARSE_UUID);
     }
 
-    parseUUID(reinterpret_cast<const UInt8 *>(s), std::reverse_iterator<UInt8 *>(reinterpret_cast<UInt8 *>(&uuid) + 16));
+    parseUUID(
+        reinterpret_cast<const UInt8 *>(s),
+        std::reverse_iterator<UInt8 *>(reinterpret_cast<UInt8 *>(&uuid) + 16));
 }
 
 
@@ -852,8 +856,7 @@ inline void readDateTimeText(LocalDateTime & datetime, ReadBuffer & buf)
 
 /// Generic methods to read value in native binary format.
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readBinary(T & x, ReadBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> readBinary(T & x, ReadBuffer & buf)
 {
     readPODBinary(x, buf);
 }
@@ -887,15 +890,13 @@ inline void readBinary(Decimal<T> & x, ReadBuffer & buf)
 
 /// Generic methods to read value in text tab-separated format.
 template <typename T>
-inline std::enable_if_t<std::is_integral_v<T>, void>
-readText(T & x, ReadBuffer & buf)
+inline std::enable_if_t<std::is_integral_v<T>, void> readText(T & x, ReadBuffer & buf)
 {
     readIntText(x, buf);
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_floating_point_v<T>, void>
-readText(T & x, ReadBuffer & buf)
+inline std::enable_if_t<std::is_floating_point_v<T>, void> readText(T & x, ReadBuffer & buf)
 {
     readFloatText(x, buf);
 }
@@ -931,8 +932,7 @@ inline void readText(UInt128 &, ReadBuffer &)
 /// Generic methods to read value in text format,
 ///  possibly in single quotes (only for data types that use quotes in VALUES format of INSERT statement in SQL).
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readQuoted(T & x, ReadBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> readQuoted(T & x, ReadBuffer & buf)
 {
     readText(x, buf);
 }
@@ -959,8 +959,7 @@ inline void readQuoted(LocalDateTime & x, ReadBuffer & buf)
 
 /// Same as above, but in double quotes.
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readDoubleQuoted(T & x, ReadBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> readDoubleQuoted(T & x, ReadBuffer & buf)
 {
     readText(x, buf);
 }
@@ -1053,8 +1052,7 @@ inline void readDateTimeCSV(time_t & datetime, ReadBuffer & buf, const DateLUTIm
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readCSV(T & x, ReadBuffer & buf)
+inline std::enable_if_t<std::is_arithmetic_v<T>, void> readCSV(T & x, ReadBuffer & buf)
 {
     readCSVSimple(x, buf);
 }
@@ -1210,11 +1208,8 @@ inline T parse(const String & s)
   */
 inline void skipBOMIfExists(ReadBuffer & buf)
 {
-    if (!buf.eof()
-        && buf.position() + 3 < buf.buffer().end()
-        && buf.position()[0] == '\xEF'
-        && buf.position()[1] == '\xBB'
-        && buf.position()[2] == '\xBF')
+    if (!buf.eof() && buf.position() + 3 < buf.buffer().end() && buf.position()[0] == '\xEF'
+        && buf.position()[1] == '\xBB' && buf.position()[2] == '\xBF')
     {
         buf.position() += 3;
     }

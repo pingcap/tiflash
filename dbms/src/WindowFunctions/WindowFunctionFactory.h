@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,14 +42,21 @@ public:
 
     /// Register a function by its name.
     /// No locking, you must register all functions before usage of get.
-    void registerFunction(
-        const String & name,
-        Creator creator);
+    void registerFunction(const String & name, Creator creator);
 
+<<<<<<< HEAD
+=======
+    template <typename Function>
+    void registerFunction()
+    {
+        registerFunction(Function::name, [](const DataTypes & argument_types) {
+            return std::make_shared<Function>(argument_types);
+        });
+    }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     /// Throws an exception if not found.
-    WindowFunctionPtr get(
-        const String & name,
-        const DataTypes & argument_types) const;
+    WindowFunctionPtr get(const String & name, const DataTypes & argument_types) const;
 
     /// Returns nullptr if not found.
     WindowFunctionPtr tryGet(const String & name, const DataTypes & argument_types) const;
@@ -57,9 +64,7 @@ public:
     bool isWindowFunctionName(const String & name) const;
 
 private:
-    WindowFunctionPtr getImpl(
-        const String & name,
-        const DataTypes & argument_types) const;
+    WindowFunctionPtr getImpl(const String & name, const DataTypes & argument_types) const;
 
 private:
     using WindowFunctions = std::unordered_map<String, Creator>;

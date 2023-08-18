@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@ namespace DB
 {
 ColumnWithTypeAndName ColumnWithTypeAndName::cloneEmpty() const
 {
-    ColumnWithTypeAndName res{(column != nullptr ? column->cloneEmpty() : nullptr), type, name, column_id, default_value};
+    ColumnWithTypeAndName
+        res{(column != nullptr ? column->cloneEmpty() : nullptr), type, name, column_id, default_value};
     return res;
 }
 
@@ -56,7 +57,28 @@ String ColumnWithTypeAndName::dumpStructure() const
 {
     WriteBufferFromOwnString out;
     dumpStructure(out);
+<<<<<<< HEAD
     return out.str();
+=======
+    return out.releaseStr();
+}
+
+void ColumnWithTypeAndName::dumpJsonStructure(WriteBuffer & out) const
+{
+    out << fmt::format(
+        R"json({{"name":"{}","id":{},"type":{},"column":{}}})json",
+        name,
+        column_id,
+        (type ? "\"" + type->getName() + "\"" : "null"),
+        (column ? "\"" + column->dumpStructure() + "\"" : "null"));
+}
+
+String ColumnWithTypeAndName::dumpJsonStructure() const
+{
+    WriteBufferFromOwnString out;
+    dumpJsonStructure(out);
+    return out.releaseStr();
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 } // namespace DB

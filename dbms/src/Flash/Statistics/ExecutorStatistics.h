@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,13 +53,21 @@ public:
         });
     }
 
+<<<<<<< HEAD
     virtual String toJson() const override
+=======
+    void setChild(const String & child_id) override { children.push_back(child_id); }
+
+    void setChildren(const std::vector<String> & children_) override
+    {
+        children.insert(children.end(), children_.begin(), children_.end());
+    }
+
+    String toJson() const override
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         FmtBuffer fmt_buffer;
-        fmt_buffer.fmtAppend(
-            R"({{"id":"{}","type":"{}","children":[)",
-            executor_id,
-            type);
+        fmt_buffer.fmtAppend(R"({{"id":"{}","type":"{}","children":[)", executor_id, type);
         fmt_buffer.joinStr(
             children.cbegin(),
             children.cend(),
@@ -82,6 +94,7 @@ public:
         auto it = profile_streams_map.find(executor_id);
         if (it != profile_streams_map.end())
         {
+<<<<<<< HEAD
             for (const auto & input_stream : it->second)
             {
                 auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get());
@@ -89,6 +102,22 @@ public:
                 const auto & profile_info = p_stream->getProfileInfo();
                 base.append(profile_info);
             }
+=======
+        case ExecutionMode::None:
+            break;
+        case ExecutionMode::Stream:
+            transformProfileForStream(dag_context, executor_id, [&](const IProfilingBlockInputStream & p_stream) {
+                base.append(p_stream.getProfileInfo());
+            });
+            // Special handling of join build time is only required for streams.
+            collectJoinBuildTime();
+            break;
+        case ExecutionMode::Pipeline:
+            transformProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+                base.append(profile_info);
+            });
+            break;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         }
         if constexpr (ExecutorImpl::has_extra_info)
         {
@@ -96,10 +125,7 @@ public:
         }
     }
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return ExecutorImpl::isMatch(executor);
-    }
+    static bool isMatch(const tipb::Executor * executor) { return ExecutorImpl::isMatch(executor); }
 
 protected:
     String executor_id;
@@ -112,5 +138,35 @@ protected:
     virtual void appendExtraJson(FmtBuffer &) const {}
 
     virtual void collectExtraRuntimeDetail() {}
+<<<<<<< HEAD
+=======
+
+    void collectJoinBuildTime()
+    {
+        /// for join need to add the build time
+        /// In TiFlash, a hash join's build side is finished before probe side starts,
+        /// so the join probe side's running time does not include hash table's build time,
+        /// when construct Execution Summaries, we need add the build cost to probe executor
+        auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(executor_id);
+        if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
+        {
+            for (const auto & join_executor_id : all_join_id_it->second)
+            {
+                auto it = dag_context.getJoinExecuteInfoMap().find(join_executor_id);
+                if (it != dag_context.getJoinExecuteInfoMap().end())
+                {
+                    UInt64 time = 0;
+                    for (const auto & join_build_stream : it->second.join_build_streams)
+                    {
+                        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get());
+                            p_stream)
+                            time = std::max(time, p_stream->getProfileInfo().execution_time);
+                    }
+                    process_time_for_join_build += time;
+                }
+            }
+        }
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 } // namespace DB

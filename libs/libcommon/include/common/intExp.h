@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,16 +32,27 @@ inline uint64_t intExp10(int x)
     if (x > 19)
         return std::numeric_limits<uint64_t>::max();
 
-    static const uint64_t table[20] =
-    {
-        1ULL,                   10ULL,                   100ULL,
-        1000ULL,                10000ULL,                100000ULL,
-        1000000ULL,             10000000ULL,             100000000ULL,
-        1000000000ULL,          10000000000ULL,          100000000000ULL,
-        1000000000000ULL,       10000000000000ULL,       100000000000000ULL,
-        1000000000000000ULL,    10000000000000000ULL,    100000000000000000ULL,
-        1000000000000000000ULL, 10000000000000000000ULL
-    };
+    static const uint64_t table[20]
+        = {1ULL,
+           10ULL,
+           100ULL,
+           1000ULL,
+           10000ULL,
+           100000ULL,
+           1000000ULL,
+           10000000ULL,
+           100000000ULL,
+           1000000000ULL,
+           10000000000ULL,
+           100000000000ULL,
+           1000000000000ULL,
+           10000000000000ULL,
+           100000000000000ULL,
+           1000000000000000ULL,
+           10000000000000000ULL,
+           100000000000000000ULL,
+           1000000000000000000ULL,
+           10000000000000000000ULL};
 
     return table[x];
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -152,7 +152,11 @@ void WriteLimiter::request(Int64 bytes)
     Stopwatch sw_pending;
     Int64 wait_times = 0;
     auto pending_request = pendingRequestMetrics(type);
+<<<<<<< HEAD
 
+=======
+    SCOPE_EXIT({ metricPendingDuration(type, sw_pending.elapsedSeconds()); });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     // request cannot be satisfied at this moment, enqueue
     Request r(bytes);
     req_queue.push_back(&r);
@@ -210,7 +214,17 @@ void WriteLimiter::request(Int64 bytes)
             }
         }
     }
+<<<<<<< HEAD
     LOG_FMT_TRACE(log, "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}", sw_pending.elapsed() / 1000, wait_times, req_queue.size(), refill_balance_per_period * 1000 / refill_period_ms);
+=======
+    LOG_TRACE(
+        log,
+        "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}",
+        sw_pending.elapsed() / 1000,
+        wait_times,
+        req_queue.size(),
+        refill_balance_per_period * 1000 / refill_period_ms);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 size_t WriteLimiter::setStop()
@@ -284,11 +298,13 @@ LimiterStat WriteLimiter::getStat()
     UInt64 elapsed_ms = stat_stop_watch.elapsedMilliseconds();
     if (refill_period_ms == 0 || refill_balance_per_period == 0 || elapsed_ms < refill_period_ms)
     {
-        throw DB::Exception(fmt::format("elapsed_ms {} refill_period_ms {} refill_balance_per_period {} is invalid.",
-                                        elapsed_ms,
-                                        refill_period_ms,
-                                        refill_balance_per_period),
-                            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception(
+            fmt::format(
+                "elapsed_ms {} refill_period_ms {} refill_balance_per_period {} is invalid.",
+                elapsed_ms,
+                refill_period_ms,
+                refill_balance_per_period),
+            ErrorCodes::LOGICAL_ERROR);
     }
     // Get and Reset
     LimiterStat stat(alloc_bytes, elapsed_ms, refill_period_ms, refill_balance_per_period);
@@ -324,11 +340,20 @@ ReadLimiter::ReadLimiter(
 
 Int64 ReadLimiter::getAvailableBalance()
 {
+<<<<<<< HEAD
     TimePoint us = now();
     // Not call getIOStatisctics() every time for performance.
     // If the clock back, elapsed_us could be negative.
     Int64 elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(us - last_stat_time).count();
     if (get_io_statistic_period_us != 0 && elapsed_us < get_io_statistic_period_us)
+=======
+    Int64 bytes = get_read_bytes();
+    if (unlikely(bytes < last_stat_bytes))
+    {
+        LOG_WARNING(log, "last_stat: {} current_stat: {}", last_stat_bytes, bytes);
+    }
+    else if (likely(bytes == last_stat_bytes))
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         return available_balance;
     }
@@ -667,10 +692,27 @@ void IORateLimiter::runAutoTune()
     auto auto_tune_worker = [&]() {
         while (!stop.load(std::memory_order_relaxed))
         {
+<<<<<<< HEAD
             ::sleep(io_config.auto_tune_sec > 0 ? io_config.auto_tune_sec : 1);
             if (io_config.auto_tune_sec > 0)
             {
                 autoTune();
+=======
+            std::this_thread::sleep_for(std::chrono::milliseconds(update_read_info_period_ms));
+            auto now_time_point = clock::now();
+            if ((io_config.auto_tune_sec > 0)
+                && (now_time_point - auto_tune_time >= std::chrono::seconds(io_config.auto_tune_sec)))
+            {
+                autoTune();
+                auto_tune_time = now_time_point;
+            }
+            if ((bg_read_limiter || fg_read_limiter)
+                && likely(
+                    now_time_point - update_read_info_time >= std::chrono::milliseconds(update_read_info_period_ms)))
+            {
+                getCurrentIOInfo();
+                update_read_info_time = now_time_point;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             }
         }
     };
@@ -767,15 +809,30 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
     auto [max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec, write_tuned] = tuneWrite(max_write_bytes_per_sec);
     if (rw_tuned || read_tuned || write_tuned)
     {
+<<<<<<< HEAD
         LOG_FMT_INFO(log, "tune_msg: bg_write {} => {} fg_write {} => {} bg_read {} => {} fg_read {} => {}", bg_write_stat != nullptr ? bg_write_stat->maxBytesPerSec() : 0, max_bg_write_bytes_per_sec, fg_write_stat != nullptr ? fg_write_stat->maxBytesPerSec() : 0, max_fg_write_bytes_per_sec, bg_read_stat != nullptr ? bg_read_stat->maxBytesPerSec() : 0, max_bg_read_bytes_per_sec, fg_read_stat != nullptr ? fg_read_stat->maxBytesPerSec() : 0, max_fg_read_bytes_per_sec);
+=======
+        LOG_INFO(
+            log,
+            "tune_msg: bg_write {} => {} fg_write {} => {} bg_read {} => {} fg_read {} => {}",
+            bg_write_stat != nullptr ? bg_write_stat->maxBytesPerSec() : 0,
+            max_bg_write_bytes_per_sec,
+            fg_write_stat != nullptr ? fg_write_stat->maxBytesPerSec() : 0,
+            max_fg_write_bytes_per_sec,
+            bg_read_stat != nullptr ? bg_read_stat->maxBytesPerSec() : 0,
+            max_bg_read_bytes_per_sec,
+            fg_read_stat != nullptr ? fg_read_stat->maxBytesPerSec() : 0,
+            max_fg_read_bytes_per_sec);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
-    return {.max_bg_read_bytes_per_sec = max_bg_read_bytes_per_sec,
-            .max_fg_read_bytes_per_sec = max_fg_read_bytes_per_sec,
-            .read_tuned = read_tuned || rw_tuned,
-            .max_bg_write_bytes_per_sec = max_bg_write_bytes_per_sec,
-            .max_fg_write_bytes_per_sec = max_fg_write_bytes_per_sec,
-            .write_tuned = write_tuned || rw_tuned};
+    return {
+        .max_bg_read_bytes_per_sec = max_bg_read_bytes_per_sec,
+        .max_fg_read_bytes_per_sec = max_fg_read_bytes_per_sec,
+        .read_tuned = read_tuned || rw_tuned,
+        .max_bg_write_bytes_per_sec = max_bg_write_bytes_per_sec,
+        .max_fg_write_bytes_per_sec = max_fg_write_bytes_per_sec,
+        .write_tuned = write_tuned || rw_tuned};
 }
 
 // <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
@@ -802,8 +859,17 @@ std::tuple<Int64, Int64, bool> IOLimitTuner::tuneReadWrite() const
     }
 
     TuneInfo read_info(maxReadBytesPerSec(), avgReadBytesPerSec(), readWatermark(), io_config.getReadMaxBytesPerSec());
+<<<<<<< HEAD
     TuneInfo write_info(maxWriteBytesPerSec(), avgWriteBytesPerSec(), writeWatermark(), io_config.getWriteMaxBytesPerSec());
     LOG_FMT_INFO(log, "read_tune_info => {} write_tune_info => {}", read_info.toString(), write_info.toString());
+=======
+    TuneInfo write_info(
+        maxWriteBytesPerSec(),
+        avgWriteBytesPerSec(),
+        writeWatermark(),
+        io_config.getWriteMaxBytesPerSec());
+    LOG_INFO(log, "read_tune_info => {} write_tune_info => {}", read_info.toString(), write_info.toString());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     return tune(read_info, write_info);
 }
 
@@ -828,8 +894,7 @@ std::tuple<Int64, Int64, bool> IOLimitTuner::tuneWrite(Int64 max_bytes_per_sec) 
 }
 
 // <bg, fg, has_tune>
-std::tuple<Int64, Int64, bool>
-IOLimitTuner::tuneBgFg(
+std::tuple<Int64, Int64, bool> IOLimitTuner::tuneBgFg(
     Int64 max_bytes_per_sec,
     const LimiterStatUPtr & bg,
     Int64 config_bg_max_bytes_per_sec,
@@ -849,7 +914,8 @@ IOLimitTuner::tuneBgFg(
     TuneInfo fg_info(fg->maxBytesPerSec(), fg->avgBytesPerSec(), getWatermark(fg->pct()), config_fg_max_bytes_per_sec);
     LOG_FMT_INFO(log, "bg_tune_info => {} fg_tune_info => {}", bg_info.toString(), fg_info.toString());
     auto [tuned_bg_max_bytes_per_sec, tuned_fg_max_bytes_per_sec, has_tuned] = tune(bg_info, fg_info);
-    tuned_bg_max_bytes_per_sec = max_bytes_per_sec * tuned_bg_max_bytes_per_sec / (tuned_bg_max_bytes_per_sec + tuned_fg_max_bytes_per_sec);
+    tuned_bg_max_bytes_per_sec
+        = max_bytes_per_sec * tuned_bg_max_bytes_per_sec / (tuned_bg_max_bytes_per_sec + tuned_fg_max_bytes_per_sec);
     tuned_fg_max_bytes_per_sec = max_bytes_per_sec - tuned_bg_max_bytes_per_sec;
     return {tuned_bg_max_bytes_per_sec, tuned_fg_max_bytes_per_sec, has_tuned};
 }
@@ -881,11 +947,13 @@ std::tuple<Int64, Int64, bool> IOLimitTuner::tune(const TuneInfo & t1, const Tun
     {
         if (max_bytes_per_sec1 < t1.config_max_bytes_per_sec)
         {
-            has_tuned = calculate(max_bytes_per_sec1, max_bytes_per_sec2, t1.config_max_bytes_per_sec - max_bytes_per_sec1);
+            has_tuned
+                = calculate(max_bytes_per_sec1, max_bytes_per_sec2, t1.config_max_bytes_per_sec - max_bytes_per_sec1);
         }
         else if (max_bytes_per_sec2 < t2.config_max_bytes_per_sec)
         {
-            has_tuned = calculate(max_bytes_per_sec2, max_bytes_per_sec1, t2.config_max_bytes_per_sec - max_bytes_per_sec2);
+            has_tuned
+                = calculate(max_bytes_per_sec2, max_bytes_per_sec1, t2.config_max_bytes_per_sec - max_bytes_per_sec2);
         }
         return {max_bytes_per_sec1, max_bytes_per_sec2, has_tuned};
     }
@@ -927,7 +995,8 @@ IOLimitTuner::Watermark IOLimitTuner::getWatermark(int pct) const
     }
 }
 
-IOLimitTuner::Watermark IOLimitTuner::getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const
+IOLimitTuner::Watermark IOLimitTuner::getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct)
+    const
 {
     // Take `bg_read` and `fg_read` for example:
     // 1. Both `max_bg_read_bytes_per_sec` and `max_fg_read_bytes_per_sec` are less than `io_config.min_bytes_per_sec`.

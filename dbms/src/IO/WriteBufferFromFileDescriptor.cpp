@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,6 +122,11 @@ void WriteBufferFromFileDescriptor::sync()
 
     /// Request OS to sync data with storage medium.
     ProfileEvents::increment(ProfileEvents::FileFSync);
+<<<<<<< HEAD
+=======
+    Stopwatch sw;
+    SCOPE_EXIT({ GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds()); });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     int res = fsync(fd);
     if (-1 == res)
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);

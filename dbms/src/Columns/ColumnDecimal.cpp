@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,12 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
 }
 
 template <typename T>
-StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
+StringRef ColumnDecimal<T>::serializeValueIntoArena(
+    size_t n,
+    Arena & arena,
+    char const *& begin,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
 {
     if constexpr (is_Decimal256)
     {
@@ -129,7 +134,8 @@ void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB:
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
+void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+    const
 {
     for (size_t i = 0; i < data.size(); ++i)
     {
@@ -143,7 +149,10 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBColla
     auto s = data.size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
+                + std::to_string(hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -251,15 +260,26 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
 }
 
 template <typename T>
-bool ColumnDecimal<T>::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
+bool ColumnDecimal<T>::decodeTiDBRowV2Datum(
+    size_t cursor,
+    const String & raw_value,
+    size_t /* length */,
+    bool /* force_decode */)
 {
     PrecType prec_ = raw_value[cursor++];
     ScaleType scale_ = raw_value[cursor++];
     auto type = createDecimal(prec_, scale_);
     if (unlikely(!checkDecimal<T>(*type)))
     {
+<<<<<<< HEAD
         throw Exception("Detected unmatched decimal value type: Decimal( " + std::to_string(prec_) + ", " + std::to_string(scale_) + ") when decoding with column type " + this->getName(),
                         ErrorCodes::LOGICAL_ERROR);
+=======
+        throw Exception(
+            "Detected unmatched decimal value type: Decimal( " + std::to_string(dec_prec) + ", "
+                + std::to_string(dec_scale) + ") when decoding with column type " + this->getName(),
+            ErrorCodes::LOGICAL_ERROR);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     auto res = DecodeDecimalImpl<T>(cursor, raw_value, prec_, scale_);
     data.push_back(DecimalField<T>(res, scale_));
@@ -274,7 +294,8 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
     if (start + length > src_vec.data.size())
         throw Exception(
             fmt::format(
-                "Parameters are out of bound in ColumnDecimal<T>::insertRangeFrom method, start={}, length={}, src.size()={}",
+                "Parameters are out of bound in ColumnDecimal<T>::insertRangeFrom method, start={}, length={}, "
+                "src.size()={}",
                 start,
                 length,
                 src_vec.data.size()),

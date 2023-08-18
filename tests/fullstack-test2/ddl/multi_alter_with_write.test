@@ -1,0 +1,884 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# this test focus on the case when multi DDL actions happen closely
+#（ and these DDL actions will be fetched in the same regular sync schema duration.) 
+# and there are some corresponding insert(write) actions between these DDL actions. 
+# Considering that these write actions and these schema change will arrive at 
+# tiflash in a different order, we simulate these different order situation to check 
+# that our schema module was working correctly.
+
+
+#TODO: the timeline is not correct now, please fix it later
+#RETURN
+
+# TiDB Timeline ： write cmd 1 ｜ alter cmd 1 ｜ write cmd 2 | alter cmd 2 | write cmd 3 
+
+# stop regular schema sync
+=> DBGInvoke __enable_schema_sync_service('false') 
+
+# Enable the failpoint and make it pause before applying the raft cmd to write a row
+>> DBGInvoke __init_fail_point()
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# Enable the failpoint to make our query only start when the write action finished
+>> DBGInvoke __enable_fail_point(unblock_query_init_after_write)
+
+# -----------------------------------------------------------------------------
+# Order 1 : write cmd 1 | alter cmd 1 | write cmd 2 | alter cmd 2 | write cmd 3
+# -----------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+│ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# make alter cmd 2 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# ---------------------------------------------------------------------------------------------
+# Order 2 : write cmd 1 | alter cmd 1 | write cmd 2 | write cmd 3 --> sync schema(alter cmd 2)
+# ---------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+│ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+# check what happen after write cmd 3 --> call sync schema and get alter cmd 2 happen
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# -----------------------------------------------------------------------------------------------
+# Order 3 : write cmd 1 | alter cmd 1 | alter cmd 2 | write cmd 2 -->sync schema() | write cmd 3
+# -----------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# make alter cmd 2 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# -----------------------------------------------------------------------------------------------
+# Order 4 : write cmd 1 | write cmd 2 --> sync schema(alter cmd 1) | alter cmd 2 | write cmd 3
+# -----------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# check no schema change before write cmd 2 take effect
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+# check what happen after write cmd 2 --> should call sync schema, get the alter cmd 1 happened.
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+│ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# make alter cmd 2 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Order 5 : write cmd 1 | write cmd 2 --> sync schema(alter cmd 1) |  write cmd 3 --> sync schema(alter cmd 2) 
+# ----------------------------------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+# check what happen after write cmd 2 --> should call sync schema, get the alter cmd 1 happened.
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+│ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+# check what happen after write cmd 3 --> should call sync schema, get the alter cmd 2 happened.
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# -----------------------------------------------------------------------------------------------
+# Order 6 : write cmd 1 | write cmd 2 --> sync schema(alter cmd 1 alter cmd 2) | write cmd 3
+# -----------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 1   │ 4.50 │ abc   │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+# check what happen after write cmd 2 --> should call sync schema, get the alter cmd 1 && alter cmd 2 happened.
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# -------------------------------------------------------------------------------
+# Order 7 : alter cmd 1 | write cmd 1 | write cmd 2 | alter cmd 2 | write cmd 3
+# -------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# add a new pre write to make check the alter cmd 1 more convenient.
+mysql> insert into test.t (a, b, c) values (0, 0, ' ');
+
+func> wait_table test t 
+ 
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 0   │ 0.00 │       │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+│ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# make alter cmd 2 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# --------------------------------------------------------------------------------------------------
+# Order 8 : alter cmd 1 | write cmd 1 | write cmd 2 | write cmd 3 --> sync schema(alter cmd 2) 
+# --------------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+# add a new pre write to make check the alter cmd 1 more convenient.
+mysql> insert into test.t (a, b, c) values (0, 0, ' ');
+
+func> wait_table test t 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 0   │ 0.00 │       │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+│ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+# check what happen after write cmd 3 --> should call sync schema, get the alter cmd 2 happened.
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# --------------------------------------------------------------------------------------------------
+# Order 9 : alter cmd 1 | write cmd 1 | alter cmd 2 | write cmd 2 -->sync schema() | write cmd 3
+# --------------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t 
+
+# add a new pre write to make check the alter cmd 1 more convenient.
+mysql> insert into test.t (a, b, c) values (0, 0, ' ');
+ 
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 0   │ 0.00 │       │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┬─e───┐
+│ 0   │ 0.00 │       │ 0   │ \N  │
+│ 1   │ 4.50 │ abc   │ 0   │ \N  │
+└─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# make alter cmd 2 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# ------------------------------------------------------------------------------------------------------------------
+# Order 10 : alter cmd 1 | alter cmd 2 | write cmd 1 -->sync schema() | write cmd 2 -->sync schema()  | write cmd 3
+# ------------------------------------------------------------------------------------------------------------------
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t 
+
+# add a new pre write to make check the alter cmd 1 more convenient.
+mysql> insert into test.t (a, b, c) values (0, 0, ' ');
+ 
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─b────┬─c─────┬─d───┐
+│ 0   │ 0.00 │       │ 0   │
+└─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 1
+mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
+
+# alter cmd 1
+mysql> alter table test.t add column e decimal(6,1) NULL;
+
+# make alter cmd 1 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+# write cmd 2
+mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
+
+# alter cmd 2
+mysql> alter table test.t drop column b;
+
+# make alter cmd 2 take effect
+>> DBGInvoke __refresh_table_schema(test, t)
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 1 and write cmd 2 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# write cmd 3
+mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
+
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
+
+# make write cmd 3 take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
+┌─a───┬─c─────┬─d───┬─e───┐
+│ 0   │       │ 0   │ \N  │
+│ 1   │ abc   │ 0   │ \N  │
+│ 3   │ ccc   │ 3   │ 0.1 │
+│ 4   │ abcd  │ 10  │ 0.2 │
+└─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+
+##
+
+=> DBGInvoke __enable_schema_sync_service('true') 
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(unblock_query_init_after_write)
+>> DBGInvoke __disable_fail_point(pause_query_init)

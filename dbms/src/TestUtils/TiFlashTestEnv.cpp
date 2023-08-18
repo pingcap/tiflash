@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,77 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
+<<<<<<< HEAD
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_ps_v3)
+=======
+String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
+{
+    String path = ".";
+    const char * temp_prefix = getenv("TIFLASH_TEMP_DIR");
+    if (temp_prefix != nullptr)
+        path = DB::String(temp_prefix);
+    path += "/tmp/";
+    if (!test_case.empty())
+        path += std::string(test_case);
+
+    Poco::Path poco_path(path);
+    if (get_abs)
+        return poco_path.absolute().toString();
+    else
+        return poco_path.toString();
+}
+
+void TiFlashTestEnv::tryCreatePath(const std::string & path)
+{
+    try
+    {
+        Poco::File p(path);
+        if (!p.exists())
+            p.createDirectories();
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
+void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
+{
+    try
+    {
+        // drop the data on disk
+        Poco::File p(path);
+        if (p.exists())
+        {
+            p.remove(true);
+        }
+
+        // re-create empty directory for testing
+        if (recreate)
+        {
+            p.createDirectories();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
+void TiFlashTestEnv::initializeGlobalContext(
+    Strings testdata_path,
+    PageStorageRunMode ps_run_mode,
+    uint64_t bg_thread_count)
+{
+    addGlobalContext(DB::Settings(), testdata_path, ps_run_mode, bg_thread_count);
+}
+
+void TiFlashTestEnv::addGlobalContext(
+    const DB::Settings & settings_,
+    Strings testdata_path,
+    PageStorageRunMode ps_run_mode,
+    uint64_t bg_thread_count)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -39,6 +109,17 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
 
+<<<<<<< HEAD
+=======
+    // initialize background & blockable background thread pool
+    global_context->setSettings(settings_);
+    Settings & settings = global_context->getSettingsRef();
+    global_context->initializeBackgroundPool(
+        bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
+    global_context->initializeBlockableBackgroundPool(
+        bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     // Theses global variables should be initialized by the following order
     // 1. capacity
     // 2. path pool
@@ -88,7 +169,15 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     Context context = *global_context;
     context.setGlobalContext(*global_context);
     // Load `testdata_path` as path if it is set.
+<<<<<<< HEAD
     const String root_path = testdata_path.empty() ? getTemporaryPath() : testdata_path[0];
+=======
+    const String root_path = [&]() {
+        const auto root_path = testdata_path.empty() ? getTemporaryPath(fmt::format("{}/", getpid()), /*get_abs*/ false)
+                                                     : testdata_path[0];
+        return Poco::Path(root_path).absolute().toString();
+    }();
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     if (testdata_path.empty())
         testdata_path.push_back(root_path);
     context.setPath(root_path);
@@ -114,4 +203,106 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
 }
+<<<<<<< HEAD
+=======
+
+void TiFlashTestEnv::setUpTestContext(
+    Context & context,
+    DAGContext * dag_context,
+    MockStorage * mock_storage,
+    const TestType & test_type)
+{
+    switch (test_type)
+    {
+    case TestType::EXECUTOR_TEST:
+        context.setExecutorTest();
+        break;
+    case TestType::INTERPRETER_TEST:
+        context.setInterpreterTest();
+        break;
+    }
+    context.setMockStorage(mock_storage);
+    context.setDAGContext(dag_context);
+    context.getTimezoneInfo().resetByDAGRequest(*dag_context->dag_request);
+    /// by default non-mpp task will do collation insensitive group by, let the test do
+    /// collation sensitive group by setting `group_by_collation_sensitive` to true
+    context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
+}
+
+FileProviderPtr TiFlashTestEnv::getMockFileProvider()
+{
+    bool encryption_enabled = false;
+    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(encryption_enabled), encryption_enabled);
+}
+
+bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client)
+{
+    Aws::S3::Model::CreateBucketRequest request;
+    request.SetBucket(s3_client.bucket());
+    auto outcome = s3_client.CreateBucket(request);
+    if (outcome.IsSuccess())
+    {
+        LOG_DEBUG(s3_client.log, "Created bucket {}", s3_client.bucket());
+    }
+    else if (
+        outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou"
+        || outcome.GetError().GetExceptionName() == "BucketAlreadyExists")
+    {
+        LOG_DEBUG(s3_client.log, "Bucket {} already exist", s3_client.bucket());
+    }
+    else
+    {
+        const auto & err = outcome.GetError();
+        LOG_ERROR(s3_client.log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+    }
+    return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou"
+        || outcome.GetError().GetExceptionName() == "BucketAlreadyExists";
+}
+
+void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
+{
+    TiFlashTestEnv::createBucketIfNotExist(s3_client);
+    if (!is_mocked_s3_client)
+    {
+        // All objects (including all object versions and delete markers)
+        // in the bucket must be deleted before the bucket itself can be
+        // deleted.
+        LOG_INFO(s3_client.log, "DeleteBucket, clean all existing objects begin");
+        S3::rawListPrefix(
+            s3_client,
+            s3_client.bucket(),
+            s3_client.root(),
+            "",
+            [&](const Aws::S3::Model::ListObjectsV2Result & r) -> S3::PageResult {
+                for (const auto & obj : r.GetContents())
+                {
+                    const auto & key = obj.GetKey();
+                    LOG_INFO(s3_client.log, "DeleteBucket, clean existing object, key={}", key);
+                    S3::rawDeleteObject(s3_client, s3_client.bucket(), key);
+                }
+                return S3::PageResult{.num_keys = r.GetContents().size(), .more = true};
+            });
+        LOG_INFO(s3_client.log, "DeleteBucket, clean all existing objects done");
+    }
+    Aws::S3::Model::DeleteBucketRequest request;
+    request.SetBucket(s3_client.bucket());
+    auto outcome = s3_client.DeleteBucket(request);
+    if (!outcome.IsSuccess())
+    {
+        const auto & err = outcome.GetError();
+        LOG_WARNING(s3_client.log, "DeleteBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+    }
+}
+
+
+void TiFlashTestEnv::disableS3Config()
+{
+    DB::S3::ClientFactory::instance().disable();
+}
+
+void TiFlashTestEnv::enableS3Config()
+{
+    DB::S3::ClientFactory::instance().enable();
+}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB::tests

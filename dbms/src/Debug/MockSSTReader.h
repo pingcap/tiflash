@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,9 +47,19 @@ struct MockSSTReader
         : iter(data_.begin())
         , end(data_.end())
         , remained(iter != end)
+<<<<<<< HEAD
     {}
 
     static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_) { return SSTReaderPtr{new MockSSTReader(data_)}; }
+=======
+        , kind(kind_)
+    {}
+
+    static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_, SSTFormatKind kind_)
+    {
+        return SSTReaderPtr{new MockSSTReader(data_, kind_), kind_};
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     bool ffi_remained() const { return iter != end; }
 
@@ -58,6 +68,41 @@ struct MockSSTReader
     BaseBuffView ffi_val() const { return {iter->second.data(), iter->second.length()}; }
 
     void ffi_next() { ++iter; }
+<<<<<<< HEAD
+=======
+
+    SSTFormatKind ffi_kind() { return kind; }
+
+    void ffi_seek(SSTReaderPtr, ColumnFamilyType, EngineIteratorSeekType et, BaseBuffView bf)
+    {
+        if (et == EngineIteratorSeekType::First)
+        {
+            remained = iter != end;
+            iter = begin;
+        }
+        else if (et == EngineIteratorSeekType::Last)
+        {
+            remained = iter != end;
+            iter = end;
+        }
+        else
+        {
+            // Seek the first key >= given key
+            iter = begin;
+            remained = iter != end;
+            auto thres = buffToStrView(bf);
+            while (ffi_remained())
+            {
+                auto && current_key = iter->first;
+                if (current_key >= thres)
+                {
+                    return;
+                }
+                ffi_next();
+            }
+        }
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     static std::map<Key, MockSSTReader::Data> & getMockSSTData() { return MockSSTData; }
 

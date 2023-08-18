@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -130,9 +130,20 @@ struct SchemaGetter
 
     Poco::Logger * log;
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/SchemaGetter.h
     SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_)
         : snap(cluster_, tso_)
         , log(&Poco::Logger::get("SchemaGetter"))
+=======
+    KeyspaceID keyspace_id;
+
+    LoggerPtr log;
+
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_, KeyspaceID keyspace_id_)
+        : snap(keyspace_id_, cluster_, tso_)
+        , keyspace_id(keyspace_id_)
+        , log(Logger::get())
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/TiDB/Schema/SchemaGetter.h
     {}
 
     Int64 getVersion();

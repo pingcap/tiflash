@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,23 @@ public:
     static LoggerPtr get(const std::string & source, T && first_identifier, Args &&... rest)
     {
         FmtBuffer buf;
+<<<<<<< HEAD
         return getInternal(source, buf, std::forward<T>(first_identifier), std::forward<Args>(rest)...);
+=======
+
+        size_t i = 0;
+        (
+            [&] {
+                if (fmt::formatted_size(FMT_COMPILE("{}"), args) == 0)
+                    return;
+                if (i++ > 0)
+                    buf.append(" ");
+                buf.fmtAppend(FMT_COMPILE("{}"), args);
+            }(),
+            ...);
+
+        return std::make_shared<Logger>(buf.toString());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     template <typename T, typename... Args>
@@ -94,6 +110,7 @@ public:
             return logger->log(Poco::Message(msg, wrapMsg(msg.getText())));
     }
 
+<<<<<<< HEAD
     void log(Poco::Message & msg) const
     {
         if (!id.empty())
@@ -104,6 +121,13 @@ public:
     bool is(int level) const { return logger->is(level); }
 
     Poco::Channel * getChannel() const { return logger->getChannel(); }
+=======
+    void log(Poco::Message & msg) const { return logger->log(msg); }
+
+    bool is(int level) const { return logger->is(level); }
+
+    const std::string & identifier() const { return id; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     const std::string & name() const { return logger->name(); }
 

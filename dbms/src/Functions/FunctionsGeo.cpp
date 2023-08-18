@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,20 +99,11 @@ public:
         return std::make_shared<FunctionPointInPolygon<PointInPolygonImpl, use_object_pool>>();
     }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    bool isVariadic() const override
-    {
-        return true;
-    }
+    bool isVariadic() const override { return true; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 0;
-    }
+    size_t getNumberOfArguments() const override { return 0; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -131,7 +122,12 @@ public:
             if (array == nullptr && i != 1)
                 throw Exception(getMsgPrefix(i) + " must be array of tuples.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+<<<<<<< HEAD
             auto * tuple = checkAndGetDataType<DataTypeTuple>(array ? array->getNestedType().get() : arguments[i].get());
+=======
+            const auto * tuple
+                = checkAndGetDataType<DataTypeTuple>(array ? array->getNestedType().get() : arguments[i].get());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             if (tuple == nullptr)
                 throw Exception(getMsgPrefix(i) + " must contains tuple.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -144,8 +140,14 @@ public:
             {
                 if (!elements[j]->isNumber())
                 {
+<<<<<<< HEAD
                     throw Exception(getMsgPrefix(i) + " must contains numeric tuple at position " + toString(j + 1),
                                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+=======
+                    throw Exception(
+                        get_msg_prefix(i) + " must contains numeric tuple at position " + toString(j + 1),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
                 }
             }
         }
@@ -163,14 +165,17 @@ public:
 
         if (!tuple_col)
         {
-            throw Exception("First argument for function " + getName() + " must be constant array of tuples.",
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "First argument for function " + getName() + " must be constant array of tuples.",
+                ErrorCodes::ILLEGAL_COLUMN);
         }
 
         const Columns & tuple_columns = tuple_col->getColumns();
-        const DataTypes & tuple_types = typeid_cast<const DataTypeTuple &>(*block.getByPosition(arguments[0]).type).getElements();
+        const DataTypes & tuple_types
+            = typeid_cast<const DataTypeTuple &>(*block.getByPosition(arguments[0]).type).getElements();
 
-        bool use_float64 = checkDataType<DataTypeFloat64>(tuple_types[0].get()) || checkDataType<DataTypeFloat64>(tuple_types[1].get());
+        bool use_float64 = checkDataType<DataTypeFloat64>(tuple_types[0].get())
+            || checkDataType<DataTypeFloat64>(tuple_types[1].get());
 
         auto & result_column = block.safeGetByPosition(result).column;
 

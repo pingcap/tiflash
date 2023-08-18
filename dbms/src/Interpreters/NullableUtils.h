@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +27,20 @@ namespace DB
   * In 'null_map' return a map of positions where at least one column was NULL.
   * null_map_holder could take ownership of null_map, if required.
   */
-void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map);
+void extractNestedColumnsAndNullMap(
+    ColumnRawPtrs & key_columns,
+    ColumnPtr & null_map_holder,
+    ConstNullMapPtr & null_map);
 
+<<<<<<< HEAD
+=======
+/** In 'all_key_null_map' return a map of positions where all key columns are NULL.
+ *  'all_key_null_map_holder' could take ownership of null_map, if required.
+ */
+void extractAllKeyNullMap(
+    ColumnRawPtrs & key_columns,
+    ColumnPtr & all_key_null_map_holder,
+    ConstNullMapPtr & all_key_null_map);
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

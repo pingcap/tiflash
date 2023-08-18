@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,12 +38,13 @@
 
 namespace DB
 {
-static void executeCreateQuery(const String & query,
-                               Context & context,
-                               const String & database,
-                               const String & file_name,
-                               ThreadPool * pool,
-                               bool has_force_restore_data_flag)
+static void executeCreateQuery(
+    const String & query,
+    Context & context,
+    const String & database,
+    const String & file_name,
+    ThreadPool * pool,
+    bool has_force_restore_data_flag)
 {
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "in file " + file_name, 0);
@@ -77,7 +78,11 @@ static void loadDatabase(
 
     if (Poco::File(database_metadata_file).exists())
     {
-        ReadBufferFromFileProvider in(context.getFileProvider(), database_metadata_file, EncryptionPath(database_metadata_file, ""), 1024);
+        ReadBufferFromFileProvider in(
+            context.getFileProvider(),
+            database_metadata_file,
+            EncryptionPath(database_metadata_file, ""),
+            1024);
         readStringUntilEOF(database_attach_query, in);
     }
     else
@@ -86,7 +91,13 @@ static void loadDatabase(
         database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
     }
 
-    executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
+    executeCreateQuery(
+        database_attach_query,
+        context,
+        database,
+        database_metadata_file,
+        thread_pool,
+        force_restore_data);
 }
 
 
@@ -134,14 +145,74 @@ void loadMetadata(Context & context)
                 continue;
             LOG_WARNING(
                 log,
-                "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
+                "Directory \"" + it.path().toString()
+                    + "\" is ignored while loading metadata since we can't find its .sql file.");
         }
     }
 
     for (const auto & [db_name, meta_file] : databases)
         loadDatabase(context, db_name, meta_file, &thread_pool, has_force_restore_data_flag);
 
+<<<<<<< HEAD
     thread_pool.wait();
+=======
+    auto load_database = [&](Context & context,
+                             const String & database,
+                             const String & database_metadata_file,
+                             ThreadPool * thread_pool,
+                             bool force_restore_data) {
+        /// There may exist .sql file with database creation statement.
+        /// Or, if it is absent, then database with default engine is created.
+        String database_attach_query;
+        if (Poco::File(database_metadata_file).exists())
+        {
+            ReadBufferFromFileProvider in(
+                context.getFileProvider(),
+                database_metadata_file,
+                EncryptionPath(database_metadata_file, ""),
+                1024);
+            readStringUntilEOF(database_attach_query, in);
+        }
+        else
+        {
+            // Old fashioned way, keep engine as "Ordinary"
+            database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
+        }
+
+        executeCreateQuery(
+            database_attach_query,
+            context,
+            database,
+            database_metadata_file,
+            thread_pool,
+            force_restore_data);
+    };
+
+    size_t default_num_threads
+        = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
+    auto load_database_thread_num = std::min(default_num_threads, databases.size());
+
+    auto load_databases_thread_pool
+        = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
+    auto load_databases_wait_group = load_databases_thread_pool.waitGroup();
+
+    auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+
+    for (const auto & database : databases)
+    {
+        const auto & db_name = database.first;
+        const auto & meta_file = database.second;
+
+        auto task
+            = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
+                  load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
+              };
+
+        load_databases_wait_group->schedule(task);
+    }
+
+    load_databases_wait_group->wait();
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();
@@ -163,7 +234,8 @@ void loadMetadataSystem(Context & context)
         Poco::File(global_path + "metadata/" SYSTEM_DATABASE).createDirectories();
 
         // Keep DatabaseOrdinary for database "system". Storages in this database is not IManageableStorage.
-        auto system_database = std::make_shared<DatabaseOrdinary>(SYSTEM_DATABASE, global_path + "metadata/" SYSTEM_DATABASE, context);
+        auto system_database
+            = std::make_shared<DatabaseOrdinary>(SYSTEM_DATABASE, global_path + "metadata/" SYSTEM_DATABASE, context);
         context.addDatabase(SYSTEM_DATABASE, system_database);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,29 @@ TiDBTableScan::TiDBTableScan(
     : table_scan(table_scan_)
     , executor_id(executor_id_)
     , is_partition_table_scan(table_scan->tp() == tipb::TypePartitionTableScan)
+<<<<<<< HEAD
     , columns(is_partition_table_scan ? table_scan->partition_table_scan().columns() : table_scan->tbl_scan().columns())
 {
+=======
+    , columns(
+          is_partition_table_scan ? std::move(TiDB::toTiDBColumnInfos(table_scan->partition_table_scan().columns()))
+                                  : std::move(TiDB::toTiDBColumnInfos(table_scan->tbl_scan().columns())))
+    , pushed_down_filters(
+          is_partition_table_scan ? std::move(table_scan->partition_table_scan().pushed_down_filter_conditions())
+                                  : std::move(table_scan->tbl_scan().pushed_down_filter_conditions()))
+    // Only No-partition table need keep order when tablescan executor required keep order.
+    // If keep_order is not set, keep order for safety.
+    , keep_order(
+          !is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))
+    , is_fast_scan(
+          is_partition_table_scan ? table_scan->partition_table_scan().is_fast_scan()
+                                  : table_scan->tbl_scan().is_fast_scan())
+{
+    RUNTIME_CHECK_MSG(
+        !keep_order || pushed_down_filters.empty(),
+        "Bad TiDB table scan executor: push down filter is not empty when keep order is true");
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     if (is_partition_table_scan)
     {
         if (table_scan->partition_table_scan().has_table_id())
@@ -35,14 +56,18 @@ TiDBTableScan::TiDBTableScan(
         for (const auto & partition_table_id : table_scan->partition_table_scan().partition_ids())
         {
             if (all_physical_table_ids.count(partition_table_id) > 0)
-                throw TiFlashException("Partition table scan contains duplicated physical table ids.", Errors::Coprocessor::BadRequest);
+                throw TiFlashException(
+                    "Partition table scan contains duplicated physical table ids.",
+                    Errors::Coprocessor::BadRequest);
             all_physical_table_ids.insert(partition_table_id);
             if (dag_context.containsRegionsInfoForTable(partition_table_id))
                 physical_table_ids.push_back(partition_table_id);
         }
         std::sort(physical_table_ids.begin(), physical_table_ids.end());
         if (physical_table_ids.size() != dag_context.tables_regions_info.tableCount())
-            throw TiFlashException("Partition table scan contains table_region_info that is not belongs to the partition table.", Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                "Partition table scan contains table_region_info that is not belongs to the partition table.",
+                Errors::Coprocessor::BadRequest);
     }
     else
     {

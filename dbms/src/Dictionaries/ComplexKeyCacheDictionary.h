@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,12 @@ namespace DB
 class ComplexKeyCacheDictionary final : public IDictionaryBase
 {
 public:
+<<<<<<< HEAD
     ComplexKeyCacheDictionary(const std::string & name,
+=======
+    ComplexKeyCacheDictionary(
+        const std::string & name,
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         const DictionaryStructure & dict_struct,
         DictionarySourcePtr source_ptr,
         const DictionaryLifetime dict_lifetime,
@@ -61,25 +66,13 @@ public:
 
     ComplexKeyCacheDictionary(const ComplexKeyCacheDictionary & other);
 
-    std::string getKeyDescription() const
-    {
-        return key_description;
-    };
+    std::string getKeyDescription() const { return key_description; };
 
-    std::exception_ptr getCreationException() const override
-    {
-        return {};
-    }
+    std::exception_ptr getCreationException() const override { return {}; }
 
-    std::string getName() const override
-    {
-        return name;
-    }
+    std::string getName() const override { return name; }
 
-    std::string getTypeName() const override
-    {
-        return "ComplexKeyCache";
-    }
+    std::string getTypeName() const override { return "ComplexKeyCache"; }
 
     size_t getBytesAllocated() const override
     {
@@ -87,55 +80,35 @@ public:
             + (string_arena ? string_arena->size() : 0);
     }
 
-    size_t getQueryCount() const override
-    {
-        return query_count.load(std::memory_order_relaxed);
-    }
+    size_t getQueryCount() const override { return query_count.load(std::memory_order_relaxed); }
 
     double getHitRate() const override
     {
-        return static_cast<double>(hit_count.load(std::memory_order_acquire)) / query_count.load(std::memory_order_relaxed);
+        return static_cast<double>(hit_count.load(std::memory_order_acquire))
+            / query_count.load(std::memory_order_relaxed);
     }
 
-    size_t getElementCount() const override
-    {
-        return element_count.load(std::memory_order_relaxed);
-    }
+    size_t getElementCount() const override { return element_count.load(std::memory_order_relaxed); }
 
     double getLoadFactor() const override
     {
         return static_cast<double>(element_count.load(std::memory_order_relaxed)) / size;
     }
 
-    bool isCached() const override
-    {
-        return true;
-    }
+    bool isCached() const override { return true; }
 
     std::unique_ptr<IExternalLoadable> clone() const override
     {
         return std::make_unique<ComplexKeyCacheDictionary>(*this);
     }
 
-    const IDictionarySource * getSource() const override
-    {
-        return source_ptr.get();
-    }
+    const IDictionarySource * getSource() const override { return source_ptr.get(); }
 
-    const DictionaryLifetime & getLifetime() const override
-    {
-        return dict_lifetime;
-    }
+    const DictionaryLifetime & getLifetime() const override { return dict_lifetime; }
 
-    const DictionaryStructure & getStructure() const override
-    {
-        return dict_struct;
-    }
+    const DictionaryStructure & getStructure() const override { return dict_struct; }
 
-    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override
-    {
-        return creation_time;
-    }
+    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override { return creation_time; }
 
     bool isInjective(const std::string & attribute_name) const override
     {
@@ -160,13 +133,26 @@ public:
     DECLARE(Float64)
 #undef DECLARE
 
-    void getString(const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types, ColumnString * out) const;
+    void getString(
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
+        ColumnString * out) const;
 
+<<<<<<< HEAD
 #define DECLARE(TYPE)                                  \
     void get##TYPE(const std::string & attribute_name, \
         const Columns & key_columns,                   \
         const DataTypes & key_types,                   \
         const PaddedPODArray<TYPE> & def,              \
+=======
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        const PaddedPODArray<TYPE> & def,   \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
@@ -181,17 +167,31 @@ public:
     DECLARE(Float64)
 #undef DECLARE
 
+<<<<<<< HEAD
     void getString(const std::string & attribute_name,
+=======
+    void getString(
+        const std::string & attribute_name,
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         const Columns & key_columns,
         const DataTypes & key_types,
         const ColumnString * const def,
         ColumnString * const out) const;
 
+<<<<<<< HEAD
 #define DECLARE(TYPE)                                  \
     void get##TYPE(const std::string & attribute_name, \
         const Columns & key_columns,                   \
         const DataTypes & key_types,                   \
         const TYPE def,                                \
+=======
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        const TYPE def,                     \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
@@ -206,7 +206,12 @@ public:
     DECLARE(Float64)
 #undef DECLARE
 
+<<<<<<< HEAD
     void getString(const std::string & attribute_name,
+=======
+    void getString(
+        const std::string & attribute_name,
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         const Columns & key_columns,
         const DataTypes & key_types,
         const String & def,
@@ -239,30 +244,25 @@ private:
         time_point_urep_t data;
 
         /// Sets expiration time, resets `is_default` flag to false
-        time_point_t expiresAt() const
-        {
-            return ext::safe_bit_cast<time_point_t>(data & EXPIRES_AT_MASK);
-        }
-        void setExpiresAt(const time_point_t & t)
-        {
-            data = ext::safe_bit_cast<time_point_urep_t>(t);
-        }
+        time_point_t expiresAt() const { return ext::safe_bit_cast<time_point_t>(data & EXPIRES_AT_MASK); }
+        void setExpiresAt(const time_point_t & t) { data = ext::safe_bit_cast<time_point_urep_t>(t); }
 
-        bool isDefault() const
-        {
-            return (data & IS_DEFAULT_MASK) == IS_DEFAULT_MASK;
-        }
-        void setDefault()
-        {
-            data |= IS_DEFAULT_MASK;
-        }
+        bool isDefault() const { return (data & IS_DEFAULT_MASK) == IS_DEFAULT_MASK; }
+        void setDefault() { data |= IS_DEFAULT_MASK; }
     };
 
     struct Attribute final
     {
         AttributeUnderlyingType type;
+<<<<<<< HEAD
         std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String> null_values;
         std::tuple<ContainerPtrType<UInt8>,
+=======
+        std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String>
+            null_values;
+        std::tuple<
+            ContainerPtrType<UInt8>,
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             ContainerPtrType<UInt16>,
             ContainerPtrType<UInt32>,
             ContainerPtrType<UInt64>,
@@ -285,9 +285,7 @@ private:
     void getItemsNumber(
         Attribute & attribute, const Columns & key_columns, PaddedPODArray<OutputType> & out, DefaultGetter && get_default) const
     {
-        if (false)
-        {
-        }
+        if (false) {}
 #define DISPATCH(TYPE)                                        \
     else if (attribute.type == AttributeUnderlyingType::TYPE) \
         getItemsNumberImpl<TYPE, OutputType>(attribute, key_columns, out, std::forward<DefaultGetter>(get_default));
@@ -364,8 +362,14 @@ private:
             return;
 
         std::vector<size_t> required_rows(outdated_keys.size());
+<<<<<<< HEAD
         std::transform(
             std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) { return pair.getMapped().front(); });
+=======
+        std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) {
+            return pair.getMapped().front();
+        });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         /// request new values
         update(key_columns,
@@ -384,7 +388,11 @@ private:
     };
 
     template <typename DefaultGetter>
-    void getItemsString(Attribute & attribute, const Columns & key_columns, ColumnString * out, DefaultGetter && get_default) const
+    void getItemsString(
+        Attribute & attribute,
+        const Columns & key_columns,
+        ColumnString * out,
+        DefaultGetter && get_default) const
     {
         const auto rows_num = key_columns.front()->size();
         /// save on some allocations
@@ -488,10 +496,18 @@ private:
         if (!outdated_keys.empty())
         {
             std::vector<size_t> required_rows(outdated_keys.size());
+<<<<<<< HEAD
             std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair)
             {
                 return pair.getMapped().front();
             });
+=======
+            std::transform(
+                std::begin(outdated_keys),
+                std::end(outdated_keys),
+                std::begin(required_rows),
+                [](auto & pair) { return pair.getMapped().front(); });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
             update(key_columns,
                 keys_array,
@@ -527,7 +543,12 @@ private:
     };
 
     template <typename PresentKeyHandler, typename AbsentKeyHandler>
+<<<<<<< HEAD
     void update(const Columns & in_key_columns,
+=======
+    void update(
+        const Columns & in_key_columns,
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         const PODArray<StringRef> & in_keys,
         const std::vector<size_t> & in_requested_rows,
         PresentKeyHandler && on_cell_updated,
@@ -554,11 +575,22 @@ private:
             while (const auto block = stream->read())
             {
                 /// cache column pointers
+<<<<<<< HEAD
                 const auto key_columns = ext::map<Columns>(
                     ext::range(0, keys_size), [&](const size_t attribute_idx) { return block.safeGetByPosition(attribute_idx).column; });
 
                 const auto attribute_columns = ext::map<Columns>(ext::range(0, attributes_size),
                     [&](const size_t attribute_idx) { return block.safeGetByPosition(keys_size + attribute_idx).column; });
+=======
+                const auto key_columns = ext::map<Columns>(ext::range(0, keys_size), [&](const size_t attribute_idx) {
+                    return block.safeGetByPosition(attribute_idx).column;
+                });
+
+                const auto attribute_columns
+                    = ext::map<Columns>(ext::range(0, attributes_size), [&](const size_t attribute_idx) {
+                          return block.safeGetByPosition(keys_size + attribute_idx).column;
+                      });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
                 const auto rows_num = block.rows();
 
@@ -600,7 +632,8 @@ private:
                     cell.hash = hash;
 
                     if (dict_lifetime.min_sec != 0 && dict_lifetime.max_sec != 0)
-                        cell.setExpiresAt(std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)});
+                        cell.setExpiresAt(
+                            std::chrono::system_clock::now() + std::chrono::seconds{distribution(rnd_engine)});
                     else
                         cell.setExpiresAt(std::chrono::time_point<std::chrono::system_clock>::max());
 
@@ -689,7 +722,12 @@ private:
     void freeKey(const StringRef key) const;
 
     template <typename Arena>
+<<<<<<< HEAD
     static StringRef placeKeysInPool(const size_t row,
+=======
+    static StringRef placeKeysInPool(
+        const size_t row,
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         const Columns & key_columns,
         StringRefs & keys,
         const std::vector<DictionaryAttribute> & key_attributes,
@@ -739,8 +777,10 @@ private:
     mutable std::vector<CellMetadata> cells{size};
     const bool key_size_is_fixed{dict_struct.isKeySizeFixed()};
     size_t key_size{key_size_is_fixed ? dict_struct.getKeySize() : 0};
-    std::unique_ptr<ArenaWithFreeLists> keys_pool = key_size_is_fixed ? nullptr : std::make_unique<ArenaWithFreeLists>();
-    std::unique_ptr<SmallObjectPool> fixed_size_keys_pool = key_size_is_fixed ? std::make_unique<SmallObjectPool>(key_size) : nullptr;
+    std::unique_ptr<ArenaWithFreeLists> keys_pool
+        = key_size_is_fixed ? nullptr : std::make_unique<ArenaWithFreeLists>();
+    std::unique_ptr<SmallObjectPool> fixed_size_keys_pool
+        = key_size_is_fixed ? std::make_unique<SmallObjectPool>(key_size) : nullptr;
     std::unique_ptr<ArenaWithFreeLists> string_arena;
 
     mutable pcg64 rnd_engine;

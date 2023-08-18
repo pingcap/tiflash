@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ struct ExecutionSummary
 class DAGResponseWriter
 {
 public:
+<<<<<<< HEAD
     DAGResponseWriter(
         Int64 records_per_chunk_,
         DAGContext & dag_context_);
@@ -71,6 +72,11 @@ public:
         const String & executor_id,
         bool delta_mode);
     void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
+=======
+    DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_);
+    /// prepared with sample block
+    virtual void prepare(const Block &){};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;

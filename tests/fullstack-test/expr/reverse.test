@@ -1,0 +1,56 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a varchar(256));
+
+
+mysql> insert into test.t values('one week’s time test');
+mysql> insert into test.t values('abc测试def');
+mysql> insert into test.t values('abcテストabc');
+mysql> insert into test.t values('ѐёђѓєѕіїјљњћќѝўџ');
+mysql> insert into test.t values('+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^');
+mysql> insert into test.t values('αβγδεζηθικλμνξοπρστυφχψωσ');
+mysql> insert into test.t values('▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕');
+mysql> insert into test.t values('թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ');
+mysql> insert into test.t values('\$$\$$\$$');
+mysql> insert into test.t values('\$$\$$\$$\$');
+mysql> insert into test.t values('\`\$$\$$\$');
+mysql> insert into test.t values('\`$$`\$$\$$\$');
+mysql> insert into test.t values('\\$```');
+mysql> insert into test.t values('\\\```');
+mysql> insert into test.t values(NULL);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select reverse(a) from test.t;
++-------------------------------------------------------------------------------------------------+
+| reverse(a)                                                                                      |
++-------------------------------------------------------------------------------------------------+
+| tset emit s’keew eno                                                                            |
+| fed试测cba                                                                                      |
+| cbaトステcba                                                                                    |
+| џўѝќћњљјїіѕєѓђёѐ                                                                                |
+| ^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+                                                        |
+| σωψχφυτσρποξνμλκιθηζεδγβα                                                                       |
+| ✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲                                                        |
+| շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ                                                           |
+| $$$$$$                                                                                          |
+| $$$$$$$                                                                                         |
+| $$$$$`                                                                                          |
+| $$$$$`$$`                                                                                       |
+| ```$\\                                                                                          |
+| ```\\                                                                                           |
+| NULL                                                                                            |
++-------------------------------------------------------------------------------------------------+

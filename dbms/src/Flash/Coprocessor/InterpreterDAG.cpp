@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ namespace DB
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
+<<<<<<< HEAD
 {
     const Settings & settings = context.getSettingsRef();
     if (dagContext().isBatchCop() || dagContext().isMPPTask())
@@ -38,6 +39,10 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
         max_streams *= settings.max_streams_to_max_threads_ratio;
     }
 }
+=======
+    , max_streams(context.getMaxStreams())
+{}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 void setRestorePipelineConcurrency(DAGQueryBlock & query_block)
 {
@@ -65,11 +70,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
         BlockInputStreams child_streams = executeQueryBlock(*child);
         input_streams_vec.push_back(child_streams);
     }
-    DAGQueryBlockInterpreter query_block_interpreter(
-        context,
-        input_streams_vec,
-        query_block,
-        max_streams);
+    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, max_streams);
     return query_block_interpreter.execute();
 }
 

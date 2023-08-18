@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +79,8 @@ Block LimitBlockInputStream::readImpl()
         static_cast<Int64>(limit),
         std::min(
             static_cast<Int64>(pos) - static_cast<Int64>(offset),
-            static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
+            static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos)
+                + static_cast<Int64>(rows)));
 
     for (size_t i = 0; i < res.columns(); ++i)
         res.safeGetByPosition(i).column = res.safeGetByPosition(i).column->cut(start, length);

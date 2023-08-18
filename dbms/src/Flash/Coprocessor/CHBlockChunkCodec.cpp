@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,22 @@ public:
     DataTypes expected_types;
 };
 
+<<<<<<< HEAD
+=======
+CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_)
+    : header(header_)
+{
+    for (const auto & column : header)
+        header_datatypes.emplace_back(column.type, column.type->getName());
+}
+
+CHBlockChunkCodec::CHBlockChunkCodec(const DAGSchema & schema)
+{
+    for (const auto & c : schema)
+        output_names.push_back(c.first);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 size_t getExtraInfoSize(const Block & block)
 {
     size_t size = 64; /// to hold some length of structures, such as column number, row number...

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,4 +23,19 @@ namespace DB
 {
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
+<<<<<<< HEAD
 } // namespace DB
+=======
+NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
+
+namespace DM
+{
+struct ColumnDefine;
+using ColumnDefinesPtr = std::shared_ptr<std::vector<ColumnDefine>>;
+} // namespace DM
+
+// The column defines and `extra table id index`
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
+
+} // namespace DB
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))

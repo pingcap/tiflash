@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,25 @@ static IAggregateFunction * createWithDecimalType(const IDataType & argument_typ
     return nullptr;
 }
 
+<<<<<<< HEAD
+=======
+template <
+    template <typename, typename, typename>
+    class AggregateSumTemplate,
+    typename ResultType,
+    typename SumName,
+    typename... TArgs>
+static IAggregateFunction * createSumAggWithDecimalType(const IDataType & argument_type, TArgs &&... args)
+{
+#define DISPATCH(FIELDTYPE, DATATYPE)                  \
+    if (typeid_cast<const DATATYPE *>(&argument_type)) \
+        return new AggregateSumTemplate<FIELDTYPE, ResultType, SumName>(std::forward<TArgs>(args)...);
+    FOR_DECIMAL_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 /** Create an aggregate function with a numeric type in the template parameter, depending on the type of the argument.
   */
 template <template <typename, typename... TArgs> class AggregateFunctionTemplate, typename... TArgs>
@@ -96,7 +115,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
     return nullptr;
 }
 
-template <template <typename, typename> class AggregateFunctionTemplate, template <typename> class Data, typename... TArgs>
+template <
+    template <typename, typename>
+    class AggregateFunctionTemplate,
+    template <typename>
+    class Data,
+    typename... TArgs>
 static IAggregateFunction * createWithNumericType(const IDataType & argument_type, TArgs &&... args)
 {
 #define DISPATCH(FIELDTYPE, DATATYPE)                  \
@@ -108,7 +132,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 }
 
 
-template <template <typename, typename> class AggregateFunctionTemplate, template <typename> class Data, typename... TArgs>
+template <
+    template <typename, typename>
+    class AggregateFunctionTemplate,
+    template <typename>
+    class Data,
+    typename... TArgs>
 static IAggregateFunction * createWithUnsignedIntegerType(const IDataType & argument_type, TArgs &&... args)
 {
 #define DISPATCH(TYPE)                                       \
@@ -134,11 +163,16 @@ static IAggregateFunction * createWithTwoNumericTypesSecond(const IDataType & se
 }
 
 template <template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
-static IAggregateFunction * createWithTwoNumericTypes(const IDataType & first_type, const IDataType & second_type, TArgs &&... args)
+static IAggregateFunction * createWithTwoNumericTypes(
+    const IDataType & first_type,
+    const IDataType & second_type,
+    TArgs &&... args)
 {
-#define DISPATCH(FIELDTYPE, DATATYPE)               \
-    if (typeid_cast<const DATATYPE *>(&first_type)) \
-        return createWithTwoNumericTypesSecond<FIELDTYPE, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+#define DISPATCH(FIELDTYPE, DATATYPE)                                                 \
+    if (typeid_cast<const DATATYPE *>(&first_type))                                   \
+        return createWithTwoNumericTypesSecond<FIELDTYPE, AggregateFunctionTemplate>( \
+            second_type,                                                              \
+            std::forward<TArgs>(args)...);
     FOR_NUMERIC_TYPES_AND_ENUMS(DISPATCH)
 #undef DISPATCH
     return nullptr;

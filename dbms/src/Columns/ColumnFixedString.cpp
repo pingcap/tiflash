@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,7 +90,12 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memcpy(&chars[old_size], pos, length);
 }
 
-StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
+StringRef ColumnFixedString::serializeValueIntoArena(
+    size_t index,
+    Arena & arena,
+    char const *& begin,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
 {
     auto * pos = arena.allocContinue(n, begin);
     memcpy(pos, &chars[n * index], n);
@@ -110,7 +115,8 @@ void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const 
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }
 
-void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
+void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+    const
 {
     for (size_t i = 0, sz = chars.size() / n; i < sz; ++i)
     {
@@ -123,7 +129,10 @@ void ColumnFixedString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBColl
     auto s = size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is "
+                + std::to_string(hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     const UInt8 * pos = chars.data();
     UInt32 * hash_data = hash.getData().data();
@@ -186,7 +195,8 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
     if (start + length > src_concrete.size())
         throw Exception(
             fmt::format(
-                "Parameters are out of bound in ColumnFixedString::insertRangeFrom method, start={}, length={}, src.size()={}",
+                "Parameters are out of bound in ColumnFixedString::insertRangeFrom method, start={}, length={}, "
+                "src.size()={}",
                 start,
                 length,
                 src_concrete.size()),
@@ -230,7 +240,8 @@ ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result
 
     while (filt_pos < filt_end_sse)
     {
-        int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
+        int mask
+            = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
 
         if (0 == mask)
         {

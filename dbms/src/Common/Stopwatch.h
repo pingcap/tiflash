@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -197,5 +197,12 @@ private:
     clockid_t clock_type;
 
     /// Most significant bit is a lock. When it is set, compareAndRestartDeferred method will return false.
+<<<<<<< HEAD
     UInt64 nanoseconds() const { return StopWatchDetail::nanoseconds(clock_type) & 0x7FFFFFFFFFFFFFFFULL; }
+=======
+    UInt64 nanoseconds(UInt64 prev_time) const
+    {
+        return clock_gettime_ns_adjusted(prev_time, clock_type) & 0x7FFFFFFFFFFFFFFFULL;
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };

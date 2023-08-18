@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ private:
     static constexpr Int64 MAX_MINUTE_PART = 59;
     static constexpr Int64 MAX_SECOND_PART = 59;
     static constexpr Int64 MAX_MICRO_PART = 999999;
-    static constexpr Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
+    static constexpr Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE
+        + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
     static_assert(MAX_NANOS > 0);
 
     Int64 nanos;
@@ -53,19 +54,39 @@ private:
 
 public:
     MyDuration() = default;
+<<<<<<< HEAD
+=======
+    explicit MyDuration(Int64 nanos_)
+        : nanos(nanos_)
+        , fsp(DefaultFsp)
+    {
+        if (nanos_ > MAX_NANOS || nanos_ < -MAX_NANOS)
+        {
+            throw Exception(
+                fmt::format("nanos must >= {} and <= {}", -MAX_NANOS, MAX_NANOS),
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     MyDuration(Int64 nanos_, UInt8 fsp_)
         : nanos(nanos_)
         , fsp(fsp_)
     {
         if (nanos_ > MAX_NANOS || nanos_ < -MAX_NANOS)
         {
-            throw Exception(fmt::format("nanos must >= {} and <= {}", -MAX_NANOS, MAX_NANOS), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(
+                fmt::format("nanos must >= {} and <= {}", -MAX_NANOS, MAX_NANOS),
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
         if (fsp > 6)
             throw Exception("fsp must >= 0 and <= 6", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     }
     MyDuration(Int32 neg, Int32 hour, Int32 minute, Int32 second, Int32 microsecond, UInt8 fsp)
-        : MyDuration(neg * (hour * NANOS_PER_HOUR + minute * NANOS_PER_MINUTE + second * NANOS_PER_SECOND + microsecond * NANOS_PER_MICRO), fsp)
+        : MyDuration(
+            neg
+                * (hour * NANOS_PER_HOUR + minute * NANOS_PER_MINUTE + second * NANOS_PER_SECOND
+                   + microsecond * NANOS_PER_MICRO),
+            fsp)
     {
         if (fsp > 6)
             throw Exception("fsp must >= 0 and <= 6", ErrorCodes::ARGUMENT_OUT_OF_BOUND);

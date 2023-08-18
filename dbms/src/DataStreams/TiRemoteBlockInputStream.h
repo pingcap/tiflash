@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -168,7 +168,15 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
+<<<<<<< HEAD
     TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id)
+=======
+    TiRemoteBlockInputStream(
+        std::shared_ptr<RemoteReader> remote_reader_,
+        const String & req_id,
+        const String & executor_id,
+        size_t stream_id_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
@@ -215,22 +223,32 @@ public:
         return block;
     }
 
+<<<<<<< HEAD
     const std::unordered_map<String, ExecutionSummary> * getRemoteExecutionSummaries(size_t index)
     {
         return execution_summaries_inited[index].load() ? &execution_summaries[index] : nullptr;
     }
+=======
+    const RemoteExecutionSummary & getRemoteExecutionSummary() { return remote_execution_summary; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
 
+<<<<<<< HEAD
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         remote_reader->collectNewThreadCount(cnt);
     }
+=======
+protected:
+    void readSuffixImpl() override { LOG_DEBUG(log, "finish read {} rows from remote", total_rows); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     virtual void resetNewThreadCountCompute() override
     {
+<<<<<<< HEAD
         if (collected)
         {
             collected = false;
@@ -243,6 +261,15 @@ protected:
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
         remote_reader->close();
+=======
+        buffer.append(": schema: {");
+        buffer.joinStr(
+            sample_block.begin(),
+            sample_block.end(),
+            [](const auto & arg, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName()); },
+            ", ");
+        buffer.append("}");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 };
 

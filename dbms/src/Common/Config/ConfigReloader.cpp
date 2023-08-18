@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,7 +78,21 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
     std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
+<<<<<<< HEAD
     if (force || new_files.isDifferOrNewerThan(files))
+=======
+    bool config_object_updated = false;
+    for (const auto & conf : config_objects)
+    {
+        if (conf->fileUpdated())
+        {
+            config_object_updated = true;
+            break;
+        }
+    }
+
+    if (force || (new_files.valid() && new_files.isDifferOrNewerThan(files)) || config_object_updated)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         ConfigProcessor config_processor(path);
         ConfigProcessor::LoadedConfig loaded_config;

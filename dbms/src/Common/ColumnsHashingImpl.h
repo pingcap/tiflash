@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -128,21 +128,45 @@ public:
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
 
     template <typename Data>
+<<<<<<< HEAD
     ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
+=======
+    ALWAYS_INLINE inline EmplaceResult emplaceKey(
+        Data & data,
+        size_t row,
+        Arena & pool,
+        std::vector<String> & sort_key_containers)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return emplaceImpl(key_holder, data);
     }
 
     template <typename Data>
+<<<<<<< HEAD
     ALWAYS_INLINE FindResult findKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
+=======
+    ALWAYS_INLINE inline FindResult findKey(
+        Data & data,
+        size_t row,
+        Arena & pool,
+        std::vector<String> & sort_key_containers)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
     template <typename Data>
+<<<<<<< HEAD
     ALWAYS_INLINE size_t getHash(const Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
+=======
+    ALWAYS_INLINE inline size_t getHash(
+        const Data & data,
+        size_t row,
+        Arena & pool,
+        std::vector<String> & sort_key_containers)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return data.hash(keyHolderGetKey(key_holder));
@@ -307,10 +331,7 @@ protected:
     /// Return the columns which actually contain the values of the keys.
     /// For a given key column, if it is nullable, we return its nested
     /// column. Otherwise we return the key column itself.
-    inline const ColumnRawPtrs & getActualColumns() const
-    {
-        return actual_columns;
-    }
+    inline const ColumnRawPtrs & getActualColumns() const { return actual_columns; }
 
     /// Create a bitmap that indicates whether, for a particular row,
     /// a key column bears a null value or not.
@@ -353,9 +374,10 @@ protected:
 
     KeysNullMap<Key> createBitmap(size_t) const
     {
-        throw Exception{"Internal error: calling createBitmap() for non-nullable keys"
-                        " is forbidden",
-                        ErrorCodes::LOGICAL_ERROR};
+        throw Exception{
+            "Internal error: calling createBitmap() for non-nullable keys"
+            " is forbidden",
+            ErrorCodes::LOGICAL_ERROR};
     }
 
 private:

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,10 +81,7 @@ private:
     Chunk * head;
     size_t size_in_bytes;
 
-    static size_t roundUpToPageSize(size_t s)
-    {
-        return (s + 4096 - 1) / 4096 * 4096;
-    }
+    static size_t roundUpToPageSize(size_t s) { return (s + 4096 - 1) / 4096 * 4096; }
 
     /// If chunks size is less than 'linear_growth_threshold', then use exponential growth, otherwise - linear growth
     ///  (to not allocate too much excessive memory).
@@ -113,18 +110,17 @@ private:
     friend class ArenaAllocator;
 
 public:
-    explicit Arena(size_t initial_size_ = 4096, size_t growth_factor_ = 2, size_t linear_growth_threshold_ = 128 * 1024 * 1024)
+    explicit Arena(
+        size_t initial_size_ = 4096,
+        size_t growth_factor_ = 2,
+        size_t linear_growth_threshold_ = 128 * 1024 * 1024)
         : growth_factor(growth_factor_)
         , linear_growth_threshold(linear_growth_threshold_)
         , head(new Chunk(initial_size_, nullptr))
         , size_in_bytes(head->size())
-    {
-    }
+    {}
 
-    ~Arena()
-    {
-        delete head;
-    }
+    ~Arena() { delete head; }
 
     /// Get piece of memory with alignment
     char * alignedAlloc(size_t size, size_t alignment)
@@ -160,10 +156,7 @@ public:
     /** Rollback just performed allocation.
       * Must pass size not more that was just allocated.
       */
-    void rollback(size_t size)
-    {
-        head->pos -= size;
-    }
+    void rollback(size_t size) { head->pos -= size; }
 
     /** Begin or expand allocation of contiguous piece of memory.
       * 'begin' - current begin of piece of memory, if it need to be expanded, or nullptr, if it need to be started.
@@ -210,15 +203,9 @@ public:
     }
 
     /// Size of chunks in bytes.
-    size_t size() const
-    {
-        return size_in_bytes;
-    }
+    size_t size() const { return size_in_bytes; }
 
-    size_t remainingSpaceInCurrentChunk() const
-    {
-        return head->remaining();
-    }
+    size_t remainingSpaceInCurrentChunk() const { return head->remaining(); }
 };
 
 using ArenaPtr = std::shared_ptr<Arena>;

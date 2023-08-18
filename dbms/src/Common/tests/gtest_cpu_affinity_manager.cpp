@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,15 @@ TEST(CPUAffinityManager_test, CPUAffinityManager)
     auto cpu_cores = cpu_affinity.cpuSetToVec(cpu_set);
     if (n_cpu != cpu_cores.size())
     {
+<<<<<<< HEAD
         LOG_FMT_INFO(Logger::get("CPUAffinityManager_test"), "n_cpu = {}, cpu_cores = {}, CPU number and CPU cores not match, don't not check CPUAffinityManager", n_cpu, cpu_cores);
+=======
+        LOG_INFO(
+            Logger::get(),
+            "n_cpu = {}, cpu_cores = {}, CPU number and CPU cores not match, don't not check CPUAffinityManager",
+            n_cpu,
+            cpu_cores);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         return;
     }
     LOG_FMT_DEBUG(Logger::get("CPUAffinityManager_test"), "n_cpu = {}, cpu_cores = {}", n_cpu, cpu_cores);

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,10 +41,7 @@ struct ExchangeReceiverImpl
 
     static constexpr auto type = "ExchangeReceiver";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_exchange_receiver();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_exchange_receiver(); }
 };
 
 using ExchangeReceiverStatisticsBase = ExecutorStatistics<ExchangeReceiverImpl>;
