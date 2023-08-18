@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,7 +107,7 @@ void PipelineEvents::mapInputs(const PipelineEvents & inputs)
          *     ```
          */
 
-        // If the outputs is fine grained mode, the intputs must also be.
+        // If the outputs is fine grained mode, the inputs must also be.
         RUNTIME_CHECK(inputs.is_fine_grained || !is_fine_grained);
         for (const auto & output : events)
         {
@@ -150,14 +150,25 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
         " -> ");
 }
 
-void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
+const String & Pipeline::toTreeString() const
+{
+    if (!tree_string.empty())
+        return tree_string;
+
+    FmtBuffer buffer;
+    toTreeStringImpl(buffer, 0);
+    tree_string = buffer.toString();
+    return tree_string;
+}
+
+void Pipeline::toTreeStringImpl(FmtBuffer & buffer, size_t level) const
 {
     toSelfString(buffer, level);
     if (!children.empty())
         buffer.append("\n");
     ++level;
     for (const auto & child : children)
-        child->toTreeString(buffer, level);
+        child->toTreeStringImpl(buffer, level);
 }
 
 void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
@@ -179,7 +190,10 @@ String Pipeline::getFinalPlanExecId() const
     return "";
 }
 
-PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::buildExecGroup(
+    PipelineExecutorContext & exec_context,
+    Context & context,
+    size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
@@ -235,18 +249,28 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
     {
         auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
+            self_events.push_back(
+                std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
-        self_events.push_back(std::make_shared<PlainPipelineEvent>(exec_context, log->identifier(), context, shared_from_this(), concurrency));
+        self_events.push_back(std::make_shared<PlainPipelineEvent>(
+            exec_context,
+            log->identifier(),
+            context,
+            shared_from_this(),
+            concurrency));
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
 }
 
-PipelineEvents Pipeline::doToEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, Events & all_events)
+PipelineEvents Pipeline::doToEvents(
+    PipelineExecutorContext & exec_context,
+    Context & context,
+    size_t concurrency,
+    Events & all_events)
 {
     auto self_events = toSelfEvents(exec_context, context, concurrency);
     for (const auto & child : children)
@@ -258,42 +282,38 @@ PipelineEvents Pipeline::doToEvents(PipelineExecutorContext & exec_context, Cont
 bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings & settings)
 {
     bool is_supported = true;
-    traverseExecutors(
-        &dag_request,
-        [&](const tipb::Executor & executor) {
-            switch (executor.tp())
-            {
-            case tipb::ExecType::TypeTableScan:
-            case tipb::ExecType::TypePartitionTableScan:
-            case tipb::ExecType::TypeProjection:
-            case tipb::ExecType::TypeSelection:
-            case tipb::ExecType::TypeLimit:
-            case tipb::ExecType::TypeTopN:
-            case tipb::ExecType::TypeExchangeSender:
-            case tipb::ExecType::TypeExchangeReceiver:
-            case tipb::ExecType::TypeExpand:
-            case tipb::ExecType::TypeExpand2:
-            case tipb::ExecType::TypeAggregation:
-            case tipb::ExecType::TypeStreamAgg:
-            case tipb::ExecType::TypeWindow:
-            case tipb::ExecType::TypeSort:
-                return true;
-            case tipb::ExecType::TypeJoin:
-                // TODO support spill.
-                // If enforce_enable_pipeline is true, it will return true, even if the join does not actually support spill.
-                is_supported = (settings.max_bytes_before_external_join == 0 || settings.enforce_enable_pipeline);
-                return is_supported;
-            default:
-                if (settings.enforce_enable_pipeline)
-                    throw Exception(fmt::format(
-                        "Pipeline mode does not support {}, and an error is reported because the setting enforce_enable_pipeline is true.",
-                        magic_enum::enum_name(executor.tp())));
-                is_supported = false;
-                return false;
-            }
-        });
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
+        switch (executor.tp())
+        {
+        case tipb::ExecType::TypeTableScan:
+        case tipb::ExecType::TypePartitionTableScan:
+        case tipb::ExecType::TypeProjection:
+        case tipb::ExecType::TypeSelection:
+        case tipb::ExecType::TypeLimit:
+        case tipb::ExecType::TypeTopN:
+        case tipb::ExecType::TypeExchangeSender:
+        case tipb::ExecType::TypeExchangeReceiver:
+        case tipb::ExecType::TypeExpand:
+        case tipb::ExecType::TypeExpand2:
+        case tipb::ExecType::TypeAggregation:
+        case tipb::ExecType::TypeStreamAgg:
+        case tipb::ExecType::TypeWindow:
+        case tipb::ExecType::TypeSort:
+        case tipb::ExecType::TypeJoin:
+            return true;
+        default:
+            if (settings.enforce_enable_pipeline)
+                throw Exception(fmt::format(
+                    "Pipeline mode does not support {}, and an error is reported because the setting "
+                    "enforce_enable_pipeline is true.",
+                    magic_enum::enum_name(executor.tp())));
+            is_supported = false;
+            return false;
+        }
+    });
     if (settings.enforce_enable_pipeline && !is_supported)
-        throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
+        throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the "
+                        "setting enforce_enable_pipeline is true.");
     return is_supported;
 }
 } // namespace DB

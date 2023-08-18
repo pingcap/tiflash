@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,10 +37,11 @@ public:
         const BlockInputStreamPtr & input,
         const Aggregator::Params & params_,
         bool final_,
-        const String & req_id)
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context)
         : log(Logger::get(req_id))
         , params(params_)
-        , aggregator(params, req_id)
+        , aggregator(params, req_id, 1, register_operator_spill_context)
         , final(final_)
     {
         children.push_back(input);

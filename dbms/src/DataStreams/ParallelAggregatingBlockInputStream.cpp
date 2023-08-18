@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,12 +31,13 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     Int64 max_buffered_bytes_,
     size_t temporary_data_merge_threads_,
-    const String & req_id)
+    const String & req_id,
+    const RegisterOperatorSpillContext & register_operator_spill_context)
     : log(Logger::get(req_id))
-    , params(params_)
-    , aggregator(params, req_id)
-    , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
+    , params(params_)
+    , aggregator(params, req_id, max_threads, register_operator_spill_context)
+    , final(final_)
     , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , keys_size(params.keys_size)
@@ -98,12 +99,21 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 {
                     BlockInputStreams merging_streams;
                     for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
-                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, max_buffered_bytes, log->identifier());
+                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(
+                            merging_buckets,
+                            i,
+                            log->identifier()));
+                    impl = std::make_unique<UnionBlockInputStream<>>(
+                        merging_streams,
+                        BlockInputStreams{},
+                        max_threads,
+                        max_buffered_bytes,
+                        log->identifier());
                 }
                 else
                 {
-                    impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
+                    impl
+                        = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
                 }
             }
         }
@@ -141,9 +151,10 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
         block,
         data,
         parent.threads_data[thread_num].key_columns,
-        parent.threads_data[thread_num].aggregate_columns);
+        parent.threads_data[thread_num].aggregate_columns,
+        thread_num);
     if (data.need_spill)
-        parent.aggregator.spill(data);
+        parent.aggregator.spill(data, thread_num);
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -156,20 +167,33 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
         /// Flush data in the RAM to disk. So it's easier to unite them later.
         auto & data = *parent.many_data[thread_num];
         if (data.tryMarkNeedSpill())
-            parent.aggregator.spill(data);
+            parent.aggregator.spill(data, thread_num);
     }
 }
 
 void ParallelAggregatingBlockInputStream::Handler::onFinish()
 {
-    if (!parent.isCancelled() && parent.aggregator.hasSpilledData())
+    /// no new spill can be triggered
+    parent.aggregator.getAggSpillContext()->finishSpillableStage();
+    bool need_final_spill = false;
+    for (size_t i = 0; i < parent.many_data.size(); ++i)
+    {
+        if (parent.aggregator.getAggSpillContext()->needFinalSpill(i))
+        {
+            /// corner case, auto spill is triggered at the last time
+            need_final_spill = true;
+            break;
+        }
+    }
+    if (!parent.isCancelled() && (parent.aggregator.hasSpilledData() || need_final_spill))
     {
         /// It may happen that some data has not yet been flushed,
         ///  because at the time of `onFinishThread` call, no data has been flushed to disk, and then some were.
-        for (auto & data : parent.many_data)
+        for (size_t i = 0; i < parent.many_data.size(); ++i)
         {
+            auto & data = parent.many_data[i];
             if (data->tryMarkNeedSpill())
-                parent.aggregator.spill(*data);
+                parent.aggregator.spill(*data, i);
         }
     }
 }
@@ -178,7 +202,11 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
 {
     parent.exceptions[thread_num] = exception;
     Int32 old_value = -1;
-    parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
+    parent.first_exception_index.compare_exchange_strong(
+        old_value,
+        static_cast<Int32>(thread_num),
+        std::memory_order_seq_cst,
+        std::memory_order_relaxed);
 
     if (!parent.executed)
         /// use cancel instead of kill to avoid too many useless error message
@@ -249,9 +277,10 @@ void ParallelAggregatingBlockInputStream::execute()
             children.at(0)->getHeader(),
             data,
             threads_data[0].key_columns,
-            threads_data[0].aggregate_columns);
+            threads_data[0].aggregate_columns,
+            0);
         if (data.need_spill)
-            aggregator.spill(data);
+            aggregator.spill(data, 0);
     }
 }
 

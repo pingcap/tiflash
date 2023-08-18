@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -194,10 +194,7 @@ namespace std
 template <>
 struct hash<DB::UInt128> // NOLINT(readability-identifier-naming)
 {
-    size_t operator()(const DB::UInt128 & u) const
-    {
-        return CityHash_v1_0_2::Hash128to64({u.low, u.high});
-    }
+    size_t operator()(const DB::UInt128 & u) const { return CityHash_v1_0_2::Hash128to64({u.low, u.high}); }
 };
 
 } // namespace std

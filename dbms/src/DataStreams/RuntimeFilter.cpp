@@ -1,10 +1,10 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -60,17 +59,19 @@ void RuntimeFilter::build()
 {
     if (!DM::FilterParser::isRSFilterSupportType(target_expr.field_type().tp()))
     {
-        throw TiFlashException(Errors::Coprocessor::Unimplemented,
-                               "The rs operator doesn't support target expr type:{}, rf_id:{}",
-                               target_expr.field_type().DebugString(),
-                               id);
+        throw TiFlashException(
+            Errors::Coprocessor::Unimplemented,
+            "The rs operator doesn't support target expr type:{}, rf_id:{}",
+            target_expr.field_type().DebugString(),
+            id);
     }
     if (source_expr.tp() != tipb::ExprType::ColumnRef)
     {
-        throw TiFlashException(Errors::Coprocessor::BadRequest,
-                               "The source expr {} of rf {} should be column ref",
-                               source_expr.tp(),
-                               id);
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "The source expr {} of rf {} should be column ref",
+            source_expr.tp(),
+            id);
     }
 }
 
@@ -156,7 +157,8 @@ bool RuntimeFilter::await(int64_t ms_remaining)
             return isReady();
         }
         std::unique_lock<std::mutex> lock(inner_mutex);
-        return inner_cv.wait_for(lock, std::chrono::milliseconds(ms_remaining), [this] { return isReady(); });
+        inner_cv.wait_for(lock, std::chrono::milliseconds(ms_remaining), [this] { return isReady() || isFailed(); });
+        return isReady();
     }
     return true;
 }
@@ -204,7 +206,11 @@ DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_t
     switch (rf_type)
     {
     case tipb::IN:
-        return DM::FilterParser::parseRFInExpr(rf_type, target_expr, columns_to_read, in_values_set->getUniqueSetElements());
+        return DM::FilterParser::parseRFInExpr(
+            rf_type,
+            target_expr,
+            columns_to_read,
+            in_values_set->getUniqueSetElements());
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
         // TODO

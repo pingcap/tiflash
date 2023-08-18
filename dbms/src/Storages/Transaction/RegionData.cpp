@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,7 +109,13 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
     return write_cf.getDataMut().erase(write_it);
 }
 
-std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied, bool hard_error)
+/// This function is called by `ReadRegionCommitCache`.
+std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
+    const ConstWriteCFIter & write_it,
+    bool need_value,
+    RegionID region_id,
+    UInt64 applied,
+    bool hard_error)
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [pk, ts] = write_it->first;
@@ -126,6 +132,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
         return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
 
+    std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
@@ -137,8 +144,9 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
             {
                 if (orphan_keys_info.pre_handling)
                 {
-                    RUNTIME_CHECK_MSG(orphan_keys_info.snapshot_index.has_value(),
-                                      "Snapshot index shall be set when Applying snapshot");
+                    RUNTIME_CHECK_MSG(
+                        orphan_keys_info.snapshot_index.has_value(),
+                        "Snapshot index shall be set when Applying snapshot");
                     // While pre-handling snapshot from raftstore v2, we accept and store the orphan keys in memory
                     // These keys should be resolved in later raft logs
                     orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
@@ -153,28 +161,48 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
                         {
                             return std::nullopt;
                         }
+                        // We can't throw here, since a PUT write may be replayed while its corresponding default not replayed.
+                        // TODO Parse some extra data to tell the difference.
+                        return std::nullopt;
                     }
                     else
                     {
                         // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
                         // So we print out a log here, and neglect the error.
-                        LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
+                        // TODO We currently comment this line, since it will cause too many log outputs.
+                        // We will also tried to recover the state from cached apply snapshot after restart.
+                        // LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
                         return std::nullopt;
                     }
+
                     // Otherwise, this is still a hard error.
                     // TODO We still need to check if there are remained orphan keys after we have applied after peer's flushed_index.
                     // Since the registered orphan write key may come from a raft log smaller than snapshot_index with its default key lost,
                     // thus this write key will not be replicated any more, which cause a slient data loss.
                 }
             }
-            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}{}",
-                                        pk.toDebugString(),
-                                        decoded_val.prewrite_ts,
-                                        key->toDebugString(),
-                                        region_id,
-                                        applied,
-                                        hard_error ? "" : ", not orphan key"),
-                            ErrorCodes::ILLFORMAT_RAFT_ROW);
+            if (!hard_error)
+            {
+                orphan_key_debug_msg = fmt::format(
+                    "orphan_info: ({}, snapshot_index: {}, {}, orphan key size {})",
+                    hard_error ? "" : ", not orphan key",
+                    orphan_keys_info.snapshot_index.has_value()
+                        ? std::to_string(orphan_keys_info.snapshot_index.value())
+                        : "",
+                    orphan_keys_info.removed_remained_keys.contains(*key) ? "duplicated write" : "missing default",
+                    orphan_keys_info.remainedKeyCount());
+            }
+            throw Exception(
+                fmt::format(
+                    "Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, "
+                    "applied_index: {}{}",
+                    pk.toDebugString(),
+                    decoded_val.prewrite_ts,
+                    key->toDebugString(),
+                    region_id,
+                    applied,
+                    orphan_key_debug_msg),
+                ErrorCodes::ILLFORMAT_RAFT_ROW);
         }
     }
 
@@ -284,7 +312,8 @@ const RegionLockCFData & RegionData::lockCF() const
 
 bool RegionData::isEqual(const RegionData & r2) const
 {
-    return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf && cf_data_size == r2.cf_data_size;
+    return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf
+        && cf_data_size == r2.cf_data_size;
 }
 
 RegionData::RegionData(RegionData && data)
@@ -310,7 +339,15 @@ void RegionData::OrphanKeysInfo::observeExtraKey(TiKVKey && key)
 
 bool RegionData::OrphanKeysInfo::observeKeyFromNormalWrite(const TiKVKey & key)
 {
-    return remained_keys.erase(key);
+    bool res = remained_keys.erase(key);
+    if (res)
+    {
+        // TODO since the check is temporarily disabled, we comment this to avoid extra memory cost.
+        // If we erased something, log that.
+        // So if we meet this key later due to some unknown replay mechanism, we can know it is a replayed orphan key.
+        // removed_remained_keys.insert(TiKVKey::copyFromObj(key));
+    }
+    return res;
 }
 
 bool RegionData::OrphanKeysInfo::containsExtraKey(const TiKVKey & key)
@@ -341,7 +378,15 @@ void RegionData::OrphanKeysInfo::advanceAppliedIndex(uint64_t applied_index)
         if (applied_index >= deadline_index.value() && count > 0)
         {
             auto one = remained_keys.begin()->toDebugString();
-            throw Exception(fmt::format("Orphan keys from snapshot still exists. One of total {} is {}. region_id={} snapshot_index={} deadline_index={} applied_index={}", count, one, region_id, snapshot_index.value(), deadline_index.value(), applied_index));
+            throw Exception(fmt::format(
+                "Orphan keys from snapshot still exists. One of total {} is {}. region_id={} snapshot_index={} "
+                "deadline_index={} applied_index={}",
+                count,
+                one,
+                region_id,
+                snapshot_index.value(),
+                deadline_index.value(),
+                applied_index));
         }
     }
 }

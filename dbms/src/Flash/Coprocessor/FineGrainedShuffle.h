@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,10 +40,7 @@ struct FineGrainedShuffle
         , batch_size(executor ? executor->fine_grained_shuffle_batch_size() : 0)
     {}
 
-    bool enable() const
-    {
-        return enableFineGrainedShuffle(stream_count);
-    }
+    bool enable() const { return enableFineGrainedShuffle(stream_count); }
 
     const UInt64 stream_count;
     const UInt64 batch_size;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,10 +41,8 @@ public:
     {}
     ColumnFileDeleteRange(const ColumnFileDeleteRange &) = default;
 
-    ColumnFileReaderPtr getReader(
-        const DMContext &,
-        const IColumnFileDataProviderPtr &,
-        const ColumnDefinesPtr &) const override;
+    ColumnFileReaderPtr getReader(const DMContext &, const IColumnFileDataProviderPtr &, const ColumnDefinesPtr &)
+        const override;
 
     const auto & getDeleteRange() { return delete_range; }
 

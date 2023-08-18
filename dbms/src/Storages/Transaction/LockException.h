@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ public:
         for (const auto & lock : locks)
             locked_regions.insert(lock.first);
 
-        this->message(fmt::format("Key is locked ({} locks in region {})", locks.size(), locked_regions));
+        this->message(fmt::format("Key is locked ({} locks in regions {})", locks.size(), locked_regions));
     }
 
     std::vector<std::pair<RegionID, LockInfoPtr>> locks;

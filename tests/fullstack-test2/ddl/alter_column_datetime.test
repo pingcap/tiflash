@@ -1,0 +1,80 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# datetime,timestamp,time enlarge fsp
+mysql> drop table if exists test.a1;
+mysql> create table test.a1(id int(11) NOT NULL AUTO_INCREMENT, `atime` datetime(0) DEFAULT '2023-01-01 00:00:00', `btime` timestamp(0) DEFAULT '2023-01-01 00:00:00', `ctime` time(0) DEFAULT '00:00:00', PRIMARY KEY (id));
+mysql> insert into test.a1 values (1,'2023-01-01 11:11:11','2023-01-01 11:11:11','11:11:11'),(2,'2023-02-01 02:22:22','2023-02-01 02:22:22','02:22:22'),(3,'2023-03-01 03:33:33','2023-03-01 03:33:33','03:33:33');
+mysql> alter table test.a1 set tiflash replica 1;
+
+func> wait_table test a1
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 order by id;
++----+---------------------+---------------------+----------+
+| id | atime               | btime               | ctime    |
++----+---------------------+---------------------+----------+
+|  1 | 2023-01-01 11:11:11 | 2023-01-01 11:11:11 | 11:11:11 |
+|  2 | 2023-02-01 02:22:22 | 2023-02-01 02:22:22 | 02:22:22 |
+|  3 | 2023-03-01 03:33:33 | 2023-03-01 03:33:33 | 03:33:33 |
++----+---------------------+---------------------+----------+
+
+mysql> alter table test.a1 modify column atime datetime(3);
+mysql> alter table test.a1 modify column btime timestamp(3);
+mysql> alter table test.a1 modify column ctime time(3);
+mysql> insert into test.a1 values (4,'2023-04-01 04:44:44.444','2023-04-01 04:44:44.444','04:44:44.444');
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 order by id;
++----+-------------------------+-------------------------+--------------+
+| id | atime                   | btime                   | ctime        |
++----+-------------------------+-------------------------+--------------+
+|  1 | 2023-01-01 11:11:11.000 | 2023-01-01 11:11:11.000 | 11:11:11.000 |
+|  2 | 2023-02-01 02:22:22.000 | 2023-02-01 02:22:22.000 | 02:22:22.000 |
+|  3 | 2023-03-01 03:33:33.000 | 2023-03-01 03:33:33.000 | 03:33:33.000 |
+|  4 | 2023-04-01 04:44:44.444 | 2023-04-01 04:44:44.444 | 04:44:44.444 |
++----+-------------------------+-------------------------+--------------+
+
+mysql> drop table if exists test.a1;
+
+# datetime,timestamp,time narrow down fsp
+mysql> drop table if exists test.a1;
+mysql> create table test.a1(id int(11) NOT NULL AUTO_INCREMENT, `atime` datetime(3) DEFAULT '2023-01-01 00:00:00.000', `btime` timestamp(3) DEFAULT '2023-01-01 00:00:00.000', `ctime` time(3) DEFAULT '00:00:00.000', PRIMARY KEY (id));
+mysql> insert into test.a1 values (1,'2023-01-01 11:11:11.111','2023-01-01 11:11:11.111','11:11:11.111'),(2,'2023-02-01 02:22:22.222','2023-02-01 02:22:22.222','02:22:22.222'),(3,'2023-03-01 03:33:33.333','2023-03-01 03:33:33.333','03:33:33.333');
+mysql> alter table test.a1 set tiflash replica 1;
+
+func> wait_table test a1
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 order by id;
++----+-------------------------+-------------------------+--------------+
+| id | atime                   | btime                   | ctime        |
++----+-------------------------+-------------------------+--------------+
+|  1 | 2023-01-01 11:11:11.111 | 2023-01-01 11:11:11.111 | 11:11:11.111 |
+|  2 | 2023-02-01 02:22:22.222 | 2023-02-01 02:22:22.222 | 02:22:22.222 |
+|  3 | 2023-03-01 03:33:33.333 | 2023-03-01 03:33:33.333 | 03:33:33.333 |
++----+-------------------------+-------------------------+--------------+
+
+mysql> alter table test.a1 modify column atime datetime(0);
+mysql> alter table test.a1 modify column btime timestamp(0);
+mysql> alter table test.a1 modify column ctime time(0);
+mysql> insert into test.a1 values (4,'2023-04-01 04:44:44','2023-04-01 04:44:44','04:44:44');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 order by id;
++----+---------------------+---------------------+----------+
+| id | atime               | btime               | ctime    |
++----+---------------------+---------------------+----------+
+|  1 | 2023-01-01 11:11:11 | 2023-01-01 11:11:11 | 11:11:11 |
+|  2 | 2023-02-01 02:22:22 | 2023-02-01 02:22:22 | 02:22:22 |
+|  3 | 2023-03-01 03:33:33 | 2023-03-01 03:33:33 | 03:33:33 |
+|  4 | 2023-04-01 04:44:44 | 2023-04-01 04:44:44 | 04:44:44 |
++----+---------------------+---------------------+----------+
+
+mysql> drop table if exists test.a1;

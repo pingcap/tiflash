@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,13 +37,14 @@ class ReceivedMessage
 
 public:
     // Constructor that move chunks.
-    ReceivedMessage(size_t source_index_,
-                    const String & req_info_,
-                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
-                    const mpp::Error * error_ptr_,
-                    const String * resp_ptr_,
-                    std::vector<const String *> && chunks_,
-                    size_t fine_grained_consumer_size);
+    ReceivedMessage(
+        size_t source_index_,
+        const String & req_info_,
+        const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
+        const mpp::Error * error_ptr_,
+        const String * resp_ptr_,
+        std::vector<const String *> && chunks_,
+        size_t fine_grained_consumer_size);
 
     size_t getSourceIndex() const { return source_index; }
     const String & getReqInfo() const { return req_info; }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,8 +64,7 @@ public:
         const DM::Remote::IDataStorePtr & remote_store,
         bool force_sync_data);
 
-    static UniversalPageStorageServicePtr
-    createForTest(
+    static UniversalPageStorageServicePtr createForTest(
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,

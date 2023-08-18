@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@
 
 namespace DB
 {
-
 namespace ExchangeReceiverMetric
 {
 inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
@@ -70,22 +69,24 @@ public:
     MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     template <bool is_force>
-    bool pushPacket(size_t source_index,
-                    const String & req_info,
-                    const TrackedMppDataPacketPtr & tracked_packet,
-                    ReceiverMode mode);
+    bool pushPacket(
+        size_t source_index,
+        const String & req_info,
+        const TrackedMppDataPacketPtr & tracked_packet,
+        ReceiverMode mode);
 
-    MPMCQueueResult pushAsyncGRPCPacket(size_t source_index,
-                                        const String & req_info,
-                                        const TrackedMppDataPacketPtr & tracked_packet,
-                                        GRPCKickTag * new_tag);
+    MPMCQueueResult pushAsyncGRPCPacket(
+        size_t source_index,
+        const String & req_info,
+        const TrackedMppDataPacketPtr & tracked_packet,
+        GRPCKickTag * new_tag);
 
     void finish()
     {
         grpc_recv_queue.finish();
         /// msg_channels_for_fine_grained_shuffle must be finished after msg_channel is finished
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
-            channel.finish();
+            channel->finish();
     }
 
     void cancel()
@@ -93,13 +94,10 @@ public:
         grpc_recv_queue.cancel();
         /// msg_channels_for_fine_grained_shuffle must be cancelled after msg_channel is cancelled
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
-            channel.cancel();
+            channel->cancel();
     }
 
-    bool isWritable() const
-    {
-        return grpc_recv_queue.isWritable();
-    }
+    bool isWritable() const { return grpc_recv_queue.isWritable(); }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -117,7 +115,7 @@ private:
     /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
-    PaddedPODArray<LooseBoundedMPMCQueue<ReceivedMessagePtr>> msg_channels_for_fine_grained_shuffle;
+    std::vector<std::shared_ptr<LooseBoundedMPMCQueue<ReceivedMessagePtr>>> msg_channels_for_fine_grained_shuffle;
     GRPCRecvQueue<ReceivedMessagePtr> grpc_recv_queue;
 };
 

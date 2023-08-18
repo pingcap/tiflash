@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@
 
 namespace DB
 {
-namespace
-{
+
 // Convert cpu time nanoseconds to cpu time millisecond, and round up.
 UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
 {
@@ -29,7 +28,6 @@ UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
     auto ceil_cpu_time_millisecond = ceil(cpu_time_millisecond);
     return ceil_cpu_time_millisecond;
 }
-} // namespace
 
 // 1 ru = 3 millisecond cpu time
 RU toRU(UInt64 cpu_time_ns)

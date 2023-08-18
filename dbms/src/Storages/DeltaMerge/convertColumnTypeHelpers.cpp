@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -40,19 +41,21 @@ namespace
 /// some helper functions for casting column data type
 
 template <typename TypeFrom, typename TypeTo>
-void insertRangeFromWithNumericTypeCast(const ColumnPtr & from_col, //
-                                        const ColumnPtr & null_map,
-                                        const ColumnDefine & read_define,
-                                        MutableColumnPtr & to_col,
-                                        size_t rows_offset,
-                                        size_t rows_limit)
+void insertRangeFromWithNumericTypeCast(
+    const ColumnPtr & from_col, //
+    const ColumnPtr & null_map,
+    const ColumnDefine & read_define,
+    MutableColumnPtr & to_col,
+    size_t rows_offset,
+    size_t rows_limit)
 {
     // Caller should ensure that both from_col / to_col
     // * are both integer or float32 -> float64
     // * no nullable wrapper
     // * both signed or unsigned
-    static_assert((std::is_integral_v<TypeFrom> && std::is_integral_v<TypeTo>)
-                  || (std::is_same<TypeFrom, Float32>::value && std::is_same<TypeTo, Float64>::value));
+    static_assert(
+        (std::is_integral_v<TypeFrom> && std::is_integral_v<TypeTo>)
+        || (std::is_same<TypeFrom, Float32>::value && std::is_same<TypeTo, Float64>::value));
     constexpr bool is_both_signed_or_unsigned = !(std::is_unsigned_v<TypeFrom> ^ std::is_unsigned_v<TypeTo>);
     static_assert(is_both_signed_or_unsigned);
     assert(from_col != nullptr);
@@ -114,13 +117,14 @@ void insertRangeFromWithNumericTypeCast(const ColumnPtr & from_col, //
 }
 
 
-bool castNonNullNumericColumn(const DataTypePtr & disk_type_not_null_,
-                              const ColumnPtr & disk_col_not_null,
-                              const ColumnDefine & read_define,
-                              const ColumnPtr & null_map,
-                              MutableColumnPtr & memory_col_not_null,
-                              size_t rows_offset,
-                              size_t rows_limit)
+bool castNonNullNumericColumn(
+    const DataTypePtr & disk_type_not_null_,
+    const ColumnPtr & disk_col_not_null,
+    const ColumnDefine & read_define,
+    const ColumnPtr & null_map,
+    MutableColumnPtr & memory_col_not_null,
+    size_t rows_offset,
+    size_t rows_limit)
 {
     /// Caller should ensure that type is not nullable
     assert(disk_type_not_null_ != nullptr);
@@ -315,18 +319,34 @@ bool castNonNullNumericColumn(const DataTypePtr & disk_type_not_null_,
             rows_limit);
         return true;
     }
+    else if (
+        checkDataType<DataTypeMyDateTime>(disk_type_not_null) && checkDataType<DataTypeMyDateTime>(read_type_not_null))
+    {
+        static_assert(
+            std::is_same_v<DataTypeMyDateTime::FieldType, UInt64>,
+            "Ensure the MyDateTime/MyTime is stored as UInt64");
+        insertRangeFromWithNumericTypeCast<UInt64, UInt64>(
+            disk_col_not_null,
+            null_map,
+            read_define,
+            memory_col_not_null,
+            rows_offset,
+            rows_limit);
+        return true;
+    }
     // else is not support
     return false;
 }
 
 } // namespace
 
-void convertColumnByColumnDefine(const DataTypePtr & disk_type,
-                                 const ColumnPtr & disk_col,
-                                 const ColumnDefine & read_define,
-                                 MutableColumnPtr memory_col,
-                                 size_t rows_offset,
-                                 size_t rows_limit)
+void convertColumnByColumnDefine(
+    const DataTypePtr & disk_type,
+    const ColumnPtr & disk_col,
+    const ColumnDefine & read_define,
+    MutableColumnPtr memory_col,
+    size_t rows_offset,
+    size_t rows_limit)
 {
     const DataTypePtr & read_type = read_define.type;
 
@@ -419,9 +439,10 @@ void convertColumnByColumnDefine(const DataTypePtr & disk_type,
                  rows_offset,
                  rows_limit))
     {
-        throw Exception("Reading mismatch data type pack. Cast and assign from " + disk_type->getName() + " to " + read_type->getName()
-                            + " is NOT supported!",
-                        ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Reading mismatch data type pack. Cast and assign from " + disk_type->getName() + " to "
+                + read_type->getName() + " is NOT supported!",
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 }
 
@@ -441,8 +462,9 @@ std::pair<bool, bool> checkColumnTypeCompatibility(const DataTypePtr & source_ty
     bool target_is_null = source_type->isNullable();
     if (source_is_null && target_is_null)
     {
-        need_cast_data = !(typeid_cast<const DataTypeNullable *>(source_type.get())->isEnum()
-                           && typeid_cast<const DataTypeNullable *>(target_type.get())->isEnum());
+        need_cast_data
+            = !(typeid_cast<const DataTypeNullable *>(source_type.get())->isEnum()
+                && typeid_cast<const DataTypeNullable *>(target_type.get())->isEnum());
     }
     else if (!source_is_null && !target_is_null)
     {
@@ -451,7 +473,10 @@ std::pair<bool, bool> checkColumnTypeCompatibility(const DataTypePtr & source_ty
     return std::make_pair(true, need_cast_data);
 }
 
-ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, ColumnPtr && from_col, const ColumnDefine & to_column_define)
+ColumnPtr convertColumnByColumnDefineIfNeed(
+    const DataTypePtr & from_type,
+    ColumnPtr && from_col,
+    const ColumnDefine & to_column_define)
 {
     // No need to convert
     if (likely(from_type->equals(*to_column_define.type)))
@@ -461,11 +486,12 @@ ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, Colum
     auto [compatible, need_data_cast] = checkColumnTypeCompatibility(from_type, to_column_define.type);
     if (unlikely(!compatible))
     {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "Reading mismatch data type pack. Cast from {} to {} is NOT supported, column_id={}",
-                        from_type->getName(),
-                        to_column_define.type->getName(),
-                        to_column_define.id);
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Reading mismatch data type pack. Cast from {} to {} is NOT supported, column_id={}",
+            from_type->getName(),
+            to_column_define.type->getName(),
+            to_column_define.id);
     }
     if (unlikely(!need_data_cast))
     {

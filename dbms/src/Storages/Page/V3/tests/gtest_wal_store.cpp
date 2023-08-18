@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -172,12 +172,14 @@ TEST(WALSeriTest, RefExternalAndEntry)
 
     {
         PageEntriesEdit edit;
-        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3
+            entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         edit.varEntry(buildV3Id(TEST_NAMESPACE_ID, 1), ver1_0, entry_p1_2, 2);
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = DB::PS::V3::u128::Serializer::deserializeFrom(DB::PS::V3::u128::Serializer::serializeTo(edit), nullptr);
+        auto deseri_edit
+            = DB::PS::V3::u128::Serializer::deserializeFrom(DB::PS::V3::u128::Serializer::serializeTo(edit), nullptr);
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
@@ -206,6 +208,7 @@ TEST(WALLognameTest, parsing)
         EXPECT_EQ(f.parent_path, parent_path);
         EXPECT_EQ(f.log_num, 1);
         EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.snap_seq, 0);
         EXPECT_EQ(f.stage, LogFileStage::Normal);
 
         EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2");
@@ -215,10 +218,25 @@ TEST(WALLognameTest, parsing)
     }
 
     {
+        LogFilename f = LogFilename::parseFrom(parent_path, "log_1_2_3", log);
+        EXPECT_EQ(f.parent_path, parent_path);
+        EXPECT_EQ(f.log_num, 1);
+        EXPECT_EQ(f.level_num, 2);
+        EXPECT_EQ(f.snap_seq, 3);
+        EXPECT_EQ(f.stage, LogFileStage::Normal);
+
+        EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_1_2_3");
+        EXPECT_EQ(f.fullname(LogFileStage::Temporary), "/data1/.temp.log_1_2_3");
+        EXPECT_EQ(f.filename(LogFileStage::Normal), "log_1_2_3");
+        EXPECT_EQ(f.fullname(LogFileStage::Normal), "/data1/log_1_2_3");
+    }
+
+    {
         LogFilename f = LogFilename::parseFrom(parent_path, ".temp.log_345_78", log);
         EXPECT_EQ(f.parent_path, parent_path);
         EXPECT_EQ(f.log_num, 345);
         EXPECT_EQ(f.level_num, 78);
+        EXPECT_EQ(f.snap_seq, 0);
         EXPECT_EQ(f.stage, LogFileStage::Temporary);
 
         EXPECT_EQ(f.filename(LogFileStage::Temporary), ".temp.log_345_78");
@@ -229,8 +247,6 @@ TEST(WALLognameTest, parsing)
 
     for (const auto & n : Strings{
              "something_wrong",
-             "log_1_2_3",
-             ".temp.log_1_2_3",
              "log_1",
              ".temp.log_1",
              "log_abc_def",
@@ -285,8 +301,7 @@ public:
     WALStoreTest()
         : multi_paths(GetParam())
         , log(Logger::get())
-    {
-    }
+    {}
 
     void SetUp() override
     {
@@ -411,7 +426,7 @@ TEST_P(WALStoreTest, Empty)
     ASSERT_NE(wal, nullptr);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -464,7 +479,7 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -497,7 +512,7 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -532,7 +547,7 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -603,12 +618,13 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
             auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
-            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size())
+                << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
         EXPECT_EQ(num_applied_edit, 3);
@@ -619,7 +635,7 @@ try
         std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto record = reader->next();
+            auto [_, record] = reader->next();
             if (!record)
             {
                 reader->throwIfError();
@@ -628,7 +644,8 @@ try
             }
             // Details of each edit is verified in `WALSeriTest`
             auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
-            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size())
+                << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
         EXPECT_EQ(num_applied_edit, 3);
@@ -652,13 +669,27 @@ try
         .offset_in_file = 100,
         .size_in_file = 2000,
     };
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location1, .is_valid = true}};
+    PageEntryV3 entry_p1{
+        .file_id = 1,
+        .size = 1,
+        .padded_size = 0,
+        .tag = 0,
+        .offset = 0x123,
+        .checksum = 0x4567,
+        .checkpoint_info = {.data_location = location1, .is_valid = true}};
     CheckpointLocation location2{
         .data_file_id = std::make_shared<String>("hhhhh"),
         .offset_in_file = 5000,
         .size_in_file = 2000,
     };
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location2, .is_valid = true}};
+    PageEntryV3 entry_p2{
+        .file_id = 1,
+        .size = 2,
+        .padded_size = 0,
+        .tag = 0,
+        .offset = 0x123,
+        .checksum = 0x4567,
+        .checkpoint_info = {.data_location = location2, .is_valid = true}};
     PageVersion ver20(/*seq=*/20);
     {
         universal::PageEntriesEdit edit;
@@ -686,13 +717,27 @@ try
         .offset_in_file = 100,
         .size_in_file = 2000,
     };
-    PageEntryV3 entry_p6{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location6, .is_valid = true}};
+    PageEntryV3 entry_p6{
+        .file_id = 1,
+        .size = 1,
+        .padded_size = 0,
+        .tag = 0,
+        .offset = 0x123,
+        .checksum = 0x4567,
+        .checkpoint_info = {.data_location = location6, .is_valid = true}};
     CheckpointLocation location7{
         .data_file_id = std::make_shared<String>("hhhhh2"),
         .offset_in_file = 5000,
         .size_in_file = 2000,
     };
-    PageEntryV3 entry_p7{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location7, .is_valid = true}};
+    PageEntryV3 entry_p7{
+        .file_id = 1,
+        .size = 2,
+        .padded_size = 0,
+        .tag = 0,
+        .offset = 0x123,
+        .checksum = 0x4567,
+        .checkpoint_info = {.data_location = location7, .is_valid = true}};
     PageVersion ver22(/*seq=*/22);
     {
         universal::PageEntriesEdit edit;
@@ -720,7 +765,7 @@ try
         std::set<std::shared_ptr<const String>, Comparator> result_file_ids;
         while (reader->remained())
         {
-            const auto record = reader->next();
+            const auto [_, record] = reader->next();
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
@@ -732,7 +777,8 @@ try
                     result_file_ids.emplace(r.entry.checkpoint_info.data_location.data_file_id);
                 }
             }
-            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size())
+                << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
         ASSERT_EQ(result_file_ids.size(), 2);
@@ -787,7 +833,7 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -819,7 +865,7 @@ try
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     file_snap.num_records = snap_edit.size();
-    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit));
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
@@ -830,7 +876,7 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto record = reader->next();
+        auto [_, record] = reader->next();
         if (!record)
         {
             reader->throwIfError();
@@ -855,7 +901,12 @@ TEST_P(WALStoreTest, GetFileSnapshot)
     ASSERT_NE(wal, nullptr);
 
     // running gc right before any writes is skip
-    ASSERT_FALSE(wal->tryGetFilesSnapshot(1, std::numeric_limits<UInt64>::max(), details::getMaxSequenceForRecord<u128::PageDirectoryTrait>, false).isValid());
+    ASSERT_FALSE(wal->tryGetFilesSnapshot(
+                        1,
+                        std::numeric_limits<UInt64>::max(),
+                        details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+                        false)
+                     .isValid());
 
     // generate log_1_0, log_2_0, log_3_0
     rollToNewLogWriter(wal);
@@ -864,17 +915,36 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
     ASSERT_EQ(getNumLogFiles(), 3);
     // num of files not exceed 5, skip
-    ASSERT_FALSE(wal->tryGetFilesSnapshot(5, std::numeric_limits<UInt64>::max(), details::getMaxSequenceForRecord<u128::PageDirectoryTrait>, false).isValid());
+    ASSERT_FALSE(wal->tryGetFilesSnapshot(
+                        5,
+                        std::numeric_limits<UInt64>::max(),
+                        details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+                        false)
+                     .isValid());
     // num of files not exceed 3, skip
-    ASSERT_FALSE(wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceForRecord<u128::PageDirectoryTrait>, false).isValid());
+    ASSERT_FALSE(wal->tryGetFilesSnapshot(
+                        3,
+                        std::numeric_limits<UInt64>::max(),
+                        details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+                        false)
+                     .isValid());
     // num of files not exceed 3, but still valid when `force` is true
-    ASSERT_TRUE(wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceForRecord<u128::PageDirectoryTrait>, true).isValid());
+    ASSERT_TRUE(wal->tryGetFilesSnapshot(
+                       3,
+                       std::numeric_limits<UInt64>::max(),
+                       details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+                       true)
+                    .isValid());
 
     rollToNewLogWriter(wal);
     // num of files exceed 3, return
     {
         ASSERT_EQ(getNumLogFiles(), 4);
-        auto files = wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceForRecord<u128::PageDirectoryTrait>, false);
+        auto files = wal->tryGetFilesSnapshot(
+            3,
+            std::numeric_limits<UInt64>::max(),
+            details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+            false);
         ASSERT_TRUE(files.isValid());
         ASSERT_EQ(files.persisted_log_files.size(), 4);
         ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
@@ -891,7 +961,11 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
     {
         ASSERT_EQ(getNumLogFiles(), 5);
-        auto files = wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceForRecord<u128::PageDirectoryTrait>, false);
+        auto files = wal->tryGetFilesSnapshot(
+            3,
+            std::numeric_limits<UInt64>::max(),
+            details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+            false);
         ASSERT_TRUE(files.isValid());
         ASSERT_EQ(files.persisted_log_files.size(), 5);
         ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
@@ -901,7 +975,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         // empty
         PageEntriesEdit snap_edit;
         files.num_records = snap_edit.size();
-        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit));
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }
@@ -916,9 +990,12 @@ TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
         auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
         ASSERT_NE(wal, nullptr);
 
-        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3
+            entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3
+            entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3
+            entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         {
             universal::PageEntriesEdit edit;
             edit.put(UniversalPageId("aaa"), entry_p1_2);
@@ -940,7 +1017,7 @@ TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
         auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto record = reader->next();
+            auto [_, record] = reader->next();
             if (!record)
             {
                 reader->throwIfError();

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ public:
     HashJoinBuildBlockInputStream(
         const BlockInputStreamPtr & input,
         JoinPtr join_,
-        size_t concurrency_build_index_,
+        size_t stream_index_,
         const String & req_id)
-        : concurrency_build_index(concurrency_build_index_)
+        : stream_index(stream_index_)
         , log(Logger::get(req_id))
     {
         children.push_back(input);
@@ -44,7 +44,7 @@ protected:
 
 private:
     JoinPtr join;
-    size_t concurrency_build_index;
+    size_t stream_index;
     const LoggerPtr log;
 };
 

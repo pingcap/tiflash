@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,8 +47,7 @@ struct FullGCParam
     explicit FullGCParam(const std::tuple<bool, bool> & t)
         : keep_snap(std::get<0>(t))
         , has_ref(std::get<1>(t))
-    {
-    }
+    {}
 };
 
 class PageStorageFullGCTest
@@ -58,13 +57,9 @@ class PageStorageFullGCTest
 public:
     PageStorageFullGCTest()
         : test_param(GetParam())
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        PageStorageTest::SetUp();
-    }
+    void SetUp() override { PageStorageTest::SetUp(); }
 
 protected:
     FullGCParam test_param;
@@ -114,12 +109,7 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(
-    Group,
-    PageStorageFullGCTest,
-    ::testing::Combine(
-        ::testing::Bool(),
-        ::testing::Bool()));
+INSTANTIATE_TEST_CASE_P(Group, PageStorageFullGCTest, ::testing::Combine(::testing::Bool(), ::testing::Bool()));
 
 ///////
 /// PageStorageFullGCConcurrentTest
@@ -138,13 +128,9 @@ class PageStorageFullGCConcurrentTest
 public:
     PageStorageFullGCConcurrentTest()
         : timing(GetParam())
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        PageStorageTest::SetUp();
-    }
+    void SetUp() override { PageStorageTest::SetUp(); }
 
     SyncPointScopeGuard getSyncPoint() const
     {
@@ -226,7 +212,7 @@ try
     size_t num_entries_on_wal = 0;
     while (reader->remained())
     {
-        auto s = reader->next();
+        auto [_, s] = reader->next();
         if (s.has_value())
         {
             auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
@@ -305,7 +291,7 @@ try
     size_t num_entries_on_wal = 0;
     while (reader->remained())
     {
-        auto s = reader->next();
+        auto [_, s] = reader->next();
         if (s.has_value())
         {
             auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
@@ -348,13 +334,9 @@ class PageStorageFullGCConcurrentTest2
 public:
     PageStorageFullGCConcurrentTest2()
         : timing(GetParam())
-    {
-    }
+    {}
 
-    void SetUp() override
-    {
-        PageStorageTest::SetUp();
-    }
+    void SetUp() override { PageStorageTest::SetUp(); }
 
     SyncPointScopeGuard getSyncPoint() const
     {
@@ -446,7 +428,7 @@ try
     bool exist_id4_normal_entry = false;
     while (reader->remained())
     {
-        auto s = reader->next();
+        auto [_, s] = reader->next();
         if (s.has_value())
         {
             auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,8 +45,13 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     const auto & meta = request->meta();
 
     auto & tmt_context = context->getTMTContext();
-    TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_DEBUG(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    TablesRegionsInfo tables_regions_info
+        = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
+    LOG_INFO(
+        log,
+        "DisaggregatedTask handling {} regions from {} physical tables",
+        tables_regions_info.regionCount(),
+        tables_regions_info.tableCount());
 
     // set schema ver and start ts
     auto schema_ver = request->schema_ver();

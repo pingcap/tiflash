@@ -1,7 +1,7 @@
 header:
   license:
     spdx-id: Apache-2.0
-    copyright-owner: PingCAP, Ltd.
+    copyright-owner: PingCAP, Inc.
   paths-ignore:
     - '.gitignore'
     - '.gitattributes'
@@ -42,5 +42,6 @@ header:
     - '.devcontainer/'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'
+    - '**/*.sql'
 
   comment: on-failure

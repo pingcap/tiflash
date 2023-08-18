@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,8 @@ public:
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
     void close();
-    int getExternalThreadCnt();
+
+    int getExternalThreadCnt() const { return external_thread_cnt; }
 
 private:
     /// two kinds of receiver in MPP
@@ -44,6 +45,7 @@ private:
     ExchangeReceiverMap exchange_receiver_map;
     std::vector<CoprocessorReaderPtr> coprocessor_readers;
     const LoggerPtr log;
+    int external_thread_cnt = 0;
 };
 
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;

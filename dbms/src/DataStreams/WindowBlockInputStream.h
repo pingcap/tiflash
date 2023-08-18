@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,70 +18,34 @@
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
+#include <WindowFunctions/WindowUtils.h>
 
 #include <deque>
 #include <memory>
+#include <tuple>
 
 namespace DB
 {
-// Runtime data for computing one window function.
-struct WindowFunctionWorkspace
-{
-    // TODO add aggregation function
-    WindowFunctionPtr window_function = nullptr;
-
-    ColumnNumbers arguments;
-};
-
-struct WindowBlock
-{
-    Columns input_columns;
-    MutableColumns output_columns;
-
-    size_t rows = 0;
-};
-
-struct RowNumber
-{
-    UInt64 block = 0;
-    UInt64 row = 0;
-
-    bool operator<(const RowNumber & other) const
-    {
-        return block < other.block
-            || (block == other.block && row < other.row);
-    }
-
-    bool operator==(const RowNumber & other) const
-    {
-        return block == other.block && row == other.row;
-    }
-
-    bool operator<=(const RowNumber & other) const
-    {
-        return *this < other || *this == other;
-    }
-
-    String toString() const
-    {
-        return fmt::format("[block={},row={}]", block, row);
-    }
-};
-
 /* Implementation details.*/
 struct WindowTransformAction
 {
 private:
     // Used for calculating the frame start
-    RowNumber stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame);
+    std::tuple<RowNumber, bool> stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame);
     // Used for calculating the frame end
     std::tuple<RowNumber, bool> stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame);
+
+    RowNumber stepInPreceding(const RowNumber & moved_row, size_t step_num);
+    std::tuple<RowNumber, bool> stepInFollowing(const RowNumber & moved_row, size_t step_num);
 
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
 public:
-    WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
+    WindowTransformAction(
+        const Block & input_header,
+        const WindowDescription & window_description_,
+        const String & req_id);
 
     void cleanUp();
 
@@ -109,10 +73,7 @@ public:
         return window_blocks[x.block - first_block_number].input_columns;
     }
 
-    const Columns & inputAt(const RowNumber & x) const
-    {
-        return const_cast<WindowTransformAction *>(this)->inputAt(x);
-    }
+    const Columns & inputAt(const RowNumber & x) const { return const_cast<WindowTransformAction *>(this)->inputAt(x); }
 
     auto & blockAt(const UInt64 block_number)
     {
@@ -126,20 +87,11 @@ public:
         return const_cast<WindowTransformAction *>(this)->blockAt(block_number);
     }
 
-    auto & blockAt(const RowNumber & x)
-    {
-        return blockAt(x.block);
-    }
+    auto & blockAt(const RowNumber & x) { return blockAt(x.block); }
 
-    const auto & blockAt(const RowNumber & x) const
-    {
-        return const_cast<WindowTransformAction *>(this)->blockAt(x);
-    }
+    const auto & blockAt(const RowNumber & x) const { return const_cast<WindowTransformAction *>(this)->blockAt(x); }
 
-    size_t blockRowsNumber(const RowNumber & x) const
-    {
-        return blockAt(x).rows;
-    }
+    size_t blockRowsNumber(const RowNumber & x) const { return blockAt(x).rows; }
 
     MutableColumns & outputAt(const RowNumber & x)
     {
@@ -156,10 +108,7 @@ public:
 
     bool lag(RowNumber & x, size_t offset) const;
 
-    RowNumber blocksEnd() const
-    {
-        return RowNumber{first_block_number + window_blocks.size(), 0};
-    }
+    RowNumber blocksEnd() const { return RowNumber{first_block_number + window_blocks.size(), 0}; }
 
     void appendBlock(Block & current_block);
 
@@ -251,7 +200,10 @@ class WindowBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "Window";
 
 public:
-    WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id);
+    WindowBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const WindowDescription & window_description_,
+        const String & req_id);
 
     Block getHeader() const override { return action.output_header; };
 

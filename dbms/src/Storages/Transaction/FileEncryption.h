@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,11 +53,12 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
     FileEncryptionInfo(const FileEncryptionInfoRaw & src)
         : FileEncryptionInfoRaw(src)
     {}
-    FileEncryptionInfo(const FileEncryptionRes & res_,
-                       const EncryptionMethod & method_,
-                       RawCppStringPtr key_,
-                       RawCppStringPtr iv_,
-                       RawCppStringPtr error_msg_)
+    FileEncryptionInfo(
+        const FileEncryptionRes & res_,
+        const EncryptionMethod & method_,
+        RawCppStringPtr key_,
+        RawCppStringPtr iv_,
+        RawCppStringPtr error_msg_)
         : FileEncryptionInfoRaw{res_, method_, key_, iv_, error_msg_}
     {}
     DISALLOW_COPY(FileEncryptionInfo);

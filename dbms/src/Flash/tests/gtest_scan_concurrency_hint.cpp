@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,12 +23,23 @@ namespace tests
 {
 class ScanConcurrencyHintTest : public DB::tests::ExecutorTest
 {
+public:
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        enablePipeline(false);
+    }
 };
 
 TEST_F(ScanConcurrencyHintTest, InvalidHint)
 try
 {
-    context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})}, 0);
+    context.addMockTable(
+        "simple_test",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})},
+        0);
     auto request = context.scan("simple_test", "t1").build(context);
     {
         /// the scan concurrency hint is invalid, the final stream concurrency is the original concurrency
@@ -44,7 +55,12 @@ CATCH
 TEST_F(ScanConcurrencyHintTest, ValidHint)
 try
 {
-    context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})}, 3);
+    context.addMockTable(
+        "simple_test",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})},
+        3);
     auto request = context.scan("simple_test", "t1").build(context);
     {
         /// case 1, concurrency < scan concurrency hint, the final stream concurrency is the original concurrency

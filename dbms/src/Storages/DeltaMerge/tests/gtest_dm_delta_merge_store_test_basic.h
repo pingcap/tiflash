@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,11 +34,12 @@ namespace DB
 {
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path);
+extern DMFilePtr writeIntoNewDMFile(
+    DMContext & dm_context,
+    const ColumnDefinesPtr & schema_snap,
+    const BlockInputStreamPtr & input_stream,
+    UInt64 file_id,
+    const String & parent_path);
 namespace tests
 {
 // Simple test suit for DeltaMergeStore.
@@ -51,30 +52,34 @@ public:
         store = reload();
     }
 
-    DeltaMergeStorePtr
-    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
+    DeltaMergeStorePtr reload(
+        const ColumnDefinesPtr & pre_define_columns = {},
+        bool is_common_handle = false,
+        size_t rowkey_column_size = 1)
     {
         TiFlashStorageTestBasic::reload();
         ColumnDefinesPtr cols;
         if (!pre_define_columns)
-            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+            cols = DMTestEnv::getDefaultColumns(
+                is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         else
             cols = pre_define_columns;
 
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
-                                                                 false,
-                                                                 "test",
-                                                                 "t_100",
-                                                                 NullspaceID,
-                                                                 100,
-                                                                 true,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
+        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+            *db_context,
+            false,
+            "test",
+            "t_100",
+            NullspaceID,
+            100,
+            true,
+            *cols,
+            handle_column_define,
+            is_common_handle,
+            rowkey_column_size,
+            DeltaMergeStore::Settings());
         return s;
     }
 
@@ -94,6 +99,9 @@ enum TestMode
     V2_BlockOnly,
     V2_FileOnly,
     V2_Mix,
+    V3_BlockOnly,
+    V3_FileOnly,
+    V3_Mix
 };
 
 // Read write test suit for DeltaMergeStore.
@@ -118,6 +126,11 @@ public:
         case TestMode::V2_Mix:
             setStorageFormat(2);
             break;
+        case TestMode::V3_BlockOnly:
+        case TestMode::V3_FileOnly:
+        case TestMode::V3_Mix:
+            setStorageFormat(3);
+            break;
         }
     }
 
@@ -127,30 +140,34 @@ public:
         store = reload();
     }
 
-    DeltaMergeStorePtr
-    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
+    DeltaMergeStorePtr reload(
+        const ColumnDefinesPtr & pre_define_columns = {},
+        bool is_common_handle = false,
+        size_t rowkey_column_size = 1)
     {
         TiFlashStorageTestBasic::reload();
         ColumnDefinesPtr cols;
         if (!pre_define_columns)
-            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+            cols = DMTestEnv::getDefaultColumns(
+                is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         else
             cols = pre_define_columns;
 
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
-                                                                 false,
-                                                                 "test",
-                                                                 "t_101",
-                                                                 NullspaceID,
-                                                                 101,
-                                                                 true,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
+        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+            *db_context,
+            false,
+            "test",
+            "t_101",
+            NullspaceID,
+            101,
+            true,
+            *cols,
+            handle_column_define,
+            is_common_handle,
+            rowkey_column_size,
+            DeltaMergeStore::Settings());
         return s;
     }
 
@@ -174,7 +191,9 @@ public:
         HandleRange range(min_pk, max_pk + 1);
         auto handle_range = RowKeyRange::fromHandleRange(range);
         auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
-        return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
+        return {
+            handle_range,
+            {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
     }
 
 protected:

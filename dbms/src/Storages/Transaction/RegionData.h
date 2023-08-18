@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,12 @@ public:
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
 
-    std::optional<RegionDataReadInfo> readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied, bool hard_error);
+    std::optional<RegionDataReadInfo> readDataByWriteIt(
+        const ConstWriteCFIter & write_it,
+        bool need_value,
+        RegionID region_id,
+        UInt64 applied,
+        bool hard_error);
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 
@@ -98,6 +103,7 @@ public:
         // See `RegionData::readDataByWriteIt`.
         bool pre_handling = false;
         uint64_t region_id = 0;
+        std::unordered_set<TiKVKey> removed_remained_keys;
 
     private:
         // Stores orphan write cf keys while handling a raftstore v2 snapshot.

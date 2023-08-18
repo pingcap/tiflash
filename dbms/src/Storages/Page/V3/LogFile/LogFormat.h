@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ static constexpr int HEADER_SIZE = CHECKSUM_FIELD_SIZE + PAYLOAD_FIELD_SIZE + si
 // - length (`PAYLOAD_FIELD_SIZE` bytes)
 // - type (1 byte),
 // - log number (4 bytes).
-static constexpr int RECYCLABLE_HEADER_SIZE = CHECKSUM_FIELD_SIZE + PAYLOAD_FIELD_SIZE + sizeof(MaxRecordType) + sizeof(LogNumberType);
+static constexpr int RECYCLABLE_HEADER_SIZE
+    = CHECKSUM_FIELD_SIZE + PAYLOAD_FIELD_SIZE + sizeof(MaxRecordType) + sizeof(LogNumberType);
 
 } // namespace DB::PS::V3::Format

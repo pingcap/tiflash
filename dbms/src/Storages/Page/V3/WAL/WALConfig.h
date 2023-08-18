@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,19 +33,17 @@ private:
 public:
     void setRecoverMode(UInt64 recover_mode)
     {
-        RUNTIME_CHECK_MSG(recover_mode == static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
-                              || recover_mode == static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
-                              || recover_mode == static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
-                              || recover_mode == static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords),
-                          "Unknow recover mode [num={}]",
-                          recover_mode);
+        RUNTIME_CHECK_MSG(
+            recover_mode == static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
+                || recover_mode == static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
+                || recover_mode == static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
+                || recover_mode == static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords),
+            "Unknow recover mode [num={}]",
+            recover_mode);
         wal_recover_mode = recover_mode;
     }
 
-    WALRecoveryMode getRecoverMode() const
-    {
-        return static_cast<WALRecoveryMode>(wal_recover_mode.get());
-    }
+    WALRecoveryMode getRecoverMode() const { return static_cast<WALRecoveryMode>(wal_recover_mode.get()); }
 
     static WALConfig from(const PageStorageConfig & config)
     {

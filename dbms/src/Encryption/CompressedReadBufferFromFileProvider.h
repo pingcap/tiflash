@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -80,6 +80,14 @@ public:
         const EncryptionPath & encryption_path,
         size_t estimated_size,
         const ReadLimiterPtr & read_limiter,
+        ChecksumAlgo checksum_algorithm,
+        size_t checksum_frame_size);
+
+
+    CompressedReadBufferFromFileProvider(
+        String && data,
+        const String & file_name,
+        size_t estimated_size,
         ChecksumAlgo checksum_algorithm,
         size_t checksum_frame_size);
 

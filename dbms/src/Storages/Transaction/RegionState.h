@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,7 +63,9 @@ private:
     ImutRegionRangePtr region_range = nullptr;
 };
 
-HandleRange<HandleID> getHandleRangeByTable(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys, TableID table_id);
+HandleRange<HandleID> getHandleRangeByTable(
+    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys,
+    TableID table_id);
 bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id);
 
 } // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,10 +34,7 @@ namespace DB
 /// Estimate of number of bytes in cache for marks.
 struct MarksWeightFunction
 {
-    size_t operator()(const MarksInCompressedFile & marks) const
-    {
-        return marks.allocated_bytes();
-    }
+    size_t operator()(const MarksInCompressedFile & marks) const { return marks.allocated_bytes(); }
 };
 
 

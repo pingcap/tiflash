@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,11 +90,15 @@ public:
 
     using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
-    using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
+    using ExternalPagesRemover = std::function<
+        void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
 public:
-    PageStorage(String name, const String & storage_path, const Config & config_, const FileProviderPtr & file_provider_);
+    PageStorage(
+        String name,
+        const String & storage_path,
+        const Config & config_,
+        const FileProviderPtr & file_provider_);
 
     PageId getMaxId();
 
@@ -117,10 +121,17 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
-    static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
+    static std::set<PageFile, PageFile::Comparator> listAllPageFiles(
+        const String & storage_path,
+        const FileProviderPtr & file_provider,
+        Poco::Logger * page_file_log,
+        ListPageFilesOption option = ListPageFilesOption());
 
-    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, bool remove_old = false);
+    static std::optional<PageFile> tryGetCheckpoint(
+        const String & storage_path,
+        const FileProviderPtr & file_provider,
+        Poco::Logger * page_file_log,
+        bool remove_old = false);
 
 private:
     PageFile::Writer & getWriter();
@@ -128,11 +139,12 @@ private:
     // gc helper functions
     using GcCandidates = std::set<PageFileIdAndLevel>;
     using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
-    GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                        const GcLivesPages & file_valid_pages,
-                                        const PageFileIdAndLevel & writing_file_id_level,
-                                        UInt64 & candidate_total_size,
-                                        size_t & migrate_page_count) const;
+    GcCandidates gcSelectCandidateFiles(
+        const std::set<PageFile, PageFile::Comparator> & page_files,
+        const GcLivesPages & file_valid_pages,
+        const PageFileIdAndLevel & writing_file_id_level,
+        UInt64 & candidate_total_size,
+        size_t & migrate_page_count) const;
 
     std::set<PageFile, PageFile::Comparator> gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files);
 
@@ -142,14 +154,16 @@ private:
 
     void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
 
-    PageEntriesEdit gcMigratePages(const SnapshotPtr & snapshot,
-                                   const GcLivesPages & file_valid_pages,
-                                   const GcCandidates & merge_files,
-                                   size_t migrate_page_count) const;
+    PageEntriesEdit gcMigratePages(
+        const SnapshotPtr & snapshot,
+        const GcLivesPages & file_valid_pages,
+        const GcCandidates & merge_files,
+        size_t migrate_page_count) const;
 
-    static void gcRemoveObsoleteData(std::set<PageFile, PageFile::Comparator> & page_files,
-                                     const PageFileIdAndLevel & writing_file_id_level,
-                                     const std::set<PageFileIdAndLevel> & live_files);
+    static void gcRemoveObsoleteData(
+        std::set<PageFile, PageFile::Comparator> & page_files,
+        const PageFileIdAndLevel & writing_file_id_level,
+        const std::set<PageFileIdAndLevel> & live_files);
 
 private:
     String storage_name; // Identify between different Storage

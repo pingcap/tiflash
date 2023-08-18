@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,12 @@ struct MPPQueryId
 
     String toString() const
     {
-        return fmt::format("<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>", query_ts, local_query_id, server_id, start_ts);
+        return fmt::format(
+            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
+            query_ts,
+            local_query_id,
+            server_id,
+            start_ts);
     }
 };
 
@@ -78,12 +83,15 @@ struct MPPGatherId
     {}
     String toString() const
     {
-        return fmt::format("<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>", gather_id, query_id.query_ts, query_id.local_query_id, query_id.server_id, query_id.start_ts);
+        return fmt::format(
+            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
+            gather_id,
+            query_id.query_ts,
+            query_id.local_query_id,
+            query_id.server_id,
+            query_id.start_ts);
     }
-    bool hasMeaningfulGatherId() const
-    {
-        return gather_id > 0;
-    }
+    bool hasMeaningfulGatherId() const { return gather_id > 0; }
     bool operator==(const MPPGatherId & rid) const;
 };
 
@@ -99,7 +107,13 @@ struct MPPTaskId
         : task_id(unknown_task_id)
         , gather_id(0, 0, 0, 0, 0){};
 
-    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, Int64 gather_id, UInt64 query_ts, UInt64 local_query_id)
+    MPPTaskId(
+        UInt64 start_ts,
+        Int64 task_id_,
+        UInt64 server_id,
+        Int64 gather_id,
+        UInt64 query_ts,
+        UInt64 local_query_id)
         : task_id(task_id_)
         , gather_id(gather_id, query_ts, local_query_id, server_id, start_ts)
     {}

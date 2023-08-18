@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,18 +73,9 @@ public:
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
 
     // Whether the current key is valid.
-    bool remained() const override
-    {
-        return mono->remained();
-    }
-    BaseBuffView keyView() const override
-    {
-        return mono->keyView();
-    }
-    BaseBuffView valueView() const override
-    {
-        return mono->valueView();
-    }
+    bool remained() const override { return mono->remained(); }
+    BaseBuffView keyView() const override { return mono->keyView(); }
+    BaseBuffView valueView() const override { return mono->valueView(); }
     void next() override
     {
         mono->next();
@@ -109,7 +100,13 @@ public:
         }
     }
 
-    MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> args_, LoggerPtr log_, RegionRangeFilter range_)
+    MultiSSTReader(
+        const TiFlashRaftProxyHelper * proxy_helper_,
+        ColumnFamilyType type_,
+        Initer initer_,
+        std::vector<E> args_,
+        LoggerPtr log_,
+        RegionRangeFilter range_)
         : log(log_)
         , proxy_helper(proxy_helper_)
         , type(type_)

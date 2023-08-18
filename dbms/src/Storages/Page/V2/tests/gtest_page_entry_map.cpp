@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,10 +29,7 @@ protected:
         map = std::make_unique<PageEntries>();
     }
 
-    void TearDown() override
-    {
-        map.reset();
-    }
+    void TearDown() override { map.reset(); }
 
     std::unique_ptr<PageEntries> map;
 };

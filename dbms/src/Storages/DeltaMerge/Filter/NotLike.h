@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class NotLike : public ColCmpVal
 {
 public:
@@ -29,9 +28,10 @@ public:
 
     String name() override { return "not_like"; }
 
-    RSResult roughCheck(size_t /*pack_id*/, const RSCheckParam & /*param*/) override { return Some; }
+    RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
+    {
+        return RSResults(pack_count, Some);
+    }
 };
 
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

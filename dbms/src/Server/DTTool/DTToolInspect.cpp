@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,7 +86,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         file.list(sub);
         for (auto & i : sub)
         {
-            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || endsWith(i, ".merged")
+                || i == "pack" || i == "meta")
             {
                 auto full_path = fmt::format("{}/{}", prefix, i);
                 LOG_INFO(logger, "checking full_path is {}: ", full_path);
@@ -187,17 +188,22 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("help", "Print help message and exit.") //
         ("check", bpo::bool_switch(&check), "Check integrity for the delta-tree file.") //
         ("dump", bpo::bool_switch(&dump_columns), "Dump the handle, pk, tag column values.") //
-        ("workdir", bpo::value<std::string>()->required(), "Target directory. Will inpsect the delta-tree file ${workdir}/dmf_${file-id}/") //
+        ("workdir",
+         bpo::value<std::string>()->required(),
+         "Target directory. Will inpsect the delta-tree file ${workdir}/dmf_${file-id}/") //
         ("file-id", bpo::value<size_t>()->required(), "Target DTFile ID.") //
-        ("imitative", bpo::bool_switch(&imitative), "Use imitative context instead of config file."
-                                                    " (encryption is not supported in this mode)") //
+        ("imitative",
+         bpo::bool_switch(&imitative),
+         "Use imitative context instead of config file."
+         " (encryption is not supported in this mode)") //
         ("config-file", bpo::value<std::string>(), "TiFlash config file.");
 
-    bpo::store(bpo::command_line_parser(opts)
-                   .options(options)
-                   .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
-                   .run(),
-               vm);
+    bpo::store(
+        bpo::command_line_parser(opts)
+            .options(options)
+            .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
+            .run(),
+        vm);
 
     try
     {

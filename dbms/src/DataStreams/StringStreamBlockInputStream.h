@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/dedupUtils.h>
 #include <DataTypes/DataTypeString.h>
 
 namespace DB
@@ -47,7 +47,9 @@ private:
     }
 
 public:
-    StringStreamBlockInputStream(const std::string col_name_) : col_name(col_name_) {}
+    StringStreamBlockInputStream(const std::string col_name_)
+        : col_name(col_name_)
+    {}
 
     void append(const std::string & s) { data.emplace_back(s); }
 

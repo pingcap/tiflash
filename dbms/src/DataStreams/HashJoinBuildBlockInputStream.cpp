@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <Common/FmtUtils.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
+
 namespace DB
 {
 Block HashJoinBuildBlockInputStream::readImpl()
@@ -24,10 +24,17 @@ Block HashJoinBuildBlockInputStream::readImpl()
         Block block = children.back()->read();
         if (!block)
         {
-            join->finishOneBuild();
+            if (join->finishOneBuild(stream_index))
+            {
+                if (join->hasBuildSideMarkedSpillData(stream_index))
+                    join->flushBuildSideMarkedSpillData(stream_index);
+                join->finalizeBuild();
+            }
             return block;
         }
-        join->insertFromBlock(block, concurrency_build_index);
+        join->insertFromBlock(block, stream_index);
+        if (join->hasBuildSideMarkedSpillData(stream_index))
+            join->flushBuildSideMarkedSpillData(stream_index);
         return block;
     }
     catch (...)

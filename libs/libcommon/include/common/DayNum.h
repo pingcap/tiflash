@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <common/types.h>
 #include <common/strong_typedef.h>
+#include <common/types.h>
 
 /** Represents number of days since 1970-01-01.
   * See DateLUTImpl for usage examples.

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,8 @@ void SchemaSyncService::addKeyspaceGCTasks()
                         /// They must be performed synchronously,
                         /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                         // GC safe point must be obtained ahead of syncing schema.
-                        auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
+                        auto gc_safe_point
+                            = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
                         stage = "Sync schemas";
                         done_anything = syncSchemas(keyspace);
                         if (done_anything)
@@ -90,7 +91,12 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     }
                     catch (const Exception & e)
                     {
-                        LOG_ERROR(ks_log, "{} failed by {} \n stack : {}", stage, e.displayText(), e.getStackTrace().toString());
+                        LOG_ERROR(
+                            ks_log,
+                            "{} failed by {} \n stack : {}",
+                            stage,
+                            e.displayText(),
+                            e.getStackTrace().toString());
                     }
                     catch (const Poco::Exception & e)
                     {
@@ -116,7 +122,8 @@ void SchemaSyncService::removeKeyspaceGCTasks()
     std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
     // Remove stale sync schema task.
-    for (auto keyspace_handle_iter = keyspace_handle_map.begin(); keyspace_handle_iter != keyspace_handle_map.end(); /*empty*/)
+    for (auto keyspace_handle_iter = keyspace_handle_map.begin(); keyspace_handle_iter != keyspace_handle_map.end();
+         /*empty*/)
     {
         const auto & keyspace = keyspace_handle_iter->first;
         if (keyspaces.count(keyspace))
@@ -210,8 +217,16 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
         auto canonical_name = [&]() {
             // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
             auto db_info = tmt_context.getSchemaSyncerManager()->getDBInfoByMappedName(keyspace_id, database_name);
-            return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
-                           : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
+            return db_info ? fmt::format(
+                       "{}, database_id={} table_id={}",
+                       SchemaNameMapper().debugCanonicalName(*db_info, table_info),
+                       db_info->id,
+                       table_info.id)
+                           : fmt::format(
+                               "({}).{}, table_id={}",
+                               database_name,
+                               SchemaNameMapper().debugTableName(table_info),
+                               table_info.id);
         }();
         LOG_INFO(keyspace_log, "Physically dropping table {}", canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
@@ -256,7 +271,11 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
         {
             // There should be something wrong, maybe a read lock of a table is held for a long time.
             // Just ignore and try to collect this database next time.
-            LOG_INFO(keyspace_log, "Physically drop database {} is skipped, reason: {} tables left", db_name, num_tables);
+            LOG_INFO(
+                keyspace_log,
+                "Physically drop database {} is skipped, reason: {} tables left",
+                db_name,
+                num_tables);
             continue;
         }
 

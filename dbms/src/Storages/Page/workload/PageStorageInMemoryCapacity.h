@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@
 
 namespace DB::PS::tests
 {
-class PageStorageInMemoryCapacity : public StressWorkload
+class PageStorageInMemoryCapacity
+    : public StressWorkload
     , public StressWorkloadFunc<PageStorageInMemoryCapacity>
 {
 public:
@@ -36,15 +37,9 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "PageStorageInMemoryCapacity";
-    }
+    static String name() { return "PageStorageInMemoryCapacity"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 7;
-    }
+    static UInt64 mask() { return 1 << 7; }
 
     static std::tuple<UInt64, UInt64, UInt64> getCurrentMemory()
     {
@@ -61,7 +56,8 @@ public:
         mach_msg_type_number_t info_size = HOST_BASIC_INFO_COUNT;
         host_basic_info_data_t info_data;
 
-        kern_return_t kern_rc = host_info(mach_host_self(), HOST_BASIC_INFO, reinterpret_cast<host_info_t>(&info_data), &info_size);
+        kern_return_t kern_rc
+            = host_info(mach_host_self(), HOST_BASIC_INFO, reinterpret_cast<host_info_t>(&info_data), &info_size);
         if (kern_rc == KERN_SUCCESS)
         {
             total_mem = info_data.max_mem;
@@ -115,12 +111,13 @@ public:
 private:
     String desc() override
     {
-        return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}"
-                           "Please cleanup folder after this test."
-                           "The current workload will measure the capacity of Pagestorage.",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored"
+            "`paths` will only used first one. which is {}. Data will store in {}"
+            "Please cleanup folder after this test."
+            "The current workload will measure the capacity of Pagestorage.",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     void run() override
@@ -158,17 +155,19 @@ private:
         size_t page_writen = (single_writer_page_nums * options.num_writers);
         assert(page_writen != 0);
 
-        LOG_INFO(StressEnv::logger, "After gen: {} pages"
-                                    "virtual memory used: {} MB,"
-                                    "resident memory used: {} MB,"
-                                    "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
-                                    "It is estimated that {} pages can be stored in the resident memory.",
-                 page_writen,
-                 virtual_used / DB::MB,
-                 resident_used / DB::MB,
-                 total_mem,
-                 std::round(virtual_used) ? (total_mem / ((double)virtual_used / page_writen)) : 0,
-                 std::round(resident_used) ? (total_mem / ((double)resident_used / page_writen)) : 0);
+        LOG_INFO(
+            StressEnv::logger,
+            "After gen: {} pages"
+            "virtual memory used: {} MB,"
+            "resident memory used: {} MB,"
+            "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
+            "It is estimated that {} pages can be stored in the resident memory.",
+            page_writen,
+            virtual_used / DB::MB,
+            resident_used / DB::MB,
+            total_mem,
+            std::round(virtual_used) ? (total_mem / ((double)virtual_used / page_writen)) : 0,
+            std::round(resident_used) ? (total_mem / ((double)resident_used / page_writen)) : 0);
     }
 };
 } // namespace DB::PS::tests

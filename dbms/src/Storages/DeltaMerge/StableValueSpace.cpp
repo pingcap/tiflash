@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -117,7 +117,9 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         if (remote_data_store)
         {
             auto wn_ps = context.db_context.getWriteNodePageStorage();
-            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), page_id);
+            auto full_page_id = UniversalPageIdFormat::toFullPageId(
+                UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id),
+                page_id);
             auto full_external_id = wn_ps->getNormalPageId(full_page_id);
             auto local_external_id = UniversalPageIdFormat::getU64ID(full_external_id);
             auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
@@ -134,7 +136,12 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         {
             auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
             auto file_parent_path = path_delegate.getDTFilePath(file_id);
-            dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
+            dmfile = DMFile::restore(
+                context.db_context.getFileProvider(),
+                file_id,
+                page_id,
+                file_parent_path,
+                DMFile::ReadMetaMode::all());
             auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
             RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
         }
@@ -155,7 +162,9 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
 {
     auto stable = std::make_shared<StableValueSpace>(stable_id);
 
-    auto stable_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id), stable_id);
+    auto stable_page_id = UniversalPageIdFormat::toFullPageId(
+        UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
+        stable_id);
     auto page = temp_ps->read(stable_page_id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
@@ -176,7 +185,9 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     {
         UInt64 page_id;
         readIntBinary(page_id, buf);
-        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), page_id);
+        auto full_page_id = UniversalPageIdFormat::toFullPageId(
+            UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id),
+            page_id);
         auto remote_data_location = temp_ps->getCheckpointLocation(full_page_id);
         auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
         auto file_oid = data_key_view.getDMFileOID();
@@ -280,7 +291,10 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
     }
 }
 
-void StableValueSpace::calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle)
+void StableValueSpace::calculateStableProperty(
+    const DMContext & context,
+    const RowKeyRange & rowkey_range,
+    bool is_common_handle)
 {
     property.gc_hint_version = std::numeric_limits<UInt64>::max();
     property.num_versions = 0;
@@ -314,11 +328,12 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             // If we pass `segment_range` instead,
             // then the returned stream is a `SkippableBlockInputStream` which will complicate the implementation
             DMFileBlockInputStreamBuilder builder(context.db_context);
-            BlockInputStreamPtr data_stream = builder
-                                                  .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
-                                                  .onlyReadOnePackEveryTime()
-                                                  .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
-                                                  .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
+            BlockInputStreamPtr data_stream
+                = builder
+                      .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
+                      .onlyReadOnePackEveryTime()
+                      .setTracingID(fmt::format("{}-calculateStableProperty", context.tracing_id))
+                      .build(file, read_columns, RowKeyRanges{rowkey_range}, context.scan_context);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream,
                 read_columns,
@@ -361,7 +376,11 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         if (use_new_pack_properties)
         {
             const size_t use_packs_count = std::count(use_packs.begin(), use_packs.end(), true);
-            RUNTIME_CHECK_MSG(static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count, "size doesn't match, new_pack_properties_size={} use_packs_size={}", new_pack_properties.property_size(), use_packs_count);
+            RUNTIME_CHECK_MSG(
+                static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count,
+                "size doesn't match, new_pack_properties_size={} use_packs_size={}",
+                new_pack_properties.property_size(),
+                use_packs_count);
         }
         for (size_t pack_id = 0; pack_id < use_packs.size(); ++pack_id)
         {
@@ -419,8 +438,7 @@ void StableValueSpace::drop(const FileProviderPtr & file_provider)
     }
 }
 
-SkippableBlockInputStreamPtr
-StableValueSpace::Snapshot::getInputStream(
+SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     const DMContext & context,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
@@ -433,7 +451,13 @@ StableValueSpace::Snapshot::getInputStream(
     const std::vector<IdSetPtr> & read_packs,
     bool need_row_id)
 {
-    LOG_DEBUG(log, "start_ts: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
+    LOG_DEBUG(
+        log,
+        "start_ts: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}",
+        max_data_version,
+        enable_handle_clean_read,
+        is_fast_scan,
+        enable_del_clean_read);
     SkippableBlockInputStreams streams;
     std::vector<size_t> rows;
     streams.reserve(stable->files.size());
@@ -441,8 +465,7 @@ StableValueSpace::Snapshot::getInputStream(
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
-        builder
-            .enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
+        builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
@@ -453,15 +476,22 @@ StableValueSpace::Snapshot::getInputStream(
     }
     if (need_row_id)
     {
-        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(streams, std::move(rows), context.scan_context);
+        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(
+            streams,
+            std::move(rows),
+            context.scan_context);
     }
     else
     {
-        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ false>>(streams, std::move(rows), context.scan_context);
+        return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ false>>(
+            streams,
+            std::move(rows),
+            context.scan_context);
     }
 }
 
-RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const
+RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)
+    const
 {
     // Avoid unnecessary reading IO
     if (valid_rows == 0 || range.none())
@@ -562,6 +592,54 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
     }
 
     return ret;
+}
+
+static size_t defaultValueBytes(const Field & f)
+{
+    switch (f.getType())
+    {
+    case Field::Types::Decimal32:
+        return 4;
+    case Field::Types::UInt64:
+    case Field::Types::Int64:
+    case Field::Types::Float64:
+    case Field::Types::Decimal64:
+        return 8;
+    case Field::Types::UInt128:
+    case Field::Types::Int128:
+    case Field::Types::Decimal128:
+        return 16;
+    case Field::Types::Int256:
+    case Field::Types::Decimal256:
+        return 32;
+    case Field::Types::String:
+        return f.get<String>().size();
+    default: // Null, Array, Tuple. In fact, it should not be Array or Tuple here.
+        // But we don't throw exceptions here because it is not the critical path.
+        return 1;
+    }
+}
+
+size_t StableValueSpace::avgRowBytes(const ColumnDefines & read_columns)
+{
+    size_t avg_bytes = 0;
+    if (likely(!files.empty()))
+    {
+        const auto & file = files.front();
+        for (const auto & col : read_columns)
+        {
+            if (file->isColumnExist(col.id))
+            {
+                const auto & stat = file->getColumnStat(col.id);
+                avg_bytes += stat.avg_size;
+            }
+            else
+            {
+                avg_bytes += defaultValueBytes(col.default_value);
+            }
+        }
+    }
+    return avg_bytes;
 }
 
 } // namespace DM

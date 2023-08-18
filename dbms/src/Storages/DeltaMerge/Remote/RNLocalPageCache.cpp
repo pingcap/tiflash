@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,9 @@ RNLocalPageCache::RNLocalPageCache(const RNLocalPageCacheOptions & options)
     }
     else
     {
-        LOG_WARNING(log, "Max capacity is not configured for local page cache. This may cause disk being filled quickly.");
+        LOG_WARNING(
+            log,
+            "Max capacity is not configured for local page cache. This may cause disk being filled quickly.");
     }
 }
 
@@ -101,10 +103,7 @@ void RNLocalPageCache::write(UniversalWriteBatch && wb)
         for (const auto & w : writes)
         {
             const auto & itr = occupied_keys.find(w.page_id);
-            RUNTIME_CHECK_MSG(
-                itr != occupied_keys.end(),
-                "Page {} was not occupied before writing",
-                w.page_id);
+            RUNTIME_CHECK_MSG(itr != occupied_keys.end(), "Page {} was not occupied before writing", w.page_id);
             RUNTIME_CHECK_MSG(
                 itr->second.size == w.size,
                 "Page {} write size is different to occupy size, write_size={} occupy_size={}",
@@ -170,7 +169,11 @@ void RNLocalPageCache::evictFromStorage(std::unique_lock<std::mutex> &)
     }
 }
 
-void RNLocalPageCache::guard(std::unique_lock<std::mutex> & lock, const std::vector<UniversalPageId> & keys, const std::vector<size_t> & sizes, uint64_t guard_debug_id)
+void RNLocalPageCache::guard(
+    std::unique_lock<std::mutex> & lock,
+    const std::vector<UniversalPageId> & keys,
+    const std::vector<size_t> & sizes,
+    uint64_t guard_debug_id)
 {
     RUNTIME_CHECK(max_size > 0);
 
@@ -198,12 +201,7 @@ void RNLocalPageCache::guard(std::unique_lock<std::mutex> & lock, const std::vec
             info.size = sizes[i];
             info.alive_guards = 1;
 
-            LOG_TRACE(
-                log,
-                "Occupy: key={} size={} stats={}",
-                keys[i],
-                sizes[i],
-                statistics(lock));
+            LOG_TRACE(log, "Occupy: key={} size={} stats={}", keys[i], sizes[i], statistics(lock));
 
             // Keep these keys not evictable.
             // Only necessary when keys are added to the `occupied_keys` for the first time.
@@ -274,7 +272,10 @@ void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64
     cv.notify_all();
 }
 
-RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes)
+RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
+    const std::vector<PageOID> & pages,
+    const std::vector<size_t> & page_sizes,
+    ScanContextPtr scan_context)
 {
     RUNTIME_CHECK(pages.size() == page_sizes.size(), pages.size(), page_sizes.size());
     const size_t n = pages.size();
@@ -303,7 +304,8 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
 
         update_need_occupy_size();
         if (need_occupy_size > max_size)
-            throw Exception(fmt::format("Occupy space failed, max_size={} need_occupy_size={}", max_size, need_occupy_size));
+            throw Exception(
+                fmt::format("Occupy space failed, max_size={} need_occupy_size={}", max_size, need_occupy_size));
 
         if (occupied_size + need_occupy_size > max_size)
         {
@@ -318,15 +320,20 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
             Stopwatch watch;
 
             // There are too many occupies, wait...
-            while (true)
+
+            // Sum of wait_seconds is 1+2+4+8+16+32+64+64+64 = 255 seconds.
+            // Since the default maximum lifetime of snapshot in WriteNodes is 300 seconds, waiting for more than the maximum lifetime is meaningless.
+            constexpr std::array<Int32, 9> wait_seconds = {1, 2, 4, 8, 16, 32, 64, 64, 64};
+            bool succ = false;
+            for (int wait_second : wait_seconds)
             {
-                using namespace std::chrono_literals;
                 GET_METRIC(tiflash_storage_remote_cache, type_page_full).Increment();
-                auto cv_status = cv.wait_for(lock, 30s);
+                auto cv_status = cv.wait_for(lock, std::chrono::seconds(wait_second));
                 if (cv_status == std::cv_status::timeout)
                     LOG_WARNING(
                         log,
-                        "Still waiting local page cache to release space, elapsed={}s need_occupy_size={} all_keys_n={} stats={}",
+                        "Still waiting local page cache to release space, elapsed={}s need_occupy_size={} "
+                        "all_keys_n={} stats={}",
                         watch.elapsedSeconds(),
                         need_occupy_size,
                         n,
@@ -334,14 +341,22 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
 
                 // Some keys may be occupied, so that need_occupy_size may be changed.
                 update_need_occupy_size();
-                bool stop_waiting = occupied_size + need_occupy_size <= max_size;
-                if (stop_waiting)
+                if (succ = occupied_size + need_occupy_size <= max_size; succ)
                     break;
             }
 
+            RUNTIME_CHECK_MSG(
+                succ,
+                "PageStorage cache space is insufficient to contain living query data. occupied_size={}, "
+                "need_occupy_size={}, max_size={}",
+                occupied_size,
+                need_occupy_size,
+                max_size);
+
             LOG_WARNING(
                 log,
-                "Finished waiting local page cache to release space, elapsed={}s need_occupy_size={} all_keys_n={} stats={}",
+                "Finished waiting local page cache to release space, elapsed={}s need_occupy_size={} all_keys_n={} "
+                "stats={}",
                 watch.elapsedSeconds(),
                 need_occupy_size,
                 n,
@@ -376,8 +391,12 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
         // Pages may be occupied but not written yet, so we always return missing pages according
         // to the storage.
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
+        {
+            scan_context->total_disagg_read_cache_hit_size += page_sizes[i];
             continue;
+        }
         missing_ids.push_back(pages[i]);
+        scan_context->total_disagg_read_cache_miss_size += page_sizes[i];
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());
@@ -404,7 +423,11 @@ bool RNLocalPageCacheLRU::put(const UniversalPageId & key, size_t size)
     }
     else
     {
-        RUNTIME_CHECK_MSG(size == item.size, "Put an item with different size, new_size={} old_size={}", size, item.size);
+        RUNTIME_CHECK_MSG(
+            size == item.size,
+            "Put an item with different size, new_size={} old_size={}",
+            size,
+            item.size);
         queue.splice(queue.end(), queue, item.queue_iter);
     }
 

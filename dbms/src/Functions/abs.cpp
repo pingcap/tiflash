@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,12 +57,10 @@ struct FunctionUnaryArithmeticMonotonicity<NameAbs>
     static bool has() { return true; }
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
-        Float64 left_float = left.isNull()
-            ? -std::numeric_limits<Float64>::infinity()
-            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull()
-            ? std::numeric_limits<Float64>::infinity()
-            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
+        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity()
+                                           : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
+        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity()
+                                             : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
 
         if ((left_float < 0 && right_float > 0) || (left_float > 0 && right_float < 0))
             return {};

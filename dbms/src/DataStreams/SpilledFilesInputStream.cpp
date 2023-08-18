@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,11 @@ SpilledFilesInputStream::SpilledFilesInputStream(
 {
     RUNTIME_CHECK_MSG(!spilled_file_infos.empty(), "Spilled files must not be empty");
     current_reading_file_index = 0;
-    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header_without_constants, file_provider, max_supported_spill_version);
+    current_file_stream = std::make_unique<SpilledFileStream>(
+        std::move(spilled_file_infos[0]),
+        header_without_constants,
+        file_provider,
+        max_supported_spill_version);
 }
 
 Block SpilledFilesInputStream::readImpl()
@@ -67,12 +71,14 @@ Block SpilledFilesInputStream::readInternal()
     if (ret)
         return ret;
 
-    for (++current_reading_file_index; current_reading_file_index < spilled_file_infos.size(); ++current_reading_file_index)
+    for (++current_reading_file_index; current_reading_file_index < spilled_file_infos.size();
+         ++current_reading_file_index)
     {
-        current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[current_reading_file_index]),
-                                                                  header,
-                                                                  file_provider,
-                                                                  max_supported_spill_version);
+        current_file_stream = std::make_unique<SpilledFileStream>(
+            std::move(spilled_file_infos[current_reading_file_index]),
+            header,
+            file_provider,
+            max_supported_spill_version);
         ret = current_file_stream->block_in->read();
         if (ret)
             return ret;

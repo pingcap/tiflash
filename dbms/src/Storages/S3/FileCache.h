@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,15 +162,9 @@ public:
         }
     }
 
-    std::list<String>::iterator begin()
-    {
-        return lru_queue.begin();
-    }
+    std::list<String>::iterator begin() { return lru_queue.begin(); }
 
-    std::list<String>::iterator end()
-    {
-        return lru_queue.end();
-    }
+    std::list<String>::iterator end() { return lru_queue.end(); }
 
     std::list<String>::iterator remove(const String & key)
     {
@@ -194,10 +188,7 @@ public:
         return files;
     }
 
-    size_t size() const
-    {
-        return table.size();
-    }
+    size_t size() const { return table.size(); }
 
 private:
     std::list<String> lru_queue;
@@ -215,19 +206,17 @@ public:
 
     static FileCache * instance()
     {
-        return global_file_cache_initialized.load(std::memory_order_acquire)
-            ? global_file_cache_instance.get()
-            : nullptr;
+        return global_file_cache_initialized.load(std::memory_order_acquire) ? global_file_cache_instance.get()
+                                                                             : nullptr;
     }
 
-    static void shutdown()
-    {
-        global_file_cache_instance = nullptr;
-    }
+    static void shutdown() { global_file_cache_instance = nullptr; }
 
     FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
-    RandomAccessFilePtr getRandomAccessFile(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize);
+    RandomAccessFilePtr getRandomAccessFile(
+        const S3::S3FilenameView & s3_fname,
+        const std::optional<UInt64> & filesize);
 
     void updateConfig(const Settings & settings);
 
@@ -262,7 +251,11 @@ public:
     void restoreDMFile(const std::filesystem::directory_entry & dmfile_entry);
 
     void remove(const String & s3_key, bool force = false);
-    std::pair<Int64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f, bool force = false);
+    std::pair<Int64, std::list<String>::iterator> removeImpl(
+        LRUFileTable & table,
+        const String & s3_key,
+        FileSegmentPtr & f,
+        bool force = false);
     void removeDiskFile(const String & local_fname);
 
     // Estimated size is an empirical value.
@@ -283,7 +276,9 @@ public:
         5 * 1024 * 1024, // Estimated size of handle/version/delete mark.
         12 * 1024 * 1024, // Estimated size of other data columns.
     };
-    static_assert(sizeof(estimated_size_of_file_type) / sizeof(estimated_size_of_file_type[0]) == magic_enum::enum_count<FileSegment::FileType>());
+    static_assert(
+        sizeof(estimated_size_of_file_type) / sizeof(estimated_size_of_file_type[0])
+        == magic_enum::enum_count<FileSegment::FileType>());
     static UInt64 getEstimatedSizeOfFileType(FileSegment::FileType file_type);
     static FileSegment::FileType getFileType(const String & fname);
     static FileSegment::FileType getFileTypeOfColData(const std::filesystem::path & p);

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,10 @@
 
 namespace DB
 {
-ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names)
+ColumnRawPtrs extractAndMaterializeKeyColumns(
+    const Block & block,
+    Columns & materialized_columns,
+    const Strings & key_columns_names)
 {
     ColumnRawPtrs key_columns(key_columns_names.size());
     for (size_t i = 0; i < key_columns_names.size(); ++i)
@@ -36,7 +39,11 @@ ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & mat
     return key_columns;
 }
 
-void recordFilteredRows(const Block & block, const String & filter_column, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map)
+void recordFilteredRows(
+    const Block & block,
+    const String & filter_column,
+    ColumnPtr & null_map_holder,
+    ConstNullMapPtr & null_map)
 {
     if (filter_column.empty())
         return;
@@ -88,7 +95,15 @@ namespace
 {
 UInt64 inline updateHashValue(size_t restore_round, UInt64 x)
 {
-    static std::vector<UInt64> hash_constants{0xff51afd7ed558ccdULL, 0xc4ceb9fe1a85ec53ULL, 0xde43a68e4d184aa3ULL, 0x86f1fda459fa47c7ULL, 0xd91419add64f471fULL, 0xc18eea9cbe12489eULL, 0x2cb94f36b9fe4c38ULL, 0xef0f50cc5f0c4cbaULL};
+    static std::vector<UInt64> hash_constants{
+        0xff51afd7ed558ccdULL,
+        0xc4ceb9fe1a85ec53ULL,
+        0xde43a68e4d184aa3ULL,
+        0x86f1fda459fa47c7ULL,
+        0xd91419add64f471fULL,
+        0xc18eea9cbe12489eULL,
+        0x2cb94f36b9fe4c38ULL,
+        0xef0f50cc5f0c4cbaULL};
     static size_t hash_constants_size = hash_constants.size();
     assert(hash_constants_size > 0 && (hash_constants_size & (hash_constants_size - 1)) == 0);
     assert(restore_round != 0);
@@ -100,12 +115,13 @@ UInt64 inline updateHashValue(size_t restore_round, UInt64 x)
     return x;
 }
 } // namespace
-void computeDispatchHash(size_t rows,
-                         const ColumnRawPtrs & key_columns,
-                         const TiDB::TiDBCollators & collators,
-                         std::vector<String> & partition_key_containers,
-                         size_t join_restore_round,
-                         WeakHash32 & hash)
+void computeDispatchHash(
+    size_t rows,
+    const ColumnRawPtrs & key_columns,
+    const TiDB::TiDBCollators & collators,
+    std::vector<String> & partition_key_containers,
+    size_t join_restore_round,
+    WeakHash32 & hash)
 {
     HashBaseWriterHelper::computeHash(rows, key_columns, collators, partition_key_containers, hash);
     if (join_restore_round != 0)

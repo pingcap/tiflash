@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -199,9 +199,11 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
         }
         else
         {
-            column_info_fields.emplace(column_id_value.id,
-                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id),
-                                                       static_cast<NearestType>(std::move(column_id_value.value))));
+            column_info_fields.emplace(
+                column_id_value.id,
+                std::make_tuple(
+                    getColumnInfo<ValueType>(column_id_value.id),
+                    static_cast<NearestType>(std::move(column_id_value.value))));
         }
     }
 }
@@ -214,7 +216,10 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
 }
 
 template <typename... Types>
-std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs pk_col_ids, bool is_common_handle, Types &&... column_value_ids)
+std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(
+    ColumnIDs pk_col_ids,
+    bool is_common_handle,
+    Types &&... column_value_ids)
 {
     OrderedColumnInfoFields column_info_fields;
     getTableInfoFieldsInternal(column_info_fields, std::forward<Types>(column_value_ids)...);
@@ -229,7 +234,8 @@ std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs pk_col_
         if (std::find(pk_col_ids.begin(), pk_col_ids.end(), column.id) != pk_col_ids.end())
         {
             column.setPriKeyFlag();
-            if (column.tp != TiDB::TypeLong && column.tp != TiDB::TypeTiny && column.tp != TiDB::TypeLongLong && column.tp != TiDB::TypeShort && column.tp != TiDB::TypeInt24)
+            if (column.tp != TiDB::TypeLong && column.tp != TiDB::TypeTiny && column.tp != TiDB::TypeLongLong
+                && column.tp != TiDB::TypeShort && column.tp != TiDB::TypeInt24)
             {
                 pk_is_handle = false;
             }
@@ -273,12 +279,18 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
     ColumnDefines store_columns;
     if (table_info.is_common_handle)
     {
-        DM::ColumnDefine extra_handle_column{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE};
+        DM::ColumnDefine extra_handle_column{
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_STRING_TYPE};
         store_columns.emplace_back(extra_handle_column);
     }
     else
     {
-        DM::ColumnDefine extra_handle_column{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
+        DM::ColumnDefine extra_handle_column{
+            EXTRA_HANDLE_COLUMN_ID,
+            EXTRA_HANDLE_COLUMN_NAME,
+            EXTRA_HANDLE_COLUMN_INT_TYPE};
         store_columns.emplace_back(extra_handle_column);
     }
     store_columns.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
@@ -296,12 +308,22 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
 
     if (handle_id != EXTRA_HANDLE_COLUMN_ID)
     {
-        auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) { return cd.id == handle_id; });
-        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter, /* decoding_schema_version_ */ 1);
+        auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) {
+            return cd.id == handle_id;
+        });
+        return std::make_shared<DecodingStorageSchemaSnapshot>(
+            std::make_shared<ColumnDefines>(store_columns),
+            table_info,
+            *iter,
+            /* decoding_schema_epoch_ */ 1);
     }
     else
     {
-        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0], /* decoding_schema_version_ */ 1);
+        return std::make_shared<DecodingStorageSchemaSnapshot>(
+            std::make_shared<ColumnDefines>(store_columns),
+            table_info,
+            store_columns[0],
+            /* decoding_schema_epoch_ */ 1);
     }
 }
 
@@ -339,8 +361,9 @@ std::tuple<T, size_t> getValueLengthByRowV2(const T & v)
     encodeRowV2(table_info, fields, ss);
     auto encoded = ss.str();
     Block block = decodeRowToBlock(encoded, decoding_schema);
-    return std::make_tuple(static_cast<T>(std::move((*block.getByPosition(0).column)[0].template safeGet<NearestType>())),
-                           encoded.size() - valueStartPos<is_big>(table_info));
+    return std::make_tuple(
+        static_cast<T>(std::move((*block.getByPosition(0).column)[0].template safeGet<NearestType>())),
+        encoded.size() - valueStartPos<is_big>(table_info));
 }
 
 template <typename T>

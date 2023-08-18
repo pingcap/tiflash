@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/HashJoinSpillContext.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/ProbeProcessInfo.h>
@@ -50,12 +51,19 @@ using JoinPtr = std::shared_ptr<Join>;
 struct RestoreInfo
 {
     JoinPtr join;
+    size_t stream_index;
     BlockInputStreamPtr scan_hash_map_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
 
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && scan_hash_map_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+    RestoreInfo(
+        const JoinPtr & join_,
+        size_t stream_index_,
+        BlockInputStreamPtr && scan_hash_map_stream_,
+        BlockInputStreamPtr && build_stream_,
+        BlockInputStreamPtr && probe_stream_)
         : join(join_)
+        , stream_index(stream_index_)
         , scan_hash_map_stream(std::move(scan_hash_map_stream_))
         , build_stream(std::move(build_stream_))
         , probe_stream(std::move(probe_stream_))
@@ -144,27 +152,29 @@ using PartitionBlocks = std::list<PartitionBlock>;
 class Join
 {
 public:
-    Join(const Names & key_names_left_,
-         const Names & key_names_right_,
-         ASTTableJoin::Kind kind_,
-         ASTTableJoin::Strictness strictness_,
-         const String & req_id,
-         bool enable_fine_grained_shuffle_,
-         size_t fine_grained_shuffle_count_,
-         size_t max_bytes_before_external_join_,
-         const SpillConfig & build_spill_config_,
-         const SpillConfig & probe_spill_config_,
-         Int64 join_restore_concurrency_,
-         const Names & tidb_output_column_names_,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const JoinNonEqualConditions & non_equal_conditions_ = {},
-         size_t max_block_size = 0,
-         size_t shallow_copy_cross_probe_threshold_ = 0,
-         const String & match_helper_name_ = "",
-         const String & flag_mapped_entry_helper_name_ = "",
-         size_t restore_round = 0,
-         bool is_test = true,
-         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
+    Join(
+        const Names & key_names_left_,
+        const Names & key_names_right_,
+        ASTTableJoin::Kind kind_,
+        ASTTableJoin::Strictness strictness_,
+        const String & req_id,
+        bool enable_fine_grained_shuffle_,
+        size_t fine_grained_shuffle_count_,
+        size_t max_bytes_before_external_join_,
+        const SpillConfig & build_spill_config_,
+        const SpillConfig & probe_spill_config_,
+        Int64 join_restore_concurrency_,
+        const Names & tidb_output_column_names_,
+        const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
+        const JoinNonEqualConditions & non_equal_conditions_ = {},
+        size_t max_block_size = 0,
+        size_t shallow_copy_cross_probe_threshold_ = 0,
+        const String & match_helper_name_ = "",
+        const String & flag_mapped_entry_helper_name_ = "",
+        size_t restore_round = 0,
+        size_t restore_partition_id = 0,
+        bool is_test = true,
+        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
 
@@ -188,27 +198,29 @@ public:
       * A stream that will scan and output rows from right table, might contain default values from left table
       * Use only after all calls to joinBlock was done.
       */
-    BlockInputStreamPtr createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createScanHashMapAfterProbeStream(
+        const Block & left_sample_block,
+        size_t index,
+        size_t step,
+        size_t max_block_size) const;
 
     bool isEnableSpill() const;
 
     bool isRestoreJoin() const;
 
-    bool getPartitionSpilled(size_t partition_index);
+    bool getPartitionSpilled(size_t partition_index) const;
 
     bool hasPartitionSpilledWithLock();
 
     bool hasPartitionSpilled();
 
-    bool isSpilled() const { return is_spilled; }
+    bool isSpilled() const { return hash_join_spill_context->isSpilled(); }
 
     std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
-    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list, size_t stream_index);
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
-
-    void finalizeRuntimeFilter();
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -241,39 +253,47 @@ public:
         active_probe_threads = probe_concurrency;
     }
 
-    void wakeUpAllWaitingThreads()
-    {
-        std::unique_lock lk(build_probe_mutex);
-        skip_wait = true;
-        probe_cv.notify_all();
-        build_cv.notify_all();
-        for (const auto & rf : runtime_filter_list)
-        {
-            rf->cancel(log, "Join has been cancelled.");
-        }
-    }
+    void wakeUpAllWaitingThreads();
 
-    void finishOneBuild();
+    // Return true if it is the last build thread.
+    bool finishOneBuild(size_t stream_index);
+    void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
-    void finishOneProbe();
+    // Return true if it is the last probe thread.
+    bool finishOneProbe(size_t stream_index);
+    void finalizeProbe();
     void waitUntilAllProbeFinished() const;
-    bool isAllProbeFinished() const;
+    bool quickCheckProbeFinished() const;
+
+    bool quickCheckBuildFinished() const;
 
     void finishOneNonJoin(size_t partition_index);
 
     size_t getBuildConcurrency() const
     {
         if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: `setBuildConcurrencyAndInitPool` has not been called",
+                ErrorCodes::LOGICAL_ERROR);
         return build_concurrency;
     }
 
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+    // std::unordered_map<partition_index, Blocks>
+    using MarkedSpillData = std::unordered_map<size_t, Blocks>;
+
+    MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index) const;
+    bool hasBuildSideMarkedSpillData(size_t stream_index) const;
+    void flushBuildSideMarkedSpillData(size_t stream_index);
+
+    MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
+    bool hasProbeSideMarkedSpillData(size_t stream_index) const;
+    void flushProbeSideMarkedSpillData(size_t stream_index);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -287,6 +307,7 @@ public:
     const String flag_mapped_entry_helper_name;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+    HashJoinSpillContextPtr hash_join_spill_context;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -295,6 +316,7 @@ private:
     ASTTableJoin::Strictness strictness;
     bool has_other_condition;
     ASTTableJoin::Strictness original_strictness;
+    String join_req_id;
     const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
@@ -306,11 +328,13 @@ private:
 
     mutable std::condition_variable build_cv;
     size_t build_concurrency;
-    std::atomic<size_t> active_build_threads;
+    size_t active_build_threads;
+    std::atomic_bool build_finished{false};
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    std::atomic<size_t> active_probe_threads;
+    size_t active_probe_threads;
+    std::atomic_bool probe_finished{false};
 
     bool skip_wait = false;
     bool meet_error = false;
@@ -336,16 +360,9 @@ private:
 
     std::list<size_t> spilled_partition_indexes;
 
-    size_t max_bytes_before_external_join;
-    SpillConfig build_spill_config;
-    SpillConfig probe_spill_config;
     Int64 join_restore_concurrency;
-    bool is_spilled = false;
-    bool disable_spill = false;
-    std::atomic<size_t> peak_build_bytes_usage{0};
 
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
+    std::atomic<size_t> peak_build_bytes_usage{0};
 
     std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
@@ -398,6 +415,10 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+    // the index of vector is the stream_index.
+    std::vector<MarkedSpillData> build_side_marked_spilled_data;
+    std::vector<MarkedSpillData> probe_side_marked_spilled_data;
+
 private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
@@ -430,7 +451,11 @@ private:
       *
       * @param block
       */
-    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+    void handleOtherConditions(
+        Block & block,
+        std::unique_ptr<IColumn::Filter> & filter,
+        std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
+        const std::vector<size_t> & right_table_column) const;
 
     void handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const;
 
@@ -448,21 +473,30 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void spillAllBuildPartitions();
-    void spillAllProbePartitions();
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks) const;
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks) const;
+
+    void markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
+    void markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
+
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
 
+    void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
+    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_, size_t restore_partition_id);
 
-    void spillMostMemoryUsedPartitionIfNeed();
-    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
-
-    void workAfterBuildFinish();
-    void workAfterProbeFinish();
+    void workAfterBuildFinish(size_t stream_index);
+    void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
+    void finalizeRuntimeFilter();
+    void cancelRuntimeFilter(const String & reason);
 
     void finalizeProfileInfo();
+
+    void finalizeNullAwareSemiFamilyBuild();
+
+    void finalizeCrossJoinBuild();
 };
 
 } // namespace DB

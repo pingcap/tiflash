@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,16 +22,13 @@ namespace DB
 void ASTOrderByElement::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     children.front()->formatImpl(settings, state, frame);
-    settings.ostr << (settings.hilite ? hilite_keyword : "")
-        << (direction == -1 ? " DESC" : " ASC")
-        << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << (direction == -1 ? " DESC" : " ASC")
+                  << (settings.hilite ? hilite_none : "");
 
     if (nulls_direction_was_explicitly_specified)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "")
-            << " NULLS "
-            << (nulls_direction == direction ? "LAST" : "FIRST")
-            << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " NULLS "
+                      << (nulls_direction == direction ? "LAST" : "FIRST") << (settings.hilite ? hilite_none : "");
     }
 
     if (collation)
@@ -41,4 +38,4 @@ void ASTOrderByElement::formatImpl(const FormatSettings & settings, FormatState 
     }
 }
 
-}
+} // namespace DB

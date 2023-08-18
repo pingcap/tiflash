@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,22 +68,19 @@ bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execut
 // Check mpp-version is illegal
 bool CheckMppVersion(int64_t mpp_version)
 {
-    fiu_do_on(FailPoints::invalid_mpp_version, {
-        mpp_version = -1;
-    });
+    fiu_do_on(FailPoints::invalid_mpp_version, { mpp_version = -1; });
     return mpp_version >= MinMppVersion && mpp_version <= NewestMppVersion;
 }
 
 std::string GenMppVersionErrorMessage(int64_t mpp_version)
 {
-    fiu_do_on(FailPoints::invalid_mpp_version, {
-        mpp_version = -1;
-    });
-    auto err_msg = fmt::format("Invalid mpp version {}, TiFlash expects version: min {}, max {}, should upgrade {}",
-                               mpp_version,
-                               MinMppVersion,
-                               NewestMppVersion,
-                               (mpp_version < MinMppVersion) ? "TiDB/planner" : "TiFlash");
+    fiu_do_on(FailPoints::invalid_mpp_version, { mpp_version = -1; });
+    auto err_msg = fmt::format(
+        "Invalid mpp version {}, TiFlash expects version: min {}, max {}, should upgrade {}",
+        mpp_version,
+        MinMppVersion,
+        NewestMppVersion,
+        (mpp_version < MinMppVersion) ? "TiDB/planner" : "TiFlash");
     return err_msg;
 }
 

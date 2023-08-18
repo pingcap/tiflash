@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,14 +26,21 @@ class StringMatch : public FunctionTest
 protected:
     const String func_like_name = "like3Args";
     const String func_ilike_name = "ilike3Args";
-    const String long_str = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
-                            "cdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdef"
-                            "ghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
-                            "mnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr"
-                            "stuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvw"
-                            "xyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+    const String long_str
+        = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+          "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+          "cdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdef"
+          "ghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdef"
+          "ghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghij"
+          "klmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
+          "mnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
+          "qrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr"
+          "stuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuv"
+          "wxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvw"
+          "xyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
-    const String long_pattern = "abcdefghijklmnopqrstuvwxyz_bcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz%abcdefghijklmnopqrstuvwxyz";
+    const String long_pattern
+        = "abcdefghijklmnopqrstuvwxyz_bcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz%abcdefghijklmnopqrstuvwxyz";
 
     std::vector<TiDB::TiDBCollatorPtr> collators{
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_GENERAL_CI),
@@ -77,15 +84,9 @@ protected:
         return createColumn<UInt8>(ints);
     }
 
-    static ColumnWithTypeAndName toConst(const String & s)
-    {
-        return createConstColumn<String>(1, s);
-    }
+    static ColumnWithTypeAndName toConst(const String & s) { return createConstColumn<String>(1, s); }
 
-    static ColumnWithTypeAndName toConst(const UInt8 i)
-    {
-        return createConstColumn<UInt8>(1, i);
-    }
+    static ColumnWithTypeAndName toConst(const UInt8 i) { return createConstColumn<UInt8>(1, i); }
 };
 
 TEST_F(StringMatch, Like3ArgsVectorWithVector)
@@ -216,168 +217,151 @@ CATCH
 
 TEST_F(StringMatch, LikeVectorWithVector)
 {
-    std::vector<std::optional<String>> haystack = {"我爱tiflash", "我爱tiflash", "", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab", "abcdefghijklmn", "a", long_str};
-    std::vector<std::optional<String>> needle = {"我_tif%", "%爱ti%", "", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_", "a%", "abcdefghijklmn%", long_pattern};
+    std::vector<std::optional<String>> haystack
+        = {"我爱tiflash",
+           "我爱tiflash",
+           "",
+           "a",
+           "",
+           "a",
+           "a",
+           "a",
+           "ab",
+           "ab",
+           "a%",
+           "aaaa",
+           "aaaa",
+           "aabaababaabbab",
+           "a",
+           "abab",
+           "abab",
+           "abcdefghijklmn",
+           "a",
+           long_str};
+    std::vector<std::optional<String>> needle
+        = {"我_tif%",
+           "%爱ti%",
+           "",
+           "a",
+           "",
+           "%",
+           "a%",
+           "%a",
+           "a%",
+           "ab",
+           "ab",
+           "a%",
+           "aaab%",
+           "aab%a%aab%b",
+           "_",
+           "_b__",
+           "_b_",
+           "a%",
+           "abcdefghijklmn%",
+           long_pattern};
     std::vector<std::optional<UInt64>> expect = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
-        executeFunction(
-            func_like_name,
-            toNullableVec(haystack),
-            toNullableVec(needle),
-            escape));
+        executeFunction(func_like_name, toNullableVec(haystack), toNullableVec(needle), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect),
-        executeFunction(
-            func_like_name,
-            toVec(haystack),
-            toVec(needle),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect), executeFunction(func_like_name, toVec(haystack), toVec(needle), escape));
 
     std::vector<std::optional<String>> haystack_null = {{}, "a"};
     std::vector<std::optional<String>> needle_null = {"我_tif%", {}};
     std::vector<std::optional<UInt64>> expect_null = {{}, {}};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect_null),
-        executeFunction(
-            func_like_name,
-            toNullableVec(haystack_null),
-            toNullableVec(needle_null),
-            escape));
+        executeFunction(func_like_name, toNullableVec(haystack_null), toNullableVec(needle_null), escape));
 }
 
 TEST_F(StringMatch, LikeConstWithVector)
 {
-    std::vector<std::optional<String>> needle = {"", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_", long_pattern};
+    std::vector<std::optional<String>> needle
+        = {"",
+           "a",
+           "",
+           "%",
+           "a%",
+           "%a",
+           "a%",
+           "ab",
+           "ab",
+           "a%",
+           "aaab%",
+           "aab%a%aab%b",
+           "_",
+           "_b__",
+           "_b_",
+           long_pattern};
     std::vector<std::optional<UInt64>> expect = {0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect1 = {0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
-        executeFunction(
-            func_like_name,
-            toConst("abcaba"),
-            toNullableVec(needle),
-            escape));
+        executeFunction(func_like_name, toConst("abcaba"), toNullableVec(needle), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect),
-        executeFunction(
-            func_like_name,
-            toConst("abcaba"),
-            toVec(needle),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect), executeFunction(func_like_name, toConst("abcaba"), toVec(needle), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect1),
-        executeFunction(
-            func_like_name,
-            toConst(long_str),
-            toVec(needle),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect1), executeFunction(func_like_name, toConst(long_str), toVec(needle), escape));
 
     std::vector<std::optional<String>> needle_null = {{}};
     std::vector<std::optional<UInt64>> expect_null = {{}};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect_null),
-        executeFunction(
-            func_like_name,
-            toConst("abc"),
-            toNullableVec(needle_null),
-            escape));
+        executeFunction(func_like_name, toConst("abc"), toNullableVec(needle_null), escape));
 }
 
 TEST_F(StringMatch, LikeVectorWithConst)
 {
-    std::vector<std::optional<String>> haystack = {"我爱tiflash", "", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab", long_str};
+    std::vector<std::optional<String>> haystack
+        = {"我爱tiflash",
+           "",
+           "a",
+           "",
+           "a",
+           "a",
+           "a",
+           "ab",
+           "ab",
+           "a%",
+           "aaaa",
+           "aaaa",
+           "aabaababaabbab",
+           "a",
+           "abab",
+           "abab",
+           long_str};
     std::vector<std::optional<UInt64>> expect = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect1 = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect2 = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect3 = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
-        executeFunction(
-            func_like_name,
-            toNullableVec(haystack),
-            toConst("%aa%"),
-            escape));
+        executeFunction(func_like_name, toNullableVec(haystack), toConst("%aa%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect),
-        executeFunction(
-            func_like_name,
-            toVec(haystack),
-            toConst("%aa%"),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect), executeFunction(func_like_name, toVec(haystack), toConst("%aa%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect1),
-        executeFunction(
-            func_like_name,
-            toVec(haystack),
-            toConst("%爱tif%"),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect1), executeFunction(func_like_name, toVec(haystack), toConst("%爱tif%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect2),
-        executeFunction(
-            func_like_name,
-            toVec(haystack),
-            toConst("%不爱tif%"),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect2), executeFunction(func_like_name, toVec(haystack), toConst("%不爱tif%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toVec(expect3),
-        executeFunction(
-            func_like_name,
-            toVec(haystack),
-            toConst(long_pattern),
-            escape));
+    ASSERT_COLUMN_EQ(toVec(expect3), executeFunction(func_like_name, toVec(haystack), toConst(long_pattern), escape));
 
     std::vector<std::optional<String>> haystack_null = {{}};
     std::vector<std::optional<UInt64>> expect_null = {{}};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect_null),
-        executeFunction(
-            func_like_name,
-            toNullableVec(haystack_null),
-            toConst("abc"),
-            escape));
+        executeFunction(func_like_name, toNullableVec(haystack_null), toConst("abc"), escape));
 }
 
 TEST_F(StringMatch, LikeConstWithConst)
 {
-    ASSERT_COLUMN_EQ(
-        toConst(1),
-        executeFunction(
-            func_like_name,
-            toConst("resaasfe"),
-            toConst("%aa%"),
-            escape));
+    ASSERT_COLUMN_EQ(toConst(1), executeFunction(func_like_name, toConst("resaasfe"), toConst("%aa%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toConst(0),
-        executeFunction(
-            func_like_name,
-            toConst("abcde"),
-            toConst("%aa%"),
-            escape));
+    ASSERT_COLUMN_EQ(toConst(0), executeFunction(func_like_name, toConst("abcde"), toConst("%aa%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toConst(1),
-        executeFunction(
-            func_like_name,
-            toConst("我爱tiflash"),
-            toConst("%爱tif%"),
-            escape));
+    ASSERT_COLUMN_EQ(toConst(1), executeFunction(func_like_name, toConst("我爱tiflash"), toConst("%爱tif%"), escape));
 
-    ASSERT_COLUMN_EQ(
-        toConst(0),
-        executeFunction(
-            func_like_name,
-            toConst("我爱tiflash"),
-            toConst("%不爱tif%"),
-            escape));
+    ASSERT_COLUMN_EQ(toConst(0), executeFunction(func_like_name, toConst("我爱tiflash"), toConst("%不爱tif%"), escape));
 }
 
 TEST_F(StringMatch, Ilike3ArgsVectorWithVector)
@@ -503,8 +487,48 @@ CATCH
 
 TEST_F(StringMatch, ilikeVectorWithVector)
 {
-    std::vector<std::optional<String>> haystack = {"我爱TiflaSH", "我爱TifLash", "", "A", "", "a", "a", "A", "ab", "aB", "a%", "aaAa", "aaaa", "aabaabABaabbab", "a", "abab", "abAB", "abcdefGHijklmn", "a", long_str};
-    std::vector<std::optional<String>> needle = {"我_Tif%", "%爱tI%", "", "a", "", "%", "a%", "%a", "a%", "ab", "Ab", "a%", "aAab%", "aab%a%aab%b", "_", "_b__", "_b_", "a%", "abcDefghIjklmn%", long_pattern};
+    std::vector<std::optional<String>> haystack
+        = {"我爱TiflaSH",
+           "我爱TifLash",
+           "",
+           "A",
+           "",
+           "a",
+           "a",
+           "A",
+           "ab",
+           "aB",
+           "a%",
+           "aaAa",
+           "aaaa",
+           "aabaabABaabbab",
+           "a",
+           "abab",
+           "abAB",
+           "abcdefGHijklmn",
+           "a",
+           long_str};
+    std::vector<std::optional<String>> needle
+        = {"我_Tif%",
+           "%爱tI%",
+           "",
+           "a",
+           "",
+           "%",
+           "a%",
+           "%a",
+           "a%",
+           "ab",
+           "Ab",
+           "a%",
+           "aAab%",
+           "aab%a%aab%b",
+           "_",
+           "_b__",
+           "_b_",
+           "a%",
+           "abcDefghIjklmn%",
+           long_pattern};
     std::vector<std::optional<UInt64>> expect = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1};
 
     std::vector<std::optional<String>> haystack_null = {{}, "a"};
@@ -515,17 +539,11 @@ TEST_F(StringMatch, ilikeVectorWithVector)
     {
         ASSERT_COLUMN_EQ(
             toNullableVec(expect),
-            executeFunction(
-                "ilike3Args",
-                {toNullableVec(haystack), toNullableVec(needle), escape},
-                collator));
+            executeFunction("ilike3Args", {toNullableVec(haystack), toNullableVec(needle), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect),
-            executeFunction(
-                "ilike3Args",
-                {toVec(haystack), toVec(needle), escape},
-                collator));
+            executeFunction("ilike3Args", {toVec(haystack), toVec(needle), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toNullableVec(expect_null),
@@ -538,7 +556,23 @@ TEST_F(StringMatch, ilikeVectorWithVector)
 
 TEST_F(StringMatch, IlikeConstWithVector)
 {
-    std::vector<std::optional<String>> needle = {"", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_", long_pattern};
+    std::vector<std::optional<String>> needle
+        = {"",
+           "a",
+           "",
+           "%",
+           "a%",
+           "%a",
+           "a%",
+           "ab",
+           "ab",
+           "a%",
+           "aaab%",
+           "aab%a%aab%b",
+           "_",
+           "_b__",
+           "_b_",
+           long_pattern};
     std::vector<std::optional<UInt64>> expect = {0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect1 = {0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1};
 
@@ -549,37 +583,42 @@ TEST_F(StringMatch, IlikeConstWithVector)
     {
         ASSERT_COLUMN_EQ(
             toNullableVec(expect),
-            executeFunction(
-                func_ilike_name,
-                {toConst("abcAba"), toNullableVec(needle), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("abcAba"), toNullableVec(needle), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect),
-            executeFunction(
-                func_ilike_name,
-                {toConst("ABCaba"), toVec(needle), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("ABCaba"), toVec(needle), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect1),
-            executeFunction(
-                func_ilike_name,
-                {toConst(long_str), toVec(needle), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst(long_str), toVec(needle), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toNullableVec(expect_null),
-            executeFunction(
-                func_ilike_name,
-                {toConst("ABC"), toNullableVec(needle_null), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("ABC"), toNullableVec(needle_null), escape}, collator));
     }
 }
 
 TEST_F(StringMatch, IlikeVectorWithConst)
 {
-    std::vector<std::optional<String>> haystack = {"我爱tiflash", "", "a", "", "a", "a", "A", "ab", "ab", "a%", "aaaa", "aaaa", "aabaABAbaabbaB", "a", "abab", "Abab", long_str};
+    std::vector<std::optional<String>> haystack
+        = {"我爱tiflash",
+           "",
+           "a",
+           "",
+           "a",
+           "a",
+           "A",
+           "ab",
+           "ab",
+           "a%",
+           "aaaa",
+           "aaaa",
+           "aabaABAbaabbaB",
+           "a",
+           "abab",
+           "Abab",
+           long_str};
     std::vector<std::optional<UInt64>> expect = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect1 = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<std::optional<UInt64>> expect2 = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -592,45 +631,27 @@ TEST_F(StringMatch, IlikeVectorWithConst)
     {
         ASSERT_COLUMN_EQ(
             toNullableVec(expect),
-            executeFunction(
-                func_ilike_name,
-                {toNullableVec(haystack), toConst("%aA%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toNullableVec(haystack), toConst("%aA%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect),
-            executeFunction(
-                func_ilike_name,
-                {toVec(haystack), toConst("%aa%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toVec(haystack), toConst("%aa%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect1),
-            executeFunction(
-                func_ilike_name,
-                {toVec(haystack), toConst("%爱tIf%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toVec(haystack), toConst("%爱tIf%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect2),
-            executeFunction(
-                func_ilike_name,
-                {toVec(haystack), toConst("%不爱tiF%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toVec(haystack), toConst("%不爱tiF%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toVec(expect3),
-            executeFunction(
-                func_ilike_name,
-                {toVec(haystack), toConst(long_pattern), escape},
-                collator));
+            executeFunction(func_ilike_name, {toVec(haystack), toConst(long_pattern), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toNullableVec(expect_null),
-            executeFunction(
-                func_ilike_name,
-                {toNullableVec(haystack_null), toConst("Abc"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toNullableVec(haystack_null), toConst("Abc"), escape}, collator));
     }
 }
 
@@ -640,31 +661,19 @@ TEST_F(StringMatch, IlikeConstWithConst)
     {
         ASSERT_COLUMN_EQ(
             toConst(1),
-            executeFunction(
-                func_ilike_name,
-                {toConst("resaAsfe"), toConst("%aa%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("resaAsfe"), toConst("%aa%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(0),
-            executeFunction(
-                func_ilike_name,
-                {toConst("Abcde"), toConst("%aa%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("Abcde"), toConst("%aa%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(1),
-            executeFunction(
-                func_ilike_name,
-                {toConst("我爱Tiflash"), toConst("%爱tiF%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("我爱Tiflash"), toConst("%爱tiF%"), escape}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(0),
-            executeFunction(
-                func_ilike_name,
-                {toConst("我爱tiflAsh"), toConst("%不爱tIf%"), escape},
-                collator));
+            executeFunction(func_ilike_name, {toConst("我爱tiflAsh"), toConst("%不爱tIf%"), escape}, collator));
     }
 }
 
@@ -693,10 +702,7 @@ TEST_F(StringMatch, CheckEscape)
         // vec vec
         ASSERT_COLUMN_EQ(
             toNullableVec(vec_vec_lower_a_expect),
-            executeFunction(
-                "ilike3Args",
-                {toNullableVec(expr_vec), toNullableVec(pat_vec), escape_lower_a},
-                collator));
+            executeFunction("ilike3Args", {toNullableVec(expr_vec), toNullableVec(pat_vec), escape_lower_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toNullableVec(vec_vec_capital_a_expect),
@@ -708,90 +714,50 @@ TEST_F(StringMatch, CheckEscape)
         // const const
         ASSERT_COLUMN_EQ(
             toConst(0),
-            executeFunction(
-                "ilike3Args",
-                {toConst("aa"), toConst("aa"), escape_lower_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("aa"), toConst("aa"), escape_lower_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(1),
-            executeFunction(
-                "ilike3Args",
-                {toConst("aa"), toConst("aa"), escape_capital_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("aa"), toConst("aa"), escape_capital_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(1),
-            executeFunction(
-                "ilike3Args",
-                {toConst("Aa"), toConst("aaA"), escape_lower_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("Aa"), toConst("aaA"), escape_lower_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(0),
-            executeFunction(
-                "ilike3Args",
-                {toConst("Aa"), toConst("aaA"), escape_capital_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("Aa"), toConst("aaA"), escape_capital_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(0),
-            executeFunction(
-                "ilike3Args",
-                {toConst("a啊啊a"), toConst("a啊啊A"), escape_lower_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("a啊啊a"), toConst("a啊啊A"), escape_lower_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toConst(0),
-            executeFunction(
-                "ilike3Args",
-                {toConst("a啊啊a"), toConst("A啊啊a"), escape_capital_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("a啊啊a"), toConst("A啊啊a"), escape_capital_a}, collator));
 
-        ASSERT_COLUMN_EQ(
-            toConst(0),
-            executeFunction(
-                "ilike3Args",
-                {toConst("ü"), toConst("Ü"), escape},
-                collator));
+        ASSERT_COLUMN_EQ(toConst(0), executeFunction("ilike3Args", {toConst("ü"), toConst("Ü"), escape}, collator));
 
-        ASSERT_COLUMN_EQ(
-            toConst(0),
-            executeFunction(
-                "ilike3Args",
-                {toConst("a"), toConst("á"), escape},
-                collator));
+        ASSERT_COLUMN_EQ(toConst(0), executeFunction("ilike3Args", {toConst("a"), toConst("á"), escape}, collator));
 
         // vec const
         ASSERT_COLUMN_EQ(
             toNullableVec({0, 1, 1, 1, 1, 0, 0, 0}),
-            executeFunction(
-                "ilike3Args",
-                {toNullableVec(expr_vec), toConst("Aaaz"), escape_lower_a},
-                collator));
+            executeFunction("ilike3Args", {toNullableVec(expr_vec), toConst("Aaaz"), escape_lower_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toNullableVec({0, 1, 1, 1, 1, 0, 0, 0}),
-            executeFunction(
-                "ilike3Args",
-                {toNullableVec(expr_vec), toConst("aAaZ"), escape_capital_a},
-                collator));
+            executeFunction("ilike3Args", {toNullableVec(expr_vec), toConst("aAaZ"), escape_capital_a}, collator));
 
         // const vec
         // "", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
         ASSERT_COLUMN_EQ(
             toNullableVec({0, 0, 1, 0, 1, 0, 0, 0}),
-            executeFunction(
-                "ilike3Args",
-                {toConst("aAz"), toNullableVec(pat_vec), escape_lower_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("aAz"), toNullableVec(pat_vec), escape_lower_a}, collator));
 
         ASSERT_COLUMN_EQ(
             toNullableVec({0, 1, 1, 1, 1, 0, 0, 0}),
-            executeFunction(
-                "ilike3Args",
-                {toConst("AaZ"), toNullableVec(pat_vec), escape_capital_a},
-                collator));
+            executeFunction("ilike3Args", {toConst("AaZ"), toNullableVec(pat_vec), escape_capital_a}, collator));
     }
 }
 

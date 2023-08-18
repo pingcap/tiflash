@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@
 └───────┴─────────────┴───────────────────┴───────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────┐
-│ [region 4] ranges: [0, 100), state: Normal │
+│ [region_id=4] ranges: [0, 100), state: Normal │
 │ total size: 1                              │
 └────────────────────────────────────────────┘
 => DBGInvoke region_split(4, default, test, 0, 4, 4, 100, 5)
@@ -81,8 +81,8 @@
 └───────┴─────────────┴───────────────────┴───────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────┐
-│ [region 5] ranges: [4, 100), state: Normal │
-│ [region 4] ranges: [0, 4), state: Normal   │
+│ [region_id=5] ranges: [4, 100), state: Normal │
+│ [region_id=4] ranges: [0, 4), state: Normal   │
 │ total size: 2                              │
 └────────────────────────────────────────────┘
 => DBGInvoke region_prepare_merge(4, 5);
@@ -91,8 +91,8 @@
 └──────────────────────────────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────┐
-│ [region 5] ranges: [4, 100), state: Normal │
-│ [region 4] ranges: [0, 4), state: Merging  │
+│ [region_id=5] ranges: [4, 100), state: Normal │
+│ [region_id=4] ranges: [0, 4), state: Merging  │
 │ total size: 2                              │
 └────────────────────────────────────────────┘
 => DBGInvoke region_commit_merge(4, 5);
@@ -101,13 +101,13 @@
 └──────────────────────────────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────┐
-│ [region 5] ranges: [0, 100), state: Normal │
+│ [region_id=5] ranges: [0, 100), state: Normal │
 │ total size: 1                              │
 └────────────────────────────────────────────┘
 => DBGInvoke __try_flush_region(5)
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────┐
-│ [region 5] ranges: [0, 100), state: Normal │
+│ [region_id=5] ranges: [0, 100), state: Normal │
 │ total size: 1                              │
 └────────────────────────────────────────────┘
 

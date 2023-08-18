@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@
 => DBGInvoke __enable_schema_sync_service('false')
 => DBGInvoke region_snapshot_pre_handle_block(default, test_dm, 5, 1000, 2000, 1002, 30, 0, 110, 1003, 31, 0, 130)
 ┌─region_snapshot_pre_handle_block(default, test, 5, 1000, 2000, 1002, 30, 0, 110, 1003, 31, 0, 130)──────────────────────────────────────────────────┐
-│ pre-handle [region 5] snapshot with data [write 2 ], pre-decode block cache { schema_version: ?, data_list size: 2, block row: 2 col: 4 bytes: 50 } │
+│ pre-handle [region_id=5] snapshot with data [write 2 ], pre-decode block cache { schema_version: ?, data_list size: 2, block row: 2 col: 4 bytes: 50 } │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 => DBGInvoke __add_column_to_tidb_table(default, test_dm, 'col_2 Nullable(Int64) default 23333')
@@ -84,7 +84,7 @@
 
 => DBGInvoke region_snapshot_pre_handle_block(default, test_dm, 5, 1000, 2000, 1002, 34, 0, 110, 888)
 ┌─region_snapshot_pre_handle_block(default, test_dm, 5, 1000, 2000, 1002, 30, 0, 110, 888)────────────────────────────────────────────────────────────┐
-│ pre-handle [region 5] snapshot with data [write 1 ], pre-decode block cache { schema_version: ?, data_list size: 1, block row: 1 col: 5 bytes: 34 } │
+│ pre-handle [region_id=5] snapshot with data [write 1 ], pre-decode block cache { schema_version: ?, data_list size: 1, block row: 1 col: 5 bytes: 34 } │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 ## clean up

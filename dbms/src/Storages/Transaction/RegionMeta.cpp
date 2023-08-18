@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <fmt/core.h>
@@ -78,7 +79,7 @@ void RegionMeta::setPeer(metapb::Peer && p)
     peer = p;
 }
 
-raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
+raft_serverpb::RaftApplyState RegionMeta::clonedApplyState() const
 {
     std::lock_guard lock(mutex);
     return apply_state;
@@ -137,8 +138,8 @@ ImutRegionRangePtr RegionMeta::getRange() const
 
 std::string RegionMeta::toString(bool dump_status) const
 {
-    std::stringstream ss;
-    ss << "[region " << regionId();
+    FmtBuffer buf;
+    buf.fmtAppend("[region_id={}", regionId());
     if (dump_status)
     {
         UInt64 term = 0;
@@ -148,10 +149,9 @@ std::string RegionMeta::toString(bool dump_status) const
             term = applied_term;
             index = apply_state.applied_index();
         }
-        ss << ", applied: term " << term << " index " << index;
+        buf.fmtAppend(" applied_term={} applied_index={}", term, index);
     }
-    ss << "]";
-    return ss.str();
+    return buf.fmtAppend("]").toString();
 }
 
 raft_serverpb::PeerState RegionMeta::peerState() const
@@ -166,7 +166,8 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
     region_state.setState(peer_state_);
 }
 
-WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running) const
+WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running)
+    const
 {
     std::unique_lock lock(mutex);
     WaitIndexResult status = WaitIndexResult::Finished;
@@ -287,11 +288,20 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     case raft_serverpb::PeerState::Normal:
         break;
     default:
-        throw Exception(fmt::format("{}: unexpected state {} of source {}", __FUNCTION__, raft_serverpb::PeerState_Name(state), regionId(), toString(false)), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format(
+                "{}: unexpected state {} of source {}",
+                __FUNCTION__,
+                raft_serverpb::PeerState_Name(state),
+                regionId(),
+                toString(false)),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!(source_region == source_meta.region_state.getRegion()))
-        throw Exception(fmt::format("{}: source region not match exist region meta", __FUNCTION__), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("{}: source region not match exist region meta", __FUNCTION__),
+            ErrorCodes::LOGICAL_ERROR);
 
     return computeRegionMergeResult(source_region, region_state.getRegion());
 }
@@ -302,7 +312,11 @@ void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const Re
 {
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
         throw Exception(
-            fmt::format("{}: current region meta: {}, expect: {}", __FUNCTION__, region_state.getRegion().ShortDebugString(), response.split().left().ShortDebugString()),
+            fmt::format(
+                "{}: current region meta: {}, expect: {}",
+                __FUNCTION__,
+                region_state.getRegion().ShortDebugString(),
+                response.split().left().ShortDebugString()),
             ErrorCodes::LOGICAL_ERROR);
 }
 #pragma GCC diagnostic pop
@@ -317,11 +331,19 @@ void MetaRaftCommandDelegate::execRollbackMerge(
 
     if (region_state.getState() != raft_serverpb::PeerState::Merging)
         throw Exception(
-            fmt::format("{}: region state is {}, expect {}", __FUNCTION__, raft_serverpb::PeerState_Name(region_state.getState()), raft_serverpb::PeerState_Name(raft_serverpb::PeerState::Merging)),
+            fmt::format(
+                "{}: region state is {}, expect {}",
+                __FUNCTION__,
+                raft_serverpb::PeerState_Name(region_state.getState()),
+                raft_serverpb::PeerState_Name(raft_serverpb::PeerState::Merging)),
             ErrorCodes::LOGICAL_ERROR);
     if (region_state.getMergeState().commit() != rollback_request.commit())
         throw Exception(
-            fmt::format("{}: merge commit index is {}, expect {}", __FUNCTION__, region_state.getMergeState().commit(), rollback_request.commit()),
+            fmt::format(
+                "{}: merge commit index is {}, expect {}",
+                __FUNCTION__,
+                region_state.getMergeState().commit(),
+                rollback_request.commit()),
             ErrorCodes::LOGICAL_ERROR);
 
     std::lock_guard lock(mutex);
@@ -406,8 +428,8 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
     std::lock_guard lock1(meta1.mutex);
     std::lock_guard lock2(meta2.mutex);
 
-    return meta1.peer == meta2.peer && meta1.apply_state == meta2.apply_state && meta1.applied_term == meta2.applied_term
-        && meta1.region_state == meta2.region_state;
+    return meta1.peer == meta2.peer && meta1.apply_state == meta2.apply_state
+        && meta1.applied_term == meta2.applied_term && meta1.region_state == meta2.region_state;
 }
 
 RegionMetaSnapshot RegionMeta::dumpRegionMetaSnapshot() const
@@ -431,7 +453,11 @@ const RegionState & MetaRaftCommandDelegate::regionState() const
     return region_state;
 }
 
-RegionMeta::RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_, raft_serverpb::RegionLocalState region_state_)
+RegionMeta::RegionMeta(
+    metapb::Peer peer_,
+    raft_serverpb::RaftApplyState apply_state_,
+    const UInt64 applied_term_,
+    raft_serverpb::RegionLocalState region_state_)
     : peer(std::move(peer_))
     , apply_state(std::move(apply_state_))
     , applied_term(applied_term_)
@@ -470,5 +496,11 @@ const raft_serverpb::MergeState & RegionMeta::getMergeState() const
 {
     std::lock_guard lock(mutex);
     return region_state.getMergeState();
+}
+
+const RegionState & RegionMeta::getRegionState() const
+{
+    std::lock_guard lock(mutex);
+    return region_state;
 }
 } // namespace DB

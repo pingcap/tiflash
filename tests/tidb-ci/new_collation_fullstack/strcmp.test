@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@ mysql> create table test.t(a varchar(30) charset utf8mb4 collate utf8mb4_general
 mysql> alter table test.t set tiflash replica 1;
 mysql> insert into test.t values ('abc', 'ABC'),('Abc', 'abc'),('def', 'dEf'), ('a', 'A'), ('b', 'B'), ('c', 'C'), (NULL, NULL), ('a', NULL), (NULL, 'a'), ('', NULL), (NULL, ''), ('', '');
 func> wait_table test t
-
->> DBGInvoke __try_flush()
 
 mysql> set tidb_enforce_mpp=1; select a, b, strcmp(a, b) from test.t;
 +------+------+--------------+

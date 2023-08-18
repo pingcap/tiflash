@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,10 +48,7 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    void buildPipeline(
-        PipelineBuilder & builder,
-        Context & context,
-        PipelineExecutorContext & exec_context) override;
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
@@ -62,11 +59,8 @@ private:
         Context & /*context*/,
         size_t /*concurrency*/) override;
 
-    void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
-    void buildProjection(
-        PipelineExecutorContext & exec_context,
-        PipelineExecGroupBuilder & group_builder,
-        const NamesAndTypes & storage_schema);
+    void buildProjection(DAGPipeline & pipeline);
+    void buildProjection(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
 private:
     FilterConditions filter_conditions;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,8 +57,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , expected_size(expected_size_)
     , log(Logger::get(log_prefix_))
     , force_decode(force_decode_)
-{
-}
+{}
 
 SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
@@ -68,9 +67,10 @@ void SSTFilesToBlockInputStream::readPrefix()
     std::vector<SSTView> ssts_write;
     std::vector<SSTView> ssts_lock;
 
-    auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
-        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
-    };
+    auto make_inner_func
+        = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
+              return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
+          };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
         const auto & snapshot = snaps.views[i];
@@ -91,17 +91,41 @@ void SSTFilesToBlockInputStream::readPrefix()
     // Pass the log to SSTReader inorder to filter logs by table_id suffix
     if (!ssts_default.empty())
     {
-        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default, log, region->getRange());
+        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(
+            proxy_helper,
+            ColumnFamilyType::Default,
+            make_inner_func,
+            ssts_default,
+            log,
+            region->getRange());
     }
     if (!ssts_write.empty())
     {
-        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write, log, region->getRange());
+        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(
+            proxy_helper,
+            ColumnFamilyType::Write,
+            make_inner_func,
+            ssts_write,
+            log,
+            region->getRange());
     }
     if (!ssts_lock.empty())
     {
-        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock, log, region->getRange());
+        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(
+            proxy_helper,
+            ColumnFamilyType::Lock,
+            make_inner_func,
+            ssts_lock,
+            log,
+            region->getRange());
     }
-    LOG_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", ssts_write.size(), ssts_lock.size(), ssts_default.size(), this->region->id());
+    LOG_INFO(
+        log,
+        "Finish Construct MultiSSTReader, write={} lock={} default={} region_id={}",
+        ssts_write.size(),
+        ssts_lock.size(),
+        ssts_default.size(),
+        this->region->id());
 
     process_keys.default_cf = 0;
     process_keys.write_cf = 0;
@@ -147,6 +171,7 @@ Block SSTFilesToBlockInputStream::read()
 
         if (process_keys.write_cf % expected_size == 0)
         {
+            // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
             loaded_write_cf_key.clear();
             // Batch the loading from other CFs until we need to decode data
@@ -168,7 +193,9 @@ Block SSTFilesToBlockInputStream::read()
     return readCommitedBlock();
 }
 
-void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * const rowkey_to_be_included)
+void SSTFilesToBlockInputStream::loadCFDataFromSST(
+    ColumnFamilyType cf,
+    const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader * reader;
     size_t * p_process_keys;
@@ -200,7 +227,13 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
             reader->next();
             (*p_process_keys) += 1;
         }
-        LOG_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
+        LOG_DEBUG(
+            log,
+            "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] [region_id={}]",
+            CFToName(cf),
+            (*p_process_keys),
+            process_keys.write_cf,
+            region->id());
         return;
     }
 
@@ -213,12 +246,16 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         {
             LOG_DEBUG(
                 log,
-                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}]",
+                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] "
+                "[rowkey_to_be_included={}] [region_id={}]",
                 CFToName(cf),
                 (*p_process_keys),
                 process_keys.write_cf,
                 Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
-                (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size()) : "<end>"));
+                (rowkey_to_be_included
+                     ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
+                     : "<end>"),
+                region->id());
             break;
         }
 
@@ -264,15 +301,18 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
             // br or lighting may write illegal data into tikv, stop decoding.
             const auto & start_key = region->getMetaRegion().start_key();
             const auto & end_key = region->getMetaRegion().end_key();
-            LOG_WARNING(log, "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep uncommitted data in region."
-                             "region_id: {}, applied_index: {}, version: {}, conf_version {}, start_key: {}, end_key: {}",
-                        e.displayText(),
-                        region->id(),
-                        region->appliedIndex(),
-                        region->version(),
-                        region->confVer(),
-                        Redact::keyToDebugString(start_key.data(), start_key.size()),
-                        Redact::keyToDebugString(end_key.data(), end_key.size()));
+            LOG_WARNING(
+                log,
+                "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep "
+                "uncommitted data in region."
+                "region_id: {}, applied_index: {}, version: {}, conf_version {}, start_key: {}, end_key: {}",
+                e.displayText(),
+                region->id(),
+                region->appliedIndex(),
+                region->version(),
+                region->confVer(),
+                Redact::keyToDebugString(start_key.data(), start_key.size()),
+                Redact::keyToDebugString(end_key.data(), end_key.size()));
             // Cancel the decoding process.
             // Note that we still need to scan data from CFs and keep them in `region`
             is_decode_cancelled = true;
@@ -297,7 +337,10 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     // First refine the boundary of blocks. Note that the rows decoded from SSTFiles are sorted by primary key asc, timestamp desc
     // (https://github.com/tikv/tikv/blob/v5.0.1/components/txn_types/src/types.rs#L103-L108).
     // While DMVersionFilter require rows sorted by primary key asc, timestamp asc, so we need an extra sort in PKSquashing.
-    auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
+    auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(
+        _raw_child,
+        pk_column_id,
+        is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream,
         *(schema_snap->column_defines),

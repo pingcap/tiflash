@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,11 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const WALConfig & config);
+    PageDirectoryPtr create(
+        const String & storage_name,
+        FileProviderPtr & file_provider,
+        PSDiskDelegatorPtr & delegator,
+        const WALConfig & config);
 
     PageDirectoryPtr createFromReader(const String & storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
 
@@ -59,7 +63,11 @@ public:
     PageDirectoryPtr dangerouslyCreateFromEditWithoutWAL(const String & storage_name, PageEntriesEdit & edit);
 
     // just for test
-    PageDirectoryPtr createFromEditForTest(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit);
+    PageDirectoryPtr createFromEditForTest(
+        const String & storage_name,
+        FileProviderPtr & file_provider,
+        PSDiskDelegatorPtr & delegator,
+        PageEntriesEdit & edit);
 
     // just for test
     PageDirectoryFactory<Trait> & setBlobStats(BlobStats & blob_stats_)
@@ -70,17 +78,25 @@ public:
 
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
-    void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
+    void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit, bool force_apply, UInt64 filter_seq = 0);
     static void applyRecord(
         const PageDirectoryPtr & dir,
-        const typename PageEntriesEdit::EditRecord & r);
+        const typename PageEntriesEdit::EditRecord & r,
+        bool strict_check);
+
+    void restoreBlobStats(const PageDirectoryPtr & dir);
 
     BlobStats * blob_stats = nullptr;
 
     // For debug tool
     template <typename T>
     friend class PageStorageControlV3;
-    bool dump_entries = false;
+    struct DebugOptions
+    {
+        bool dump_entries = false;
+        bool apply_entries_to_directory = true;
+    };
+    DebugOptions debug;
 };
 
 namespace u128

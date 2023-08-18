@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,10 +48,7 @@ public:
         RUNTIME_CHECK(max_edit_records_per_part > 0, max_edit_records_per_part);
     }
 
-    ~CPManifestFileWriter()
-    {
-        flush();
-    }
+    ~CPManifestFileWriter() { flush(); }
 
     /// Must be called first.
     void writePrefix(const CheckpointProto::ManifestFilePrefix & prefix);

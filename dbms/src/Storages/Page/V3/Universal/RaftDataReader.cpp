@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,10 @@ Page RaftDataReader::read(const UniversalPageId & page_id)
     return uni_ps.read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
 }
 
-void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
+void RaftDataReader::traverse(
+    const UniversalPageId & start,
+    const UniversalPageId & end,
+    const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
 {
     auto transformed_end = end.empty() ? UniversalPageId(raft_data_end_key, 1) : end;
     auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, transformed_end));
@@ -49,7 +52,10 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
     }
 }
 
-void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
+void RaftDataReader::traverseRemoteRaftLogForRegion(
+    UInt64 region_id,
+    const std::function<
+        void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
 {
     auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
     auto end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
@@ -71,5 +77,36 @@ std::optional<UniversalPageId> RaftDataReader::getLowerBound(const UniversalPage
 {
     auto snapshot = uni_ps.getSnapshot(fmt::format("lower_bound_r_{}", page_id));
     return uni_ps.page_directory->getLowerBound(page_id, snapshot);
+}
+
+std::optional<UInt64> RaftDataReader::tryParseRegionId(const UniversalPageId & page_id)
+{
+    auto page_id_type = UniversalPageIdFormat::getUniversalPageIdType(page_id);
+    if (page_id_type != StorageType::KVEngine && page_id_type != StorageType::RaftEngine)
+    {
+        return {};
+    }
+    // 11 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id)
+    if (page_id.size() < 11)
+    {
+        return {};
+    }
+    auto v = *(reinterpret_cast<const UInt64 *>(page_id.data() + 3));
+    return toBigEndian(v);
+}
+
+std::optional<UInt64> RaftDataReader::tryParseRaftLogIndex(const UniversalPageId & page_id)
+{
+    auto page_id_type = UniversalPageIdFormat::getUniversalPageIdType(page_id);
+    if (page_id_type != StorageType::KVEngine && page_id_type != StorageType::RaftEngine)
+    {
+        return {};
+    }
+    // 20 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
+    if (page_id.size() < 20)
+    {
+        return {};
+    }
+    return UniversalPageIdFormat::getU64ID(page_id);
 }
 } // namespace DB

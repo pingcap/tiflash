@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@ int main(int, char **)
 {
     {
         DB::WriteBufferFromFileDescriptor buf(STDOUT_FILENO);
-        buf
-            << "Hello, world!" << '\n'
+        buf << "Hello, world!" << '\n'
             << DB::escape << "Hello, world!" << '\n'
             << DB::quote << "Hello, world!" << '\n'
             << DB::double_quote << "Hello, world!" << '\n'

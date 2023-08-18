@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +57,8 @@ struct Settings
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value "                       \
                                                                                "and no less than the volume of data for one mark.")                                                                                                     \
     M(SettingUInt64, max_compress_block_size, DEFAULT_MAX_COMPRESS_BLOCK_SIZE, "The maximum size of blocks of uncompressed data before compressing for writing to a table.")                                                            \
-    M(SettingUInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading")                                                                                                                                              \
+    M(SettingUInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block rows for reading")                                                                                                                                              \
+    M(SettingUInt64, max_block_bytes, DEFAULT_BLOCK_BYTES, "Maximum block bytes for reading")                                                                                                                                           \
     M(SettingUInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.")                                                                     \
     M(SettingUInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.")                                                            \
     M(SettingUInt64, min_insert_block_size_bytes, (DEFAULT_INSERT_BLOCK_SIZE * 256), "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.")                                                  \
@@ -215,13 +216,14 @@ struct Settings
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
                                                                                                                                                                                                                                         \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
+    M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
     M(SettingBool, dt_enable_read_thread, true, "Enable storage read thread or not")                                                                                                                                                    \
     M(SettingBool, dt_enable_bitmap_filter, true, "Use bitmap filter to read data or not")                                                                                                                                              \
     M(SettingDouble, dt_read_thread_count_scale, 1.0, "Number of read thread = number of logical cpu cores * dt_read_thread_count_scale.  Only has meaning at server startup.")                                                         \
     M(SettingDouble, dt_filecache_max_downloading_count_scale, 1.0, "Max downloading task count of FileCache = io thread count * dt_filecache_max_downloading_count_scale.")                                                            \
     M(SettingUInt64, dt_filecache_min_age_seconds, 1800, "Files of the same priority can only be evicted from files that were not accessed within `dt_filecache_min_age_seconds` seconds.")                                             \
-    M(SettingUInt64, dt_small_file_size_threshold, 128 * 1024, "When S3 is enabled, file size less than dt_small_file_size_threshold will be merged before uploading to S3")                                                            \
-    M(SettingDouble, dt_merged_file_max_size, 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                     \
+    M(SettingUInt64, dt_small_file_size_threshold, 128 * 1024, "for dmfile, when the file size less than dt_small_file_size_threshold, it will be merged. If dt_small_file_size_threshold = 0, dmfile will just do as v2")               \
+    M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                              \
     M(SettingUInt64, dt_fetch_pages_packet_limit_size, 0, "Response packet size limit of FetchDisaggPages, 0 means one page per packet")                                                                                                  \
     M(SettingUInt64, dt_write_page_cache_limit_size, 2 * 1024 * 1024, "Limit size per write batch when compute node writing to PageStorage cache")                                                                                          \
     M(SettingDouble, io_thread_count_scale, 5.0, "Number of thread of IOThreadPool = number of logical cpu cores * io_thread_count_scale.  Only has meaning at server startup.")                                                        \
@@ -292,7 +294,7 @@ struct Settings
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
     M(SettingUInt64, max_bytes_before_external_join, 0, "max bytes used by join before spill, 0 as the default value, 0 means no limit")                                                                                                \
     M(SettingInt64, join_restore_concurrency, 0, "join restore concurrency, negative value means restore join serially, 0 means TiFlash choose restore concurrency automatically, 0 as the default value")                              \
-    M(SettingUInt64, max_cached_data_bytes_in_spiller, 1024ULL * 1024 * 100, "Max cached data bytes in spiller before spilling, 100MB as the default value, 0 means no limit")                                                          \
+    M(SettingUInt64, max_cached_data_bytes_in_spiller, 1024ULL * 1024 * 10, "Max cached data bytes in spiller before spilling, 10 MB as the default value, 0 means no limit")                                                          \
     M(SettingUInt64, max_spilled_rows_per_file, 200000, "Max spilled data rows per spill file, 200000 as the default value, 0 means no limit.")                                                                                         \
     M(SettingUInt64, max_spilled_bytes_per_file, 0, "Max spilled data bytes per spill file, 0 as the default value, 0 means no limit.")                                                                                                 \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
@@ -309,7 +311,12 @@ struct Settings
     M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")                                                                   \
     M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
     M(SettingUInt64, ddl_sync_interval_seconds, 60, "The interval of background DDL sync schema in seconds")                                                                                                                            \
-    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")                                                                                                                            \
+    M(SettingFloat, auto_memory_revoke_trigger_threshold, 0.7, "Trigger auto memory revocation when the memory usage is above this percentage.")                                                                                        \
+    M(SettingFloat, auto_memory_revoke_target_threshold, 0.5, "When auto revoking memory, try to revoke enough that the memory usage is filled below the target percentage at the end.")                                                 \
+    M(SettingUInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                    \
+    M(SettingBool, enable_cop_stream_for_remote_read, true, "Enable cop stream for remote read")                                                                                                                                        \
+    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")
 
 
 // clang-format on

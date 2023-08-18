@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,11 @@ class PosixRandomAccessFile : public RandomAccessFile
 public:
     static RandomAccessFilePtr create(const String & file_name_);
 
-    PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr, const FileSegmentPtr & file_seg_ = nullptr);
+    PosixRandomAccessFile(
+        const std::string & file_name_,
+        int flags,
+        const ReadLimiterPtr & read_limiter_ = nullptr,
+        const FileSegmentPtr & file_seg_ = nullptr);
 
     ~PosixRandomAccessFile() override;
 

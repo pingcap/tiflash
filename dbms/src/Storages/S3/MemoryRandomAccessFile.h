@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,25 +56,13 @@ public:
         return n;
     }
 
-    std::string getFileName() const override
-    {
-        return filename;
-    }
+    std::string getFileName() const override { return filename; }
 
-    int getFd() const override
-    {
-        return -1;
-    }
+    int getFd() const override { return -1; }
 
-    bool isClosed() const override
-    {
-        return is_closed;
-    }
+    bool isClosed() const override { return is_closed; }
 
-    void close() override
-    {
-        is_closed = true;
-    }
+    void close() override { is_closed = true; }
 
 private:
     String filename;

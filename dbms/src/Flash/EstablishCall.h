@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,8 @@ public:
     virtual std::optional<GRPCKickFunc> getGRPCKickFuncForTest() { return std::nullopt; }
 };
 
-class EstablishCallData final : public IAsyncCallData
+class EstablishCallData final
+    : public IAsyncCallData
     , public GRPCKickTag
 {
 public:
@@ -59,14 +60,8 @@ public:
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();
-    void setToWaitingTunnelState()
-    {
-        state = WAIT_TUNNEL;
-    }
-    bool isWaitingTunnelState()
-    {
-        return state == WAIT_TUNNEL;
-    }
+    void setToWaitingTunnelState() { state = WAIT_TUNNEL; }
+    bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.

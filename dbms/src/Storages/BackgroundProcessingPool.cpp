@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,7 +97,10 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread
 }
 
 
-BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task, const bool multi, const size_t interval_ms)
+BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(
+    const Task & task,
+    const bool multi,
+    const size_t interval_ms)
 {
     TaskHandle res = std::make_shared<TaskInfo>(*this, task, multi, interval_ms);
 
@@ -133,7 +136,10 @@ BackgroundProcessingPool::~BackgroundProcessingPool()
 {
     try
     {
-        shutdown = true;
+        {
+            std::unique_lock lock(tasks_mutex);
+            shutdown = true;
+        }
         wake_event.notify_all();
         for (std::thread & thread : threads)
             thread.join();
@@ -161,8 +167,7 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 
         {
             // find the first coming task that no thread is running
             // or can be run by multithreads
-            if (!task_handle->removed
-                && (task_handle->concurrent_executors == 0 || task_handle->multi))
+            if (!task_handle->removed && (task_handle->concurrent_executors == 0 || task_handle->multi))
             {
                 min_time = task_time;
                 task = task_handle;
@@ -175,9 +180,10 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 
         if (!task)
         {
             /// No tasks ready for execution, wait for a while and check again
-            wake_event.wait_for(lock,
-                                std::chrono::duration<double>(
-                                    sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
+            wake_event.wait_for(
+                lock,
+                std::chrono::duration<double>(
+                    sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
             continue;
         }
 
@@ -185,9 +191,11 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 
         if (min_time > current_time)
         {
             // The coming task is not ready for execution yet, wait for a while
-            wake_event.wait_for(lock,
-                                std::chrono::microseconds(
-                                    min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
+            wake_event.wait_for(
+                lock,
+                std::chrono::microseconds(
+                    min_time - current_time
+                    + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
         }
         // here task != nullptr and is ready for execution
         return task;
@@ -211,7 +219,8 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
     current_memory_tracker = memory_tracker.get();
 
     pcg64 rng(randomSeed());
-    std::this_thread::sleep_for(std::chrono::duration<double>(std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
+    std::this_thread::sleep_for(
+        std::chrono::duration<double>(std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
 
     while (!shutdown)
     {

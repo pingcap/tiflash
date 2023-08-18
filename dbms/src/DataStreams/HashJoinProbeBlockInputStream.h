@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
-        size_t scan_hash_map_after_probe_stream_index,
+        size_t stream_index,
         const String & req_id,
         UInt64 max_block_size_);
 

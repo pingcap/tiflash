@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,12 +48,17 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     const PageStorageConfig & config,
     const FileProviderPtr & file_provider)
 {
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate_raft_data}},
+    };
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(
         name,
         file_provider,
         delegator,
-        PS::V3::BlobConfig::from(config));
+        PS::V3::BlobConfig::from(config),
+        page_type_and_config);
     if (S3::ClientFactory::instance().isEnabled())
     {
         storage->remote_reader = std::make_unique<PS::V3::S3PageReader>();
@@ -67,8 +72,7 @@ void UniversalPageStorage::restore()
     blob_store->registerPaths();
 
     PS::V3::universal::PageDirectoryFactory factory;
-    page_directory = factory
-                         .setBlobStore(*blob_store)
+    page_directory = factory.setBlobStore(*blob_store)
                          .create(storage_name, file_provider, delegator, PS::V3::WALConfig::from(config));
 }
 
@@ -79,13 +83,17 @@ size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
     return page_directory->numPagesWithPrefix(prefix);
 }
 
-void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
+void UniversalPageStorage::write(
+    UniversalWriteBatch && write_batch,
+    PageType page_type,
+    const WriteLimiterPtr & write_limiter) const
 {
     if (unlikely(write_batch.empty()))
         return;
 
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT(
+        { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
     bool has_writes_from_remote = write_batch.hasWritesFromRemote();
     if (has_writes_from_remote)
     {
@@ -96,7 +104,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
-    auto edit = blob_store->write(std::move(write_batch), write_limiter);
+    auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
     auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
     if (has_writes_from_remote)
     {
@@ -106,7 +114,11 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
     }
 }
 
-Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
+Page UniversalPageStorage::read(
+    const UniversalPageId & page_id,
+    const ReadLimiterPtr & read_limiter,
+    SnapshotPtr snapshot,
+    bool throw_on_not_exist) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
@@ -114,7 +126,8 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
         snapshot = this->getSnapshot("");
     }
 
-    auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
+    auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot)
+                                         : page_directory->getByIDOrNull(page_id, snapshot);
     auto & checkpoint_info = page_entry.second.checkpoint_info;
     if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
     {
@@ -131,7 +144,11 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
     }
 }
 
-UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
+UniversalPageMap UniversalPageStorage::read(
+    const UniversalPageIds & page_ids,
+    const ReadLimiterPtr & read_limiter,
+    SnapshotPtr snapshot,
+    bool throw_on_not_exist) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
@@ -183,7 +200,11 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
     }
 }
 
-UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
+UniversalPageMap UniversalPageStorage::read(
+    const std::vector<PageReadFields> & page_fields,
+    const ReadLimiterPtr & read_limiter,
+    SnapshotPtr snapshot,
+    bool throw_on_not_exist) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
@@ -197,7 +218,8 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
     PS::V3::universal::BlobStoreType::FieldReadInfos local_read_infos, remote_read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
-        const auto & [id, entry] = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
+        const auto & [id, entry] = throw_on_not_exist ? page_directory->getByID(page_id, snapshot)
+                                                      : page_directory->getByIDOrNull(page_id, snapshot);
 
         if (entry.isValid())
         {
@@ -246,7 +268,10 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
     return local_page_map;
 }
 
-void UniversalPageStorage::traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) const
+void UniversalPageStorage::traverse(
+    const String & prefix,
+    const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor,
+    SnapshotPtr snapshot) const
 {
     if (!snapshot)
     {
@@ -275,7 +300,10 @@ void UniversalPageStorage::traverse(const String & prefix, const std::function<v
     }
 }
 
-void UniversalPageStorage::traverseEntries(const String & prefix, const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot) const
+void UniversalPageStorage::traverseEntries(
+    const String & prefix,
+    const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor,
+    SnapshotPtr snapshot) const
 {
     if (!snapshot)
     {
@@ -290,7 +318,10 @@ void UniversalPageStorage::traverseEntries(const String & prefix, const std::fun
     }
 }
 
-UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist) const
+UniversalPageId UniversalPageStorage::getNormalPageId(
+    const UniversalPageId & page_id,
+    SnapshotPtr snapshot,
+    bool throw_on_not_exist) const
 {
     if (!snapshot)
     {
@@ -328,7 +359,9 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
     }
 }
 
-std::optional<DB::PS::V3::CheckpointLocation> UniversalPageStorage::getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot) const
+std::optional<DB::PS::V3::CheckpointLocation> UniversalPageStorage::getCheckpointLocation(
+    const UniversalPageId & page_id,
+    SnapshotPtr snapshot) const
 {
     if (!snapshot)
     {
@@ -360,16 +393,14 @@ PageIdU64 UniversalPageStorage::getMaxIdAfterRestart() const
     return page_directory->getMaxIdAfterRestart();
 }
 
-bool UniversalPageStorage::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+bool UniversalPageStorage::gc(
+    bool /*not_skip*/,
+    const WriteLimiterPtr & write_limiter,
+    const ReadLimiterPtr & read_limiter)
 {
     PS::V3::RemoteFileValidSizes remote_valid_sizes;
-    bool done_anything = manager.gc(
-        *blob_store,
-        *page_directory,
-        write_limiter,
-        read_limiter,
-        &remote_valid_sizes,
-        log);
+    bool done_anything
+        = manager.gc(*blob_store, *page_directory, write_limiter, read_limiter, &remote_valid_sizes, log);
     // update the valid size cache of remote file ids
     remote_data_files_stat_cache.updateValidSize(remote_valid_sizes);
     return done_anything;
@@ -430,7 +461,8 @@ bool UniversalPageStorage::canSkipCheckpoint() const
     return snap->sequence == last_checkpoint_sequence;
 }
 
-PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
+    const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
     Stopwatch sw;
@@ -457,16 +489,13 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     if (!options.only_upload_manifest)
     {
         PS::V3::universal::PageDirectoryFactory factory;
-        auto temp_page_directory = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
+        auto temp_page_directory
+            = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
         edit_from_mem = temp_page_directory->dumpSnapshotToEdit();
     }
 
-    auto manifest_file_id = fmt::format(
-        fmt::runtime(options.manifest_file_id_pattern),
-        fmt::arg("seq", sequence));
-    auto manifest_file_path = fmt::format(
-        fmt::runtime(options.manifest_file_path_pattern),
-        fmt::arg("seq", sequence));
+    auto manifest_file_id = fmt::format(fmt::runtime(options.manifest_file_id_pattern), fmt::arg("seq", sequence));
+    auto manifest_file_path = fmt::format(fmt::runtime(options.manifest_file_path_pattern), fmt::arg("seq", sequence));
 
     // TODO: After FAP is enabled, we need the `data_source` can read data from a remote store.
 
@@ -495,10 +524,8 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
         return PS::V3::CPFilesWriter::CompactOptions(options.compact_getter());
     }();
     // get the remote file ids that need to be compacted
-    const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(
-        edit_from_mem,
-        compact_opts,
-        options.only_upload_manifest);
+    const auto checkpoint_dump_stats
+        = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, compact_opts, options.only_upload_manifest);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
@@ -536,17 +563,19 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_copy_checkpoint_info).Observe(copy_checkpoint_info_seconds);
-    LOG_INFO(log,
-             "Checkpoint result: files={} dump_snapshot={:.3f}s dump_data={:.3f}s upload={:.3f}s copy_checkpoint_info={:.3f}s "
-             "total={:.3f}s sequence={} {}",
-             data_file_paths,
-             dump_snapshot_seconds,
-             dump_data_seconds,
-             upload_seconds,
-             copy_checkpoint_info_seconds,
-             sw.elapsedSeconds(),
-             sequence,
-             checkpoint_dump_stats);
+    LOG_INFO(
+        log,
+        "Checkpoint result: files={} dump_snapshot={:.3f}s dump_data={:.3f}s upload={:.3f}s "
+        "copy_checkpoint_info={:.3f}s "
+        "total={:.3f}s sequence={} {}",
+        data_file_paths,
+        dump_snapshot_seconds,
+        dump_data_seconds,
+        upload_seconds,
+        copy_checkpoint_info_seconds,
+        sw.elapsedSeconds(),
+        sequence,
+        checkpoint_dump_stats);
     SetMetrics(checkpoint_dump_stats);
     return checkpoint_dump_stats;
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,15 +23,20 @@ namespace DB
 {
 PipelineExecutor::PipelineExecutor(
     const MemoryTrackerPtr & memory_tracker_,
+    AutoSpillTrigger * auto_spill_trigger,
+    const RegisterOperatorSpillContext & register_operator_spill_context,
     Context & context_,
     const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
     , exec_context(
           // For mpp task, there is a unique identifier MPPTaskId, so MPPTaskId is used here as the query id of PipelineExecutor.
           // But for cop/batchCop, there is no such unique identifier, so an empty value is given here, indicating that the query id of PipelineExecutor is invalid.
-          /*query_id=*/context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
+          /*query_id=*/context.getDAGContext()->isMPPTask() ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
-          memory_tracker_)
+          memory_tracker_,
+          auto_spill_trigger,
+          register_operator_spill_context,
+          context.getDAGContext()->getResourceGroupName())
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());
@@ -113,9 +118,7 @@ void PipelineExecutor::cancel()
 String PipelineExecutor::toString() const
 {
     assert(root_pipeline);
-    FmtBuffer buffer;
-    root_pipeline->toTreeString(buffer);
-    return buffer.toString();
+    return root_pipeline->toTreeString();
 }
 
 int PipelineExecutor::estimateNewThreadCount()

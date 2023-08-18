@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 #include <common/types.h>
@@ -32,16 +33,13 @@ class FirstValue : public DB::tests::WindowTest
 public:
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 
     template <typename IntType>
     void testInt()
     {
         executeFunctionAndAssert(
-            toVec<IntType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
+            toNullableVec<IntType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -59,7 +57,7 @@ public:
     void testFloat()
     {
         executeFunctionAndAssert(
-            toVec<FloatType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
+            toNullableVec<FloatType>({1, 2, 2, 2, 2, 6, 6, 6, 6, 6, 11, 11, 11}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -80,7 +78,7 @@ try
     {
         // boundary type: unbounded
         executeFunctionAndAssert(
-            toVec<String>({"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}),
+            toNullableVec<String>({"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
              toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -98,10 +96,10 @@ try
         // boundary type: offset
         MockWindowFrame frame;
         frame.type = tipb::WindowFrameType::Rows;
-        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
 
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-        std::vector<std::vector<String>> res_not_null{
+        std::vector<std::vector<std::optional<String>>> res_not_null{
             {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"},
             {"1", "2", "2", "3", "4", "6", "6", "7", "8", "9", "11", "11", "12"},
             {"1", "2", "2", "2", "2", "6", "6", "6", "6", "7", "11", "11", "11"},
@@ -117,7 +115,7 @@ try
             frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
 
             executeFunctionAndAssert(
-                toVec<String>(res_not_null[i]),
+                toNullableVec<String>(res_not_null[i]),
                 FirstValue(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
                  toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
@@ -132,6 +130,28 @@ try
                  toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})},
                 frame);
         }
+
+        // The following are <preceding, preceding> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 2);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 1);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, {}, "2", "2", "3", {}, "6", "6", "7", "8", {}, "11", "11"}),
+            FirstValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
+
+        // The following are <following, folloing> tests
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 1);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 2);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13", {}}),
+            FirstValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+            frame);
     }
 
     // TODO support unsigned int.

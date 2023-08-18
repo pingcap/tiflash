@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -80,14 +80,14 @@ public:
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+        DB::tests::TiFlashTestEnv::enableS3Config();
     }
 
-    void reload()
-    {
-        TiFlashStorageTestBasic::reload();
-    }
+    void reload() { TiFlashStorageTestBasic::reload(); }
 
     Context & dbContext() { return *db_context; }
+
+    void TearDown() override { DB::tests::TiFlashTestEnv::disableS3Config(); }
 
 protected:
     void writeLocalFile(const String & path, size_t size)
@@ -137,8 +137,9 @@ protected:
             }
             else
             {
-                ASSERT_EQ(std::vector<char>(tmp_buf.begin(), tmp_buf.begin() + n),
-                          std::vector<char>(buf_unit.begin(), buf_unit.begin() + n));
+                ASSERT_EQ(
+                    std::vector<char>(tmp_buf.begin(), tmp_buf.begin() + n),
+                    std::vector<char>(buf_unit.begin(), buf_unit.begin() + n));
             }
             read_size += n;
         }
@@ -164,7 +165,10 @@ protected:
         return res;
     }
 
-    static void downloadDMFile(const DMFileOID & remote_oid, const String & local_dir, const std::vector<String> & target_files)
+    static void downloadDMFile(
+        const DMFileOID & remote_oid,
+        const String & local_dir,
+        const std::vector<String> & target_files)
     {
         Remote::DataStoreS3::copyToLocal(remote_oid, target_files, local_dir);
     }
@@ -275,7 +279,9 @@ try
     DMFileOID oid;
     oid.store_id = 1;
     oid.table_id = 1;
-    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
+                      .time_since_epoch()
+                      .count();
 
     {
         // Prepare for write
@@ -285,7 +291,13 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
-        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);
+        dmfile = DMFile::create(
+            oid.file_id,
+            parent_path,
+            std::move(configuration),
+            128 * 1024,
+            16 * 1024 * 1024,
+            DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -297,18 +309,14 @@ try
 
     std::vector<String> uploaded_files;
     {
+        auto local_files = dmfile->listFilesForUpload();
         data_store->putDMFile(dmfile, oid, /*remove_local*/ false);
-        auto local_files_with_size = dmfile->listFilesForUpload();
         auto remote_files_with_size = listFiles(oid);
-        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
-        for (const auto & [fname, fsize] : local_files_with_size)
+        ASSERT_EQ(local_files.size(), remote_files_with_size.size());
+        for (const auto & fname : local_files)
         {
             auto itr = remote_files_with_size.find(fname);
             ASSERT_NE(itr, remote_files_with_size.end());
-            if (fname != DMFile::metav2FileName())
-            {
-                ASSERT_EQ(itr->second, fsize);
-            }
             uploaded_files.push_back(fname);
         }
         LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
@@ -346,7 +354,11 @@ try
     try
     {
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.build(dmfile_from_s3, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto stream = builder.build(
+            dmfile_from_s3,
+            *cols,
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
+            std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),
@@ -371,7 +383,8 @@ try
 
     auto read_dmfile = [&](DMFilePtr dmf) {
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.build(dmf, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto stream
+            = builder.build(dmf, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),
@@ -396,7 +409,9 @@ try
     DMFileOID oid;
     oid.store_id = 1;
     oid.table_id = 1;
-    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
+                      .time_since_epoch()
+                      .count();
 
     {
         // Prepare for write
@@ -406,7 +421,13 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
-        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);
+        dmfile = DMFile::create(
+            oid.file_id,
+            parent_path,
+            std::move(configuration),
+            128 * 1024,
+            16 * 1024 * 1024,
+            DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -420,18 +441,14 @@ try
     auto local_dir = dmfile->path();
     ASSERT_TRUE(std::filesystem::exists(local_dir));
     {
+        auto local_files = dmfile->listFilesForUpload();
         data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
-        auto local_files_with_size = dmfile->listFilesForUpload();
         auto remote_files_with_size = listFiles(oid);
-        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
-        for (const auto & [fname, fsize] : local_files_with_size)
+        ASSERT_EQ(local_files.size(), remote_files_with_size.size());
+        for (const auto & fname : local_files)
         {
             auto itr = remote_files_with_size.find(fname);
             ASSERT_NE(itr, remote_files_with_size.end());
-            if (fname != DMFile::metav2FileName())
-            {
-                ASSERT_EQ(itr->second, fsize) << fname;
-            }
             uploaded_files.push_back(fname);
         }
         LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
@@ -510,7 +527,8 @@ try
 
     /// test 2: check get data file infos from remote store
     // add an not exist key for testing
-    lock_keys.emplace_back(S3::S3Filename::newCheckpointData(store_id, sequence, 999).toView().getLockKey(store_id, sequence));
+    lock_keys.emplace_back(
+        S3::S3Filename::newCheckpointData(store_id, sequence, 999).toView().getLockKey(store_id, sequence));
     lock_keyset.insert(lock_keys.back());
 
     FailPointHelper::enableFailPoint(
@@ -521,22 +539,26 @@ try
             {df_keys[2], test_infos[2].mtime},
             {df_keys[3], test_infos[3].mtime},
         });
-    SCOPE_EXIT({
-        FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
-    });
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime); });
 
     const auto remote_files_info = data_store->getDataFilesInfo(lock_keyset);
     ASSERT_EQ(remote_files_info.size(), 5);
     for (size_t idx = 0; idx < test_infos.size(); ++idx)
     {
         ASSERT_EQ(remote_files_info.at(lock_keys[idx]).size, test_infos[idx].total_size);
-        ASSERT_EQ(remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime) << fmt::format("remote_mtime:{:%Y-%m-%d %H:%M:%S} test_mtime:{:%Y-%m-%d %H:%M:%S}", remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime);
+        ASSERT_EQ(remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime) << fmt::format(
+            "remote_mtime:{:%Y-%m-%d %H:%M:%S} test_mtime:{:%Y-%m-%d %H:%M:%S}",
+            remote_files_info.at(lock_keys[idx]).mtime,
+            test_infos[idx].mtime);
     }
     ASSERT_EQ(remote_files_info.at(lock_keys[4]).size, -1); // not exist or exception happens
 
     /// test 3: create an empty file stat cache
     PS::V3::CPDataFilesStatCache cache;
-    auto gc_threshold = DB::DM::Remote::RemoteGCThreshold{.min_age_seconds = 3600, .valid_rate = 0.2, .min_file_threshold = 128 * 1024};
+    auto gc_threshold = DB::DM::Remote::RemoteGCThreshold{
+        .min_age_seconds = 3600,
+        .valid_rate = 0.2,
+        .min_file_threshold = 128 * 1024};
     {
         auto stats = cache.getCopy(); // valid size is not collected
         EXPECT_EQ(stats.size(), 0);
@@ -597,12 +619,13 @@ try
     // Always succ
     {
         Int32 retry = 0;
-        retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
-            UNUSED(max_retry_times);
-            retry = current_retry;
-            return true;
-        },
-                     3);
+        retryWrapper(
+            [&retry](Int32 max_retry_times, Int32 current_retry) {
+                UNUSED(max_retry_times);
+                retry = current_retry;
+                return true;
+            },
+            3);
         ASSERT_EQ(retry, 0);
     }
 
@@ -611,12 +634,13 @@ try
         Int32 retry = 0;
         try
         {
-            retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
-                retry = current_retry;
-                RUNTIME_CHECK(max_retry_times - 1 != current_retry);
-                return false;
-            },
-                         3);
+            retryWrapper(
+                [&retry](Int32 max_retry_times, Int32 current_retry) {
+                    retry = current_retry;
+                    RUNTIME_CHECK(max_retry_times - 1 != current_retry);
+                    return false;
+                },
+                3);
         }
         catch (...)
         {
@@ -627,12 +651,13 @@ try
     // Partial fail
     {
         Int32 retry = 0;
-        retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
-            UNUSED(max_retry_times);
-            retry = current_retry;
-            return current_retry > 0;
-        },
-                     3);
+        retryWrapper(
+            [&retry](Int32 max_retry_times, Int32 current_retry) {
+                UNUSED(max_retry_times);
+                retry = current_retry;
+                return current_retry > 0;
+            },
+            3);
         ASSERT_EQ(retry, 1);
     }
 }

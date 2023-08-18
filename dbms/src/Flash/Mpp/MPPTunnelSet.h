@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,14 +56,8 @@ public:
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
-    int getExternalThreadCnt()
-    {
-        return external_thread_cnt;
-    }
-    size_t getLocalTunnelCnt()
-    {
-        return local_tunnel_cnt;
-    }
+    int getExternalThreadCnt() { return external_thread_cnt; }
+    size_t getLocalTunnelCnt() { return local_tunnel_cnt; }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,9 +37,7 @@ struct LogFile
 };
 using LogFiles = std::vector<LogFile>;
 
-LogFilenameSet WALStoreReader::listAllFiles(
-    const PSDiskDelegatorPtr & delegator,
-    LoggerPtr logger)
+LogFilenameSet WALStoreReader::listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, LogFiles>> all_filenames;
@@ -77,11 +75,16 @@ LogFilenameSet WALStoreReader::listAllFiles(
                 break;
             }
             case LogFileStage::Temporary:
-                [[fallthrough]];
+            {
+                break;
+            }
             case LogFileStage::Invalid:
             {
-                // TODO: clean
-                break;
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Unknown logfile name, parent_path={} filename={}",
+                    parent_path,
+                    file.filename);
             }
             }
         }
@@ -89,8 +92,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
     return log_files;
 }
 
-std::tuple<std::optional<LogFilename>, LogFilenameSet>
-WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
+std::tuple<std::optional<LogFilename>, LogFilenameSet> WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 {
     auto latest_checkpoint_iter = all_files.cend();
     for (auto iter = all_files.cbegin(); iter != all_files.cend(); ++iter)
@@ -130,14 +132,21 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
     return {latest_checkpoint, std::move(all_files)};
 }
 
-WALStoreReaderPtr WALStoreReader::create(String storage_name,
-                                         FileProviderPtr & provider,
-                                         LogFilenameSet files,
-                                         WALRecoveryMode recovery_mode_,
-                                         const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(
+    String storage_name,
+    FileProviderPtr & provider,
+    LogFilenameSet files,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(storage_name, provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(
+        storage_name,
+        provider,
+        checkpoint,
+        std::move(files_to_read),
+        recovery_mode_,
+        read_limiter);
     reader->openNextFile();
     return reader;
 }
@@ -163,7 +172,9 @@ LogReaderPtr WALStoreReader::createLogReader(
 {
     const auto log_num = filename.log_num;
     const auto fullname = filename.fullname(filename.stage);
-    LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
+    Poco::File f(fullname);
+    const auto file_size = f.getSize();
+    LOG_DEBUG(logger, "Open log file for reading, file={} size={}", fullname, file_size);
 
     auto read_buf = createReadBufferFromFileBaseByFileProvider(
         provider,
@@ -203,15 +214,17 @@ String WALStoreReader::getLastRecordInLogFile(
     return last_record;
 }
 
-WALStoreReader::WALStoreReader(String storage_name,
-                               FileProviderPtr & provider_,
-                               std::optional<LogFilename> checkpoint,
-                               LogFilenameSet && files_,
-                               WALRecoveryMode recovery_mode_,
-                               const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(
+    String storage_name,
+    FileProviderPtr & provider_,
+    std::optional<LogFilename> checkpoint,
+    LogFilenameSet && files_,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
-    , checkpoint_read_done(!checkpoint.has_value())
+    , checkpoint_reader_created(!checkpoint.has_value())
+    , reading_checkpoint_file(false)
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
@@ -226,12 +239,17 @@ bool WALStoreReader::remained() const
 
     if (!reader->isEOF())
         return true;
-    if (checkpoint_read_done && next_reading_file != files_to_read.end())
+    if (checkpoint_reader_created && next_reading_file != files_to_read.end())
         return true;
     return false;
 }
 
-std::optional<String> WALStoreReader::next()
+UInt64 WALStoreReader::getSnapSeqForCheckpoint() const
+{
+    return checkpoint_file.has_value() ? checkpoint_file->snap_seq : 0;
+}
+
+std::pair<bool, std::optional<String>> WALStoreReader::next()
 {
     bool ok = false;
     String record;
@@ -240,34 +258,36 @@ std::optional<String> WALStoreReader::next()
         std::tie(ok, record) = reader->readRecord();
         if (ok)
         {
-            return record;
+            return std::make_pair(reading_checkpoint_file, record);
         }
 
         // Roll to read the next file
         if (bool next_file = openNextFile(); !next_file)
         {
             // No more file to be read.
-            return std::nullopt;
+            return std::make_pair(false, std::nullopt);
         }
     } while (true);
 }
 
 bool WALStoreReader::openNextFile()
 {
-    if (checkpoint_read_done && next_reading_file == files_to_read.end())
+    if (checkpoint_reader_created && next_reading_file == files_to_read.end())
     {
         return false;
     }
 
-    if (!checkpoint_read_done)
+    if (!checkpoint_reader_created)
     {
         reader = createLogReader(*checkpoint_file, provider, &reporter, recovery_mode, read_limiter, logger);
-        checkpoint_read_done = true;
+        checkpoint_reader_created = true;
+        reading_checkpoint_file = true;
     }
     else
     {
         reader = createLogReader(*next_reading_file, provider, &reporter, recovery_mode, read_limiter, logger);
         ++next_reading_file;
+        reading_checkpoint_file = false;
     }
     return true;
 }

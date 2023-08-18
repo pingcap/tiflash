@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,9 +45,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     TaskQueuePtr queue = std::make_unique<CPUMultiLevelFeedbackQueue>();
     size_t valid_task_num = 1000;
@@ -77,9 +75,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     TaskQueuePtr queue = std::make_unique<CPUMultiLevelFeedbackQueue>();
 
@@ -98,6 +94,10 @@ try
             queue->updateStatistics(task, ExecTaskStatus::RUNNING, value);
             task->profile_info.addCPUExecuteTime(value);
             queue->submit(std::move(task));
+        }
+        while (!queue->empty())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         queue->finish();
     });
@@ -123,9 +123,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     CPUMultiLevelFeedbackQueue queue;
     TaskPtr task = std::make_unique<PlainTask>(context);
@@ -159,9 +157,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     CPUMultiLevelFeedbackQueue queue;
 
@@ -243,23 +239,19 @@ try
     PipelineExecutorContext context1("id1", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     context1.incActiveRefCount();
-    SCOPE_EXIT({
-        context1.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context1.decActiveRefCount(); });
 
     PipelineExecutorContext context2("id2", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     context2.incActiveRefCount();
-    SCOPE_EXIT({
-        context2.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context2.decActiveRefCount(); });
 
     // case1 submit first.
     {
         CPUMultiLevelFeedbackQueue queue;
         queue.submit(std::make_unique<PlainTask>(context1));
         queue.submit(std::make_unique<PlainTask>(context2));
-        queue.cancel("id2");
+        queue.cancel("id2", "");
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
         queue.take(task);
@@ -274,7 +266,7 @@ try
     // case2 cancel first.
     {
         CPUMultiLevelFeedbackQueue queue;
-        queue.cancel("id2");
+        queue.cancel("id2", "");
         queue.submit(std::make_unique<PlainTask>(context1));
         queue.submit(std::make_unique<PlainTask>(context2));
         TaskPtr task;

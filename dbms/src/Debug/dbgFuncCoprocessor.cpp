@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,9 +55,12 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
             auto storage = context.getTable(mapped_database_name, mapped_table_name.second);
             auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
             if (!managed_storage //
-                || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT
-                     || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
-                throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
+                || !(
+                    managed_storage->engineType() == ::TiDB::StorageEngine::DT
+                    || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+                throw Exception(
+                    database_name + "." + table_name + " is not ManageableStorage",
+                    ErrorCodes::BAD_ARGUMENTS);
             return managed_storage->getTableInfo();
         },
         properties);
@@ -67,7 +70,9 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
 {
     if (args.size() < 2 || args.size() > 4)
-        throw Exception("Args not matched, should be: query, region-id[, start-ts, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: query, region-id[, start-ts, dag_prop_string]",
+            ErrorCodes::BAD_ARGUMENTS);
 
     auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     auto region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -146,7 +151,9 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         fmt_buf.joinStr(
             failed_req_msg_vec.begin(),
             failed_req_msg_vec.end(),
-            [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
+            [](const auto & pair, FmtBuffer & fb) {
+                fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second);
+            },
             "\n");
         throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }

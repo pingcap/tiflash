@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,21 +20,6 @@ namespace DB
 {
 namespace
 {
-template <typename Queue>
-bool popTask(Queue & queue, TaskPtr & task)
-{
-    if (!queue.empty())
-    {
-        task = std::move(queue.front());
-        queue.pop_front();
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
 void moveCancelledTasks(std::list<TaskPtr> & normal_queue, std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
     assert(!query_id.empty());
@@ -55,9 +40,7 @@ void moveCancelledTasks(std::list<TaskPtr> & normal_queue, std::deque<TaskPtr> &
 
 IOPriorityQueue::~IOPriorityQueue()
 {
-    RUNTIME_ASSERT(cancel_task_queue.empty(), logger, "all task should be taken before it is destructed");
-    RUNTIME_ASSERT(io_in_task_queue.empty(), logger, "all task should be taken before it is destructed");
-    RUNTIME_ASSERT(io_out_task_queue.empty(), logger, "all task should be taken before it is destructed");
+    drainTaskQueueWithoutLock();
 }
 
 bool IOPriorityQueue::take(TaskPtr & task)
@@ -65,6 +48,10 @@ bool IOPriorityQueue::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        // Remaining tasks will be drained in destructor.
+        if (unlikely(is_finished))
+            return false;
+
         if (popTask(cancel_task_queue, task))
             return true;
 
@@ -75,9 +62,24 @@ bool IOPriorityQueue::take(TaskPtr & task)
             return true;
         if (popTask(next_queue, task))
             return true;
-        if (unlikely(is_finished))
-            return false;
         cv.wait(lock);
+    }
+}
+
+void IOPriorityQueue::drainTaskQueueWithoutLock()
+{
+    TaskPtr task;
+    while (popTask(cancel_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
+    while (popTask(io_out_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
+    while (popTask(io_in_task_queue, task))
+    {
+        FINALIZE_TASK(task);
     }
 }
 
@@ -128,7 +130,9 @@ void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
         io_out_task_queue.push_back(std::move(task));
         break;
     default:
-        throw Exception(fmt::format("Unexpected status: {}, IOPriorityQueue only accepts tasks with IO status", magic_enum::enum_name(status)));
+        throw Exception(fmt::format(
+            "Unexpected status: {}, IOPriorityQueue only accepts tasks with IO status",
+            magic_enum::enum_name(status)));
     }
 }
 
@@ -166,7 +170,7 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-void IOPriorityQueue::cancel(const String & query_id)
+void IOPriorityQueue::cancel(const String & query_id, const String &)
 {
     if unlikely (query_id.empty())
         return;
@@ -174,9 +178,14 @@ void IOPriorityQueue::cancel(const String & query_id)
     std::lock_guard lock(mu);
     if (cancel_query_id_cache.add(query_id))
     {
-        moveCancelledTasks(io_in_task_queue, cancel_task_queue, query_id);
-        moveCancelledTasks(io_out_task_queue, cancel_task_queue, query_id);
+        collectCancelledTasks(cancel_task_queue, query_id);
         cv.notify_all();
     }
+}
+
+void IOPriorityQueue::collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id)
+{
+    moveCancelledTasks(io_in_task_queue, cancel_queue, query_id);
+    moveCancelledTasks(io_out_task_queue, cancel_queue, query_id);
 }
 } // namespace DB

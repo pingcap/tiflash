@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,10 @@ namespace DB
 {
 
 DictionaryBlockInputStreamBase::DictionaryBlockInputStreamBase(size_t rows_count, size_t max_block_size)
-    : rows_count(rows_count), max_block_size(max_block_size), next_row(0)
-{
-}
+    : rows_count(rows_count)
+    , max_block_size(max_block_size)
+    , next_row(0)
+{}
 
 Block DictionaryBlockInputStreamBase::readImpl()
 {
@@ -38,4 +39,4 @@ Block DictionaryBlockInputStreamBase::getHeader() const
     return getBlock(0, 0);
 }
 
-}
+} // namespace DB

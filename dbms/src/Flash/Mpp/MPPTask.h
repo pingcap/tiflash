@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 class DAGContext;
 class ProcessListEntry;
+class QueryOperatorSpillContexts;
 
 enum class AbortType
 {
@@ -64,7 +65,8 @@ private:
     bool initialized = false;
 };
 
-class MPPTask : public std::enable_shared_from_this<MPPTask>
+class MPPTask
+    : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
 public:
@@ -125,6 +127,9 @@ private:
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
 
     void initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry);
+
+    void initQueryOperatorSpillContexts(
+        const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts);
 
     void initExchangeReceivers();
 

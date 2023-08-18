@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,8 +72,17 @@ void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_a
 HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, bool resolve_host = true);
 
 /// As previous method creates session, but tooks it from pool, without and with proxy uri.
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host = true);
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const Poco::URI & proxy_uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host = true);
 
 bool isRedirect(Poco::Net::HTTPResponse::HTTPStatus status);
 

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,23 +28,23 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const JoinPtr & join_ptr_,
-        size_t concurrency_build_index_)
+        size_t op_index_)
         : SinkOp(exec_context_, req_id)
         , join_ptr(join_ptr_)
-        , concurrency_build_index(concurrency_build_index_)
-    {
-    }
+        , op_index(op_index_)
+    {}
 
-    String getName() const override
-    {
-        return "HashJoinBuildSink";
-    }
+    String getName() const override { return "HashJoinBuildSink"; }
 
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus executeIOImpl() override;
+
 private:
     JoinPtr join_ptr;
-    size_t concurrency_build_index;
+    size_t op_index;
+
+    bool is_finish_status = false;
 };
 } // namespace DB

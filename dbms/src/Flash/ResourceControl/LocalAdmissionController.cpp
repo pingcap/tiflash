@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Join.h>
-#include <Operators/HashJoinBuildSink.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 
 namespace DB
 {
-// TODO support spill.
-OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
+std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_instance = nullptr;
+
+LocalAdmissionController::LocalAdmissionController()
 {
-    if unlikely (!block)
-    {
-        join_ptr->finishOneBuild();
-        return OperatorStatus::FINISHED;
-    }
-    join_ptr->insertFromBlock(block, concurrency_build_index);
-    block.clear();
-    return OperatorStatus::NEED_INPUT;
+    if (!global_instance)
+        global_instance = std::make_unique<MockLocalAdmissionController>();
+}
+
+LocalAdmissionController::~LocalAdmissionController()
+{
+    global_instance.reset();
 }
 } // namespace DB

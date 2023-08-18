@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,13 +79,14 @@ static void insertRegionInfoToTablesRegionInfo(
             r.region_id(),
             r.region_epoch().version(),
             r.region_epoch().conf_ver(),
-            CoprocessorHandler::genCopKeyRange(r.ranges()),
+            genCopKeyRange(r.ranges()),
             nullptr);
         if (region_info.key_ranges.empty())
         {
-            throw TiFlashException(Errors::Coprocessor::BadRequest,
-                                   "Income key ranges is empty for region: {}",
-                                   region_info.region_id);
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Income key ranges is empty for region_id={}",
+                region_info.region_id);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
         /// region id, only the first region will be treated as local region
@@ -117,13 +118,23 @@ TablesRegionsInfo TablesRegionsInfo::create(
     TablesRegionsInfo tables_regions_info(!regions.empty());
     std::unordered_set<RegionID> local_region_id_set;
     if (!regions.empty())
-        insertRegionInfoToTablesRegionInfo(regions, InvalidTableID, tables_regions_info, local_region_id_set, tmt_context);
+        insertRegionInfoToTablesRegionInfo(
+            regions,
+            InvalidTableID,
+            tables_regions_info,
+            local_region_id_set,
+            tmt_context);
     else
     {
         for (const auto & table_region : table_regions)
         {
             assert(table_region.physical_table_id() != InvalidTableID);
-            insertRegionInfoToTablesRegionInfo(table_region.regions(), table_region.physical_table_id(), tables_regions_info, local_region_id_set, tmt_context);
+            insertRegionInfoToTablesRegionInfo(
+                table_region.regions(),
+                table_region.physical_table_id(),
+                tables_regions_info,
+                local_region_id_set,
+                tmt_context);
         }
         assert(static_cast<UInt64>(table_regions.size()) == tables_regions_info.tableCount());
     }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,10 +52,7 @@ public:
         UInt64 max_edit_records_per_part = 100000;
     };
 
-    static CPFilesWriterPtr create(Options options)
-    {
-        return std::make_unique<CPFilesWriter>(std::move(options));
-    }
+    static CPFilesWriterPtr create(Options options) { return std::make_unique<CPFilesWriter>(std::move(options)); }
 
     explicit CPFilesWriter(Options options);
 

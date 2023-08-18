@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,20 +22,12 @@ template <bool is_input>
 class IOEventTask : public EventTask
 {
 public:
-    IOEventTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_)
-        : EventTask(
-            exec_context_,
-            req_id,
-            event_,
-            is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
-    {
-    }
+    IOEventTask(PipelineExecutorContext & exec_context_, const String & req_id, const EventPtr & event_)
+        : EventTask(exec_context_, req_id, event_, is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
+    {}
 
 private:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() final
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;
@@ -43,7 +35,7 @@ private:
             return ExecTaskStatus::IO_OUT;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() final
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;

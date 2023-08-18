@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,8 +68,7 @@ double UnitQueue::normalizedTimeMicrosecond()
 template <typename TimeGetter>
 MultiLevelFeedbackQueue<TimeGetter>::~MultiLevelFeedbackQueue()
 {
-    for (const auto & unit_queue : level_queues)
-        RUNTIME_ASSERT(unit_queue->empty(), logger, "all task should be taken before it is destructed");
+    drainTaskQueueWithoutLock();
 }
 
 template <typename TimeGetter>
@@ -176,12 +175,12 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
         std::unique_lock lock(mu);
         while (true)
         {
-            if (!cancel_task_queue.empty())
-            {
-                task = std::move(cancel_task_queue.front());
-                cancel_task_queue.pop_front();
+            // Remaining tasks will be drained in destructor.
+            if (unlikely(is_finished))
+                return false;
+
+            if (popTask(cancel_task_queue, task))
                 return true;
-            }
 
             // Find the queue with the smallest execution time.
             for (size_t i = 0; i < QUEUE_SIZE; ++i)
@@ -201,8 +200,6 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 
             if (queue_idx >= 0)
                 break;
-            if (unlikely(is_finished))
-                return false;
             cv.wait(lock);
         }
         level_queues[queue_idx]->take(task);
@@ -210,6 +207,26 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 
     assert(task);
     return true;
+}
+
+template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
+{
+    TaskPtr task;
+    while (popTask(cancel_task_queue, task))
+    {
+        FINALIZE_TASK(task);
+    }
+
+    for (size_t i = 0; i < QUEUE_SIZE; ++i)
+    {
+        auto & cur_queue = level_queues[i];
+        while (!cur_queue->empty())
+        {
+            cur_queue->take(task);
+            FINALIZE_TASK(task);
+        }
+    }
 }
 
 template <typename TimeGetter>
@@ -249,7 +266,7 @@ const UnitQueueInfo & MultiLevelFeedbackQueue<TimeGetter>::getUnitQueueInfo(size
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
+void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id, const String &)
 {
     if unlikely (query_id.empty())
         return;
@@ -257,10 +274,18 @@ void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
     std::lock_guard lock(mu);
     if (cancel_query_id_cache.add(query_id))
     {
-        for (const auto & queue : level_queues)
-            moveCancelledTasks(*queue, cancel_task_queue, query_id);
+        collectCancelledTasks(cancel_task_queue, query_id);
         cv.notify_all();
     }
+}
+
+template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::collectCancelledTasks(
+    std::deque<TaskPtr> & cancel_queue,
+    const String & query_id)
+{
+    for (const auto & queue : level_queues)
+        moveCancelledTasks(*queue, cancel_queue, query_id);
 }
 
 template class MultiLevelFeedbackQueue<CPUTimeGetter>;

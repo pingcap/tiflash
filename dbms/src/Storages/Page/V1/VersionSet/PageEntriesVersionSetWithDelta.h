@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,14 +27,16 @@ namespace DB::PS::V1
 {
 class DeltaVersionEditAcceptor;
 
-class PageEntriesVersionSetWithDelta : public MVCC::VersionSetWithDelta< //
-                                           PageEntriesForDelta,
-                                           PageEntriesView,
-                                           PageEntriesEdit,
-                                           DeltaVersionEditAcceptor>
+class PageEntriesVersionSetWithDelta
+    : public MVCC::VersionSetWithDelta< //
+          PageEntriesForDelta,
+          PageEntriesView,
+          PageEntriesEdit,
+          DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType = MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using BaseType
+        = MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
     using EditAcceptor = BaseType::EditAcceptor;
     using VersionType = BaseType::VersionType;
     using VersionPtr = BaseType::VersionPtr;
@@ -45,32 +47,40 @@ public:
     {}
 
 public:
-    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(
+        PageEntriesEdit & edit,
+        bool need_scan_page_ids = true);
 
     /// List all PageFile that are used by any version
-    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &,
-                                                                               bool need_scan_page_ids = true) const;
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(
+        const std::unique_lock<std::shared_mutex> &,
+        bool need_scan_page_ids = true) const;
 
 private:
-    void collectLiveFilesFromVersionList(const PageEntriesView & view,
-                                         std::set<PageFileIdAndLevel> & live_files,
-                                         std::set<PageId> & live_normal_pages,
-                                         bool need_scan_page_ids) const;
+    void collectLiveFilesFromVersionList(
+        const PageEntriesView & view,
+        std::set<PageFileIdAndLevel> & live_files,
+        std::set<PageId> & live_normal_pages,
+        bool need_scan_page_ids) const;
 };
 
 /// Read old entries state from `view_` and apply new edit to `view_->tail`
 class DeltaVersionEditAcceptor
 {
 public:
-    explicit DeltaVersionEditAcceptor(const PageEntriesView * view_, //
-                                      bool ignore_invalid_ref_ = false,
-                                      Poco::Logger * log_ = nullptr);
+    explicit DeltaVersionEditAcceptor(
+        const PageEntriesView * view_, //
+        bool ignore_invalid_ref_ = false,
+        Poco::Logger * log_ = nullptr);
 
     ~DeltaVersionEditAcceptor();
 
     void apply(PageEntriesEdit & edit);
 
-    static void applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit, Poco::Logger * log);
+    static void applyInplace(
+        const PageEntriesVersionSetWithDelta::VersionPtr & current,
+        const PageEntriesEdit & edit,
+        Poco::Logger * log);
 
     void gcApply(PageEntriesEdit & edit) { PageEntriesBuilder::gcApplyTemplate(view, edit, current_version); }
 

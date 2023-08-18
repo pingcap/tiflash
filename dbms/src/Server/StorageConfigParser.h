@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,6 +115,7 @@ struct StorageS3Config
     void parse(const String & content);
     void enable(bool check_requirements, const LoggerPtr & log);
     bool isS3Enabled() const;
+    void disable() { is_enabled = false; }
 
     String toString() const;
 };
@@ -160,7 +161,9 @@ public:
 
     Strings getAllNormalPaths() const;
 
-    static std::tuple<size_t, TiFlashStorageConfig> parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+    static std::tuple<size_t, TiFlashStorageConfig> parseSettings(
+        Poco::Util::LayeredConfiguration & config,
+        const LoggerPtr & log);
 
 private:
     void parseStoragePath(const String & storage_section, const LoggerPtr & log);

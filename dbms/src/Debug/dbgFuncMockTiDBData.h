@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,16 +23,6 @@ namespace DB
 class Context;
 
 // TiDB table data writing test tools
-
-// Change flush threshold rows
-// Usage:
-//   ./storages-client.sh "DBGInvoke set_flush_rows(threshold_rows)"
-void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
-// Change flush deadline seconds
-// Usage:
-//   ./storages-client.sh "DBGInvoke set_deadline_seconds(seconds)"
-void dbgFuncSetDeadlineSeconds(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Write one row of mocked TiDB data with raft command.
 // Usage:

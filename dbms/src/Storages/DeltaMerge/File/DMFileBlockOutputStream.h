@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,9 +32,7 @@ namespace DM
 class DMFileBlockOutputStream
 {
 public:
-    DMFileBlockOutputStream(const Context & context,
-                            const DMFilePtr & dmfile,
-                            const ColumnDefines & write_columns);
+    DMFileBlockOutputStream(const Context & context, const DMFilePtr & dmfile, const ColumnDefines & write_columns);
 
     DMFilePtr getFile() const { return writer.getFile(); }
 

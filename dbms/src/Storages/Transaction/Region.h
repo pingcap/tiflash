@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -130,10 +132,10 @@ public:
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-    std::string getDebugString() const;
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
+    std::string getDebugString() const;
     std::string toString(bool dump_status = true) const;
 
     bool isPendingRemove() const;
@@ -147,8 +149,12 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markCompactLog() const;
+    void markCompactLog();
     Timepoint lastCompactLogTime() const;
+    UInt64 lastCompactLogApplied() const;
+    void setLastCompactLogApplied(UInt64 new_value) const;
+    // Must hold region lock.
+    void updateLastCompactLogApplied() const;
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -162,7 +168,10 @@ public:
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
+    std::tuple<WaitIndexResult, double> waitIndex(
+        UInt64 index,
+        UInt64 timeout_ms,
+        std::function<bool(void)> && check_running);
 
     // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
@@ -181,7 +190,7 @@ public:
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
 
-    void tryCompactionFilter(const Timestamp safe_point);
+    void tryCompactionFilter(Timestamp safe_point);
 
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
     metapb::Region cloneMetaRegion() const;
@@ -191,10 +200,11 @@ public:
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
-
-    UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
+    std::pair<EngineStoreApplyRes, DM::WriteResult> handleWriteRaftCmd(
+        const WriteCmdsView & cmds,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
 
     /// get approx rows, bytes info about mem cache.
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
@@ -202,25 +212,36 @@ public:
 
     RegionMeta & mutMeta() { return meta; }
 
+    UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
+
+    // IngestSST will first be applied to the `temp_region`, then we need to
+    // copy the key-values from `temp_region` and move forward the `index` and `term`
+    void finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UInt64 term);
+
+    /// methods to handle orphan keys under raftstore v2
     RaftstoreVer getClusterRaftstoreVer();
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot();
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
-private:
     Region() = delete;
+
+private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
     friend class tests::RegionKVStoreTest;
 
     // Private methods no need to lock mutex, normally
 
-    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
-    std::optional<RegionDataReadInfo> readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error);
+    std::optional<RegionDataReadInfo> readDataByWriteIt(
+        const RegionData::ConstWriteCFIter & write_it,
+        bool need_value,
+        bool hard_error);
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
@@ -229,29 +250,41 @@ private:
     void setPeerState(raft_serverpb::PeerState state);
 
 private:
-    RegionData data;
-    RegionMeta meta;
     // Modification to data or meta requires this mutex.
     mutable std::shared_mutex mutex;
+    RegionData data;
+    RegionMeta meta;
 
     LoggerPtr log;
 
-    const TableID mapped_table_id;
+    // As the placement-rules created for TiFlash, the Region peers
+    // in TiFlash must and only response to one <keyspace, table_id>
+    // The keyspace_id, table_id this region is belong to
     const KeyspaceID keyspace_id;
+    const TableID mapped_table_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
+    mutable std::atomic<uint64_t> last_compact_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };
 
-class RegionRaftCommandDelegate : public Region
+class RegionRaftCommandDelegate
+    : public Region
     , private boost::noncopyable
 {
 public:
     /// Only after the task mutex of KVStore is locked, region can apply raft command.
-    void handleAdminRaftCmd(const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse &, UInt64, UInt64, const KVStore &, RegionTable &, RaftCommandResult &);
+    void handleAdminRaftCmd(
+        const raft_cmdpb::AdminRequest &,
+        const raft_cmdpb::AdminResponse &,
+        UInt64,
+        UInt64,
+        const KVStore &,
+        RegionTable &,
+        RaftCommandResult &);
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 
@@ -263,24 +296,30 @@ private:
     Regions execBatchSplit(
         const raft_cmdpb::AdminRequest & request,
         const raft_cmdpb::AdminResponse & response,
-        const UInt64 index,
-        const UInt64 term);
+        UInt64 index,
+        UInt64 term);
     void execChangePeer(
         const raft_cmdpb::AdminRequest & request,
         const raft_cmdpb::AdminResponse & response,
-        const UInt64 index,
-        const UInt64 term);
+        UInt64 index,
+        UInt64 term);
     void execPrepareMerge(
         const raft_cmdpb::AdminRequest & request,
         const raft_cmdpb::AdminResponse & response,
-        const UInt64 index,
-        const UInt64 term);
-    RegionID execCommitMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term, const KVStore & kvstore, RegionTable & region_table);
+        UInt64 index,
+        UInt64 term);
+    RegionID execCommitMerge(
+        const raft_cmdpb::AdminRequest & request,
+        const raft_cmdpb::AdminResponse & response,
+        UInt64 index,
+        UInt64 term,
+        const KVStore & kvstore,
+        RegionTable & region_table);
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request,
         const raft_cmdpb::AdminResponse & response,
-        const UInt64 index,
-        const UInt64 term);
+        UInt64 index,
+        UInt64 term);
 };
 
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts = 0);

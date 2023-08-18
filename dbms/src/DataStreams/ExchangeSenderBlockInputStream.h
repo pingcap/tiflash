@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,14 +40,8 @@ public:
 
 protected:
     Block readImpl() override;
-    void readPrefixImpl() override
-    {
-        writer->prepare(getHeader());
-    }
-    void readSuffixImpl() override
-    {
-        LOG_DEBUG(log, "finish write with {} rows", total_rows);
-    }
+    void readPrefixImpl() override { writer->prepare(getHeader()); }
+    void readSuffixImpl() override { LOG_DEBUG(log, "finish write with {} rows", total_rows); }
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class In : public RSOperator
 {
     Attr attr;
@@ -29,8 +28,7 @@ public:
     In(const Attr & attr_, const Fields & values_)
         : attr(attr_)
         , values(values_)
-    {
-    }
+    {}
 
     String name() override { return "in"; }
 
@@ -48,25 +46,16 @@ public:
         return s + "]}";
     };
 
-
-    RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
+    RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
         // If values is empty (for example where a in ()), all packs will not match.
         // So return none directly.
         if (values.empty())
-        {
-            return RSResult::None;
-        }
-        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        // TODO optimize for IN
-        RSResult res = rsindex.minmax->checkEqual(pack_id, values[0], rsindex.type);
-        for (size_t i = 1; i < values.size(); ++i)
-            res = res || rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
-        return res;
+            return RSResults(pack_count, RSResult::None);
+        RSResults results(pack_count, RSResult::Some);
+        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
+        return rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
     }
 };
 
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM

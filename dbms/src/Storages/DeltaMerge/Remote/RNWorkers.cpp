@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,11 +29,14 @@ RNWorkers::RNWorkers(const Context & context, const Options & options, size_t nu
     const auto & settings = context.getSettingsRef();
     if (settings.dt_fetch_page_concurrency_scale > 0.0)
     {
-        fetch_pages_concurrency = std::min(std::ceil(num_streams * settings.dt_fetch_page_concurrency_scale), fetch_pages_concurrency);
+        fetch_pages_concurrency
+            = std::min(std::ceil(num_streams * settings.dt_fetch_page_concurrency_scale), fetch_pages_concurrency);
     }
     if (settings.dt_prepare_stream_concurrency_scale > 0.0)
     {
-        prepare_streams_concurrency = std::min(std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale), prepare_streams_concurrency);
+        prepare_streams_concurrency = std::min(
+            std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale),
+            prepare_streams_concurrency);
     }
 
     worker_fetch_pages = RNWorkerFetchPages::create({

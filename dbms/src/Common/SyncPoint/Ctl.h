@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,8 +86,7 @@ private:
 
     static std::pair<SyncChannelPtr, SyncChannelPtr> mustGetChannel(const char * name);
 
-    inline static std::unordered_map<std::string, std::pair<SyncChannelPtr, SyncChannelPtr>>
-        channels{};
+    inline static std::unordered_map<std::string, std::pair<SyncChannelPtr, SyncChannelPtr>> channels{};
     inline static std::mutex mu{};
 };
 

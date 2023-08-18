@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,10 +31,7 @@ public:
         , key(0)
     {}
 
-    uint64_t get64() override
-    {
-        return key.fetch_add(1, std::memory_order_relaxed) % key_count + start_key;
-    }
+    uint64_t get64() override { return key.fetch_add(1, std::memory_order_relaxed) % key_count + start_key; }
 
 private:
     const uint64_t key_count;

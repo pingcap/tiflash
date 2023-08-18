@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,16 +49,14 @@ private:
         : has_null_marks(has_null_marks_)
         , has_value_marks(has_value_marks_)
         , minmaxes(std::move(minmaxes_))
-    {
-    }
+    {}
 
 public:
     explicit MinMaxIndex(const IDataType & type)
         : has_null_marks(std::make_shared<PaddedPODArray<UInt8>>())
         , has_value_marks(std::make_shared<PaddedPODArray<UInt8>>())
         , minmaxes(type.createColumn())
-    {
-    }
+    {}
 
     size_t byteSize() const
     {
@@ -79,15 +77,40 @@ public:
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
-    RSResult checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkIsNull(size_t pack_index);
+    RSResults checkEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkIn(
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
+    RSResults checkGreater(
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type,
+        int nan_direction);
+    RSResults checkGreaterEqual(
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type,
+        int nan_direction);
+    RSResults checkIsNull(size_t start_pack, size_t pack_count);
+
+    RSResults checkNullableEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableIn(
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
+    RSResults checkNullableGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableGreaterEqual(
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type);
 
     static String toString();
-    RSResult checkNullableEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreater(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
 };
 
 

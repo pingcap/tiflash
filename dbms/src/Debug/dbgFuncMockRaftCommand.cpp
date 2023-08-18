@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,9 +47,12 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     auto table_info = table->table_info;
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     if (4 + handle_column_size * 4 != args.size())
-        throw Exception("Args not matched, should be: region-id1, database-name, table-name, start1, end1, start2, end2, region-id2",
-                        ErrorCodes::BAD_ARGUMENTS);
-    auto region_id2 = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args.size() - 1]).value));
+        throw Exception(
+            "Args not matched, should be: region-id1, database-name, table-name, start1, end1, start2, end2, "
+            "region-id2",
+            ErrorCodes::BAD_ARGUMENTS);
+    auto region_id2
+        = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args.size() - 1]).value));
 
     auto table_id = table->id();
     TiKVKey start_key1, start_key2, end_key1, end_key2;
@@ -64,20 +67,24 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         {
             auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
 
-            auto start_field1 = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
+            auto start_field1
+                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum1 = TiDB::DatumBumpy(start_field1, column_info.tp);
             start_keys1.emplace_back(start_datum1.field());
-            auto end_field1
-                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size + i]).value);
+            auto end_field1 = RegionBench::convertField(
+                column_info,
+                typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size + i]).value);
             TiDB::DatumBumpy end_datum1 = TiDB::DatumBumpy(end_field1, column_info.tp);
             end_keys1.emplace_back(end_datum1.field());
 
-            auto start_field2
-                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size * 2 + i]).value);
+            auto start_field2 = RegionBench::convertField(
+                column_info,
+                typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size * 2 + i]).value);
             TiDB::DatumBumpy start_datum2 = TiDB::DatumBumpy(start_field2, column_info.tp);
             start_keys2.emplace_back(start_datum2.field());
-            auto end_field2
-                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size * 3 + i]).value);
+            auto end_field2 = RegionBench::convertField(
+                column_info,
+                typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size * 3 + i]).value);
             TiDB::DatumBumpy end_datum2 = TiDB::DatumBumpy(end_field2, column_info.tp);
             end_keys2.emplace_back(end_datum2.field());
         }
@@ -128,12 +135,13 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         }
     }
 
-    kvstore->handleAdminRaftCmd(std::move(request),
-                                std::move(response),
-                                region_id,
-                                MockTiKV::instance().getRaftIndex(region_id),
-                                MockTiKV::instance().getRaftTerm(region_id),
-                                tmt);
+    kvstore->handleAdminRaftCmd(
+        std::move(request),
+        std::move(response),
+        region_id,
+        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
 
     output(fmt::format("execute batch split, region {} into ({},{})", region_id, region_id, region_id2));
 }
@@ -168,12 +176,13 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
         }
     }
 
-    kvstore->handleAdminRaftCmd(std::move(request),
-                                std::move(response),
-                                region_id,
-                                MockTiKV::instance().getRaftIndex(region_id),
-                                MockTiKV::instance().getRaftTerm(region_id),
-                                tmt);
+    kvstore->handleAdminRaftCmd(
+        std::move(request),
+        std::move(response),
+        region_id,
+        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
 
     output(fmt::format("execute prepare merge, source {} target {}", region_id, target_id));
 }
@@ -204,12 +213,13 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
         }
     }
 
-    kvstore->handleAdminRaftCmd(std::move(request),
-                                std::move(response),
-                                current_id,
-                                MockTiKV::instance().getRaftIndex(current_id),
-                                MockTiKV::instance().getRaftTerm(current_id),
-                                tmt);
+    kvstore->handleAdminRaftCmd(
+        std::move(request),
+        std::move(response),
+        current_id,
+        MockTiKV::instance().getRaftIndex(current_id),
+        MockTiKV::instance().getRaftTerm(current_id),
+        tmt);
 
     output(fmt::format("execute commit merge, source {} current {}", source_id, current_id));
 }
@@ -239,12 +249,13 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
         }
     }
 
-    kvstore->handleAdminRaftCmd(std::move(request),
-                                std::move(response),
-                                region_id,
-                                MockTiKV::instance().getRaftIndex(region_id),
-                                MockTiKV::instance().getRaftTerm(region_id),
-                                tmt);
+    kvstore->handleAdminRaftCmd(
+        std::move(request),
+        std::move(response),
+        region_id,
+        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
 
     output(fmt::format("execute rollback merge, region {}", region_id));
 }

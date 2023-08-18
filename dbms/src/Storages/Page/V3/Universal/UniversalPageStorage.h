@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageType.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
@@ -57,6 +58,9 @@ namespace PS::V3
 class S3LockLocalManager;
 using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
 } // namespace PS::V3
+using PS::V3::PageType;
+using PS::V3::PageTypeAndConfig;
+using PS::V3::PageTypeConfig;
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -71,8 +75,7 @@ public:
     using SnapshotPtr = PageStorageSnapshotPtr;
 
 public:
-    static UniversalPageStoragePtr
-    create(
+    static UniversalPageStoragePtr create(
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
@@ -88,23 +91,16 @@ public:
         , config(config_)
         , file_provider(file_provider_)
         , log(Logger::get("UniversalPageStorage", name))
-    {
-    }
+    {}
 
     ~UniversalPageStorage();
 
     void restore();
 
-    SnapshotPtr getSnapshot(const String & tracing_id) const
-    {
-        return page_directory->createSnapshot(tracing_id);
-    }
+    SnapshotPtr getSnapshot(const String & tracing_id) const { return page_directory->createSnapshot(tracing_id); }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
-    SnapshotsStatistics getSnapshotsStat() const
-    {
-        return page_directory->getSnapshotsStat();
-    }
+    SnapshotsStatistics getSnapshotsStat() const { return page_directory->getSnapshotsStat(); }
 
     FileUsageStatistics getFileUsageStatistics() const
     {
@@ -115,26 +111,52 @@ public:
 
     size_t getNumberOfPages(const String & prefix) const;
 
-    void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
+    void write(
+        UniversalWriteBatch && write_batch,
+        PageType page_type = PageType::Normal,
+        const WriteLimiterPtr & write_limiter = nullptr) const;
 
-    Page read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
+    Page read(
+        const UniversalPageId & page_id,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        SnapshotPtr snapshot = {},
+        bool throw_on_not_exist = true) const;
 
-    UniversalPageMap read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
+    UniversalPageMap read(
+        const UniversalPageIds & page_ids,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        SnapshotPtr snapshot = {},
+        bool throw_on_not_exist = true) const;
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<UniversalPageId, FieldIndices>;
 
-    UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
+    UniversalPageMap read(
+        const std::vector<PageReadFields> & page_fields,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        SnapshotPtr snapshot = {},
+        bool throw_on_not_exist = true) const;
 
-    void traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) const;
+    void traverse(
+        const String & prefix,
+        const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor,
+        SnapshotPtr snapshot = {}) const;
 
-    void traverseEntries(const String & prefix, const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot = {}) const;
+    void traverseEntries(
+        const String & prefix,
+        const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor,
+        SnapshotPtr snapshot = {}) const;
 
-    UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
+    UniversalPageId getNormalPageId(
+        const UniversalPageId & page_id,
+        SnapshotPtr snapshot = {},
+        bool throw_on_not_exist = true) const;
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
-    std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
+    std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(
+        const UniversalPageId & page_id,
+        SnapshotPtr snapshot = {}) const;
 
     void waitUntilInitedFromRemoteStore() const;
 
@@ -227,12 +249,12 @@ public:
     PageIdU64 getMaxIdAfterRestart() const;
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    bool gc(
+        bool not_skip = false,
+        const WriteLimiterPtr & write_limiter = nullptr,
+        const ReadLimiterPtr & read_limiter = nullptr);
 
-    bool isEmpty() const
-    {
-        return page_directory->numPages() == 0;
-    }
+    bool isEmpty() const { return page_directory->numPages() == 0; }
 
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.

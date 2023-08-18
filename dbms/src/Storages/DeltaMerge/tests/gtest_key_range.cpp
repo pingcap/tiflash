@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ std::shared_ptr<RegionRangeKeys> genTestRegionRangeKeys()
             = R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":3,"Flen":10,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"b","O":"b"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":3,"Flen":20,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"c","O":"c"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}}],"comment":"","id":49,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"b","O":"b"},"offset":1}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5,"tbl_name":{"L":"","O":""}}],"is_common_handle":true,"name":{"L":"pt","O":"pt"},"partition":null,"pk_is_handle":false,"schema_version":25,"state":5,"update_timestamp":421444995366518789})json";
         TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
-        start = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
+        start
+            = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
         end = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
     }
     return std::make_shared<RegionRangeKeys>(std::move(start), std::move(end));
@@ -109,9 +110,8 @@ TEST(RowKey, ToNextKeyIntHandle)
         EXPECT_EQ(0, compare(next.toRowKeyValueRef(), expected_next_int.toRowKeyValueRef()));
     }
     {
-        const auto range_keys = std::make_shared<RegionRangeKeys>(
-            RecordKVFormat::genKey(1, 0),
-            RecordKVFormat::genKey(1, 21));
+        const auto range_keys
+            = std::make_shared<RegionRangeKeys>(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 21));
         const auto range = RowKeyRange::fromRegionRange(
             range_keys,
             /* table_id */ 1,
@@ -119,21 +119,20 @@ TEST(RowKey, ToNextKeyIntHandle)
             /* row_key_column_size */ 1);
         EXPECT_EQ(0, compare(next.toRowKeyValueRef(), range.getEnd()));
     }
-    // Note: The following does not work, because {20,00} will be regarded as Key=20 in RowKeyRange::fromRegionRange.
-    // {
-    //     auto key_end = RecordKVFormat::genRawKey(1, 20);
-    //     key_end.push_back(0);
-    //     auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
-    //     const auto range_keys = std::make_shared<RegionRangeKeys>(
-    //         RecordKVFormat::genKey(1, 0),
-    //         std::move(tikv_key_end));
-    //     const auto range = RowKeyRange::fromRegionRange(
-    //         range_keys,
-    //         /* table_id */ 1,
-    //         /* is_common_handle */ false,
-    //         /* row_key_column_size */ 1);
-    //     EXPECT_EQ(0, compare(next.toRowKeyValueRef(), range.getEnd()));
-    // }
+    // Note: {20,00} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    {
+        auto key_end = RecordKVFormat::genRawKey(1, 20);
+        key_end.push_back(0);
+        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
+        const auto range_keys
+            = std::make_shared<RegionRangeKeys>(RecordKVFormat::genKey(1, 0), std::move(tikv_key_end));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ 1,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(0, compare(next.toRowKeyValueRef(), range.getEnd()));
+    }
 }
 
 TEST(RowKey, ToNextKeyCommonHandle)

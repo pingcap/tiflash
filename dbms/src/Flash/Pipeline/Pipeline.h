@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ public:
 
     void addChild(const PipelinePtr & child);
 
-    void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
+    const String & toTreeString() const;
 
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
@@ -93,10 +93,15 @@ public:
     String getFinalPlanExecId() const;
 
 private:
+    void toTreeStringImpl(FmtBuffer & buffer, size_t level) const;
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
     PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
-    PipelineEvents doToEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, Events & all_events);
+    PipelineEvents doToEvents(
+        PipelineExecutorContext & exec_context,
+        Context & context,
+        size_t concurrency,
+        Events & all_events);
 
 private:
     const UInt32 id;
@@ -108,5 +113,7 @@ private:
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
     std::vector<PipelinePtr> children;
+
+    mutable String tree_string;
 };
 } // namespace DB

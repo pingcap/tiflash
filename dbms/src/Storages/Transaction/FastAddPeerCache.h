@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,9 @@ public:
     bool isReady(std::unique_lock<std::mutex> & lock) const;
 
     // The caller must ensure `end_key_and_segment_id` is ordered
-    void build(std::unique_lock<std::mutex> & lock, std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
+    void build(
+        std::unique_lock<std::mutex> & lock,
+        std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
 
     UInt64 getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key);
 

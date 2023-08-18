@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,8 +115,7 @@ public:
 private:
     explicit RNReadSegmentTask(const RNReadSegmentMeta & meta_)
         : meta(meta_)
-    {
-    }
+    {}
 
 private:
     BlockInputStreamPtr input_stream;
@@ -136,8 +135,7 @@ public:
 private:
     explicit RNReadTask(const std::vector<RNReadSegmentTaskPtr> & segment_read_tasks_)
         : segment_read_tasks(segment_read_tasks_)
-    {
-    }
+    {}
 };
 
 

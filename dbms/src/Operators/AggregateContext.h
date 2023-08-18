@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,13 +41,15 @@ struct ThreadData
 class AggregateContext
 {
 public:
-    explicit AggregateContext(
-        const String & req_id)
+    explicit AggregateContext(const String & req_id)
         : log(Logger::get(req_id))
-    {
-    }
+    {}
 
-    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
+    void initBuild(
+        const Aggregator::Params & params,
+        size_t max_threads_,
+        Aggregator::CancellationHook && hook,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     size_t getBuildConcurrency() const { return max_threads; }
 
@@ -73,6 +75,8 @@ public:
     Block readForConvergent(size_t index);
 
     Block getHeader() const;
+
+    AggSpillContextPtr & getAggSpillContext() { return aggregator->getAggSpillContext(); }
 
 private:
     std::unique_ptr<Aggregator> aggregator;

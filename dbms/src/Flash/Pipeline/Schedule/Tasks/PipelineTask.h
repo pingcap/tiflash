@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,30 +16,34 @@
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipelineTaskBase.h>
 
 namespace DB
 {
-class PipelineTask : public EventTask
+class PipelineTask
+    : public EventTask
+    , public PipelineTaskBase
 {
 public:
     PipelineTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
-        PipelineExecPtr && pipeline_exec_);
+        PipelineExecPtr && pipeline_exec_)
+        : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
+        , PipelineTaskBase(std::move(pipeline_exec_))
+    {}
 
 protected:
-    ExecTaskStatus executeImpl() override;
+    ExecTaskStatus executeImpl() override { return runExecute(); }
 
-    ExecTaskStatus executeIOImpl() override;
+    ExecTaskStatus executeIOImpl() override { return runExecuteIO(); }
 
-    ExecTaskStatus awaitImpl() override;
+    ExecTaskStatus awaitImpl() override { return runAwait(); }
 
-    void doFinalizeImpl() override;
-
-private:
-    PipelineExecPtr pipeline_exec_holder;
-    // To reduce the overheads of `pipeline_exec_holder.get()`
-    PipelineExec * pipeline_exec;
+    void doFinalizeImpl() override
+    {
+        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
+    }
 };
 } // namespace DB

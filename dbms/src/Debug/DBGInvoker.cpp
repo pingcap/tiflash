@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/ReadIndexStressTest.h>
@@ -66,8 +67,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("create_tidb_tables", MockTiDBTable::dbgFuncCreateTiDBTables);
     regSchemalessFunc("rename_tidb_tables", MockTiDBTable::dbgFuncRenameTiDBTables);
 
-    regSchemalessFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
-
     regSchemalessFunc("raft_insert_row", dbgFuncRaftInsertRow);
     regSchemalessFunc("raft_insert_row_full", dbgFuncRaftInsertRowFull);
     regSchemalessFunc("raft_insert_rows", dbgFuncRaftInsertRows);
@@ -77,7 +76,6 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("put_region", dbgFuncPutRegion);
 
-    regSchemalessFunc("try_flush", dbgFuncTryFlush);
     regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
@@ -103,7 +101,9 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_snapshot_pre_handle_block", /**/ MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock);
     regSchemalessFunc("region_snapshot_apply_block", /*     */ MockRaftCommand::dbgFuncRegionSnapshotApplyBlock);
     regSchemalessFunc("region_snapshot_pre_handle_file", /* */ MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles);
-    regSchemalessFunc("region_snapshot_pre_handle_file_pks", MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
+    regSchemalessFunc(
+        "region_snapshot_pre_handle_file_pks",
+        MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
 
@@ -132,7 +132,9 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
 
-    regSchemalessFunc("wait_until_no_temp_active_threads_in_dynamic_thread_pool", dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool);
+    regSchemalessFunc(
+        "wait_until_no_temp_active_threads_in_dynamic_thread_pool",
+        dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
@@ -198,7 +200,8 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
         ", ");
     fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
+    std::shared_ptr<StringStreamBlockInputStream> res
+        = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
     Printer printer = [&](const std::string & s) {
         res->append(s);
     };
@@ -208,7 +211,11 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     return res;
 }
 
-BlockInputStreamPtr DBGInvoker::invokeSchemaful(Context & context, const std::string &, const SchemafulDBGFunc & func, const ASTs & args)
+BlockInputStreamPtr DBGInvoker::invokeSchemaful(
+    Context & context,
+    const std::string &,
+    const SchemafulDBGFunc & func,
+    const ASTs & args)
 {
     return func(context, args);
 }

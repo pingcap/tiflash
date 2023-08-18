@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,11 @@ struct PrimaryKeyNotMatchException : public std::exception
 };
 
 // This function will replace the primary key and update statement in `table_metadata_path`. The correct statement will be return.
-String fixCreateStatementWithPriKeyNotMatchException(Context & context, const String old_definition, const String & table_metadata_path, const PrimaryKeyNotMatchException & ex, Poco::Logger * log);
+String fixCreateStatementWithPriKeyNotMatchException(
+    Context & context,
+    const String old_definition,
+    const String & table_metadata_path,
+    const PrimaryKeyNotMatchException & ex,
+    Poco::Logger * log);
 
 } // namespace DB

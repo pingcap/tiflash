@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,10 +122,7 @@ try
     auto edits = universal::PageEntriesEdit{};
     edits.appendRecord({.type = EditRecordType::DEL});
 
-    ASSERT_THROW({
-        writer->writeEditsAndApplyCheckpointInfo(edits);
-    },
-                 DB::Exception);
+    ASSERT_THROW({ writer->writeEditsAndApplyCheckpointInfo(edits); }, DB::Exception);
 }
 CATCH
 
@@ -194,8 +191,8 @@ try
         .data_file_id_pattern = data_file_id_pattern,
         .manifest_file_path = manifest_file_path,
         .manifest_file_id = manifest_file_id,
-        .data_source = CPWriteDataSourceFixture::create({{5, "Said she just dreamed a dream"},
-                                                         {10, "nahida opened her eyes"}}),
+        .data_source
+        = CPWriteDataSourceFixture::create({{5, "Said she just dreamed a dream"}, {10, "nahida opened her eyes"}}),
     });
 
     writer->writePrefix({
@@ -212,7 +209,8 @@ try
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "abc", .entry = {.size = 29, .offset = 5}});
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
-        edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
+        edits.appendRecord(
+            {.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "rain"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
@@ -319,7 +317,8 @@ try
             },
         });
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
-        edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
+        edits.appendRecord(
+            {.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "sun"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
@@ -343,7 +342,8 @@ try
         ASSERT_EQ(0, r[0].entry.offset); // The deserialized offset is not the same as the original one!
         ASSERT_EQ(10, r[0].entry.size);
         ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
-        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed); // After deserialization, this field is always true!
+        ASSERT_TRUE(
+            r[0].entry.checkpoint_info.is_local_data_reclaimed); // After deserialization, this field is always true!
         ASSERT_EQ("my_file_id", *r[0].entry.checkpoint_info.data_location.data_file_id);
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
@@ -385,7 +385,16 @@ try
 {
     const auto delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(std::vector{dir});
     const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
-    auto blob_store = BlobStore<universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, BlobConfig{});
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = 0.5}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = 0.01}},
+    };
+    auto blob_store = BlobStore<universal::BlobStoreTrait>(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        BlobConfig{},
+        page_type_and_config);
 
     auto edits = universal::PageEntriesEdit{};
     {
@@ -393,13 +402,19 @@ try
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         wb.delPage("id_bar");
         wb.putPage("page_abc", 0, "Dreamed of the day that she was born");
-        auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
+        auto blob_store_edits = blob_store.write(std::move(wb));
 
         ASSERT_EQ(blob_store_edits.size(), 3);
 
-        edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "page_foo", .entry = blob_store_edits.getRecords()[0].entry});
+        edits.appendRecord(
+            {.type = EditRecordType::VAR_ENTRY,
+             .page_id = "page_foo",
+             .entry = blob_store_edits.getRecords()[0].entry});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "id_bar"});
-        edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "page_abc", .entry = blob_store_edits.getRecords()[2].entry});
+        edits.appendRecord(
+            {.type = EditRecordType::VAR_ENTRY,
+             .page_id = "page_abc",
+             .entry = blob_store_edits.getRecords()[2].entry});
     }
 
     auto writer = CPFilesWriter::create({
@@ -460,11 +475,12 @@ try
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
         ASSERT_EQ("Dreamed of the day that she was born", readData(r[2].entry.checkpoint_info.data_location));
     }
-    EXPECT_THROW({
-        // Call readLocks without draining readEdits should result in exceptions
-        manifest_reader->readLocks();
-    },
-                 DB::Exception);
+    EXPECT_THROW(
+        {
+            // Call readLocks without draining readEdits should result in exceptions
+            manifest_reader->readLocks();
+        },
+        DB::Exception);
     {
         auto edits_r = manifest_reader->readEdits(im);
         ASSERT_FALSE(edits_r.has_value());
@@ -605,7 +621,8 @@ try
                 },
             },
         });
-        edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
+        edits.appendRecord(
+            {.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     auto data_paths = writer->writeSuffix();

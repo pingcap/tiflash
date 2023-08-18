@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,8 @@ public:
 
     PageIdU64 getMaxId() override;
 
-    PageIdU64 getNormalPageIdImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageIdU64 getNormalPageIdImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
+        override;
 
     DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
@@ -63,13 +64,33 @@ public:
 
     DB::PageEntry getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot) override;
 
-    DB::Page readImpl(NamespaceID ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    DB::Page readImpl(
+        NamespaceID ns_id,
+        PageIdU64 page_id,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
-    PageMapU64 readImpl(NamespaceID ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMapU64 readImpl(
+        NamespaceID ns_id,
+        const PageIdU64s & page_ids,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
-    PageMapU64 readImpl(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMapU64 readImpl(
+        NamespaceID ns_id,
+        const std::vector<PageReadFields> & page_fields,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
-    Page readImpl(NamespaceID ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    Page readImpl(
+        NamespaceID ns_id,
+        const PageReadFields & page_field,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist) override;
 
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 

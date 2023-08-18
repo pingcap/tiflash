@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ DataTypeMyDateTime::DataTypeMyDateTime(int fraction_)
 {
     fraction = fraction_;
     if (fraction < 0 || fraction > 6)
-        throw Exception("fraction must >= 0 and <= 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "fraction must >= 0 and <= 6, fraction={}", fraction_);
 }
 
 void DataTypeMyDateTime::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -69,10 +69,15 @@ void DataTypeMyDateTime::deserializeTextQuoted(IColumn & column, ReadBuffer & is
     {
         readIntText(x, istr);
     }
-    static_cast<ColumnUInt64 &>(column).getData().push_back(x); /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt64 &>(column).getData().push_back(
+        x); /// It's important to do this at the end - for exception safety.
 }
 
-void DataTypeMyDateTime::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
+void DataTypeMyDateTime::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON &) const
 {
     writeChar('"', ostr);
     serializeText(column, row_num, ostr);
@@ -112,7 +117,8 @@ bool DataTypeMyDateTime::equals(const IDataType & rhs) const
 {
     /// DateTime with different timezones are equal, because:
     /// "all types with different time zones are equivalent and may be used interchangingly."
-    return typeid(rhs) == typeid(*this) && getFraction() == dynamic_cast<const DataTypeMyDateTime *>(&rhs)->getFraction();
+    return typeid(rhs) == typeid(*this)
+        && getFraction() == dynamic_cast<const DataTypeMyDateTime *>(&rhs)->getFraction();
 }
 
 
@@ -132,9 +138,11 @@ static DataTypePtr create(const ASTPtr & arguments)
             "MyDateTime data type can optionally have only one argument - fractional",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::UInt64)
-        throw Exception("Parameter for MyDateTime data type must be uint literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+            "Parameter for MyDateTime data type must be uint literal",
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return std::make_shared<DataTypeMyDateTime>(arg->value.get<int>());
 }

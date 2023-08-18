@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,12 +45,13 @@ StorageSystemDatabases::StorageSystemDatabases(const std::string & name_)
 }
 
 
-BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
-                                               const SelectQueryInfo &,
-                                               const Context & context,
-                                               QueryProcessingStage::Enum & processed_stage,
-                                               const size_t /*max_block_size*/,
-                                               const unsigned /*num_streams*/)
+BlockInputStreams StorageSystemDatabases::read(
+    const Names & column_names,
+    const SelectQueryInfo &,
+    const Context & context,
+    QueryProcessingStage::Enum & processed_stage,
+    const size_t /*max_block_size*/,
+    const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -85,7 +86,9 @@ BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
         res_columns[j++]->insert(database.second->getMetadataPath());
     }
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
 

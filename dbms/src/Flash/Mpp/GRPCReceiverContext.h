@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ namespace DB
 using MPPDataPacket = mpp::MPPDataPacket;
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
-using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+using RequestAndRegionIDs = std::tuple<mpp::DispatchTaskRequest, std::vector<pingcap::kv::RegionVerID>, uint64_t>;
 
 
 class ExchangePacketReader
@@ -58,9 +58,10 @@ using AsyncExchangePacketReaderPtr = std::unique_ptr<AsyncExchangePacketReader>;
 struct ExchangeRecvRequest
 {
     Int64 source_index = -1;
-    Int64 send_task_id = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
+    Int64 send_task_id
+        = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = -2;
-    std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
+    mpp::EstablishMPPConnectionRequest req;
     bool is_local = false;
 
     String debugString() const;
@@ -95,10 +96,7 @@ public:
         grpc::CompletionQueue * cq,
         GRPCKickTag * tag) const;
 
-    static Status getStatusOK()
-    {
-        return grpc::Status::OK;
-    }
+    static Status getStatusOK() { return grpc::Status::OK; }
 
     void fillSchema(DAGSchema & schema) const;
 
@@ -108,7 +106,9 @@ public:
         LocalRequestHandler & local_request_handler,
         bool has_remote_conn);
 
-    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager);
+    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        const std::shared_ptr<MPPTaskManager> & task_manager);
 
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
     void sendMPPTaskToTiFlashStorageNode(

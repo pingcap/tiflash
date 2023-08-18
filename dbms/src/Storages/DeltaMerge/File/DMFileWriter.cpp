@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>
@@ -28,11 +29,12 @@ namespace DB
 {
 namespace DM
 {
-DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
-                           const ColumnDefines & write_columns_,
-                           const FileProviderPtr & file_provider_,
-                           const WriteLimiterPtr & write_limiter_,
-                           const DMFileWriter::Options & options_)
+DMFileWriter::DMFileWriter(
+    const DMFilePtr & dmfile_,
+    const ColumnDefines & write_columns_,
+    const FileProviderPtr & file_provider_,
+    const WriteLimiterPtr & write_limiter_,
+    const DMFileWriter::Options & options_)
     : dmfile(dmfile_)
     , write_columns(write_columns_)
     , options(options_)
@@ -42,6 +44,19 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     , meta_file(createMetaFile())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
+
+    if (dmfile->useMetaV2())
+    {
+        merged_file.buffer = std::make_unique<WriteBufferFromFileProvider>(
+            file_provider,
+            dmfile->mergedPath(0),
+            dmfile->encryptionMergedPath(0),
+            /*create_new_encryption_info*/ false,
+            write_limiter);
+
+        merged_file.file_info = DMFile::MergedFile({0, 0});
+    }
+
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
@@ -127,7 +142,8 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
-    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
+    const ColumnVector<UInt8> * del_mark
+        = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
 
     for (auto & cd : write_columns)
     {
@@ -157,10 +173,7 @@ void DMFileWriter::finalize()
     }
     if (dmfile->useMetaV2())
     {
-        if (S3::ClientFactory::instance().isEnabled())
-        {
-            dmfile->finalizeSmallColumnDataFiles(file_provider, write_limiter);
-        }
+        dmfile->finalizeSmallFiles(merged_file, file_provider, write_limiter);
         // Some fields of ColumnStat is set in `finalizeColumn`, must call finalizeMetaV2 after all column finalized
         finalizeMetaV2();
     }
@@ -190,10 +203,13 @@ void DMFileWriter::finalizeMetaV2()
     dmfile->finalizeDirName();
 }
 
-void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark)
+void DMFileWriter::writeColumn(
+    ColId col_id,
+    const IDataType & type,
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark)
 {
     size_t rows = column.size();
-
     type.enumerateStreams(
         [&](const IDataType::SubstreamPath & substream) {
             const auto name = DMFile::getFileNameBase(col_id, substream);
@@ -203,7 +219,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                 // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
                 // For TAG Column, we also ignore del_mark when add minmax index.
-                stream->minmaxes->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
+                stream->minmaxes->addPack(
+                    column,
+                    (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
             /// There could already be enough data to compress into the new block.
@@ -212,8 +230,16 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
             auto offset_in_compressed_block = stream->compressed_buf->offset();
 
-            writeIntBinary(stream->plain_file->count(), *stream->mark_file);
-            writeIntBinary(offset_in_compressed_block, *stream->mark_file);
+            if (dmfile->useMetaV2())
+            {
+                stream->marks->emplace_back(
+                    MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
+            }
+            else
+            {
+                writeIntBinary(stream->plain_file->count(), *stream->mark_file);
+                writeIntBinary(offset_in_compressed_block, *stream->mark_file);
+            }
         },
         {});
 
@@ -250,7 +276,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     size_t nullmap_mark_bytes = 0;
     size_t index_bytes = 0;
 #ifndef NDEBUG
-    auto examine_buffer_size = [](auto & buf, auto & fp) {
+    auto examine_buffer_size = [&](auto & buf, auto & fp) {
         if (!fp.isEncryptionEnabled())
         {
             auto fd = buf.getFD();
@@ -273,61 +299,169 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
-        stream->flush();
-#ifndef NDEBUG
-        examine_buffer_size(*stream->mark_file, *this->file_provider);
-        examine_buffer_size(*stream->plain_file, *this->file_provider);
-#endif
-        bytes_written += stream->getWrittenBytes();
-        if (is_nullmap_stream(substream))
+
+        // v3
+        if (dmfile->useMetaV2())
         {
-            nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
-            nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
-        }
-        else
-        {
-            data_bytes = stream->plain_file->getMaterializedBytes();
-            mark_bytes = stream->mark_file->getMaterializedBytes();
-        }
-        if (stream->minmaxes)
-        {
-            if (!dmfile->configuration)
+            stream->compressed_buf->next();
+            stream->plain_file->next();
+            stream->plain_file->sync();
+
+            bytes_written += stream->plain_file->getMaterializedBytes();
+
+            if (is_nullmap_stream(substream))
             {
-                WriteBufferFromFileProvider buf(
-                    file_provider,
-                    dmfile->colIndexPath(stream_name),
-                    dmfile->encryptionIndexPath(stream_name),
-                    false,
-                    write_limiter);
-                stream->minmaxes->write(*type, buf);
-                buf.sync();
-                // Ignore data written in index file when the dmfile is empty.
-                // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
-                // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
-                // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                index_bytes = buf.getMaterializedBytes();
-                bytes_written += is_empty_file ? 0 : index_bytes;
+                nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
             }
             else
             {
-                auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                       dmfile->colIndexPath(stream_name),
-                                                                       dmfile->encryptionIndexPath(stream_name),
-                                                                       false,
-                                                                       write_limiter,
-                                                                       dmfile->configuration->getChecksumAlgorithm(),
-                                                                       dmfile->configuration->getChecksumFrameLength());
-                stream->minmaxes->write(*type, *buf);
-                buf->sync();
-                // Ignore data written in index file when the dmfile is empty.
-                // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
-                // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
-                // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                index_bytes = buf->getMaterializedBytes();
-                bytes_written += is_empty_file ? 0 : index_bytes;
+                data_bytes = stream->plain_file->getMaterializedBytes();
+            }
+
 #ifndef NDEBUG
-                examine_buffer_size(*buf, *this->file_provider);
+            examine_buffer_size(*stream->plain_file, *this->file_provider);
 #endif
+
+            // write index info into merged_file_writer
+            if (stream->minmaxes and !is_empty_file)
+            {
+                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
+
+                auto fname = dmfile->colIndexFileName(stream_name);
+
+                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
+                    merged_file.buffer,
+                    dmfile->configuration->getChecksumAlgorithm(),
+                    dmfile->configuration->getChecksumFrameLength());
+
+                stream->minmaxes->write(*type, *buffer);
+
+                index_bytes = buffer->getMaterializedBytes();
+                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, index_bytes};
+                dmfile->merged_sub_file_infos[fname] = info;
+
+                merged_file.file_info.size += index_bytes;
+                buffer->next();
+            }
+
+            // write mark into merged_file_writer
+            if (!is_empty_file)
+            {
+                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
+
+                auto fname = dmfile->colMarkFileName(stream_name);
+
+                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
+                    merged_file.buffer,
+                    dmfile->configuration->getChecksumAlgorithm(),
+                    dmfile->configuration->getChecksumFrameLength());
+
+
+                for (const auto & mark : *(stream->marks))
+                {
+                    writeIntBinary(mark.offset_in_compressed_file, *buffer);
+                    writeIntBinary(mark.offset_in_decompressed_block, *buffer);
+                }
+                size_t mark_size = buffer->getMaterializedBytes();
+                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, mark_size};
+                dmfile->merged_sub_file_infos[fname] = info;
+
+                merged_file.file_info.size += mark_size;
+                buffer->next();
+
+                if (is_nullmap_stream(substream))
+                {
+                    nullmap_mark_bytes = mark_size;
+                }
+                else
+                {
+                    mark_bytes = mark_size;
+                }
+            }
+        }
+        else
+        {
+            // v1 or v2
+            stream->compressed_buf->next();
+            stream->plain_file->next();
+            stream->plain_file->sync();
+            stream->mark_file->sync();
+#ifndef NDEBUG
+            examine_buffer_size(*stream->mark_file, *this->file_provider);
+            examine_buffer_size(*stream->plain_file, *this->file_provider);
+#endif
+            if (!dmfile->configuration)
+            { // v1
+                bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
+                if (is_nullmap_stream(substream))
+                {
+                    nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+                }
+                else
+                {
+                    data_bytes = stream->plain_file->getMaterializedBytes();
+                    mark_bytes = stream->mark_file->getMaterializedBytes();
+                }
+            }
+            else
+            { // v2
+                bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
+                if (is_nullmap_stream(substream))
+                {
+                    nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+                }
+                else
+                {
+                    data_bytes = stream->plain_file->getMaterializedBytes();
+                    mark_bytes = stream->mark_file->getMaterializedBytes();
+                }
+            }
+
+
+            if (stream->minmaxes)
+            {
+                if (!dmfile->configuration)
+                {
+                    WriteBufferFromFileProvider buf(
+                        file_provider,
+                        dmfile->colIndexPath(stream_name),
+                        dmfile->encryptionIndexPath(stream_name),
+                        false,
+                        write_limiter);
+                    stream->minmaxes->write(*type, buf);
+                    buf.sync();
+                    // Ignore data written in index file when the dmfile is empty.
+                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                    index_bytes = buf.getMaterializedBytes();
+                    bytes_written += is_empty_file ? 0 : index_bytes;
+                }
+                else
+                {
+                    auto buf = createWriteBufferFromFileBaseByFileProvider(
+                        file_provider,
+                        dmfile->colIndexPath(stream_name),
+                        dmfile->encryptionIndexPath(stream_name),
+                        false,
+                        write_limiter,
+                        dmfile->configuration->getChecksumAlgorithm(),
+                        dmfile->configuration->getChecksumFrameLength());
+                    stream->minmaxes->write(*type, *buf);
+                    buf->sync();
+                    // Ignore data written in index file when the dmfile is empty.
+                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                    index_bytes = buf->getMaterializedBytes();
+                    bytes_written += is_empty_file ? 0 : index_bytes;
+
+#ifndef NDEBUG
+                    examine_buffer_size(*buf, *this->file_provider);
+#endif
+                }
             }
         }
     };
@@ -339,8 +473,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     col_stat.data_bytes = data_bytes;
     col_stat.mark_bytes = mark_bytes;
     col_stat.nullmap_data_bytes = nullmap_data_bytes;
-    col_stat.nullmap_mark_bytes = nullmap_mark_bytes;
     col_stat.index_bytes = index_bytes;
+    col_stat.nullmap_mark_bytes = nullmap_mark_bytes;
 }
 
 } // namespace DM

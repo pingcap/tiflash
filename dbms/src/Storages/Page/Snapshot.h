@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,15 +45,9 @@ public:
 
     ~PageStorageSnapshotMixed() = default;
 
-    PageStorageSnapshotPtr getV2Snapshot()
-    {
-        return snapshot_v2;
-    }
+    PageStorageSnapshotPtr getV2Snapshot() { return snapshot_v2; }
 
-    PageStorageSnapshotPtr getV3Snapshot()
-    {
-        return snapshot_v3;
-    }
+    PageStorageSnapshotPtr getV3Snapshot() { return snapshot_v3; }
 
 private:
     PageStorageSnapshotPtr snapshot_v2;
@@ -61,8 +55,7 @@ private:
 };
 using PageStorageSnapshotMixedPtr = std::shared_ptr<PageStorageSnapshotMixed>;
 
-inline PageStorageSnapshotMixedPtr
-toConcreteMixedSnapshot(const PageStorageSnapshotPtr & ptr)
+inline PageStorageSnapshotMixedPtr toConcreteMixedSnapshot(const PageStorageSnapshotPtr & ptr)
 {
     return std::static_pointer_cast<PageStorageSnapshotMixed>(ptr);
 }

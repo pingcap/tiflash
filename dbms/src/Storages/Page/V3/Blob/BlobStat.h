@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/PageType.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/PathPool.h>
 #include <common/types.h>
@@ -65,30 +67,15 @@ public:
             , sm_max_caps(sm_max_caps_)
         {}
 
-        [[nodiscard]] std::unique_lock<std::mutex> lock()
-        {
-            return std::unique_lock(sm_lock);
-        }
+        [[nodiscard]] std::unique_lock<std::mutex> lock() { return std::unique_lock(sm_lock); }
 
-        [[nodiscard]] std::unique_lock<std::mutex> defer_lock()
-        {
-            return std::unique_lock(sm_lock, std::defer_lock);
-        }
+        [[nodiscard]] std::unique_lock<std::mutex> defer_lock() { return std::unique_lock(sm_lock, std::defer_lock); }
 
-        bool isNormal() const
-        {
-            return type.load() == BlobStatType::NORMAL;
-        }
+        bool isNormal() const { return type.load() == BlobStatType::NORMAL; }
 
-        bool isReadOnly() const
-        {
-            return type.load() == BlobStatType::READ_ONLY;
-        }
+        bool isReadOnly() const { return type.load() == BlobStatType::READ_ONLY; }
 
-        void changeToReadOnly()
-        {
-            type.store(BlobStatType::READ_ONLY);
-        }
+        void changeToReadOnly() { type.store(BlobStatType::READ_ONLY); }
 
         BlobFileOffset getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &);
 
@@ -155,7 +142,10 @@ public:
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
          * 
          */
-    std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
+    std::pair<BlobStatPtr, BlobFileId> chooseStat(
+        size_t buf_size,
+        PageType page_type,
+        const std::lock_guard<std::mutex> &);
 
     BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
@@ -184,7 +174,8 @@ private:
     BlobConfig & config;
 
     mutable std::mutex lock_stats;
-    BlobFileId roll_id = 1;
+    const PageTypeAndConfig page_type_and_config;
+    BlobFileId cur_max_id = 1;
     // Index for selecting next path for creating new blobfile
     UInt32 stats_map_path_index = 0;
     std::map<String, std::list<BlobStatPtr>> stats_map;

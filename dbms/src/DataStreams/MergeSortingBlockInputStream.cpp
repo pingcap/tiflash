@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,14 +30,13 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     const SortDescription & description_,
     size_t max_merged_block_size_,
     size_t limit_,
-    size_t max_bytes_before_external_sort_,
-    const SpillConfig & spill_config_,
-    const String & req_id)
+    size_t max_bytes_before_external_sort,
+    const SpillConfig & spill_config,
+    const String & req_id,
+    const RegisterOperatorSpillContext & register_operator_spill_context)
     : description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
-    , max_bytes_before_external_sort(max_bytes_before_external_sort_)
-    , spill_config(spill_config_)
     , log(Logger::get(req_id))
 {
     children.push_back(input);
@@ -45,12 +44,30 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     header_without_constants = header;
     SortHelper::removeConstantsFromBlock(header_without_constants);
     SortHelper::removeConstantsFromSortDescription(header, description);
-    if (max_bytes_before_external_sort > 0)
-    {
-        spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
-    }
+    sort_spill_context = std::make_shared<SortSpillContext>(spill_config, max_bytes_before_external_sort, log);
+    if (sort_spill_context->isSpillEnabled())
+        sort_spill_context->buildSpiller(header_without_constants);
+    if (register_operator_spill_context != nullptr)
+        register_operator_spill_context(sort_spill_context);
 }
 
+void MergeSortingBlockInputStream::spillCurrentBlocks()
+{
+    sort_spill_context->markSpilled();
+    auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(
+        blocks,
+        description,
+        log->identifier(),
+        std::max(1, max_merged_block_size / 10),
+        limit);
+    auto is_cancelled_pred = [this]() {
+        return this->isCancelled();
+    };
+    sort_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_in, 0, is_cancelled_pred);
+    sort_spill_context->finishOneSpill();
+    blocks.clear();
+    sum_bytes_in_blocks = 0;
+}
 
 Block MergeSortingBlockInputStream::readImpl()
 {
@@ -80,22 +97,18 @@ Block MergeSortingBlockInputStream::readImpl()
               *  will merge blocks that we have in memory at this moment and write merged stream to temporary (compressed) file.
               * NOTE. It's possible to check free space in filesystem.
               */
-            if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
+            if (sort_spill_context->updateRevocableMemory(sum_bytes_in_blocks))
             {
-                if (!hasSpilledData())
-                {
-                    LOG_INFO(log, "Begin spill in sort");
-                }
-                auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
-                auto is_cancelled_pred = [this]() {
-                    return this->isCancelled();
-                };
-                spiller->spillBlocksUsingBlockInputStream(block_in, 0, is_cancelled_pred);
-                blocks.clear();
+                spillCurrentBlocks();
                 if (is_cancelled)
                     break;
-                sum_bytes_in_blocks = 0;
             }
+        }
+
+        sort_spill_context->finishSpillableStage();
+        if (!blocks.empty() && sort_spill_context->needFinalSpill())
+        {
+            spillCurrentBlocks();
         }
 
         if (isCancelledOrThrowIfKilled() || (blocks.empty() && !hasSpilledData()))
@@ -103,7 +116,12 @@ Block MergeSortingBlockInputStream::readImpl()
 
         if (!hasSpilledData())
         {
-            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
+            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
+                blocks,
+                description,
+                log->identifier(),
+                max_merged_block_size,
+                limit);
         }
         else
         {
@@ -112,8 +130,8 @@ Block MergeSortingBlockInputStream::readImpl()
             LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
             /// Create sorted streams to merge.
-            spiller->finishSpill();
-            inputs_to_merge = spiller->restoreBlocks(0, 0);
+            sort_spill_context->getSpiller()->finishSpill();
+            inputs_to_merge = sort_spill_context->getSpiller()->restoreBlocks(0, 0);
 
             /// Rest of blocks in memory.
             if (!blocks.empty())
@@ -125,7 +143,11 @@ Block MergeSortingBlockInputStream::readImpl()
                     limit));
 
             /// Will merge that sorted streams.
-            impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, description, max_merged_block_size, limit);
+            impl = std::make_unique<MergingSortedBlockInputStream>(
+                inputs_to_merge,
+                description,
+                max_merged_block_size,
+                limit);
         }
     }
 

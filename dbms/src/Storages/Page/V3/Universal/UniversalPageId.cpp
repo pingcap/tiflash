@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,10 @@ namespace DB::details
 String UniversalPageIdFormatHelper::format(const DB::UniversalPageId & value)
 {
     auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
-    return fmt::format("0x{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
+    return fmt::format(
+        "0x{}.{}",
+        Redact::keyToHexString(prefix.data(), prefix.size()),
+        DB::UniversalPageIdFormat::getU64ID(value));
 }
 
 } // namespace DB::details

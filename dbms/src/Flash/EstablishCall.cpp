@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,11 @@ namespace FailPoints
 extern const char random_tunnel_init_rpc_failure_failpoint[];
 } // namespace FailPoints
 
-EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
+EstablishCallData::EstablishCallData(
+    AsyncFlashService * service,
+    grpc::ServerCompletionQueue * cq,
+    grpc::ServerCompletionQueue * notify_cq,
+    const std::shared_ptr<std::atomic<bool>> & is_shutdown)
     : service(service)
     , cq(cq)
     , notify_cq(notify_cq)
@@ -52,7 +56,8 @@ EstablishCallData::~EstablishCallData()
     if (stopwatch)
     {
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(stopwatch->elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn)
+            .Observe(stopwatch->elapsedSeconds());
     }
 }
 
@@ -136,7 +141,11 @@ void EstablishCallData::startEstablishConnection()
     stopwatch = std::make_unique<Stopwatch>();
 }
 
-EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
+EstablishCallData * EstablishCallData::spawn(
+    AsyncFlashService * service,
+    grpc::ServerCompletionQueue * cq,
+    grpc::ServerCompletionQueue * notify_cq,
+    const std::shared_ptr<std::atomic<bool>> & is_shutdown)
 {
     return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
@@ -224,9 +233,18 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 
     if (async_tunnel_sender)
     {
-        LOG_INFO(async_tunnel_sender->getLogger(), "async connection for {} cost {} ms, including {} ms to wait task.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds(), waiting_task_time_ms);
+        LOG_INFO(
+            async_tunnel_sender->getLogger(),
+            "async connection for {} cost {} ms, including {} ms to wait task.",
+            async_tunnel_sender->getTunnelId(),
+            stopwatch->elapsedMilliseconds(),
+            waiting_task_time_ms);
 
-        RUNTIME_ASSERT(!async_tunnel_sender->isConsumerFinished(), async_tunnel_sender->getLogger(), "tunnel {} consumer finished in advance", async_tunnel_sender->getTunnelId());
+        RUNTIME_ASSERT(
+            !async_tunnel_sender->isConsumerFinished(),
+            async_tunnel_sender->getLogger(),
+            "tunnel {} consumer finished in advance",
+            async_tunnel_sender->getTunnelId());
 
         if (!msg.empty())
         {

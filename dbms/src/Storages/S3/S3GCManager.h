@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,7 +131,9 @@ public:
 
     std::unordered_set<String> getValidLocksFromManifest(const Strings & manifest_keys);
 
-    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
+    void removeOutdatedManifest(
+        const CheckpointManifestS3Set & manifests,
+        const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
 
 private:
     const pingcap::pd::ClientPtr pd_client;

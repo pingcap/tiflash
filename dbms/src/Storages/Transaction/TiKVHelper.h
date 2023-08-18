@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <string>
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <string>
 
 namespace DB
 {
@@ -80,34 +80,34 @@ inline std::string escapeString(const std::string & data)
     {
         switch (c)
         {
-            case '\n':
-                escaped += "\\n";
-                break;
-            case '\r':
-                escaped += "\\r";
-                break;
-            case '\t':
-                escaped += "\\t";
-                break;
-            case '"':
-                escaped += "\"";
-                break;
-            case '\\':
-                escaped += "\\\\";
-                break;
-            default:
-                if (c >= 0x20 && c < 0x7f)
-                {
-                    // c is printable
-                    escaped += c;
-                }
-                else
-                {
-                    escaped += '\\';
-                    escaped += ((char)'0') + (c >> 6);
-                    escaped += ((char)'0') + ((c >> 3) & 7);
-                    escaped += ((char)'0') + (c & 7);
-                }
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        case '"':
+            escaped += "\"";
+            break;
+        case '\\':
+            escaped += "\\\\";
+            break;
+        default:
+            if (c >= 0x20 && c < 0x7f)
+            {
+                // c is printable
+                escaped += c;
+            }
+            else
+            {
+                escaped += '\\';
+                escaped += ((char)'0') + (c >> 6);
+                escaped += ((char)'0') + ((c >> 3) & 7);
+                escaped += ((char)'0') + (c & 7);
+            }
         }
     }
     return escaped;
