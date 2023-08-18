@@ -121,8 +121,9 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     const Settings & settings = context.getSettingsRef();
     size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
-    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
-    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
+    auto join_req_id = fmt::format("{}_{}", log->identifier(), executor_id);
+    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_0_build", join_req_id), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
+    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_0_probe", join_req_id), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
     size_t max_block_size = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
@@ -140,7 +141,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_key_names,
         tiflash_join.kind,
         tiflash_join.strictness,
-        log->identifier(),
+        join_req_id,
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
         max_bytes_before_external_join,
@@ -154,6 +155,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
+        0,
         0,
         context.isTest(),
         runtime_filter_list);

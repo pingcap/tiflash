@@ -171,6 +171,7 @@ public:
          const String & match_helper_name_ = "",
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
+         size_t restore_partition_id = 0,
          bool is_test = true,
          const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
@@ -308,6 +309,7 @@ private:
     ASTTableJoin::Strictness strictness;
     bool has_other_condition;
     ASTTableJoin::Strictness original_strictness;
+    String join_req_id;
     const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
@@ -470,7 +472,7 @@ private:
     void releaseAllPartitions();
 
     void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
-    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
+    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_, size_t restore_partition_id);
 
     void workAfterBuildFinish(size_t stream_index);
     void workAfterProbeFinish(size_t stream_index);
