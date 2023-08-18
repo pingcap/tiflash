@@ -31,13 +31,16 @@ class ResourceControlQueue
 public:
     ResourceControlQueue()
     {
+        RUNTIME_CHECK_MSG(
+            LocalAdmissionController::global_instance != nullptr,
+            "LocalAdmissionController::global_instance has not been initialized yet.");
         LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() {
             std::lock_guard lock(mu);
             cv.notify_all();
         });
     }
 
-    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->stop(); }
+    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->unregisterRefillTokenCallback(); }
 
     void submit(TaskPtr && task) override;
 

@@ -14,10 +14,13 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
 
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 
 namespace DB
 {
@@ -51,16 +54,28 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns)
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
         consume_resource_func(name, ru, cpu_time_ns);
     }
 
-    uint64_t getPriority(const std::string & name) { return get_priority_func(name); }
+    uint64_t getPriority(const std::string & name) const { return get_priority_func(name); }
 
-    bool isResourceGroupThrottled(const std::string & name) { return is_resource_group_throttled_func(name); }
+    bool isResourceGroupThrottled(const std::string & name) const { return is_resource_group_throttled_func(name); }
 
-    void registerRefillTokenCallback(const std::function<void()> & cb) { refill_token_callback = cb; }
+    void registerRefillTokenCallback(const std::function<void()> & cb)
+    {
+        std::lock_guard lock(call_back_mutex);
+        RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
+        refill_token_callback = cb;
+    }
+
+    void unregisterRefillTokenCallback()
+    {
+        std::lock_guard lock(call_back_mutex);
+        RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
+        refill_token_callback = nullptr;
+    }
 
     void stop()
     {
@@ -76,15 +91,6 @@ public:
 
     void refillTokenBucket();
 
-    void resetAll()
-    {
-        resource_groups.clear();
-        consume_resource_func = nullptr;
-        get_priority_func = nullptr;
-        is_resource_group_throttled_func = nullptr;
-        max_ru_per_sec = 0;
-    }
-
     std::string dump() const;
 
     mutable std::mutex mu;
@@ -97,8 +103,10 @@ public:
 
     uint64_t max_ru_per_sec = 0;
     bool stopped = false;
-    std::function<void()> refill_token_callback;
+
+    std::mutex call_back_mutex;
+    std::function<void()> refill_token_callback{nullptr};
+
     std::thread refill_token_thread;
 };
-
 } // namespace DB

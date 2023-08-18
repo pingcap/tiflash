@@ -16,7 +16,16 @@
 
 namespace DB
 {
+std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_instance = nullptr;
 
-auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+LocalAdmissionController::LocalAdmissionController()
+{
+    if (!global_instance)
+        global_instance = std::make_unique<MockLocalAdmissionController>();
+}
 
+LocalAdmissionController::~LocalAdmissionController()
+{
+    global_instance.reset();
+}
 } // namespace DB

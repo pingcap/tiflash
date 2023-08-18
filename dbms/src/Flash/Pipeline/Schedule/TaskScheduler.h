@@ -19,6 +19,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 
 namespace DB
 {
@@ -72,6 +73,11 @@ public:
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
+    // LAC needs to be initialized before initializing the thread pools,
+    // so LAC should be placed before cpu_task_thread_pool and io_task_thread_pool,
+    // as ResourceGroupQueue relies on LAC.
+    LocalAdmissionController local_admission_controller;
+
     TaskThreadPool<CPUImpl> cpu_task_thread_pool;
 
     TaskThreadPool<IOImpl> io_task_thread_pool;

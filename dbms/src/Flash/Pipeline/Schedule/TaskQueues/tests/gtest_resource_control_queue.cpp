@@ -534,6 +534,8 @@ TEST_F(TestResourceControlQueue, TestBurstableDynamicTokenBucket)
 // Test priority queue of ResourceControlQueue: Less priority value means higher priority.
 TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
 {
+    setupNopLAC();
+
     std::random_device dev;
     std::mt19937 gen(dev());
     std::uniform_int_distribution dist;
