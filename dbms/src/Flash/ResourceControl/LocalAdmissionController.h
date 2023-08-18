@@ -182,10 +182,13 @@ private:
         double next_n_sec_need_num = avg_speed * n * amplification;
 
         // Prevent avg_speed from being 0 due to RU exhaustion.
-        if (next_n_sec_need_num == 0.0)
+        if (next_n_sec_need_num == 0.0 && remaining_ru <= 0.0)
             next_n_sec_need_num = base;
 
-        auto acquire_num = next_n_sec_need_num - remaining_ru;
+        double acquire_num = 0.0;
+        if (acquire_num > remaining_ru)
+            acquire_num -= remaining_ru;
+
         LOG_TRACE(
             log,
             "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, next n sec need: {}, "
