@@ -35,7 +35,7 @@ PhysicalPlanNode::PhysicalPlanNode(
     , type(type_)
     , schema(schema_)
     , fine_grained_shuffle(fine_grained_shuffle_)
-    , log(Logger::get(req_id, type_.toString(), executor_id_))
+    , log(Logger::get(fmt::format("{}_{}_{}", req_id, type_.toString(), executor_id_)))
 {}
 
 String PhysicalPlanNode::toString()
