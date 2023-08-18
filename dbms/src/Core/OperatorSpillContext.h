@@ -48,11 +48,10 @@ public:
     const static Int64 MIN_SPILL_THRESHOLD = 10ULL * 1024 * 1024;
     OperatorSpillContext(UInt64 operator_spill_threshold_, const String op_name_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
+        , auto_spill_mode(operator_spill_threshold == 0)
         , op_name(op_name_)
         , log(log_)
-    {
-        auto_spill_mode = supportAutoTriggerSpill() && operator_spill_threshold == 0;
-    }
+    {}
     virtual ~OperatorSpillContext() = default;
     bool isSpillEnabled() const { return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0); }
     void disableSpill() { enable_spill = false; }
