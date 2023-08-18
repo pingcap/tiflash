@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -152,27 +152,29 @@ using PartitionBlocks = std::list<PartitionBlock>;
 class Join
 {
 public:
-    Join(const Names & key_names_left_,
-         const Names & key_names_right_,
-         ASTTableJoin::Kind kind_,
-         ASTTableJoin::Strictness strictness_,
-         const String & req_id,
-         bool enable_fine_grained_shuffle_,
-         size_t fine_grained_shuffle_count_,
-         size_t max_bytes_before_external_join_,
-         const SpillConfig & build_spill_config_,
-         const SpillConfig & probe_spill_config_,
-         Int64 join_restore_concurrency_,
-         const Names & tidb_output_column_names_,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const JoinNonEqualConditions & non_equal_conditions_ = {},
-         size_t max_block_size = 0,
-         size_t shallow_copy_cross_probe_threshold_ = 0,
-         const String & match_helper_name_ = "",
-         const String & flag_mapped_entry_helper_name_ = "",
-         size_t restore_round = 0,
-         bool is_test = true,
-         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
+    Join(
+        const Names & key_names_left_,
+        const Names & key_names_right_,
+        ASTTableJoin::Kind kind_,
+        ASTTableJoin::Strictness strictness_,
+        const String & req_id,
+        bool enable_fine_grained_shuffle_,
+        size_t fine_grained_shuffle_count_,
+        size_t max_bytes_before_external_join_,
+        const SpillConfig & build_spill_config_,
+        const SpillConfig & probe_spill_config_,
+        Int64 join_restore_concurrency_,
+        const Names & tidb_output_column_names_,
+        const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
+        const JoinNonEqualConditions & non_equal_conditions_ = {},
+        size_t max_block_size = 0,
+        size_t shallow_copy_cross_probe_threshold_ = 0,
+        const String & match_helper_name_ = "",
+        const String & flag_mapped_entry_helper_name_ = "",
+        size_t restore_round = 0,
+        size_t restore_partition_id = 0,
+        bool is_test = true,
+        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
 
@@ -196,7 +198,11 @@ public:
       * A stream that will scan and output rows from right table, might contain default values from left table
       * Use only after all calls to joinBlock was done.
       */
-    BlockInputStreamPtr createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createScanHashMapAfterProbeStream(
+        const Block & left_sample_block,
+        size_t index,
+        size_t step,
+        size_t max_block_size) const;
 
     bool isEnableSpill() const;
 
@@ -267,7 +273,9 @@ public:
     size_t getBuildConcurrency() const
     {
         if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: `setBuildConcurrencyAndInitPool` has not been called",
+                ErrorCodes::LOGICAL_ERROR);
         return build_concurrency;
     }
 
@@ -308,6 +316,7 @@ private:
     ASTTableJoin::Strictness strictness;
     bool has_other_condition;
     ASTTableJoin::Strictness original_strictness;
+    String join_req_id;
     const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
@@ -442,7 +451,11 @@ private:
       *
       * @param block
       */
-    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+    void handleOtherConditions(
+        Block & block,
+        std::unique_ptr<IColumn::Filter> & filter,
+        std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
+        const std::vector<size_t> & right_table_column) const;
 
     void handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const;
 
@@ -470,7 +483,7 @@ private:
     void releaseAllPartitions();
 
     void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
-    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
+    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_, size_t restore_partition_id);
 
     void workAfterBuildFinish(size_t stream_index);
     void workAfterProbeFinish(size_t stream_index);

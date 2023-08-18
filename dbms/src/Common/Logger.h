@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,14 +40,15 @@ public:
         FmtBuffer buf;
 
         size_t i = 0;
-        ([&] {
-            if (fmt::formatted_size(FMT_COMPILE("{}"), args) == 0)
-                return;
-            if (i++ > 0)
-                buf.append(" ");
-            buf.fmtAppend(FMT_COMPILE("{}"), args);
-        }(),
-         ...);
+        (
+            [&] {
+                if (fmt::formatted_size(FMT_COMPILE("{}"), args) == 0)
+                    return;
+                if (i++ > 0)
+                    buf.append(" ");
+                buf.fmtAppend(FMT_COMPILE("{}"), args);
+            }(),
+            ...);
 
         return std::make_shared<Logger>(buf.toString());
     }
@@ -70,20 +71,11 @@ public:
         , id(identifier)
     {}
 
-    void log(Poco::Message & msg) const
-    {
-        return logger->log(msg);
-    }
+    void log(Poco::Message & msg) const { return logger->log(msg); }
 
-    bool is(int level) const
-    {
-        return logger->is(level);
-    }
+    bool is(int level) const { return logger->is(level); }
 
-    const std::string & identifier() const
-    {
-        return id;
-    }
+    const std::string & identifier() const { return id; }
 
     const std::string & name() const
     {

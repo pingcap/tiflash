@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,10 +52,7 @@ struct MockReceiverContext
     using Status = ::grpc::Status;
     struct Request
     {
-        String debugString() const
-        {
-            return "{Request}";
-        }
+        String debugString() const { return "{Request}"; }
 
         int source_index = 0;
         int send_task_id = 0;
@@ -68,9 +65,7 @@ struct MockReceiverContext
             : queue(queue_)
         {}
 
-        void initialize() const
-        {
-        }
+        void initialize() const {}
 
         bool read(PacketPtr & packet [[maybe_unused]]) const
         {
@@ -83,10 +78,7 @@ struct MockReceiverContext
             return false;
         }
 
-        Status finish() const
-        {
-            return ::grpc::Status();
-        }
+        Status finish() const { return ::grpc::Status(); }
 
         PacketQueuePtr queue;
     };
@@ -101,13 +93,10 @@ struct MockReceiverContext
 
     using AsyncReader = MockAsyncGrpcExchangePacketReader;
 
-    MockReceiverContext(
-        const std::vector<PacketQueuePtr> & queues_,
-        const std::vector<tipb::FieldType> & field_types_)
+    MockReceiverContext(const std::vector<PacketQueuePtr> & queues_, const std::vector<tipb::FieldType> & field_types_)
         : queues(queues_)
         , field_types(field_types_)
-    {
-    }
+    {}
 
     void fillSchema(DAGSchema & schema) const
     {
@@ -120,26 +109,17 @@ struct MockReceiverContext
         }
     }
 
-    Request makeRequest(int index) const
-    {
-        return {index, index, -1};
-    }
+    Request makeRequest(int index) const { return {index, index, -1}; }
 
     std::shared_ptr<Reader> makeSyncReader(const Request & request)
     {
         return std::make_shared<Reader>(queues[request.send_task_id]);
     }
 
-    static Status getStatusOK()
-    {
-        return ::grpc::Status();
-    }
+    static Status getStatusOK() { return ::grpc::Status(); }
 
     bool supportAsync(const Request &) const { return false; }
-    std::unique_ptr<AsyncReader> makeAsyncReader(
-        const Request &,
-        grpc::CompletionQueue *,
-        GRPCKickTag *) const
+    std::unique_ptr<AsyncReader> makeAsyncReader(const Request &, grpc::CompletionQueue *, GRPCKickTag *) const
     {
         return nullptr;
     }
@@ -165,10 +145,7 @@ struct MockWriter : public PacketWriter
         return true;
     }
 
-    void finish()
-    {
-        queue->finish();
-    }
+    void finish() { queue->finish(); }
 
     PacketQueuePtr queue;
 };
@@ -287,10 +264,11 @@ class ExchangeBench : public benchmark::Fixture
 public:
     void SetUp(const benchmark::State &) override;
     void TearDown(const benchmark::State &) override;
-    void runAndWait(std::shared_ptr<ReceiverHelper> receiver_helper,
-                    BlockInputStreamPtr receiver_stream,
-                    std::shared_ptr<SenderHelper> & sender_helper,
-                    BlockInputStreamPtr sender_stream);
+    void runAndWait(
+        std::shared_ptr<ReceiverHelper> receiver_helper,
+        BlockInputStreamPtr receiver_stream,
+        std::shared_ptr<SenderHelper> & sender_helper,
+        BlockInputStreamPtr sender_stream);
 
     std::vector<Block> uniform_blocks;
     std::vector<Block> skew_blocks;

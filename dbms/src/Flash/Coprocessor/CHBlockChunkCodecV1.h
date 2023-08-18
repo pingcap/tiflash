@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,12 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
 void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode);
-extern void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit);
+extern void WriteColumnData(
+    const IDataType & type,
+    const ColumnPtr & column,
+    WriteBuffer & ostr,
+    size_t offset,
+    size_t limit);
 
 struct CHBlockChunkCodecV1 : boost::noncopyable
 {

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,15 +29,9 @@ public:
         : task(task_)
     {}
 
-    void run() override
-    {
-        task();
-    }
+    void run() override { task(); }
 
-    static Poco::Util::TimerTask::Ptr create(Task task)
-    {
-        return new FunctionTimerTask(task);
-    }
+    static Poco::Util::TimerTask::Ptr create(Task task) { return new FunctionTimerTask(task); }
 
 private:
     Task task;

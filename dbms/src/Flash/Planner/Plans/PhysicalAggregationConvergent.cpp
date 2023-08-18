@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,12 +35,11 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
         auto restorers = aggregate_context->buildSharedRestorer(exec_context);
         for (auto & restorer : restorers)
         {
-            group_builder.addConcurrency(
-                std::make_unique<AggregateRestoreSourceOp>(
-                    exec_context,
-                    aggregate_context,
-                    std::move(restorer),
-                    log->identifier()));
+            group_builder.addConcurrency(std::make_unique<AggregateRestoreSourceOp>(
+                exec_context,
+                aggregate_context,
+                std::move(restorer),
+                log->identifier()));
         }
     }
     else
@@ -48,12 +47,11 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
         aggregate_context->initConvergent();
         for (size_t index = 0; index < aggregate_context->getConvergentConcurrency(); ++index)
         {
-            group_builder.addConcurrency(
-                std::make_unique<AggregateConvergentSourceOp>(
-                    exec_context,
-                    aggregate_context,
-                    index,
-                    log->identifier()));
+            group_builder.addConcurrency(std::make_unique<AggregateConvergentSourceOp>(
+                exec_context,
+                aggregate_context,
+                index,
+                log->identifier()));
         }
     }
 

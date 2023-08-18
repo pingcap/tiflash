@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,11 @@
 
 namespace DB::mock
 {
-bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ExchangeReceiverBinder::toTiPBExecutor(
+    tipb::Executor * tipb_executor,
+    int32_t collator_id,
+    const MPPInfo & mpp_info,
+    const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
     tipb_executor->set_executor_id(name);
@@ -54,7 +58,8 @@ bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int3
         fillTaskMetaWithMPPInfo(meta, mpp_info);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[i].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[i].addr
+                                        : Debug::LOCAL_HOST;
         meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
@@ -63,16 +68,29 @@ bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int3
 }
 
 
-void ExchangeReceiverBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+void ExchangeReceiverBinder::toMPPSubPlan(
+    size_t & executor_index,
+    const DAGProperties & properties,
+    std::unordered_map<
+        String,
+        std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
 {
     RUNTIME_CHECK_MSG(exchange_sender, "exchange_sender must not be nullptr in toMPPSubPlan");
     exchange_sender->toMPPSubPlan(executor_index, properties, exchange_map);
     exchange_map[name] = std::make_pair(shared_from_this(), exchange_sender);
 }
 
-ExecutorBinderPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count, const std::shared_ptr<ExchangeSenderBinder> & exchange_sender)
+ExecutorBinderPtr compileExchangeReceiver(
+    size_t & executor_index,
+    DAGSchema schema,
+    uint64_t fine_grained_shuffle_stream_count,
+    const std::shared_ptr<ExchangeSenderBinder> & exchange_sender)
 {
-    ExecutorBinderPtr exchange_receiver = std::make_shared<mock::ExchangeReceiverBinder>(executor_index, schema, fine_grained_shuffle_stream_count, exchange_sender);
+    ExecutorBinderPtr exchange_receiver = std::make_shared<mock::ExchangeReceiverBinder>(
+        executor_index,
+        schema,
+        fine_grained_shuffle_stream_count,
+        exchange_sender);
     return exchange_receiver;
 }
 } // namespace DB::mock

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,8 +40,18 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
 
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
     if (needScanHashMapAfterProbe(origin_join->getKind()))
-        scan_hash_map_after_probe_stream = origin_join->createScanHashMapAfterProbeStream(input_header, op_index_, origin_join->getProbeConcurrency(), max_block_size);
-    probe_transform = std::make_shared<HashProbeTransformExec>(req_id, exec_context_, op_index_, origin_join, scan_hash_map_after_probe_stream, max_block_size);
+        scan_hash_map_after_probe_stream = origin_join->createScanHashMapAfterProbeStream(
+            input_header,
+            op_index_,
+            origin_join->getProbeConcurrency(),
+            max_block_size);
+    probe_transform = std::make_shared<HashProbeTransformExec>(
+        req_id,
+        exec_context_,
+        op_index_,
+        origin_join,
+        scan_hash_map_after_probe_stream,
+        max_block_size);
 }
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
@@ -53,7 +63,12 @@ void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
 
 void HashJoinProbeTransformOp::operateSuffixImpl()
 {
-    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
+    LOG_DEBUG(
+        log,
+        "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}",
+        joined_rows + scan_hash_map_rows,
+        joined_rows,
+        scan_hash_map_rows);
 }
 
 OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
@@ -67,7 +82,8 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             // The subsequent logic is the same as the probe stage.
             if (probe_process_info.all_rows_joined_finish)
             {
-                if (auto ret = probe_transform->tryFillProcessInfoInRestoreProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
+                if (auto ret = probe_transform->tryFillProcessInfoInRestoreProbeStage(probe_process_info);
+                    ret != OperatorStatus::HAS_OUTPUT)
                     return ret;
             }
         case ProbeStatus::PROBE:
@@ -100,7 +116,8 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if unlikely (!block)
             {
                 probe_transform->endScanHashMapAfterProbe();
-                auto next_status = probe_transform->shouldRestore() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
+                auto next_status
+                    = probe_transform->shouldRestore() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
                 switchStatus(next_status);
                 BREAK;
             }
@@ -134,7 +151,8 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
-    if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block); ret != OperatorStatus::HAS_OUTPUT)
+    if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block);
+        ret != OperatorStatus::HAS_OUTPUT)
         return ret;
 
     return onOutput(block);
@@ -144,7 +162,8 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
-        if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
+        if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
+            ret != OperatorStatus::HAS_OUTPUT)
             return ret;
     }
 

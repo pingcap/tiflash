@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,10 @@ namespace DB::tests
 class AggregationTest : public ::testing::Test
 {
 public:
-    ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type);
+    ::testing::AssertionResult checkAggReturnType(
+        const String & agg_name,
+        const DataTypes & data_types,
+        const DataTypePtr & expect_type);
 
     static void SetUpTestCase();
 };

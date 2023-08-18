@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,7 +87,14 @@ struct SpilledFiles
 class Spiller
 {
 public:
-    Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
+    Spiller(
+        const SpillConfig & config,
+        bool is_input_sorted,
+        UInt64 partition_num,
+        const Block & input_schema,
+        const LoggerPtr & logger,
+        Int64 spill_version = 1,
+        bool release_spilled_file_on_restore = true);
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
     SpillHandler createSpillHandler(UInt64 partition_id);
     CachedSpillHandlerPtr createCachedSpillHandler(
@@ -95,9 +102,15 @@ public:
         UInt64 partition_id,
         const std::function<bool()> & is_cancelled);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
-    void spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
+    void spillBlocksUsingBlockInputStream(
+        const BlockInputStreamPtr & block_in,
+        UInt64 partition_id,
+        const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
-    BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool append_dummy_read_stream = false);
+    BlockInputStreams restoreBlocks(
+        UInt64 partition_id,
+        UInt64 max_stream_size = 0,
+        bool append_dummy_read_stream = false);
     UInt64 spilledRows(UInt64 partition_id);
     void finishSpill();
     bool hasSpilledData() const { return has_spilled_data; };

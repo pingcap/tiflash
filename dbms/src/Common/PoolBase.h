@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,8 +50,7 @@ private:
         PooledObject(ObjectPtr object_, PoolBase & pool_)
             : object(object_)
             , pool(pool_)
-        {
-        }
+        {}
 
         ObjectPtr object;
         bool in_use = false;
