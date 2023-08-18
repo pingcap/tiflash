@@ -23,10 +23,10 @@ namespace DB
 class QueryOperatorSpillContexts
 {
 public:
-    QueryOperatorSpillContexts(const MPPQueryId & query_id, UInt64 auto_spill_check_min_interval_ms_)
-        : auto_spill_check_min_interval_ms(
-            auto_spill_check_min_interval_ms_ == 0 ? std::numeric_limits<UInt64>::max()
-                                                   : auto_spill_check_min_interval_ms_)
+    QueryOperatorSpillContexts(const MPPQueryId & query_id, UInt64 auto_spill_check_min_interval_ms)
+        : auto_spill_check_min_interval_ns(
+            auto_spill_check_min_interval_ms == 0 ? std::numeric_limits<UInt64>::max()
+                                                   : auto_spill_check_min_interval_ms * 1000000ULL)
         , log(Logger::get(query_id.toString()))
     {
         watch.start();
@@ -37,16 +37,24 @@ public:
         /// use mutex to avoid concurrent check
         if (lock.owns_lock())
         {
+            auto log_level = Poco::Message::PRIO_TRACE;
             if unlikely (!first_check)
             {
                 first_check = true;
+                log_level = Poco::Message::PRIO_INFORMATION;
                 LOG_INFO(log, "Query memory usage exceeded threshold, trigger auto spill check");
             }
-            else
+
+            LOG_IMPL(log, log_level, "Query memory usage exceeded threshold, trigger auto spill check, expected released memory: {}", expected_released_memories);
+
+            if (watch.elapsedFromLastTime() < auto_spill_check_min_interval_ns)
             {
-                if (watch.elapsedMillisecondsFromLastTime() < auto_spill_check_min_interval_ms)
-                    return expected_released_memories;
+                LOG_IMPL(log, log_level, "Auto spill check still in cooldown time, skip this check");
+                return expected_released_memories;
             }
+
+            auto ret = expected_released_memories;
+
             /// vector of <revocable_memories, task_operator_spill_contexts>
             std::vector<std::pair<Int64, TaskOperatorSpillContexts *>> revocable_memories;
             revocable_memories.reserve(task_operator_spill_contexts_list.size());
@@ -69,11 +77,12 @@ public:
             {
                 if (pair.first < OperatorSpillContext::MIN_SPILL_THRESHOLD)
                     break;
-                expected_released_memories = pair.second->triggerAutoSpill(expected_released_memories);
-                if (expected_released_memories <= 0)
+                ret = pair.second->triggerAutoSpill(ret);
+                if (ret <= 0)
                     break;
             }
-            return expected_released_memories;
+            LOG_IMPL(log, log_level, "Auto spill check finished, marked {} memory to be spilled", expected_released_memories - ret);
+            return ret;
         }
         return expected_released_memories;
     }
@@ -96,7 +105,7 @@ public:
 private:
     std::list<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_list;
     bool first_check = false;
-    const UInt64 auto_spill_check_min_interval_ms;
+    const UInt64 auto_spill_check_min_interval_ns;
     LoggerPtr log;
     mutable std::mutex mutex;
     Stopwatch watch;

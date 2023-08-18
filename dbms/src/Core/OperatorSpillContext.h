@@ -22,9 +22,11 @@ namespace DB
 {
 enum class AutoSpillStatus
 {
-    /// auto spill is not needed or current auto spill already finished
+    /// NO_NEED_AUTO_SPILL means auto spill is not needed or current auto spill already finished
     NO_NEED_AUTO_SPILL,
-    /// auto spill is needed
+    /// WAI_SPILL_FINISH means the operator is aware that it needs spill, but spill does not finish yet
+    WAIT_SPILL_FINISH,
+    /// NEED_AUTO_SPILL means to mark the operator to spill, the operator itself may not aware that it needs spill yet
     NEED_AUTO_SPILL,
 };
 
@@ -35,6 +37,7 @@ protected:
     std::atomic<bool> in_spillable_stage{true};
     std::atomic<bool> is_spilled{false};
     bool enable_spill = true;
+    bool auto_spill_mode = false;
     String op_name;
     LoggerPtr log;
 
@@ -47,7 +50,9 @@ public:
         : operator_spill_threshold(operator_spill_threshold_)
         , op_name(op_name_)
         , log(log_)
-    {}
+    {
+        auto_spill_mode = supportAutoTriggerSpill() && operator_spill_threshold == 0;
+    }
     virtual ~OperatorSpillContext() = default;
     bool isSpillEnabled() const { return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0); }
     void disableSpill() { enable_spill = false; }
