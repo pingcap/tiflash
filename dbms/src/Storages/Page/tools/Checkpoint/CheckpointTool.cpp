@@ -98,7 +98,8 @@ struct Options
             S3::ClientFactory::instance().init(s3_config);
         }
         catch (...)
-        {}
+        {
+        }
     }
 
     void tryShutdownS3() const
