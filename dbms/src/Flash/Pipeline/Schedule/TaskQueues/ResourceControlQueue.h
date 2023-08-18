@@ -37,7 +37,7 @@ public:
         });
     }
 
-    ~ResourceControlQueue() override { LocalAdmissionController::global_instance.reset(); }
+    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->unregisterRefillTokenCallback(); }
 
     void submit(TaskPtr && task) override;
 

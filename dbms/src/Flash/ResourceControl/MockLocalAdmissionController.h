@@ -70,6 +70,13 @@ public:
         refill_token_callback = cb;
     }
 
+    void unregisterRefillTokenCallback()
+    {
+        std::lock_guard lock(call_back_mutex);
+        RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
+        refill_token_callback = nullptr;
+    }
+
     void stop()
     {
         {
@@ -84,15 +91,6 @@ public:
 
     void refillTokenBucket();
 
-    void resetAll()
-    {
-        resource_groups.clear();
-        consume_resource_func = nullptr;
-        get_priority_func = nullptr;
-        is_resource_group_throttled_func = nullptr;
-        max_ru_per_sec = 0;
-    }
-
     std::string dump() const;
 
     mutable std::mutex mu;
@@ -105,9 +103,10 @@ public:
 
     uint64_t max_ru_per_sec = 0;
     bool stopped = false;
+
     std::mutex call_back_mutex;
     std::function<void()> refill_token_callback{nullptr};
+
     std::thread refill_token_thread;
 };
-
 } // namespace DB
