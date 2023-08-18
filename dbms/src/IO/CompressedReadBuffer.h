@@ -22,7 +22,8 @@
 namespace DB
 {
 template <bool has_checksum = true>
-class CompressedReadBuffer : public CompressedReadBufferBase<has_checksum>
+class CompressedReadBuffer
+    : public CompressedReadBufferBase<has_checksum>
     , public BufferWithOwnMemory<ReadBuffer>
 {
 private:

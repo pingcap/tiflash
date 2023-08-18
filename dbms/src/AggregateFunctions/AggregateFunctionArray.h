@@ -47,43 +47,24 @@ public:
     {
         for (const auto & type : arguments)
             if (!typeid_cast<const DataTypeArray *>(type.get()))
-                throw Exception("All arguments for aggregate function " + getName() + " must be arrays", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "All arguments for aggregate function " + getName() + " must be arrays",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    String getName() const override
-    {
-        return nested_func->getName() + "Array";
-    }
+    String getName() const override { return nested_func->getName() + "Array"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return nested_func->getReturnType();
-    }
+    DataTypePtr getReturnType() const override { return nested_func->getReturnType(); }
 
-    void create(AggregateDataPtr __restrict place) const override
-    {
-        nested_func->create(place);
-    }
+    void create(AggregateDataPtr __restrict place) const override { nested_func->create(place); }
 
-    void destroy(AggregateDataPtr __restrict place) const noexcept override
-    {
-        nested_func->destroy(place);
-    }
+    void destroy(AggregateDataPtr __restrict place) const noexcept override { nested_func->destroy(place); }
 
-    bool hasTrivialDestructor() const override
-    {
-        return nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return nested_func->hasTrivialDestructor(); }
 
-    size_t sizeOfData() const override
-    {
-        return nested_func->sizeOfData();
-    }
+    size_t sizeOfData() const override { return nested_func->sizeOfData(); }
 
-    size_t alignOfData() const override
-    {
-        return nested_func->alignOfData();
-    }
+    size_t alignOfData() const override { return nested_func->alignOfData(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -105,7 +86,9 @@ public:
             const IColumn::Offsets & ith_offsets = ith_column.getOffsets();
 
             if (ith_offsets[row_num] != end || (row_num != 0 && ith_offsets[row_num - 1] != begin))
-                throw Exception("Arrays passed to " + getName() + " aggregate function have different sizes", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
+                throw Exception(
+                    "Arrays passed to " + getName() + " aggregate function have different sizes",
+                    ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
         }
 
         for (size_t i = begin; i < end; ++i)
@@ -132,10 +115,7 @@ public:
         nested_func->insertResultInto(place, to, arena);
     }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return nested_func->allocatesMemoryInArena();
-    }
+    bool allocatesMemoryInArena() const override { return nested_func->allocatesMemoryInArena(); }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };

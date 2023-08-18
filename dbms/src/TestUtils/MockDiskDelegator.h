@@ -34,37 +34,24 @@ public:
         : path(std::move(path_))
     {}
 
-    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const override
-    {
-        return true;
-    }
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const override { return true; }
 
-    size_t numPaths() const override
-    {
-        return 1;
-    }
+    size_t numPaths() const override { return 1; }
 
-    String defaultPath() const override
-    {
-        return path;
-    }
+    String defaultPath() const override { return path; }
 
-    String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const override
-    {
-        return path;
-    }
+    String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const override { return path; }
 
-    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) override {}
+    void removePageFile(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*file_size*/,
+        bool /*meta_left*/,
+        bool /*remove_from_default_path*/) override
+    {}
 
-    Strings listPaths() const override
-    {
-        return Strings{path};
-    }
+    Strings listPaths() const override { return Strings{path}; }
 
-    String choosePath(const PageFileIdAndLevel & /*id_lvl*/) override
-    {
-        return path;
-    }
+    String choosePath(const PageFileIdAndLevel & /*id_lvl*/) override { return path; }
 
     size_t addPageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
@@ -94,35 +81,32 @@ public:
         RUNTIME_CHECK(!paths.empty());
     }
 
-    bool fileExist(const PageFileIdAndLevel & id_lvl) const override
-    {
-        return page_path_map.exist(id_lvl);
-    }
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override { return page_path_map.exist(id_lvl); }
 
 
-    size_t numPaths() const override
-    {
-        return paths.size();
-    }
+    size_t numPaths() const override { return paths.size(); }
 
-    String defaultPath() const override
-    {
-        return paths[0];
-    }
+    String defaultPath() const override { return paths[0]; }
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override
     {
         auto idx_opt = page_path_map.getIndex(id_lvl);
-        RUNTIME_CHECK_MSG(idx_opt.has_value(), "Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second);
+        RUNTIME_CHECK_MSG(
+            idx_opt.has_value(),
+            "Can not find path for PageFile [id={}_{}]",
+            id_lvl.first,
+            id_lvl.second);
         return paths[*idx_opt];
     }
 
-    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) override {}
+    void removePageFile(
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*file_size*/,
+        bool /*meta_left*/,
+        bool /*remove_from_default_path*/) override
+    {}
 
-    Strings listPaths() const override
-    {
-        return paths;
-    }
+    Strings listPaths() const override { return paths; }
 
     String choosePath(const PageFileIdAndLevel & id_lvl) override
     {

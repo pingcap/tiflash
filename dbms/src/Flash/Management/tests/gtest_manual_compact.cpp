@@ -41,10 +41,7 @@ class BasicManualCompactTest
 public:
     static constexpr TableID TABLE_ID = 5;
 
-    BasicManualCompactTest()
-    {
-        pk_type = GetParam();
-    }
+    BasicManualCompactTest() { pk_type = GetParam(); }
 
     void SetUp() override
     {
@@ -73,22 +70,25 @@ public:
         auto table_info = DM::tests::DMTestEnv::getMinimalTableInfo(TABLE_ID, pk_type);
         auto astptr = DM::tests::DMTestEnv::getPrimaryKeyExpr("test_table", pk_type);
 
-        storage = StorageDeltaMerge::create("TiFlash",
-                                            "default" /* db_name */,
-                                            "test_table" /* table_name */,
-                                            table_info,
-                                            ColumnsDescription{columns},
-                                            astptr,
-                                            0,
-                                            db_context->getGlobalContext());
+        storage = StorageDeltaMerge::create(
+            "TiFlash",
+            "default" /* db_name */,
+            "test_table" /* table_name */,
+            table_info,
+            ColumnsDescription{columns},
+            astptr,
+            0,
+            db_context->getGlobalContext());
         storage->startup();
     }
 
     void prepareDataForFirstThreeSegments()
     {
         // Write data to first 3 segments.
-        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
-        Block block = DM::tests::DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        auto newly_written_rows
+            = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block
+            = DM::tests::DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
         storage->write(block, db_context->getSettingsRef());
         storage->flushCache(*db_context);
 
@@ -307,7 +307,13 @@ CATCH
 TEST_P(BasicManualCompactTest, CompactMultiple)
 try
 {
+<<<<<<< HEAD
     db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(60 * 1000))); // Hope it's long enough!
+=======
+    db_context->setSetting(
+        "manual_compact_more_until_ms",
+        Field(static_cast<UInt64>(60 * 1000))); // Hope it's long enough!
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(TABLE_ID);

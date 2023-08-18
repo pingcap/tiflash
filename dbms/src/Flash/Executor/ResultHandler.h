@@ -34,10 +34,7 @@ public:
 
     bool isIgnored() const { return is_ignored; }
 
-    void operator()(const Block & block) const
-    {
-        handler(block);
-    }
+    void operator()(const Block & block) const { handler(block); }
 
 private:
     Handler handler;

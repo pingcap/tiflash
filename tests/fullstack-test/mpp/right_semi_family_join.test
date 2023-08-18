@@ -1,0 +1,64 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.a
+mysql> create table test.a (id int, value varchar(64) not null)
+mysql> insert into test.a values(0,'a'),(2,'b'),(5,'c')
+mysql> drop table if exists test.b
+mysql> create table test.b (id int, value varchar(64))
+mysql> insert into test.b values(1,'a'),(2,'b'),(3,'c'),(4,'d');
+
+mysql> alter table test.a set tiflash replica 1
+mysql> alter table test.b set tiflash replica 1
+mysql> analyze table test.a 
+mysql> analyze table test.b 
+
+func> wait_table test a
+func> wait_table test b
+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; set tidb_broadcast_join_threshold_count = 0; set tidb_broadcast_join_threshold_size=0; set tidb_opt_mpp_outer_join_fixed_build_side = 0; select * from a where exists (select * from b where a.id = b.id);
++------+-------+
+| id   | value |
++------+-------+
+|    2 | b     |
++------+-------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; set tidb_broadcast_join_threshold_count = 100; set tidb_broadcast_join_threshold_size=10000; set tidb_opt_mpp_outer_join_fixed_build_side = 0; select * from a where exists (select * from b where a.id = b.id);
++------+-------+
+| id   | value |
++------+-------+
+|    2 | b     |
++------+-------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp= 1; set tidb_broadcast_join_threshold_count = 0; set tidb_opt_mpp_outer_join_fixed_build_side = 0; set tidb_broadcast_join_threshold_size=0; select * from a where not exists (select * from b where a.id = b.id);
++------+-------+
+| id   | value |
++------+-------+
+|    5 | c     |
+|    0 | a     |
++------+-------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp= 1; set tidb_broadcast_join_threshold_count = 100; set tidb_opt_mpp_outer_join_fixed_build_side = 0; set tidb_broadcast_join_threshold_size=10000; select * from a where not exists (select * from b where a.id = b.id);
++------+-------+
+| id   | value |
++------+-------+
+|    5 | c     |
+|    0 | a     |
++------+-------+
+
+# Clean up.
+mysql> drop table if exists test.a
+mysql> drop table if exists test.b

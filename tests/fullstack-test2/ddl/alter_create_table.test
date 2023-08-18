@@ -1,0 +1,96 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+## related to create table. if no data or no replica, there should be no tiflash storage. 
+## Only with data and relica, we will create the storage in TiFlash
+
+=> DBGInvoke __enable_schema_sync_service('false') 
+
+mysql> drop table if exists test.t;
+mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+
+=> DBGInvoke __refresh_schemas()
+
+# check not create the related storage in TiFlash
+=> DBGInvoke mapped_table_exists(test, t)
+┌─mapped_table_exists(test, t)─┐
+│ false                        │
+└──────────────────────────────┘
+
+# check when we set replica, the information_schema.tiflash_replica will be updated, 
+# but if no data write, the table still not exist in TiFlash
+
+mysql> alter table test.t set tiflash replica 1; 
+=> DBGInvoke __refresh_schemas()
+
+=> DBGInvoke mapped_table_exists(test, t)
+┌─mapped_table_exists(test, t)─┐
+│ false                        │
+└──────────────────────────────┘
+
+func> wait_table test t
+
+mysql> select table_schema, table_name, replica_count, available, progress from information_schema.tiflash_replica where table_schema='test' and table_name='t';
++--------------+------------+---------------+-----------+----------+
+| table_schema | table_name | replica_count | available | progress |
++--------------+------------+---------------+-----------+----------+
+| test         | t          |             1 |         1 |        1 |
++--------------+------------+---------------+-----------+----------+
+
+# when we insert data into table, we will truly create the storage in TiFlash
+mysql> insert into test.t values(1, 1.1, 'a', 1);
+
+func> wait_table test t
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+------+------+------+
+| a    | b    | c    | d    |
++------+------+------+------+
+|    1 | 1.10 |  a   |    1 |
++------+------+------+------+
+
+=> DBGInvoke mapped_table_exists(test, t)
+┌─mapped_table_exists(test, t)─┐
+│ true                         │
+└──────────────────────────────┘
+
+mysql> select table_schema, table_name, replica_count, available, progress from information_schema.tiflash_replica where table_schema='test' and table_name='t';
++--------------+------------+---------------+-----------+----------+
+| table_schema | table_name | replica_count | available | progress |
++--------------+------------+---------------+-----------+----------+
+| test         | t          |             1 |         1 |        1 |
++--------------+------------+---------------+-----------+----------+
+
+mysql> drop table if exists test.t2;
+mysql> create table test.t2(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+mysql> insert into test.t2 values(1, 1.1, 'a', 1);
+
+# check if have data but no replica, we should not create the storage in TiFlash
+=> DBGInvoke mapped_table_exists(test, t2)
+┌─mapped_table_exists(test, t2)─┐
+│ false                         │
+└───────────────────────────────┘
+
+mysql> alter table test.t2 set tiflash replica 1; 
+
+func> wait_table test t2
+
+=> DBGInvoke mapped_table_exists(test, t2)
+┌─mapped_table_exists(test, t2)─┐
+│ true                          │
+└───────────────────────────────┘
+
+
+mysql> drop table if exists test.t;
+mysql> drop table if exists test.t2;

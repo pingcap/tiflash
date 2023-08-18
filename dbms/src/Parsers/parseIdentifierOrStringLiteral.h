@@ -23,4 +23,4 @@ namespace DB
   * name, `name` or 'name' */
 bool parseIdentifierOrStringLiteral(IParser::Pos & pos, Expected & expected, String & result);
 
-}
+} // namespace DB

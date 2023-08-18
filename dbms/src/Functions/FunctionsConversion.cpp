@@ -17,26 +17,23 @@
 
 namespace DB
 {
-void throwExceptionForIncompletelyParsedValue(
-    ReadBuffer & read_buffer,
-    Block & block,
-    size_t result)
+void throwExceptionForIncompletelyParsedValue(ReadBuffer & read_buffer, Block & block, size_t result)
 {
     const IDataType & to_type = *block.getByPosition(result).type;
 
     WriteBufferFromOwnString message_buf;
     message_buf << "Cannot parse string " << quote << String(read_buffer.buffer().begin(), read_buffer.buffer().size())
-                << " as " << to_type.getName()
-                << ": syntax error";
+                << " as " << to_type.getName() << ": syntax error";
 
     if (read_buffer.offset())
-        message_buf << " at position " << read_buffer.offset()
-                    << " (parsed just " << quote << String(read_buffer.buffer().begin(), read_buffer.offset()) << ")";
+        message_buf << " at position " << read_buffer.offset() << " (parsed just " << quote
+                    << String(read_buffer.buffer().begin(), read_buffer.offset()) << ")";
     else
         message_buf << " at begin of string";
 
     if (to_type.isNumber())
-        message_buf << ". Note: there are to" << to_type.getName() << "OrZero function, which returns zero instead of throwing exception.";
+        message_buf << ". Note: there are to" << to_type.getName()
+                    << "OrZero function, which returns zero instead of throwing exception.";
 
     throw Exception(message_buf.str(), ErrorCodes::CANNOT_PARSE_TEXT);
 }
@@ -60,10 +57,7 @@ public:
     explicit FunctionTiDBUnixTimeStamp(const Context & context)
         : timezone_info(context.getTimezoneInfo()){};
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
 
@@ -72,7 +66,9 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (!arguments[0].type->isMyDateOrMyDateTime())
-            throw Exception("The argument of function " + getName() + " must be date or datetime type", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "The argument of function " + getName() + " must be date or datetime type",
+                ErrorCodes::ILLEGAL_COLUMN);
 
         if constexpr (std::is_same_v<Name, NameTiDBUnixTimeStampInt>)
             return std::make_shared<DataTypeUInt64>();

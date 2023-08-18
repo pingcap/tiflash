@@ -61,7 +61,8 @@ void DataTypeDecimal<T>::deserializeBinary(IColumn & column, ReadBuffer & istr) 
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
+void DataTypeDecimal<T>::serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit)
+    const
 {
     const typename ColumnType::Container & x = typeid_cast<const ColumnType &>(column).getData();
 
@@ -74,7 +75,11 @@ void DataTypeDecimal<T>::serializeBinaryBulk(const IColumn & column, WriteBuffer
 }
 
 template <typename T>
-void DataTypeDecimal<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const
+void DataTypeDecimal<T>::deserializeBinaryBulk(
+    IColumn & column,
+    ReadBuffer & istr,
+    size_t limit,
+    double /*avg_value_size_hint*/) const
 {
     typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
     size_t initial_size = x.size();
@@ -124,7 +129,11 @@ void DataTypeDecimal<T>::deserializeTextQuoted(IColumn & column, ReadBuffer & is
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
+void DataTypeDecimal<T>::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON &) const
 {
     serializeText(column, row_num, ostr);
 }

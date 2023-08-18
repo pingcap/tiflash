@@ -11,9 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+<<<<<<< HEAD
 
 #RETURN
+=======
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
+#RETURN
 mysql> drop table if exists test.t
 mysql> create table test.t(a int)
 mysql> insert into test.t values(1), (20201212)

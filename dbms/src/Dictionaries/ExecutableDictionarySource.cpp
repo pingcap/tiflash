@@ -38,8 +38,7 @@ class ShellCommandOwningBlockInputStream : public OwningBlockInputStream<ShellCo
 public:
     ShellCommandOwningBlockInputStream(const BlockInputStreamPtr & stream, std::unique_ptr<ShellCommand> own)
         : OwningBlockInputStream(std::move(stream), std::move(own))
-    {
-    }
+    {}
 
     void readSuffix() override
     {
@@ -51,11 +50,12 @@ public:
 } // namespace
 
 
-ExecutableDictionarySource::ExecutableDictionarySource(const DictionaryStructure & dict_struct_,
-                                                       const Poco::Util::AbstractConfiguration & config,
-                                                       const std::string & config_prefix,
-                                                       Block & sample_block,
-                                                       const Context & context)
+ExecutableDictionarySource::ExecutableDictionarySource(
+    const DictionaryStructure & dict_struct_,
+    const Poco::Util::AbstractConfiguration & config,
+    const std::string & config_prefix,
+    Block & sample_block,
+    const Context & context)
     : log(&Poco::Logger::get("ExecutableDictionarySource"))
     , update_time{std::chrono::system_clock::from_time_t(0)}
     , dict_struct{dict_struct_}
@@ -64,8 +64,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(const DictionaryStructure
     , format{config.getString(config_prefix + ".format")}
     , sample_block{sample_block}
     , context(context)
-{
-}
+{}
 
 ExecutableDictionarySource::ExecutableDictionarySource(const ExecutableDictionarySource & other)
     : log(&Poco::Logger::get("ExecutableDictionarySource"))
@@ -76,8 +75,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(const ExecutableDictionar
     , format{other.format}
     , sample_block{other.sample_block}
     , context(other.context)
-{
-}
+{}
 
 std::string ExecutableDictionarySource::getUpdateFieldAndDate()
 {
@@ -136,7 +134,10 @@ public:
         : stream{stream_}
         , command{std::move(command_)}
         , task(std::move(task_))
-        , thread([this] { task(); command->in.close(); })
+        , thread([this] {
+            task();
+            command->in.close();
+        })
     {
         children.push_back(stream);
     }
@@ -197,10 +198,7 @@ BlockInputStreamPtr ExecutableDictionarySource::loadIds(const std::vector<UInt64
     return std::make_shared<BlockInputStreamWithBackgroundThread>(
         input_stream,
         std::move(process),
-        std::packaged_task<void()>(
-            [output_stream, &ids]() mutable {
-                formatIDs(output_stream, ids);
-            }));
+        std::packaged_task<void()>([output_stream, &ids]() mutable { formatIDs(output_stream, ids); }));
 }
 
 BlockInputStreamPtr ExecutableDictionarySource::loadKeys(
@@ -216,10 +214,9 @@ BlockInputStreamPtr ExecutableDictionarySource::loadKeys(
     return std::make_shared<BlockInputStreamWithBackgroundThread>(
         input_stream,
         std::move(process),
-        std::packaged_task<void()>(
-            [output_stream, key_columns, &requested_rows, this]() mutable {
-                formatKeys(dict_struct, output_stream, key_columns, requested_rows);
-            }));
+        std::packaged_task<void()>([output_stream, key_columns, &requested_rows, this]() mutable {
+            formatKeys(dict_struct, output_stream, key_columns, requested_rows);
+        }));
 }
 
 bool ExecutableDictionarySource::isModified() const

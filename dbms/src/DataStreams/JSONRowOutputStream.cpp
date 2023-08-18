@@ -20,8 +20,19 @@
 namespace DB
 {
 
+<<<<<<< HEAD
 JSONRowOutputStream::JSONRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool write_statistics_, const FormatSettingsJSON & settings_)
     : dst_ostr(ostr_), write_statistics(write_statistics_), settings(settings_)
+=======
+JSONRowOutputStream::JSONRowOutputStream(
+    WriteBuffer & ostr_,
+    const Block & sample_,
+    bool write_statistics_,
+    const FormatSettingsJSON & settings_)
+    : dst_ostr(ostr_)
+    , write_statistics(write_statistics_)
+    , settings(settings_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     NamesAndTypesList columns(sample_.getNamesAndTypesList());
     fields.assign(columns.begin(), columns.end());
@@ -143,6 +154,7 @@ void JSONRowOutputStream::writeRowsBeforeLimitAtLeast()
     }
 }
 
+<<<<<<< HEAD
 void JSONRowOutputStream::writeTotals()
 {
     if (totals)
@@ -173,6 +185,14 @@ void JSONRowOutputStream::writeTotals()
 
 
 static void writeExtremesElement(const char * title, const Block & extremes, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON & settings)
+=======
+static void writeExtremesElement(
+    const char * title,
+    const Block & extremes,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON & settings)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     writeCString("\t\t\"", ostr);
     writeCString(title, ostr);

@@ -53,7 +53,9 @@ struct PairNoInit
 template <typename First, typename Second>
 PairNoInit<std::decay_t<First>, std::decay_t<Second>> makePairNoInit(First && first, Second && second)
 {
-    return PairNoInit<std::decay_t<First>, std::decay_t<Second>>(std::forward<First>(first), std::forward<Second>(second));
+    return PairNoInit<std::decay_t<First>, std::decay_t<Second>>(
+        std::forward<First>(first),
+        std::forward<Second>(second));
 }
 
 
@@ -88,7 +90,10 @@ struct HashMapCell
 
     bool keyEquals(const Key & key_) const { return bitEquals(value.first, key_); }
     bool keyEquals(const Key & key_, size_t /*hash_*/) const { return bitEquals(value.first, key_); }
-    bool keyEquals(const Key & key_, size_t /*hash_*/, const State & /*state*/) const { return bitEquals(value.first, key_); }
+    bool keyEquals(const Key & key_, size_t /*hash_*/, const State & /*state*/) const
+    {
+        return bitEquals(value.first, key_);
+    }
 
     void setHash(size_t /*hash_value*/) {}
     size_t getHash(const Hash & hash) const { return hash(value.first); }
@@ -194,8 +199,14 @@ struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, Hash, TState>
     using Base::Base;
 
     bool keyEquals(const Key & key_) const { return bitEquals(this->value.first, key_); }
-    bool keyEquals(const Key & key_, size_t hash_) const { return saved_hash == hash_ && bitEquals(this->value.first, key_); }
-    bool keyEquals(const Key & key_, size_t hash_, const typename Base::State &) const { return keyEquals(key_, hash_); }
+    bool keyEquals(const Key & key_, size_t hash_) const
+    {
+        return saved_hash == hash_ && bitEquals(this->value.first, key_);
+    }
+    bool keyEquals(const Key & key_, size_t hash_, const typename Base::State &) const
+    {
+        return keyEquals(key_, hash_);
+    }
 
     void setHash(size_t hash_value) { saved_hash = hash_value; }
     size_t getHash(const Hash & /*hash_function*/) const { return saved_hash; }
@@ -350,8 +361,7 @@ using HashMapWithStackMemory = HashMapTable<
     Hash,
     HashTableGrower<initial_size_degree>,
     HashTableAllocatorWithStackMemory<
-        (1ULL << initial_size_degree)
-        * sizeof(HashMapCellWithSavedHash<Key, Mapped, Hash>)>>;
+        (1ULL << initial_size_degree) * sizeof(HashMapCellWithSavedHash<Key, Mapped, Hash>)>>;
 
 /// ConcurrentHashTable is the base class, it contains a vector of HashTableWithLock, ConcurrentHashMapTable is a derived
 /// class from ConcurrentHashTable, it makes hash table to be a hash map, and ConcurrentHashMap/ConcurrentHashMapWithSavedHash
@@ -416,4 +426,5 @@ template <
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
     typename Allocator = HashTableAllocator>
-using ConcurrentHashMapWithSavedHash = ConcurrentHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
+using ConcurrentHashMapWithSavedHash
+    = ConcurrentHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;

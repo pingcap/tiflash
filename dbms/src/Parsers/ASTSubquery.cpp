@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ASTSubquery.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/ASTSubquery.h>
 
 namespace DB
 {
@@ -28,5 +28,4 @@ String ASTSubquery::getColumnNameImpl() const
     return "__subquery_" + toString(hash.first) + "_" + toString(hash.second);
 }
 
-}
-
+} // namespace DB

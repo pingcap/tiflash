@@ -34,7 +34,8 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
     assert(child);
 
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
-    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
+    TiDB::TiDBCollators partition_col_collators
+        = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
 
     auto physical_exchange_sender = std::make_shared<PhysicalExchangeSender>(
         executor_id,
@@ -55,16 +56,30 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     child->transform(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalExchangeSender.cpp
     restoreConcurrency(pipeline, dag_context.final_concurrency, log);
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
+=======
+    restoreConcurrency(
+        pipeline,
+        dag_context.final_concurrency,
+        context.getSettingsRef().max_buffered_bytes_in_executor,
+        log);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalExchangeSender.cpp
 
     String extra_info;
     if (fine_grained_shuffle.enable())
     {
         extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalExchangeSender.cpp
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
+=======
+        RUNTIME_CHECK(
+            fine_grained_shuffle.stream_count <= maxFineGrainedStreamCount,
+            fine_grained_shuffle.stream_count);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalExchangeSender.cpp
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
@@ -78,12 +93,59 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             dag_context,
             fine_grained_shuffle.enable(),
             fine_grained_shuffle.stream_count,
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalExchangeSender.cpp
             fine_grained_shuffle.batch_size);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+=======
+            fine_grained_shuffle.batch_size,
+            compression_mode,
+            context.getSettingsRef().batch_send_min_limit_compression,
+            log->identifier());
+        stream
+            = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalExchangeSender.cpp
         stream->setExtraInfo(extra_info);
     });
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalExchangeSender.cpp
+=======
+void PhysicalExchangeSender::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t /*concurrency*/)
+{
+    if (fine_grained_shuffle.enable())
+    {
+        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
+        RUNTIME_CHECK(
+            fine_grained_shuffle.stream_count <= maxFineGrainedStreamCount,
+            fine_grained_shuffle.stream_count);
+    }
+
+    group_builder.transform([&](auto & builder) {
+        // construct writer
+        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+            partition_col_ids,
+            partition_col_collators,
+            exchange_type,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
+            *context.getDAGContext(),
+            fine_grained_shuffle.enable(),
+            fine_grained_shuffle.stream_count,
+            fine_grained_shuffle.batch_size,
+            compression_mode,
+            context.getSettingsRef().batch_send_min_limit_compression,
+            log->identifier(),
+            /*is_async=*/true);
+        builder.setSinkOp(
+            std::make_unique<ExchangeSenderSinkOp>(exec_context, log->identifier(), std::move(response_writer)));
+    });
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalExchangeSender.cpp
 void PhysicalExchangeSender::finalize(const Names & parent_require)
 {
     child->finalize(parent_require);

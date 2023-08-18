@@ -188,8 +188,9 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
     };
 
     if (!(args.size() >= 3 && args.size() % 2 == 1))
-        throw Exception{"Invalid number of arguments for function " + getName(),
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
+        throw Exception{
+            "Invalid number of arguments for function " + getName(),
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
     for_conditions([&](const DataTypePtr & arg) {
         const IDataType * nested_type;
@@ -208,18 +209,18 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
         }
 
         if (!checkDataType<DataTypeUInt8>(nested_type))
-            throw Exception{"Illegal type " + arg->getName() + " of argument (condition) "
-                                                               "of function "
-                                + getName() + ". Must be UInt8.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception{
+                "Illegal type " + arg->getName()
+                    + " of argument (condition) "
+                      "of function "
+                    + getName() + ". Must be UInt8.",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
     });
 
     DataTypes types_of_branches;
     types_of_branches.reserve(args.size() / 2 + 1);
 
-    for_branches([&](const DataTypePtr & arg) {
-        types_of_branches.emplace_back(arg);
-    });
+    for_branches([&](const DataTypePtr & arg) { types_of_branches.emplace_back(arg); });
 
     return getLeastSupertype(types_of_branches);
 }

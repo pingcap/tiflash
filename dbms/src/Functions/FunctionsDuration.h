@@ -103,11 +103,16 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isString())
-            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                fmt::format("First argument for function {} (unit) must be String", getName()),
+                Errors::Coprocessor::BadRequest);
 
         if (!arguments[1]->isMyTime())
             throw TiFlashException(
-                fmt::format("Illegal type {} of second argument of function {}. Must be Duration.", arguments[1]->getName(), getName()),
+                fmt::format(
+                    "Illegal type {} of second argument of function {}. Must be Duration.",
+                    arguments[1]->getName(),
+                    getName()),
                 Errors::Coprocessor::BadRequest);
 
         return std::make_shared<DataTypeInt64>();
@@ -161,7 +166,9 @@ public:
         else if (unit == "day_hour")
             dispatch<ExtractMyDurationImpl::extractDayHour>(col_from, vec_to);
         else
-            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                fmt::format("Function {} does not support '{}' unit", getName(), unit),
+                Errors::Coprocessor::BadRequest);
 
         block.getByPosition(result).column = std::move(col_to);
     }

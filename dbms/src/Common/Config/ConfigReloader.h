@@ -48,7 +48,11 @@ public:
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
-    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, const char * name = "CfgReloader");
+    ConfigReloader(
+        const std::string & path,
+        Updater && updater,
+        bool already_loaded,
+        const char * name = "CfgReloader");
 
     virtual ~ConfigReloader();
 

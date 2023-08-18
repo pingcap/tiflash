@@ -40,7 +40,9 @@ struct QuantileReservoirSamplerDeterministic
 
     void add(const Value &)
     {
-        throw Exception("Method add without determinator is not implemented for ReservoirSamplerDeterministic", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method add without determinator is not implemented for ReservoirSamplerDeterministic",
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     template <typename Determinator>
@@ -49,26 +51,14 @@ struct QuantileReservoirSamplerDeterministic
         data.insert(x, determinator);
     }
 
-    void merge(const QuantileReservoirSamplerDeterministic & rhs)
-    {
-        data.merge(rhs.data);
-    }
+    void merge(const QuantileReservoirSamplerDeterministic & rhs) { data.merge(rhs.data); }
 
-    void serialize(WriteBuffer & buf) const
-    {
-        data.write(buf);
-    }
+    void serialize(WriteBuffer & buf) const { data.write(buf); }
 
-    void deserialize(ReadBuffer & buf)
-    {
-        data.read(buf);
-    }
+    void deserialize(ReadBuffer & buf) { data.read(buf); }
 
     /// Get the value of the `level` quantile. The level must be between 0 and 1.
-    Value get(Float64 level)
-    {
-        return data.quantileInterpolated(level);
-    }
+    Value get(Float64 level) { return data.quantileInterpolated(level); }
 
     /// Get the `size` values of `levels` quantiles. Write `size` results starting with `result` address.
     /// indices - an array of index levels such that the corresponding elements will go in ascending order.
@@ -79,10 +69,7 @@ struct QuantileReservoirSamplerDeterministic
     }
 
     /// The same, but in the case of an empty state, NaN is returned.
-    Float64 getFloat(Float64 level)
-    {
-        return data.quantileInterpolated(level);
-    }
+    Float64 getFloat(Float64 level) { return data.quantileInterpolated(level); }
 
     void getManyFloat(const Float64 * levels, const size_t * indices, size_t size, Float64 * result)
     {

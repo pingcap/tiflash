@@ -28,10 +28,7 @@ namespace tests
 class StringLRTrim : public DB::tests::FunctionTest
 {
 protected:
-    static ColumnWithTypeAndName toConst(const String & s)
-    {
-        return createConstColumn<String>(1, s);
-    }
+    static ColumnWithTypeAndName toConst(const String & s) { return createConstColumn<String>(1, s); }
 };
 
 TEST_F(StringLRTrim, strLRTrimTest)
@@ -68,9 +65,7 @@ try
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, ""),
         executeFunction("tidbLTrim", createConstColumn<String>(5, "   ")));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(5, ""),
-        executeFunction("tidbLTrim", createConstColumn<String>(5, "")));
+    ASSERT_COLUMN_EQ(createConstColumn<String>(5, ""), executeFunction("tidbLTrim", createConstColumn<String>(5, "")));
     ASSERT_COLUMN_EQ(
         toConst("+Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^   "),
         executeFunction("tidbLTrim", toConst("   +Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^   ")));
@@ -112,9 +107,7 @@ try
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(5, ""),
         executeFunction("tidbRTrim", createConstColumn<String>(5, "   ")));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(5, ""),
-        executeFunction("tidbRTrim", createConstColumn<String>(5, "")));
+    ASSERT_COLUMN_EQ(createConstColumn<String>(5, ""), executeFunction("tidbRTrim", createConstColumn<String>(5, "")));
     ASSERT_COLUMN_EQ(
         toConst("   +Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^"),
         executeFunction("tidbRTrim", toConst("   +Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^   ")));
@@ -128,31 +121,27 @@ try
     // ltrim(column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "\t aa \t", "", {}, "", "\n\t"}),
-        executeFunction("tidbLTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
+        executeFunction(
+            "tidbLTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({"xx aa", "xxaa xx ", "\t aa \t", "", {}, "", "\n\t"}),
         executeFunction("tidbLTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
     // rtrim(column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, "", "\n\t"}),
-        executeFunction("tidbRTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
+        executeFunction(
+            "tidbRTrim",
+            createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, "", "\n\t"}),
         executeFunction("tidbRTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
 
     // NULL cases
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(5),
-        executeFunction("tidbLTrim", createOnlyNullColumnConst(5)));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(5),
-        executeFunction("tidbRTrim", createOnlyNullColumnConst(5)));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(5),
-        executeFunction("tidbLTrim", createOnlyNullColumn(5)));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(5),
-        executeFunction("tidbRTrim", createOnlyNullColumn(5)));
+    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(5), executeFunction("tidbLTrim", createOnlyNullColumnConst(5)));
+    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(5), executeFunction("tidbRTrim", createOnlyNullColumnConst(5)));
+    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(5), executeFunction("tidbLTrim", createOnlyNullColumn(5)));
+    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(5), executeFunction("tidbRTrim", createOnlyNullColumn(5)));
 
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, {}),
@@ -160,57 +149,65 @@ try
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(5, {}),
         executeFunction("tidbRTrim", createConstColumn<Nullable<String>>(5, {})));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(5, {}),
-        executeFunction("tidbLTrim", createConstColumn<String>(5, {})));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(5, {}),
-        executeFunction("tidbRTrim", createConstColumn<String>(5, {})));
+    ASSERT_COLUMN_EQ(createConstColumn<String>(5, {}), executeFunction("tidbLTrim", createConstColumn<String>(5, {})));
+    ASSERT_COLUMN_EQ(createConstColumn<String>(5, {}), executeFunction("tidbRTrim", createConstColumn<String>(5, {})));
 
     // ltrim(column) Nullable<String> ASCII group and non-ASCII group
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a", "b", "c ", "d ", "e f", "g h", "i j ", "k l "}),
-        executeFunction("tidbLTrim", createColumn<Nullable<String>>({"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "})));
+        executeFunction(
+            "tidbLTrim",
+            createColumn<Nullable<String>>({"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"你", "好", "平 ", "凯 ", "星 辰", "啊 波", "次 得 ", "额 佛 "}),
-        executeFunction("tidbLTrim", createColumn<Nullable<String>>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
+        executeFunction(
+            "tidbLTrim",
+            createColumn<Nullable<String>>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
     // ltrim(column) String ASCII group and non-ASCII group
     ASSERT_COLUMN_EQ(
         createColumn<String>({"a", "b", "c ", "d ", "e f", "g h", "i j ", "k l "}),
         executeFunction("tidbLTrim", createColumn<String>({"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({"你", "好", "平 ", "凯 ", "星 辰", "啊 波", "次 得 ", "额 佛 "}),
-        executeFunction("tidbLTrim", createColumn<String>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
+        executeFunction(
+            "tidbLTrim",
+            createColumn<String>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
     // rtrim(column)  Nullable<String> ASCII group and non-ASCII group
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"a", " b", "c", " d", "e f", " g h", "i j", " k l"}),
-        executeFunction("tidbRTrim", createColumn<Nullable<String>>({"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "})));
+        executeFunction(
+            "tidbRTrim",
+            createColumn<Nullable<String>>({"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}),
-        executeFunction("tidbRTrim", createColumn<Nullable<String>>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
+        executeFunction(
+            "tidbRTrim",
+            createColumn<Nullable<String>>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
     // rtrim(column)  String ASCII group and non-ASCII group
     ASSERT_COLUMN_EQ(
         createColumn<String>({"a", " b", "c", " d", "e f", " g h", "i j", " k l"}),
         executeFunction("tidbRTrim", createColumn<String>({"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}),
-        executeFunction("tidbRTrim", createColumn<String>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
+        executeFunction(
+            "tidbRTrim",
+            createColumn<String>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
 
     // const cases
-    InferredDataInitializerList<String> inputs[] = {
-        {"", "/n/t"}, // corner cases
-        {"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "}, // ASCII
-        {"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "}}; // non-ASCII
+    InferredDataInitializerList<String> inputs[]
+        = {{"", "/n/t"}, // corner cases
+           {"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "}, // ASCII
+           {"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "}}; // non-ASCII
 
-    InferredDataInitializerList<String> results_ltrim[] = {
-        {"", "/n/t"}, // corner cases
-        {"a", "b", "c ", "d ", "e f", "g h", "i j ", "k l "}, // ASCII
-        {"你", "好", "平 ", "凯 ", "星 辰", "啊 波", "次 得 ", "额 佛 "}}; // non-ASCII
+    InferredDataInitializerList<String> results_ltrim[]
+        = {{"", "/n/t"}, // corner cases
+           {"a", "b", "c ", "d ", "e f", "g h", "i j ", "k l "}, // ASCII
+           {"你", "好", "平 ", "凯 ", "星 辰", "啊 波", "次 得 ", "额 佛 "}}; // non-ASCII
 
-    InferredDataInitializerList<String> results_rtrim[] = {
-        {"", "/n/t"}, // corner cases
-        {"a", " b", "c", " d", "e f", " g h", "i j", " k l"}, // ASCII
-        {"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}}; // non-ASCII
+    InferredDataInitializerList<String> results_rtrim[]
+        = {{"", "/n/t"}, // corner cases
+           {"a", " b", "c", " d", "e f", " g h", "i j", " k l"}, // ASCII
+           {"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}}; // non-ASCII
 
 
     //const

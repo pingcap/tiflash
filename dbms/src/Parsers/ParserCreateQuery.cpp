@@ -111,7 +111,10 @@ bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
 bool ParserColumnDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserColumnDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(
+               std::make_unique<ParserColumnDeclaration>(),
+               std::make_unique<ParserToken>(TokenType::Comma),
+               false)
         .parse(pos, node, expected);
 }
 

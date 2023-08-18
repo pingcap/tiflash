@@ -31,4 +31,18 @@ public:
     {}
 };
 
+<<<<<<< HEAD
+=======
+class ReadBufferFromOwnString
+    : public String
+    , public ReadBufferFromString
+{
+public:
+    explicit ReadBufferFromOwnString(std::string_view s_)
+        : String(s_)
+        , ReadBufferFromString(*this)
+    {}
+};
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

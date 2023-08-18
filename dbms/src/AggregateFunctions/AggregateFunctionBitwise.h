@@ -55,10 +55,7 @@ class AggregateFunctionBitwise final : public IAggregateFunctionDataHelper<Data,
 public:
     String getName() const override { return Data::name(); }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeNumber<T>>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeNumber<T>>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {

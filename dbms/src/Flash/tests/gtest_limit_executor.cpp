@@ -30,9 +30,29 @@ public:
     {
         ExecutorTest::initializeContext();
 
+<<<<<<< HEAD
         context.addMockTable({db_name, table_name},
                              {{col_name, TiDB::TP::TypeString}},
                              {toNullableVec<String>(col_name, col0)});
+=======
+        context.addMockTable(
+            {db_name, table_name},
+            {{col_name, TiDB::TP::TypeString}},
+            {toNullableVec<String>(col_name, col0)});
+
+        ColumnWithNullableString col;
+        for (size_t i = 0; i < big_table_rows; ++i)
+            col.emplace_back("a");
+        context.addMockTable(
+            {"test", "bigtable"},
+            {{"col", TiDB::TP::TypeString}},
+            {toNullableVec<String>("col", col)});
+
+        context.addMockTable(
+            {"test", "notNull"},
+            {{"col", TiDB::TP::TypeString, false}},
+            {toVec<String>("col", {"a", "b", "c", "d", "e", "f", "g", "h"})});
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(size_t limit_num)
@@ -66,7 +86,12 @@ try
         else if (limit_num > col_data_num)
             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.end()))};
         else
+<<<<<<< HEAD
             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + limit_num))};
+=======
+            expect_cols
+                = {toNullableVec<String>(col_name, ColumnWithNullableString(col0.begin(), col0.begin() + limit_num))};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);

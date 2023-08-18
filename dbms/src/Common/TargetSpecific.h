@@ -76,18 +76,15 @@ namespace DB::TargetSpecific
 struct SkipTarget
 {
 };
-#define TIFLASH_TARGET_SPECIFIC_DEFINE_SKIP_TARGET(RETURN, NAME, ARCH, ...)              \
-    __VA_ARGS__                                                                          \
-    struct _TiflashSkip_##ARCH##_Target_##NAME : public ::DB::TargetSpecific::SkipTarget \
-    {                                                                                    \
-        using ReturnType = RETURN;                                                       \
-        struct Checker                                                                   \
-        {                                                                                \
-            __attribute__((pure, always_inline)) static bool runtimeSupport()            \
-            {                                                                            \
-                return false;                                                            \
-            }                                                                            \
-        };                                                                               \
+#define TIFLASH_TARGET_SPECIFIC_DEFINE_SKIP_TARGET(RETURN, NAME, ARCH, ...)                     \
+    __VA_ARGS__                                                                                 \
+    struct _TiflashSkip_##ARCH##_Target_##NAME : public ::DB::TargetSpecific::SkipTarget        \
+    {                                                                                           \
+        using ReturnType = RETURN;                                                              \
+        struct Checker                                                                          \
+        {                                                                                       \
+            __attribute__((pure, always_inline)) static bool runtimeSupport() { return false; } \
+        };                                                                                      \
     };
 
 #define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)                           \
@@ -165,11 +162,8 @@ struct AVX512Checker
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
         using namespace common;
-        return simd_option::ENABLE_AVX512
-            && common::cpu_feature_flags.avx512f
-            && common::cpu_feature_flags.avx512bw
-            && common::cpu_feature_flags.avx512vl
-            && common::cpu_feature_flags.avx512cd;
+        return simd_option::ENABLE_AVX512 && common::cpu_feature_flags.avx512f && common::cpu_feature_flags.avx512bw
+            && common::cpu_feature_flags.avx512vl && common::cpu_feature_flags.avx512cd;
     }
 };
 #else
@@ -205,8 +199,7 @@ struct SSE4Checker
 {
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
-        return common::cpu_feature_flags.sse4_1
-            && common::cpu_feature_flags.sse4_2;
+        return common::cpu_feature_flags.sse4_1 && common::cpu_feature_flags.sse4_2;
     }
 };
 #else
@@ -244,13 +237,14 @@ struct Dispatch<Last>
     }
 };
 
-#define TIFLASH_MULTITARGET_DISPATCH(RETURN, NAME, ARG_NAMES, ARG_LIST)                                       \
-    RETURN NAME ARG_LIST                                                                                      \
-    {                                                                                                         \
-        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN),                     \
-                                              TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN),                        \
-                                              TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN),                       \
-                                              TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)>::invoke ARG_NAMES; \
+#define TIFLASH_MULTITARGET_DISPATCH(RETURN, NAME, ARG_NAMES, ARG_LIST)     \
+    RETURN NAME ARG_LIST                                                    \
+    {                                                                       \
+        return ::DB::TargetSpecific::Dispatch<                              \
+            TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN),                     \
+            TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN),                        \
+            TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN),                       \
+            TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)>::invoke ARG_NAMES; \
     }
 
 // clang-format off
@@ -319,7 +313,13 @@ struct Dispatch<Last>
     TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TIFLASH_TEMPLATE TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)   \
     TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TIFLASH_TEMPLATE TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)    \
     TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TIFLASH_TEMPLATE TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__) \
-    TIFLASH_MULTITARGET_DISPATCH_TP(TIFLASH_TEMPLATE TPARMS, TIFLASH_MACRO_ARGS TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)
+    TIFLASH_MULTITARGET_DISPATCH_TP(                                                                      \
+        TIFLASH_TEMPLATE TPARMS,                                                                          \
+        TIFLASH_MACRO_ARGS TARGS,                                                                         \
+        RETURN,                                                                                           \
+        NAME,                                                                                             \
+        ARG_NAMES,                                                                                        \
+        ARG_LIST)
 
 namespace Detail
 {
@@ -546,8 +546,7 @@ struct SimdImpl<Generic::WORD_SIZE>
     };                                                                                    \
     using TYPE_PREFIX##vec_t = typename TYPE_PREFIX##_wrapper::type;
 
-#define ENUM_TYPE(TYPE_PREFIX) \
-    TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
+#define ENUM_TYPE(TYPE_PREFIX) TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
 
 #define GET_TYPE(TYPE_PREFIX)                         \
     if constexpr (std::is_same_v<TYPE_PREFIX##_t, T>) \
@@ -557,142 +556,142 @@ struct SimdImpl<Generic::WORD_SIZE>
 
 /// inlining function requires the scope must be within target options, therefore, we need to declare Word
 /// within pragma scope
-TIFLASH_TARGET_SPECIFIC_NAMESPACE(
-    template <size_t LENGTH>
-    struct Word {
-        DECLARE_TYPE(int8);
-        DECLARE_TYPE(int16);
-        DECLARE_TYPE(int32);
-        DECLARE_TYPE(int64);
-        DECLARE_TYPE(uint8);
-        DECLARE_TYPE(uint16);
-        DECLARE_TYPE(uint32);
-        DECLARE_TYPE(uint64);
+TIFLASH_TARGET_SPECIFIC_NAMESPACE(template <size_t LENGTH> struct Word {
+    DECLARE_TYPE(int8);
+    DECLARE_TYPE(int16);
+    DECLARE_TYPE(int32);
+    DECLARE_TYPE(int64);
+    DECLARE_TYPE(uint8);
+    DECLARE_TYPE(uint16);
+    DECLARE_TYPE(uint32);
+    DECLARE_TYPE(uint64);
 
-        template <typename First, typename Second>
-        struct TypePair
+    template <typename First, typename Second>
+    struct TypePair
+    {
+        using FirstType = First;
+        using SecondType = Second;
+    };
+
+    template <typename Key, typename Head, typename... Tail>
+    struct TypeMatch
+    {
+        using MatchedType = std::conditional_t<
+            std::is_same_v<Key, typename Head::FirstType>,
+            typename Head::SecondType,
+            typename TypeMatch<Key, Tail...>::MatchedType>;
+    };
+
+    template <typename Key, typename Head>
+    struct TypeMatch<Key, Head>
+    {
+        using MatchedType = typename Head::SecondType;
+    };
+
+    template <typename Key>
+    using MatchedVectorType = typename TypeMatch<
+        Key,
+        TypePair<int8_t, int8_wrapper>,
+        TypePair<int16_t, int16_wrapper>,
+        TypePair<int32_t, int32_wrapper>,
+        TypePair<int64_t, int64_wrapper>,
+        TypePair<uint8_t, uint8_wrapper>,
+        TypePair<uint16_t, uint16_wrapper>,
+        TypePair<uint32_t, uint32_wrapper>,
+        TypePair<uint64_t, uint64_wrapper>>::MatchedType::type;
+
+    union
+    {
+        typename Detail::SimdImpl<LENGTH>::InternalType as_internal;
+        ENUM_TYPE(int8);
+        ENUM_TYPE(int16);
+        ENUM_TYPE(int32);
+        ENUM_TYPE(int64);
+        ENUM_TYPE(uint8);
+        ENUM_TYPE(uint16);
+        ENUM_TYPE(uint32);
+        ENUM_TYPE(uint64);
+    };
+
+    template <class T>
+    __attribute__((always_inline)) MatchedVectorType<T> & get()
+    {
+        GET_TYPE(int8);
+        GET_TYPE(int16);
+        GET_TYPE(int32);
+        GET_TYPE(int64);
+        GET_TYPE(uint8);
+        GET_TYPE(uint16);
+        GET_TYPE(uint32);
+        GET_TYPE(uint64);
+        __builtin_unreachable();
+    }
+
+    template <class T>
+    __attribute__((always_inline)) const MatchedVectorType<T> & get() const
+    {
+        GET_TYPE(int8);
+        GET_TYPE(int16);
+        GET_TYPE(int32);
+        GET_TYPE(int64);
+        GET_TYPE(uint8);
+        GET_TYPE(uint16);
+        GET_TYPE(uint32);
+        GET_TYPE(uint64);
+        __builtin_unreachable();
+    }
+
+    [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
+    {
+        return Detail::SimdImpl<LENGTH>::isByteAllMarked(as_internal);
+    }
+
+    __attribute__((always_inline)) static Word fromAligned(const void * src)
+    {
+        Word result{};
+        result.as_internal = Detail::SimdImpl<LENGTH>::fromAligned(src);
+        return result;
+    }
+
+    __attribute__((always_inline)) static Word fromUnaligned(const void * src)
+    {
+        Word result{};
+        result.as_internal = Detail::SimdImpl<LENGTH>::fromUnaligned(src);
+        return result;
+    }
+
+    __attribute__((always_inline)) void toAligned(void * dst)
+    {
+        return Detail::SimdImpl<LENGTH>::toAligned(as_internal, dst);
+    }
+
+    __attribute__((always_inline)) void toUnaligned(void * dst)
+    {
+        return Detail::SimdImpl<LENGTH>::toUnaligned(as_internal, dst);
+    }
+
+    template <class T>
+    __attribute__((always_inline)) static Word fromSingle(T val)
+    {
+        Word result{};
+        for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
         {
-            using FirstType = First;
-            using SecondType = Second;
-        };
-
-        template <typename Key, typename Head, typename... Tail>
-        struct TypeMatch
-        {
-            using MatchedType = std::conditional_t<std::is_same_v<Key, typename Head::FirstType>, typename Head::SecondType, typename TypeMatch<Key, Tail...>::MatchedType>;
-        };
-
-        template <typename Key, typename Head>
-        struct TypeMatch<Key, Head>
-        {
-            using MatchedType = typename Head::SecondType;
-        };
-
-        template <typename Key>
-        using MatchedVectorType =
-            typename TypeMatch<
-                Key,
-                TypePair<int8_t, int8_wrapper>,
-                TypePair<int16_t, int16_wrapper>,
-                TypePair<int32_t, int32_wrapper>,
-                TypePair<int64_t, int64_wrapper>,
-                TypePair<uint8_t, uint8_wrapper>,
-                TypePair<uint16_t, uint16_wrapper>,
-                TypePair<uint32_t, uint32_wrapper>,
-                TypePair<uint64_t, uint64_wrapper>>::MatchedType::type;
-
-        union
-        {
-            typename Detail::SimdImpl<LENGTH>::InternalType as_internal;
-            ENUM_TYPE(int8);
-            ENUM_TYPE(int16);
-            ENUM_TYPE(int32);
-            ENUM_TYPE(int64);
-            ENUM_TYPE(uint8);
-            ENUM_TYPE(uint16);
-            ENUM_TYPE(uint32);
-            ENUM_TYPE(uint64);
-        };
-
-        template <class T>
-        __attribute__((always_inline)) MatchedVectorType<T> & get()
-        {
-            GET_TYPE(int8);
-            GET_TYPE(int16);
-            GET_TYPE(int32);
-            GET_TYPE(int64);
-            GET_TYPE(uint8);
-            GET_TYPE(uint16);
-            GET_TYPE(uint32);
-            GET_TYPE(uint64);
-            __builtin_unreachable();
+            result.template get<T>()[i] = val;
         }
+        return result;
+    }
 
-        template <class T>
-        __attribute__((always_inline)) const MatchedVectorType<T> & get() const
+    template <class T>
+    __attribute__((always_inline)) static Word fromArray(const std::array<T, LENGTH / sizeof(T)> & arr)
+    {
+        Word result{};
+        for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
         {
-            GET_TYPE(int8);
-            GET_TYPE(int16);
-            GET_TYPE(int32);
-            GET_TYPE(int64);
-            GET_TYPE(uint8);
-            GET_TYPE(uint16);
-            GET_TYPE(uint32);
-            GET_TYPE(uint64);
-            __builtin_unreachable();
+            result.template get<T>()[i] = arr[i];
         }
-
-        [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
-        {
-            return Detail::SimdImpl<LENGTH>::isByteAllMarked(as_internal);
-        }
-
-        __attribute__((always_inline)) static Word fromAligned(const void * src)
-        {
-            Word result{};
-            result.as_internal = Detail::SimdImpl<LENGTH>::fromAligned(src);
-            return result;
-        }
-
-        __attribute__((always_inline)) static Word fromUnaligned(const void * src)
-        {
-            Word result{};
-            result.as_internal = Detail::SimdImpl<LENGTH>::fromUnaligned(src);
-            return result;
-        }
-
-        __attribute__((always_inline)) void toAligned(void * dst)
-        {
-            return Detail::SimdImpl<LENGTH>::toAligned(as_internal, dst);
-        }
-
-        __attribute__((always_inline)) void toUnaligned(void * dst)
-        {
-            return Detail::SimdImpl<LENGTH>::toUnaligned(as_internal, dst);
-        }
-
-        template <class T>
-        __attribute__((always_inline)) static Word fromSingle(T val)
-        {
-            Word result{};
-            for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
-            {
-                result.template get<T>()[i] = val;
-            }
-            return result;
-        }
-
-        template <class T>
-        __attribute__((always_inline)) static Word fromArray(const std::array<T, LENGTH / sizeof(T)> & arr)
-        {
-            Word result{};
-            for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
-            {
-                result.template get<T>()[i] = arr[i];
-            }
-            return result;
-        }
-    };)
+        return result;
+    }
+};)
 
 #undef DECLARE_TYPE
 #undef ENUM_TYPE

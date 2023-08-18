@@ -84,18 +84,9 @@ public:
     }
 
 private:
-    bool isFullOrOverflow(const std::queue<std::shared_ptr<T>> & q) const
-    {
-        return q.size() >= capacity;
-    }
-    bool isOverflow(const std::queue<std::shared_ptr<T>> & q) const
-    {
-        return q.size() > capacity;
-    }
-    bool isFull(const std::queue<std::shared_ptr<T>> & q) const
-    {
-        return q.size() == capacity;
-    }
+    bool isFullOrOverflow(const std::queue<std::shared_ptr<T>> & q) const { return q.size() >= capacity; }
+    bool isOverflow(const std::queue<std::shared_ptr<T>> & q) const { return q.size() > capacity; }
+    bool isFull(const std::queue<std::shared_ptr<T>> & q) const { return q.size() == capacity; }
 
     std::queue<std::shared_ptr<T>> empty_objects;
     std::queue<std::shared_ptr<T>> objects;

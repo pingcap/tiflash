@@ -108,7 +108,11 @@ struct Helper<ConcurrentBoundedQueue<T>>
 };
 
 template <template <typename> typename QueueType, typename ValueType>
-void test(int capacity [[maybe_unused]], int reader_cnt [[maybe_unused]], int writer_cnt [[maybe_unused]], int seconds [[maybe_unused]])
+void test(
+    int capacity [[maybe_unused]],
+    int reader_cnt [[maybe_unused]],
+    int writer_cnt [[maybe_unused]],
+    int seconds [[maybe_unused]])
 {
     QueueType<ValueType> queue(capacity);
     std::vector<ValueType> data;
@@ -156,12 +160,11 @@ void test(int capacity [[maybe_unused]], int reader_cnt [[maybe_unused]], int wr
         if (duration.count() >= 1000)
         {
             Int64 cur_counter = counter.load(std::memory_order_acquire);
-            std::cout
-                << fmt::format(
-                       "Count: {:<14} Count/s: {:<14}",
-                       cur_counter,
-                       (cur_counter - last_counter) * 1000 / duration.count())
-                << std::endl;
+            std::cout << fmt::format(
+                "Count: {:<14} Count/s: {:<14}",
+                cur_counter,
+                (cur_counter - last_counter) * 1000 / duration.count())
+                      << std::endl;
             second_ago = cur;
             last_counter = cur_counter;
         }
@@ -178,12 +181,8 @@ void test(int capacity [[maybe_unused]], int reader_cnt [[maybe_unused]], int wr
     auto cur = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
     Int64 cur_counter = counter.load(std::memory_order_acquire);
-    std::cout
-        << fmt::format(
-               "End. Count: {:<14} Count/s: {:<14}",
-               cur_counter,
-               cur_counter * 1000 / duration.count())
-        << std::endl;
+    std::cout << fmt::format("End. Count: {:<14} Count/s: {:<14}", cur_counter, cur_counter * 1000 / duration.count())
+              << std::endl;
 }
 
 } // namespace
@@ -194,7 +193,8 @@ int main(int argc, char ** argv)
     if (argc < 3 || argc > 7)
     {
         auto usage = fmt::format(
-            "Usage: {} [MPMCQueue|ConcurrentBoundedQueue] [Int|ShortString|LongString] <capacity=4> <reader=4> <writer=4> <seconds=10>",
+            "Usage: {} [MPMCQueue|ConcurrentBoundedQueue] [Int|ShortString|LongString] <capacity=4> <reader=4> "
+            "<writer=4> <seconds=10>",
             argv[0]);
         std::cerr << usage << std::endl;
         exit(1);
@@ -208,18 +208,15 @@ int main(int argc, char ** argv)
     int seconds = argc >= 7 ? atoi(argv[6]) : 10;
 
     using TestHandler = std::function<void(int capacity, int reader_cnt, int writer_cnt, int seconds)>;
-    static const std::unordered_map<
-        String,
-        std::unordered_map<String, TestHandler>>
-        handlers = {
-            {"MPMCQueue",
-             {{"Int", DB::tests::test<DB::MPMCQueue, int>},
-              {"ShortString", DB::tests::test<DB::MPMCQueue, DB::tests::ShortString>},
-              {"LongString", DB::tests::test<DB::MPMCQueue, DB::tests::LongString>}}},
-            {"ConcurrentBoundedQueue",
-             {{"Int", DB::tests::test<ConcurrentBoundedQueue, int>},
-              {"ShortString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::ShortString>},
-              {"LongString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::LongString>}}}};
+    static const std::unordered_map<String, std::unordered_map<String, TestHandler>> handlers
+        = {{"MPMCQueue",
+            {{"Int", DB::tests::test<DB::MPMCQueue, int>},
+             {"ShortString", DB::tests::test<DB::MPMCQueue, DB::tests::ShortString>},
+             {"LongString", DB::tests::test<DB::MPMCQueue, DB::tests::LongString>}}},
+           {"ConcurrentBoundedQueue",
+            {{"Int", DB::tests::test<ConcurrentBoundedQueue, int>},
+             {"ShortString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::ShortString>},
+             {"LongString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::LongString>}}}};
 
     const auto & find_handler = [](const String & title, const String & name, const auto & handler_map) {
         auto it = handler_map.find(name);
@@ -233,15 +230,14 @@ int main(int argc, char ** argv)
 
     auto handler = find_handler("type", type_name, find_handler("class", class_name, handlers));
 
-    std::cout
-        << fmt::format(
-               "Run MPMC test for {}-{} capacity={} readers={} writers={} seconds={}",
-               class_name,
-               type_name,
-               capacity,
-               reader_cnt,
-               writer_cnt,
-               seconds)
-        << std::endl;
+    std::cout << fmt::format(
+        "Run MPMC test for {}-{} capacity={} readers={} writers={} seconds={}",
+        class_name,
+        type_name,
+        capacity,
+        reader_cnt,
+        writer_cnt,
+        seconds)
+              << std::endl;
     handler(capacity, reader_cnt, writer_cnt, seconds);
 }

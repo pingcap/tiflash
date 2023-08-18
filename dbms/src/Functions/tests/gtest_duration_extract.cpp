@@ -55,19 +55,53 @@ try
         "day_hour",
     };
     MyDuration duration_value(1, 838, 34, 56, 123456, 6);
-    std::vector<Int64> results{838, 34, 56, 123456, 56123456, 3456123456, 3456, 8383456123456, 8383456, 83834, 8383456123456, 8383456, 83834, 838};
+    std::vector<Int64> results{
+        838,
+        34,
+        56,
+        123456,
+        56123456,
+        3456123456,
+        3456,
+        8383456123456,
+        8383456,
+        83834,
+        8383456123456,
+        8383456,
+        83834,
+        838};
 
     for (size_t i = 0; i < units.size(); ++i)
     {
         const auto & unit = units[i];
         const auto & result = results[i];
         // nullable/non-null duration
-        ASSERT_COLUMN_EQ(toNullableVec<Int64>({result}), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumn({duration_value}, 6)));
-        ASSERT_COLUMN_EQ(toVec<Int64>({result}), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumn<false>({duration_value}, 6)));
+        ASSERT_COLUMN_EQ(
+            toNullableVec<Int64>({result}),
+            executeFunction(
+                "extractMyDuration",
+                createConstColumn<String>(1, {unit}),
+                createDurationColumn({duration_value}, 6)));
+        ASSERT_COLUMN_EQ(
+            toVec<Int64>({result}),
+            executeFunction(
+                "extractMyDuration",
+                createConstColumn<String>(1, {unit}),
+                createDurationColumn<false>({duration_value}, 6)));
         // const duration
-        ASSERT_COLUMN_EQ(createConstColumn<Int64>(1, result), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumnConst(1, {duration_value}, 6)));
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, result),
+            executeFunction(
+                "extractMyDuration",
+                createConstColumn<String>(1, {unit}),
+                createDurationColumnConst(1, {duration_value}, 6)));
         // null
-        ASSERT_COLUMN_EQ(toNullableVec<Int64>({std::nullopt}), executeFunction("extractMyDuration", createConstColumn<String>(1, {unit}), createDurationColumn({std::nullopt}, 6)));
+        ASSERT_COLUMN_EQ(
+            toNullableVec<Int64>({std::nullopt}),
+            executeFunction(
+                "extractMyDuration",
+                createConstColumn<String>(1, {unit}),
+                createDurationColumn({std::nullopt}, 6)));
     }
 }
 CATCH

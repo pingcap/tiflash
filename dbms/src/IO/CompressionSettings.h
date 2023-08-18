@@ -28,20 +28,17 @@ struct CompressionSettings
 
     CompressionSettings()
         : CompressionSettings(CompressionMethod::LZ4)
-    {
-    }
+    {}
 
     CompressionSettings(CompressionMethod method_)
         : method(method_)
         , level(getDefaultLevel(method))
-    {
-    }
+    {}
 
     CompressionSettings(CompressionMethod method_, int level_)
         : method(method_)
         , level(level_)
-    {
-    }
+    {}
 
     CompressionSettings(const Settings & settings);
 

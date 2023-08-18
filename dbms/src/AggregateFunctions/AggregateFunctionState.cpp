@@ -31,10 +31,7 @@ class AggregateFunctionCombinatorState final : public IAggregateFunctionCombinat
 public:
     String getName() const override { return "State"; };
 
-    DataTypes transformArguments(const DataTypes & arguments) const override
-    {
-        return arguments;
-    }
+    DataTypes transformArguments(const DataTypes & arguments) const override { return arguments; }
 
     AggregateFunctionPtr transformAggregateFunction(
         const AggregateFunctionPtr & nested_function,
@@ -63,7 +60,9 @@ DataTypePtr AggregateFunctionState::getReturnType() const
             throw Exception("Combinator -MergeState expects only one argument", ErrorCodes::BAD_ARGUMENTS);
 
         if (!typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get()))
-            throw Exception("Combinator -MergeState expects argument with AggregateFunction type", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                "Combinator -MergeState expects argument with AggregateFunction type",
+                ErrorCodes::BAD_ARGUMENTS);
 
         return arguments[0];
     }

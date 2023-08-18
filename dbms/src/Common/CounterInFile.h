@@ -63,8 +63,10 @@ public:
         bool file_doesnt_exists = !Poco::File(path).exists();
         if (file_doesnt_exists && !create_if_need)
         {
-            throw Poco::Exception("File " + path + " does not exist. "
-                                                   "You must create it manulally with appropriate value or 0 for first start.");
+            throw Poco::Exception(
+                "File " + path
+                + " does not exist. "
+                  "You must create it manulally with appropriate value or 0 for first start.");
         }
 
         int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
@@ -87,8 +89,11 @@ public:
                 catch (const DB::Exception & e)
                 {
                     /// A more understandable error message.
-                    if (e.code() == DB::ErrorCodes::CANNOT_READ_ALL_DATA || e.code() == DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF)
-                        throw DB::Exception("File " + path + " is empty. You must fill it manually with appropriate value.", e.code());
+                    if (e.code() == DB::ErrorCodes::CANNOT_READ_ALL_DATA
+                        || e.code() == DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF)
+                        throw DB::Exception(
+                            "File " + path + " is empty. You must fill it manually with appropriate value.",
+                            e.code());
                     else
                         throw;
                 }
@@ -128,16 +133,10 @@ public:
             create_if_need);
     }
 
-    const std::string & getPath() const
-    {
-        return path;
-    }
+    const std::string & getPath() const { return path; }
 
     /// Change the path to the file.
-    void setPath(std::string path_)
-    {
-        path = path_;
-    }
+    void setPath(std::string path_) { path = path_; }
 
     // Not thread-safe and not synchronized between processes.
     void fixIfBroken(UInt64 value)
@@ -166,7 +165,8 @@ public:
                 }
                 catch (const DB::Exception & e)
                 {
-                    if (e.code() != DB::ErrorCodes::CANNOT_READ_ALL_DATA && e.code() != DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF)
+                    if (e.code() != DB::ErrorCodes::CANNOT_READ_ALL_DATA
+                        && e.code() != DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF)
                         throw;
                 }
             }

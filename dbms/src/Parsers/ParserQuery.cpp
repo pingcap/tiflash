@@ -35,12 +35,9 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserDBGInvokeQuery dbginvoke_p;
     ParserManageQuery manage_p;
 
-    bool res = query_with_output_p.parse(pos, node, expected)
-        || insert_p.parse(pos, node, expected)
-        || use_p.parse(pos, node, expected)
-        || set_p.parse(pos, node, expected)
-        || dbginvoke_p.parse(pos, node, expected)
-        || manage_p.parse(pos, node, expected);
+    bool res = query_with_output_p.parse(pos, node, expected) || insert_p.parse(pos, node, expected)
+        || use_p.parse(pos, node, expected) || set_p.parse(pos, node, expected)
+        || dbginvoke_p.parse(pos, node, expected) || manage_p.parse(pos, node, expected);
 
     return res;
 }

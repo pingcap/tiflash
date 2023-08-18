@@ -93,7 +93,10 @@ struct HashSetCellWithSavedHash : public HashTableCell<Key, Hash, TState>
 
     bool keyEquals(const Key & key_) const { return bitEquals(this->key, key_); }
     bool keyEquals(const Key & key_, size_t hash_) const { return saved_hash == hash_ && bitEquals(this->key, key_); }
-    bool keyEquals(const Key & key_, size_t hash_, const typename Base::State &) const { return keyEquals(key_, hash_); }
+    bool keyEquals(const Key & key_, size_t hash_, const typename Base::State &) const
+    {
+        return keyEquals(key_, hash_);
+    }
 
     void setHash(size_t hash_value) { saved_hash = hash_value; }
     size_t getHash(const Hash & /*hash_function*/) const { return saved_hash; }
@@ -111,9 +114,7 @@ using HashSetWithStackMemory = HashSet<
     Key,
     Hash,
     HashTableGrower<initial_size_degree>,
-    HashTableAllocatorWithStackMemory<
-        (1ULL << initial_size_degree)
-        * sizeof(HashTableCell<Key, Hash>)>>;
+    HashTableAllocatorWithStackMemory<(1ULL << initial_size_degree) * sizeof(HashTableCell<Key, Hash>)>>;
 
 template <
     typename Key,
@@ -127,6 +128,4 @@ using HashSetWithSavedHashWithStackMemory = HashSetWithSavedHash<
     Key,
     Hash,
     HashTableGrower<initial_size_degree>,
-    HashTableAllocatorWithStackMemory<
-        (1ULL << initial_size_degree)
-        * sizeof(HashSetCellWithSavedHash<Key, Hash>)>>;
+    HashTableAllocatorWithStackMemory<(1ULL << initial_size_degree) * sizeof(HashSetCellWithSavedHash<Key, Hash>)>>;

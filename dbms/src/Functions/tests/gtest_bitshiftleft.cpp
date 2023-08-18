@@ -23,15 +23,15 @@ class TestFunctionBitShiftLeft : public DB::tests::FunctionTest
 {
 };
 
-#define ASSERT_BITSHIFTLEFT(t1, t2, result) \
-    ASSERT_COLUMN_EQ(result, executeFunction("bitShiftLeft", {t1, t2}))
+#define ASSERT_BITSHIFTLEFT(t1, t2, result) ASSERT_COLUMN_EQ(result, executeFunction("bitShiftLeft", {t1, t2}))
 
 TEST_F(TestFunctionBitShiftLeft, Simple)
 try
 {
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int64>>({11}),
-                        createColumn<Nullable<Int64>>({3}),
-                        createColumn<Nullable<UInt64>>({88}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int64>>({11}),
+        createColumn<Nullable<Int64>>({3}),
+        createColumn<Nullable<UInt64>>({88}));
 }
 CATCH
 
@@ -41,21 +41,57 @@ TEST_F(TestFunctionBitShiftLeft, TypePromotion)
 try
 {
     // Type Promotion
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({-1}), createColumn<Nullable<Int16>>({1}), createColumn<Nullable<UInt64>>({18446744073709551614ull}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int16>>({-1}), createColumn<Nullable<Int32>>({1}), createColumn<Nullable<UInt64>>({18446744073709551614ull}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int32>>({-1}), createColumn<Nullable<Int64>>({1}), createColumn<Nullable<UInt64>>({18446744073709551614ull}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({-1}), createColumn<Nullable<Int64>>({1}), createColumn<Nullable<UInt64>>({18446744073709551614ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({-1}),
+        createColumn<Nullable<Int16>>({1}),
+        createColumn<Nullable<UInt64>>({18446744073709551614ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int16>>({-1}),
+        createColumn<Nullable<Int32>>({1}),
+        createColumn<Nullable<UInt64>>({18446744073709551614ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int32>>({-1}),
+        createColumn<Nullable<Int64>>({1}),
+        createColumn<Nullable<UInt64>>({18446744073709551614ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({-1}),
+        createColumn<Nullable<Int64>>({1}),
+        createColumn<Nullable<UInt64>>({18446744073709551614ull}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<UInt16>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt16>>({1}), createColumn<Nullable<UInt32>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<UInt64>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<UInt64>>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt16>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt16>>({1}),
+        createColumn<Nullable<UInt32>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt32>>({1}),
+        createColumn<Nullable<UInt64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<UInt64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 
     // Type Promotion across signed/unsigned
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int16>>({-1}), createColumn<Nullable<UInt32>>({0}), createColumn<Nullable<UInt64>>({18446744073709551615ull}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int64>>({-1}), createColumn<Nullable<UInt8>>({0}), createColumn<Nullable<UInt64>>({18446744073709551615ull}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<Int16>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<Int64>>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int16>>({-1}),
+        createColumn<Nullable<UInt32>>({0}),
+        createColumn<Nullable<UInt64>>({18446744073709551615ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int64>>({-1}),
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt64>>({18446744073709551615ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt32>>({1}),
+        createColumn<Nullable<Int16>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Nullable<Int64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 }
 CATCH
 
@@ -79,35 +115,107 @@ try
     ASSERT_BITSHIFTLEFT(createColumn<UInt8>({1}), createColumn<Int64>({0}), createColumn<UInt64>({1}));
 
     // Across Nullable and non-Nullable
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({1}), createColumn<Nullable<Int16>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int16>({1}), createColumn<Nullable<Int32>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int32>({1}), createColumn<Nullable<Int64>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({1}), createColumn<Nullable<Int64>>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({1}),
+        createColumn<Nullable<Int16>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int16>({1}),
+        createColumn<Nullable<Int32>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int32>({1}),
+        createColumn<Nullable<Int64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({1}),
+        createColumn<Nullable<Int64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<UInt8>({1}), createColumn<Nullable<UInt16>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<UInt16>({1}), createColumn<Nullable<UInt32>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<UInt32>({1}), createColumn<Nullable<UInt64>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<UInt8>({1}), createColumn<Nullable<UInt64>>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt8>({1}),
+        createColumn<Nullable<UInt16>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt16>({1}),
+        createColumn<Nullable<UInt32>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt32>({1}),
+        createColumn<Nullable<UInt64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt8>({1}),
+        createColumn<Nullable<UInt64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Int16>({1}), createColumn<Nullable<UInt32>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int64>({1}), createColumn<Nullable<UInt8>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<UInt32>({1}), createColumn<Nullable<Int16>>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<UInt8>({1}), createColumn<Nullable<Int64>>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int16>({1}),
+        createColumn<Nullable<UInt32>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int64>({1}),
+        createColumn<Nullable<UInt8>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt32>({1}),
+        createColumn<Nullable<Int16>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt8>({1}),
+        createColumn<Nullable<Int64>>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({1}), createColumn<Int16>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int16>>({1}), createColumn<Int32>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int32>>({1}), createColumn<Int64>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({1}), createColumn<Int64>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({1}),
+        createColumn<Int16>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int16>>({1}),
+        createColumn<Int32>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int32>>({1}),
+        createColumn<Int64>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({1}),
+        createColumn<Int64>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt8>>({1}), createColumn<UInt16>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt16>>({1}), createColumn<UInt32>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt32>>({1}), createColumn<UInt64>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt8>>({1}), createColumn<UInt64>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<UInt16>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt16>>({1}),
+        createColumn<UInt32>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt32>>({1}),
+        createColumn<UInt64>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<UInt64>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int16>>({1}), createColumn<UInt32>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int64>>({1}), createColumn<UInt8>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt32>>({1}), createColumn<Int16>({0}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt8>>({1}), createColumn<Int64>({0}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int16>>({1}),
+        createColumn<UInt32>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int64>>({1}),
+        createColumn<UInt8>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt32>>({1}),
+        createColumn<Int16>({0}),
+        createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt8>>({1}),
+        createColumn<Int64>({0}),
+        createColumn<Nullable<UInt64>>({1}));
 }
 CATCH
 
@@ -121,89 +229,190 @@ try
     /// 4. ColumnConst<Nullable>, value != null
     /// 5. ColumnConst<Nullable>, value = null
 
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({0, 0, 1, 1}), createColumn<UInt64>({0, 1, 0, 1}), createColumn<UInt64>({0, 0, 1, 2}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({0, 0, 1, 1}), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({0, 0, 1, 1}), createConstColumn<UInt64>(4, 0), createColumn<UInt64>({0, 0, 1, 1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({0, 0, 1, 1}), createConstColumn<Nullable<UInt64>>(4, 0), createColumn<UInt64>({0, 0, 1, 1}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({0, 0, 1, 1}), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt)); // become const in wrapInNullable
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createColumn<UInt64>({0, 1, 0, 1}),
+        createColumn<UInt64>({0, 0, 1, 2}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createConstColumn<UInt64>(4, 0),
+        createColumn<UInt64>({0, 0, 1, 1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createConstColumn<Nullable<UInt64>>(4, 0),
+        createColumn<UInt64>({0, 0, 1, 1}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({0, 0, 1, 1}),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt)); // become const in wrapInNullable
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<UInt64>({0, 1, 0, 1}), createColumn<Nullable<UInt64>>({0, 2, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 2, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<UInt64>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<UInt64>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<UInt64>({0, 1, 0, 1}),
+        createColumn<Nullable<UInt64>>({0, 2, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({0, 2, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createConstColumn<UInt64>(4, 0),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createConstColumn<UInt64>(4, 0),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 
-    ASSERT_BITSHIFTLEFT(createConstColumn<Int8>(4, 1), createColumn<UInt64>({0, 1, 0, 1}), createColumn<UInt64>({1, 2, 1, 2}));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Int8>(4, 1), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({1, 2, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Int8>(4, 1), createConstColumn<UInt64>(4, 0), createConstColumn<UInt64>(4, 1));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Int8>(4, 1), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<UInt64>(4, 1));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Int8>(4, 1), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Int8>(4, 1),
+        createColumn<UInt64>({0, 1, 0, 1}),
+        createColumn<UInt64>({1, 2, 1, 2}));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Int8>(4, 1),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({1, 2, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Int8>(4, 1),
+        createConstColumn<UInt64>(4, 0),
+        createConstColumn<UInt64>(4, 1));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Int8>(4, 1),
+        createConstColumn<Nullable<UInt64>>(4, 0),
+        createConstColumn<UInt64>(4, 1));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Int8>(4, 1),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, 1), createColumn<UInt64>({0, 1, 0, 1}), createColumn<UInt64>({1, 2, 1, 2}));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, 1), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({1, 2, std::nullopt, std::nullopt}));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, 1), createConstColumn<UInt64>(4, 0), createConstColumn<UInt64>(4, 1));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, 1), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<UInt64>(4, 1));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, 1), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, 1),
+        createColumn<UInt64>({0, 1, 0, 1}),
+        createColumn<UInt64>({1, 2, 1, 2}));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, 1),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}),
+        createColumn<Nullable<UInt64>>({1, 2, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, 1),
+        createConstColumn<UInt64>(4, 0),
+        createConstColumn<UInt64>(4, 1));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, 1),
+        createConstColumn<Nullable<UInt64>>(4, 0),
+        createConstColumn<UInt64>(4, 1));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, 1),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<UInt64>({0, 1, 0, 1}), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<UInt64>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<UInt64>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
-    ASSERT_BITSHIFTLEFT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createColumn<UInt64>({0, 1, 0, 1}),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createConstColumn<UInt64>(4, 0),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createConstColumn<UInt64>(4, 0),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITSHIFTLEFT(
+        createConstColumn<Nullable<Int8>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt),
+        createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 }
 CATCH
 
 TEST_F(TestFunctionBitShiftLeft, Boundary)
 try
 {
-    ASSERT_BITSHIFTLEFT(createColumn<Int8>({127, 127, -128, -128}), createColumn<UInt8>({0, 7, 0, 7}), createColumn<UInt64>({127, 16256, 18446744073709551488ull, 18446744073709535232ull}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int16>({32767, 32767, -32768, -32768}), createColumn<UInt8>({0, 15, 0, 15}), createColumn<UInt64>({32767, 1073709056, 18446744073709518848ull, 18446744072635809792ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int8>({127, 127, -128, -128}),
+        createColumn<UInt8>({0, 7, 0, 7}),
+        createColumn<UInt64>({127, 16256, 18446744073709551488ull, 18446744073709535232ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int16>({32767, 32767, -32768, -32768}),
+        createColumn<UInt8>({0, 15, 0, 15}),
+        createColumn<UInt64>({32767, 1073709056, 18446744073709518848ull, 18446744072635809792ull}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Int64>({0, 0, 1, 1, -1, -1, INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN}),
-                        createColumn<UInt64>({0, 63, 0, 63, 0, 63, 0, 63, 0, 63}),
-                        createColumn<UInt64>({0, 0, 1, 9223372036854775808ull, 18446744073709551615ull, 9223372036854775808ull, 9223372036854775807ull, 9223372036854775808ull, 9223372036854775808ull, 0}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int64>({0, 0, 1, 1, -1, -1, INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN}),
+        createColumn<UInt64>({0, 63, 0, 63, 0, 63, 0, 63, 0, 63}),
+        createColumn<UInt64>(
+            {0,
+             0,
+             1,
+             9223372036854775808ull,
+             18446744073709551615ull,
+             9223372036854775808ull,
+             9223372036854775807ull,
+             9223372036854775808ull,
+             9223372036854775808ull,
+             0}));
 }
 CATCH
 
 TEST_F(TestFunctionBitShiftLeft, UINT64)
 try
 {
-    ASSERT_BITSHIFTLEFT(createColumn<UInt64>({0, UINT64_MAX}),
-                        createColumn<UInt64>({63, 63}),
-                        createColumn<UInt64>({0, 9223372036854775808ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt64>({0, UINT64_MAX}),
+        createColumn<UInt64>({63, 63}),
+        createColumn<UInt64>({0, 9223372036854775808ull}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt64>>({0, UINT64_MAX, std::nullopt}),
-                        createColumn<Nullable<UInt64>>({63, 63, 63}),
-                        createColumn<Nullable<UInt64>>({0, 9223372036854775808ull, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt64>>({0, UINT64_MAX, std::nullopt}),
+        createColumn<Nullable<UInt64>>({63, 63, 63}),
+        createColumn<Nullable<UInt64>>({0, 9223372036854775808ull, std::nullopt}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt64>>({0, UINT64_MAX, std::nullopt}),
-                        createColumn<UInt64>({63, 63, 63}),
-                        createColumn<Nullable<UInt64>>({0, 9223372036854775808ull, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt64>>({0, UINT64_MAX, std::nullopt}),
+        createColumn<UInt64>({63, 63, 63}),
+        createColumn<Nullable<UInt64>>({0, 9223372036854775808ull, std::nullopt}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<UInt64>({0, UINT64_MAX}),
-                        createColumn<Nullable<UInt64>>({63, 63}),
-                        createColumn<Nullable<UInt64>>({0, 9223372036854775808ull}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt64>({0, UINT64_MAX}),
+        createColumn<Nullable<UInt64>>({63, 63}),
+        createColumn<Nullable<UInt64>>({0, 9223372036854775808ull}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Int64>({0, 0, 1, 1, -1, -1, INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN}),
-                        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX}),
-                        createColumn<UInt64>({0, 0, 1, 0, 18446744073709551615ull, 0, INT64_MAX, 0, 9223372036854775808ull, 0}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int64>({0, 0, 1, 1, -1, -1, INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN}),
+        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX, 0, UINT64_MAX}),
+        createColumn<UInt64>({0, 0, 1, 0, 18446744073709551615ull, 0, INT64_MAX, 0, 9223372036854775808ull, 0}));
 
 
-    ASSERT_BITSHIFTLEFT(createColumn<UInt64>({0, 0, UINT64_MAX, UINT64_MAX}),
-                        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX}),
-                        createColumn<UInt64>({0, 0, UINT64_MAX, 0}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt64>({0, 0, UINT64_MAX, UINT64_MAX}),
+        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX}),
+        createColumn<UInt64>({0, 0, UINT64_MAX, 0}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, 0, std::nullopt}),
-                        createColumn<Nullable<UInt64>>({0, UINT64_MAX, 0, UINT64_MAX, std::nullopt, 0}),
-                        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, 0, std::nullopt, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, 0, std::nullopt}),
+        createColumn<Nullable<UInt64>>({0, UINT64_MAX, 0, UINT64_MAX, std::nullopt, 0}),
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, 0, std::nullopt, std::nullopt}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
-                        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0}),
-                        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, 0, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
+        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0}),
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, 0, std::nullopt}));
 
-    ASSERT_BITSHIFTLEFT(createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0}),
-                        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
-                        createColumn<Nullable<UInt64>>({0, UINT64_MAX, 0, 0, std::nullopt}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<UInt64>({0, UINT64_MAX, 0, UINT64_MAX, 0}),
+        createColumn<Nullable<UInt64>>({0, 0, UINT64_MAX, UINT64_MAX, std::nullopt}),
+        createColumn<Nullable<UInt64>>({0, UINT64_MAX, 0, 0, std::nullopt}));
 
     /*
     std::mt19937 gen(std::random_device{}());
@@ -233,9 +442,18 @@ try
 {
     ASSERT_BITSHIFTLEFT(createColumn<Int8>({127, -128}), createColumn<UInt8>({64, 64}), createColumn<UInt64>({0, 0}));
     ASSERT_BITSHIFTLEFT(createColumn<Int8>({127, -128}), createColumn<UInt16>({64, 64}), createColumn<UInt64>({0, 0}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int16>({32767, -32768}), createColumn<UInt8>({64, 64}), createColumn<UInt64>({0, 0}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int32>({INT32_MAX, INT32_MIN}), createColumn<UInt8>({64, 64}), createColumn<UInt64>({0, 0}));
-    ASSERT_BITSHIFTLEFT(createColumn<Int64>({INT64_MAX, INT64_MIN}), createColumn<UInt8>({64, 64}), createColumn<UInt64>({0, 0}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int16>({32767, -32768}),
+        createColumn<UInt8>({64, 64}),
+        createColumn<UInt64>({0, 0}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int32>({INT32_MAX, INT32_MIN}),
+        createColumn<UInt8>({64, 64}),
+        createColumn<UInt64>({0, 0}));
+    ASSERT_BITSHIFTLEFT(
+        createColumn<Int64>({INT64_MAX, INT64_MIN}),
+        createColumn<UInt8>({64, 64}),
+        createColumn<UInt64>({0, 0}));
 
     ASSERT_BITSHIFTLEFT(createColumn<UInt8>({255}), createColumn<UInt8>({64}), createColumn<UInt64>({0}));
     ASSERT_BITSHIFTLEFT(createColumn<UInt8>({255}), createColumn<UInt16>({64}), createColumn<UInt64>({0}));

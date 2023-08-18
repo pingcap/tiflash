@@ -42,15 +42,11 @@ public:
     template <typename Function>
     void registerFunction()
     {
-        registerFunction(Function::name, []() -> TableFunctionPtr {
-            return std::make_shared<Function>();
-        });
+        registerFunction(Function::name, []() -> TableFunctionPtr { return std::make_shared<Function>(); });
     }
 
     /// Throws an exception if not found.
-    TableFunctionPtr get(
-        const std::string & name,
-        const Context & context) const;
+    TableFunctionPtr get(const std::string & name, const Context & context) const;
 
 private:
     using TableFunctions = std::unordered_map<std::string, Creator>;

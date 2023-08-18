@@ -31,17 +31,11 @@ template <typename BiasData>
 class HyperLogLogBiasEstimator
 {
 public:
-    static constexpr bool isTrivial()
-    {
-        return false;
-    }
+    static constexpr bool isTrivial() { return false; }
 
     /// Maximum number of unique values to which the correction should apply
     /// from the LinearCounting algorithm.
-    static double getThreshold()
-    {
-        return BiasData::getThreshold();
-    }
+    static double getThreshold() { return BiasData::getThreshold(); }
 
     /// Return the error estimate.
     static double getBias(double raw_estimate)
@@ -92,8 +86,9 @@ private:
     static_assert(std::is_same_v<TRawEstimates, TBiasData>, "Bias estimator data have inconsistent types");
     static_assert(std::tuple_size<TRawEstimates>::value > 0, "Bias estimator has no raw estimate data");
     static_assert(std::tuple_size<TBiasData>::value > 0, "Bias estimator has no bias data");
-    static_assert(std::tuple_size<TRawEstimates>::value == std::tuple_size<TBiasData>::value,
-                  "Bias estimator has inconsistent data");
+    static_assert(
+        std::tuple_size<TRawEstimates>::value == std::tuple_size<TBiasData>::value,
+        "Bias estimator has inconsistent data");
 };
 
 /** Trivial case of HyperLogLogBiasEstimator: used if we do not want to fix
@@ -105,18 +100,9 @@ private:
   */
 struct TrivialBiasEstimator
 {
-    static constexpr bool isTrivial()
-    {
-        return true;
-    }
+    static constexpr bool isTrivial() { return true; }
 
-    static double getThreshold()
-    {
-        return 0.0;
-    }
+    static double getThreshold() { return 0.0; }
 
-    static double getBias(double /*raw_estimate*/)
-    {
-        return 0.0;
-    }
+    static double getBias(double /*raw_estimate*/) { return 0.0; }
 };

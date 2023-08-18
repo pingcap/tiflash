@@ -45,14 +45,28 @@ public:
         index_++;
     }
 
+<<<<<<< HEAD
     std::vector<std::shared_ptr<ExecutorBinder>> getChildren()
     {
         return children;
     }
+=======
+    std::vector<std::shared_ptr<ExecutorBinder>> getChildren() const { return children; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     virtual void columnPrune(std::unordered_set<String> & used_columns) = 0;
-    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) = 0;
-    virtual void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+    virtual bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context)
+        = 0;
+    virtual void toMPPSubPlan(
+        size_t & executor_index,
+        const DAGProperties & properties,
+        std::unordered_map<
+            String,
+            std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
     {
         children[0]->toMPPSubPlan(executor_index, properties, exchange_map);
     }

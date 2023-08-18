@@ -27,9 +27,7 @@ class DAGContext;
 class Planner : public IInterpreter
 {
 public:
-    Planner(
-        Context & context_,
-        const PlanQuerySource & plan_source_);
+    Planner(Context & context_, const PlanQuerySource & plan_source_);
 
     ~Planner() = default;
 

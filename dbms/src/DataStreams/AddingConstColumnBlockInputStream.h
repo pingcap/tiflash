@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Core/ColumnWithTypeAndName.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {
@@ -26,12 +26,10 @@ template <typename T>
 class AddingConstColumnBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    AddingConstColumnBlockInputStream(
-        BlockInputStreamPtr input_,
-        DataTypePtr data_type_,
-        T value_,
-        String column_name_)
-        : data_type(data_type_), value(value_), column_name(column_name_)
+    AddingConstColumnBlockInputStream(BlockInputStreamPtr input_, DataTypePtr data_type_, T value_, String column_name_)
+        : data_type(data_type_)
+        , value(value_)
+        , column_name(column_name_)
     {
         children.push_back(input_);
     }
@@ -52,7 +50,8 @@ protected:
         if (!res)
             return res;
 
-        res.insert({data_type->createColumnConst(res.rows(), value)->convertToFullColumnIfConst(), data_type, column_name});
+        res.insert(
+            {data_type->createColumnConst(res.rows(), value)->convertToFullColumnIfConst(), data_type, column_name});
         return res;
     }
 
@@ -62,4 +61,4 @@ private:
     String column_name;
 };
 
-}
+} // namespace DB

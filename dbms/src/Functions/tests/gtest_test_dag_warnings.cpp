@@ -39,17 +39,45 @@ try
 {
     const std::string func_name = "formatWithLocale";
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"0.0000", "-0.0120", "0.0120", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", {}, {}, {}}),
+        createColumn<Nullable<String>>(
+            {"0.0000",
+             "-0.0120",
+             "0.0120",
+             "12,332.1235",
+             "12,332.1235",
+             "12,332.1235",
+             "12,332.1235",
+             "12,332.1235",
+             {},
+             {},
+             {}}),
         executeFunction(
             func_name,
-            createColumn<Nullable<Float64>>({0, -.012, .012, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, {}, {}}),
+            createColumn<Nullable<Float64>>(
+                {0,
+                 -.012,
+                 .012,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 12332.123456,
+                 {},
+                 {}}),
             createColumn<Nullable<Int64>>({4, 4, 4, 4, 4, 4, 4, 4, {}, 4, {}}),
-            createColumn<Nullable<String>>({"en_US", "en_US", "en_US", "en_US", "en_us", "xxx", "xx1", {}, "xx2", "xx3", "xx4"})));
+            createColumn<Nullable<String>>(
+                {"en_US", "en_US", "en_US", "en_US", "en_us", "xxx", "xx1", {}, "xx2", "xx3", "xx4"})));
 
     auto gen_warning_str = [](const std::string & value) -> std::string {
         return fmt::format("Unknown locale: \'{}\'", value);
     };
-    std::vector<std::string> expected_warnings{gen_warning_str("xxx"), gen_warning_str("xx1"), gen_warning_str("NULL"), gen_warning_str("xx2"), gen_warning_str("xx3")};
+    std::vector<std::string> expected_warnings{
+        gen_warning_str("xxx"),
+        gen_warning_str("xx1"),
+        gen_warning_str("NULL"),
+        gen_warning_str("xx2"),
+        gen_warning_str("xx3")};
     std::vector<tipb::Error> actual_warnings;
     getDAGContext().consumeWarnings(actual_warnings);
     ASSERT_TRUE(getDAGContext().getWarningCount() == 6);

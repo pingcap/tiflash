@@ -47,8 +47,7 @@ InterpreterInsertQuery::InterpreterInsertQuery(
     : query_ptr(query_ptr_)
     , context(context_)
     , allow_materialized(allow_materialized_)
-{
-}
+{}
 
 
 StoragePtr InterpreterInsertQuery::getTable(const ASTInsertQuery & query)
@@ -90,10 +89,14 @@ Block InterpreterInsertQuery::getSampleBlock(const ASTInsertQuery & query, const
 
         /// The table does not have a column with that name
         if (!table_sample.has(current_name))
-            throw Exception("No such column " + current_name + " in table " + query.table, ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception(
+                "No such column " + current_name + " in table " + query.table,
+                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 
         if (!allow_materialized && !table_sample_non_materialized.has(current_name))
-            throw Exception("Cannot insert column " + current_name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Cannot insert column " + current_name + ", because it is MATERIALIZED column.",
+                ErrorCodes::ILLEGAL_COLUMN);
 
         res.insert(ColumnWithTypeAndName(table_sample.getByName(current_name).type, current_name));
     }
@@ -117,7 +120,13 @@ BlockIO InterpreterInsertQuery::execute()
     /// We create a pipeline of several streams, into which we will write data.
     BlockOutputStreamPtr out;
 
-    out = std::make_shared<PushingToViewsBlockOutputStream>(query.database, query.table, table, context, query_ptr, query.no_destination);
+    out = std::make_shared<PushingToViewsBlockOutputStream>(
+        query.database,
+        query.table,
+        table,
+        context,
+        query_ptr,
+        query.no_destination);
 
     out = std::make_shared<AddingDefaultBlockOutputStream>(
         out,
@@ -147,11 +156,16 @@ BlockIO InterpreterInsertQuery::execute()
     if (query.select)
     {
         /// Passing 1 as subquery_depth will disable limiting size of intermediate result.
-        InterpreterSelectWithUnionQuery interpreter_select{query.select, context, {}, QueryProcessingStage::Complete, 1};
+        InterpreterSelectWithUnionQuery
+            interpreter_select{query.select, context, {}, QueryProcessingStage::Complete, 1};
 
         res.in = interpreter_select.execute().in;
 
-        res.in = std::make_shared<ConvertingBlockInputStream>(context, res.in, res.out->getHeader(), ConvertingBlockInputStream::MatchColumnsMode::Position);
+        res.in = std::make_shared<ConvertingBlockInputStream>(
+            context,
+            res.in,
+            res.out->getHeader(),
+            ConvertingBlockInputStream::MatchColumnsMode::Position);
         res.in = std::make_shared<NullAndDoCopyBlockInputStream>(res.in, res.out);
 
         res.out = nullptr;
@@ -161,7 +175,9 @@ BlockIO InterpreterInsertQuery::execute()
             Block in_header = res.in->getHeader();
             for (const auto & name_type : table->getColumns().materialized)
                 if (in_header.has(name_type.name))
-                    throw Exception("Cannot insert column " + name_type.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
+                    throw Exception(
+                        "Cannot insert column " + name_type.name + ", because it is MATERIALIZED column.",
+                        ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 

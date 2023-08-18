@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteBufferValidUTF8.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferValidUTF8.h>
 #include <IO/WriteHelpers.h>
-#include <string>
-#include <streambuf>
-#include <iostream>
+
 #include <cstdio>
+#include <iostream>
+#include <streambuf>
+#include <string>
 
 int main(int, char **)
 {

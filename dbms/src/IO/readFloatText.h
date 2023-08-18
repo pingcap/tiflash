@@ -152,7 +152,9 @@ bool assertOrParseNaN(ReadBuffer & buf)
 template <typename T, typename ReturnType>
 ReturnType readFloatTextPreciseImpl(T & x, ReadBuffer & buf)
 {
-    static_assert(std::is_same_v<T, double> || std::is_same_v<T, float>, "Argument for readFloatTextImpl must be float or double");
+    static_assert(
+        std::is_same_v<T, double> || std::is_same_v<T, float>,
+        "Argument for readFloatTextImpl must be float or double");
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
     if (buf.eof())
@@ -213,12 +215,8 @@ ReturnType readFloatTextPreciseImpl(T & x, ReadBuffer & buf)
         break;
     }
 
-    static const double_conversion::StringToDoubleConverter converter(
-        double_conversion::StringToDoubleConverter::ALLOW_TRAILING_JUNK,
-        0,
-        0,
-        nullptr,
-        nullptr);
+    static const double_conversion::StringToDoubleConverter
+        converter(double_conversion::StringToDoubleConverter::ALLOW_TRAILING_JUNK, 0, 0, nullptr, nullptr);
 
     /// Fast path (avoid copying) if the buffer have at least MAX_LENGTH bytes.
     static constexpr int MAX_LENGTH = 316;
@@ -228,7 +226,10 @@ ReturnType readFloatTextPreciseImpl(T & x, ReadBuffer & buf)
         int num_processed_characters = 0;
 
         if constexpr (std::is_same_v<T, double>)
-            x = converter.StringToDouble(buf.position(), buf.buffer().end() - buf.position(), &num_processed_characters);
+            x = converter.StringToDouble(
+                buf.position(),
+                buf.buffer().end() - buf.position(),
+                &num_processed_characters);
         else
             x = converter.StringToFloat(buf.position(), buf.buffer().end() - buf.position(), &num_processed_characters);
 
@@ -330,8 +331,12 @@ static inline void readUIntTextUpToNSignificantDigits(T & x, ReadBuffer & buf)
 template <typename T, typename ReturnType>
 ReturnType readFloatTextFastImpl(T & x, ReadBuffer & in)
 {
-    static_assert(std::is_same_v<T, double> || std::is_same_v<T, float>, "Argument for readFloatTextImpl must be float or double");
-    static_assert('a' > '.' && 'A' > '.' && '\n' < '.' && '\t' < '.' && '\'' < '.' && '"' < '.', "Layout of char is not like ASCII");
+    static_assert(
+        std::is_same_v<T, double> || std::is_same_v<T, float>,
+        "Argument for readFloatTextImpl must be float or double");
+    static_assert(
+        'a' > '.' && 'A' > '.' && '\n' < '.' && '\t' < '.' && '\'' < '.' && '"' < '.',
+        "Layout of char is not like ASCII");
 
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
@@ -393,7 +398,8 @@ ReturnType readFloatTextFastImpl(T & x, ReadBuffer & in)
 
         readUIntTextUpToNSignificantDigits<significant_digits>(after_point, in);
         int read_digits = in.count() - after_leading_zeros_count;
-        after_point_exponent = (read_digits > significant_digits ? -significant_digits : -read_digits) - after_point_num_leading_zeros;
+        after_point_exponent
+            = (read_digits > significant_digits ? -significant_digits : -read_digits) - after_point_num_leading_zeros;
     }
 
     if (checkChar('e', in) || checkChar('E', in))

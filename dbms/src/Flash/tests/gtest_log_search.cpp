@@ -50,8 +50,10 @@ TEST_F(LogSearchTest, LogSearch)
     Int64 offset = getTimezoneAndOffset(tz_sign, tz_hour, tz_min);
     char tzs[10];
     getTimezoneString(tzs, tz_sign, tz_hour, tz_min);
-    std::string s = "[2020/04/23 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
-    std::string s_bad1 = "[2020/4/4 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s
+        = "[2020/04/23 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s_bad1
+        = "[2020/4/4 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
     std::string s_bad2 = "[2020/04/23 13:11:02.329 " + std::string(tzs) + "] [\"Application : Load metadata done.\"]\n";
     s = s + s;
     s.resize(s.size() - 1); // Trim \n
@@ -61,12 +63,48 @@ TEST_F(LogSearchTest, LogSearch)
     int year, month, day, hour, minute, second;
     size_t loglevel_size;
     size_t loglevel_s;
-    ASSERT_FALSE(LogIterator::readDate(s_bad1.size(), s_bad1.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-                 && LogIterator::readLevel(s_bad1.size(), s_bad1.data(), loglevel_s, loglevel_size));
-    ASSERT_FALSE(LogIterator::readDate(s_bad2.size(), s_bad2.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-                 && LogIterator::readLevel(s_bad2.size(), s_bad2.data(), loglevel_s, loglevel_size));
-    ASSERT_TRUE(LogIterator::readDate(s.size(), s.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-                && LogIterator::readLevel(s.size(), s.data(), loglevel_s, loglevel_size));
+    ASSERT_FALSE(
+        LogIterator::readDate(
+            s_bad1.size(),
+            s_bad1.data(),
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            milli_second,
+            timezone_hour,
+            timezone_min)
+        && LogIterator::readLevel(s_bad1.size(), s_bad1.data(), loglevel_s, loglevel_size));
+    ASSERT_FALSE(
+        LogIterator::readDate(
+            s_bad2.size(),
+            s_bad2.data(),
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            milli_second,
+            timezone_hour,
+            timezone_min)
+        && LogIterator::readLevel(s_bad2.size(), s_bad2.data(), loglevel_s, loglevel_size));
+    ASSERT_TRUE(
+        LogIterator::readDate(
+            s.size(),
+            s.data(),
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            milli_second,
+            timezone_hour,
+            timezone_min)
+        && LogIterator::readLevel(s.size(), s.data(), loglevel_s, loglevel_size));
     EXPECT_EQ(year, 2020);
     EXPECT_EQ(month, 4);
     EXPECT_EQ(day, 23);
@@ -120,13 +158,18 @@ TEST_F(LogSearchTest, SearchDir)
     ASSERT_TRUE(FilterFileByDatetime("/1/test-err.log", {"/1/test-err.log"}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log.123.gz", {"/1/test-err.log"}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.....gz", {"/1/test-err.log"}, 0));
-    ASSERT_TRUE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.481.gz", {"/1/test-err.log"}, 1633855377000)); // 1633855377000 : 2021-10-10 16:42:57
+    ASSERT_TRUE(FilterFileByDatetime(
+        "/1/server.log.2021-10-09-14:50:55.481.gz",
+        {"/1/test-err.log"},
+        1633855377000)); // 1633855377000 : 2021-10-10 16:42:57
     ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-10-16:43:57.123.gz", {"/1/test-err.log"}, 1633855377000));
 
-    ASSERT_TRUE(FilterFileByDatetime("/1/tiflash_tikv.2021-10-09T14-50-55.123.log", {"/1/test-err.log"}, 1633855377000));
+    ASSERT_TRUE(
+        FilterFileByDatetime("/1/tiflash_tikv.2021-10-09T14-50-55.123.log", {"/1/test-err.log"}, 1633855377000));
 
     {
-        const std::string example_data = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
+        const std::string example_data
+            = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
         std::string_view example = example_data;
         {
             std::string log_file_path = "/tmp/LogSearch_Test_SearchDir.gz";

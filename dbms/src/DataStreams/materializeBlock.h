@@ -24,4 +24,4 @@ namespace DB
   */
 Block materializeBlock(const Block & block);
 
-}
+} // namespace DB

@@ -55,9 +55,32 @@ void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, si
 {
     child->transform(pipeline, context, max_streams);
 
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
+    pipeline.transform([&](auto & stream) {
+        stream
+            = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier());
+    });
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalFilter.cpp
+=======
+void PhysicalFilter::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(
+            exec_context,
+            log->identifier(),
+            input_header,
+            before_filter_actions,
+            filter_column));
+    });
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalFilter.cpp
 void PhysicalFilter::finalize(const Names & parent_require)
 {
     Names required_output = parent_require;

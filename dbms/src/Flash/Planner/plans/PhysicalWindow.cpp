@@ -79,14 +79,59 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
     else
     {
         /// If there are several streams, we merge them into one.
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalWindow.cpp
         executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
         assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+=======
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            false,
+            "merge into one for window input");
+        RUNTIME_CHECK(pipeline.streams.size() == 1);
+        pipeline.firstStream()
+            = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalWindow.cpp
     }
 
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalWindow.cpp
+=======
+void PhysicalWindow::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
+{
+    executeExpression(exec_context, group_builder, window_description.before_window, log);
+    window_description.fillArgColumnNumbers();
+
+    if (!fine_grained_shuffle.enable())
+        executeUnion(exec_context, group_builder, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+
+    /// Window function can be multiple threaded when fine grained shuffle is enabled.
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(
+            std::make_unique<WindowTransformOp>(exec_context, log->identifier(), window_description));
+    });
+
+    if (!fine_grained_shuffle.enable() && is_restore_concurrency)
+        restoreConcurrency(
+            exec_context,
+            group_builder,
+            concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
+
+    executeExpression(exec_context, group_builder, window_description.after_window, log);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalWindow.cpp
 void PhysicalWindow::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);

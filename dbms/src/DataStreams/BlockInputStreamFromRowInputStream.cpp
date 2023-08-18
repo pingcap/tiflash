@@ -21,14 +21,14 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
-    extern const int CANNOT_PARSE_QUOTED_STRING;
-    extern const int CANNOT_PARSE_DATE;
-    extern const int CANNOT_PARSE_DATETIME;
-    extern const int CANNOT_READ_ARRAY_FROM_TEXT;
-    extern const int CANNOT_PARSE_NUMBER;
-    extern const int CANNOT_PARSE_UUID;
-}
+extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+extern const int CANNOT_PARSE_QUOTED_STRING;
+extern const int CANNOT_PARSE_DATE;
+extern const int CANNOT_PARSE_DATETIME;
+extern const int CANNOT_READ_ARRAY_FROM_TEXT;
+extern const int CANNOT_PARSE_NUMBER;
+extern const int CANNOT_PARSE_UUID;
+} // namespace ErrorCodes
 
 
 BlockInputStreamFromRowInputStream::BlockInputStreamFromRowInputStream(
@@ -37,20 +37,19 @@ BlockInputStreamFromRowInputStream::BlockInputStreamFromRowInputStream(
     size_t max_block_size_,
     UInt64 allow_errors_num_,
     Float64 allow_errors_ratio_)
-    : row_input(row_input_), sample(sample_), max_block_size(max_block_size_),
-    allow_errors_num(allow_errors_num_), allow_errors_ratio(allow_errors_ratio_)
-{
-}
+    : row_input(row_input_)
+    , sample(sample_)
+    , max_block_size(max_block_size_)
+    , allow_errors_num(allow_errors_num_)
+    , allow_errors_ratio(allow_errors_ratio_)
+{}
 
 
 static bool isParseError(int code)
 {
-    return code == ErrorCodes::CANNOT_PARSE_INPUT_ASSERTION_FAILED
-        || code == ErrorCodes::CANNOT_PARSE_QUOTED_STRING
-        || code == ErrorCodes::CANNOT_PARSE_DATE
-        || code == ErrorCodes::CANNOT_PARSE_DATETIME
-        || code == ErrorCodes::CANNOT_READ_ARRAY_FROM_TEXT
-        || code == ErrorCodes::CANNOT_PARSE_NUMBER
+    return code == ErrorCodes::CANNOT_PARSE_INPUT_ASSERTION_FAILED || code == ErrorCodes::CANNOT_PARSE_QUOTED_STRING
+        || code == ErrorCodes::CANNOT_PARSE_DATE || code == ErrorCodes::CANNOT_PARSE_DATETIME
+        || code == ErrorCodes::CANNOT_READ_ARRAY_FROM_TEXT || code == ErrorCodes::CANNOT_PARSE_NUMBER
         || code == ErrorCodes::CANNOT_PARSE_UUID;
 }
 
@@ -83,12 +82,16 @@ Block BlockInputStreamFromRowInputStream::readImpl()
                 ++num_errors;
                 Float64 current_error_ratio = static_cast<Float64>(num_errors) / total_rows;
 
-                if (num_errors > allow_errors_num
-                    && current_error_ratio > allow_errors_ratio)
+                if (num_errors > allow_errors_num && current_error_ratio > allow_errors_ratio)
                 {
-                    e.addMessage("(Already have " + toString(num_errors) + " errors"
-                        " out of " + toString(total_rows) + " rows"
-                        ", which is " + toString(current_error_ratio) + " of all rows)");
+                    e.addMessage(
+                        "(Already have " + toString(num_errors)
+                        + " errors"
+                          " out of "
+                        + toString(total_rows)
+                        + " rows"
+                          ", which is "
+                        + toString(current_error_ratio) + " of all rows)");
                     throw;
                 }
 
@@ -140,4 +143,4 @@ Block BlockInputStreamFromRowInputStream::readImpl()
     return sample.cloneWithColumns(std::move(columns));
 }
 
-}
+} // namespace DB

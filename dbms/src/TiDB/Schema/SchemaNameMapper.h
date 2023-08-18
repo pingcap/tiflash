@@ -43,6 +43,16 @@ struct SchemaNameMapper
     {
         return debugDatabaseName(db_info) + "." + debugTableName(table_info);
     }
+<<<<<<< HEAD
+=======
+
+    virtual String debugCanonicalName(const TiDB::TableInfo & table_info, DatabaseID db_id, KeyspaceID keyspace_id)
+        const
+    {
+        auto db_name = DATABASE_PREFIX + std::to_string(db_id);
+        return map2Keyspace(keyspace_id, db_name) + "." + debugTableName(table_info);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 } // namespace DB

@@ -26,8 +26,19 @@ namespace DB
 class TableFunctionMerge : public ITableFunction
 {
 public:
+<<<<<<< HEAD:dbms/src/TableFunctions/TableFunctionMerge.h
     static constexpr auto name = "merge";
     std::string getName() const override { return name; }
+=======
+    LoadBucketTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        SpilledBucketInput & input_)
+        : IOEventTask(exec_context_, req_id, event_)
+        , input(input_)
+    {}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h
 
 private:
     StoragePtr executeImpl(const ASTPtr & ast_function, const Context & context) const override;

@@ -69,8 +69,9 @@ inline ALWAYS_INLINE void writeSlice(const GenericArraySlice & slice, GenericArr
         sink.current_offset += slice.size;
     }
     else
-        throw Exception("Function writeSlice expect same column types for GenericArraySlice and GenericArraySink.",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Function writeSlice expect same column types for GenericArraySlice and GenericArraySink.",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 template <typename T>
@@ -105,7 +106,10 @@ inline ALWAYS_INLINE void writeSlice(const NullableSlice<Slice> & slice, Nullabl
     if (slice.size == 1) /// Always true for ValueSlice.
         sink.null_map[sink.current_offset] = *slice.null_map;
     else
-        memcpySmallAllowReadWriteOverflow15(&sink.null_map[sink.current_offset], slice.null_map, slice.size * sizeof(UInt8));
+        memcpySmallAllowReadWriteOverflow15(
+            &sink.null_map[sink.current_offset],
+            slice.null_map,
+            slice.size * sizeof(UInt8));
 
     writeSlice(static_cast<const Slice &>(slice), static_cast<ArraySink &>(sink));
 }
@@ -141,8 +145,9 @@ inline ALWAYS_INLINE void writeSlice(const GenericValueSlice & slice, GenericArr
         ++sink.current_offset;
     }
     else
-        throw Exception("Function writeSlice expect same column types for GenericValueSlice and GenericArraySink.",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Function writeSlice expect same column types for GenericValueSlice and GenericArraySink.",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 template <typename T>
@@ -189,10 +194,11 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & array_sources, Si
 
     auto checkAndGetSizeToReserve = [](auto source, IArraySource * array_source) {
         if (source == nullptr)
-            throw Exception("Concat function expected " + demangle(typeid(Source).name()) + " or "
-                                + demangle(typeid(ConstSource<Source>).name()) + " but got "
-                                + demangle(typeid(*array_source).name()),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Concat function expected " + demangle(typeid(Source).name()) + " or "
+                    + demangle(typeid(ConstSource<Source>).name()) + " but got "
+                    + demangle(typeid(*array_source).name()),
+                ErrorCodes::LOGICAL_ERROR);
         return source->getSizeForReserve();
     };
 
@@ -502,16 +508,19 @@ void NO_INLINE sliceDynamicOffsetUnbounded(Source && src, Sink && sink, const IC
 }
 
 template <typename Source, typename Sink>
-void NO_INLINE sliceDynamicOffsetBounded(Source && src, Sink && sink, const IColumn & offset_column, const IColumn & length_column)
+void NO_INLINE
+sliceDynamicOffsetBounded(Source && src, Sink && sink, const IColumn & offset_column, const IColumn & length_column)
 {
     const bool is_offset_null = offset_column.onlyNull();
     const auto * offset_nullable = typeid_cast<const ColumnNullable *>(&offset_column);
-    const ColumnUInt8::Container * offset_null_map = offset_nullable ? &offset_nullable->getNullMapColumn().getData() : nullptr;
+    const ColumnUInt8::Container * offset_null_map
+        = offset_nullable ? &offset_nullable->getNullMapColumn().getData() : nullptr;
     const IColumn * offset_nested_column = offset_nullable ? &offset_nullable->getNestedColumn() : &offset_column;
 
     const bool is_length_null = length_column.onlyNull();
     const auto * length_nullable = typeid_cast<const ColumnNullable *>(&length_column);
-    const ColumnUInt8::Container * length_null_map = length_nullable ? &length_nullable->getNullMapColumn().getData() : nullptr;
+    const ColumnUInt8::Container * length_null_map
+        = length_nullable ? &length_nullable->getNullMapColumn().getData() : nullptr;
     const IColumn * length_nested_column = length_nullable ? &length_nullable->getNestedColumn() : &length_column;
 
     while (!src.isEnd())
@@ -568,8 +577,16 @@ void NO_INLINE conditional(SourceA && src_a, SourceB && src_b, Sink && sink, con
 
 /// Methods to check if first array has elements from second array, overloaded for various combinations of types.
 
-template <bool all, typename FirstSliceType, typename SecondSliceType, bool (*isEqual)(const FirstSliceType &, const SecondSliceType &, size_t, size_t)>
-bool sliceHasImpl(const FirstSliceType & first, const SecondSliceType & second, const UInt8 * first_null_map, const UInt8 * second_null_map)
+template <
+    bool all,
+    typename FirstSliceType,
+    typename SecondSliceType,
+    bool (*isEqual)(const FirstSliceType &, const SecondSliceType &, size_t, size_t)>
+bool sliceHasImpl(
+    const FirstSliceType & first,
+    const SecondSliceType & second,
+    const UInt8 * first_null_map,
+    const UInt8 * second_null_map)
 {
     const bool has_first_null_map = first_null_map != nullptr;
     const bool has_second_null_map = second_null_map != nullptr;
@@ -603,7 +620,11 @@ bool sliceHasImpl(const FirstSliceType & first, const SecondSliceType & second, 
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
 template <typename T, typename U>
-bool sliceEqualElements(const NumericArraySlice<T> & first, const NumericArraySlice<U> & second, size_t first_ind, size_t second_ind)
+bool sliceEqualElements(
+    const NumericArraySlice<T> & first,
+    const NumericArraySlice<U> & second,
+    size_t first_ind,
+    size_t second_ind)
 {
     return first.data[first_ind] == second.data[second_ind];
 }
@@ -622,7 +643,11 @@ bool sliceEqualElements(const GenericArraySlice &, const NumericArraySlice<U> &,
     return false;
 }
 
-inline ALWAYS_INLINE bool sliceEqualElements(const GenericArraySlice & first, const GenericArraySlice & second, size_t first_ind, size_t second_ind)
+inline ALWAYS_INLINE bool sliceEqualElements(
+    const GenericArraySlice & first,
+    const GenericArraySlice & second,
+    size_t first_ind,
+    size_t second_ind)
 {
     return first.elements->compareAt(first_ind + first.begin, second_ind + second.begin, *second.elements, -1) == 0;
 }
@@ -660,21 +685,24 @@ bool sliceHas(const NumericArraySlice<T> & /*first*/, const GenericArraySlice & 
 template <bool all, typename FirstArraySlice, typename SecondArraySlice>
 bool sliceHas(const FirstArraySlice & first, NullableSlice<SecondArraySlice> & second)
 {
-    auto impl = sliceHasImpl<all, FirstArraySlice, SecondArraySlice, sliceEqualElements<FirstArraySlice, SecondArraySlice>>;
+    auto impl
+        = sliceHasImpl<all, FirstArraySlice, SecondArraySlice, sliceEqualElements<FirstArraySlice, SecondArraySlice>>;
     return impl(first, second, nullptr, second.null_map);
 }
 
 template <bool all, typename FirstArraySlice, typename SecondArraySlice>
 bool sliceHas(const NullableSlice<FirstArraySlice> & first, SecondArraySlice & second)
 {
-    auto impl = sliceHasImpl<all, FirstArraySlice, SecondArraySlice, sliceEqualElements<FirstArraySlice, SecondArraySlice>>;
+    auto impl
+        = sliceHasImpl<all, FirstArraySlice, SecondArraySlice, sliceEqualElements<FirstArraySlice, SecondArraySlice>>;
     return impl(first, second, first.null_map, nullptr);
 }
 
 template <bool all, typename FirstArraySlice, typename SecondArraySlice>
 bool sliceHas(const NullableSlice<FirstArraySlice> & first, NullableSlice<SecondArraySlice> & second)
 {
-    auto impl = sliceHasImpl<all, FirstArraySlice, SecondArraySlice, sliceEqualElements<FirstArraySlice, SecondArraySlice>>;
+    auto impl
+        = sliceHasImpl<all, FirstArraySlice, SecondArraySlice, sliceEqualElements<FirstArraySlice, SecondArraySlice>>;
     return impl(first, second, first.null_map, second.null_map);
 }
 
@@ -692,7 +720,11 @@ void NO_INLINE arrayAllAny(FirstSource && first, SecondSource && second, ColumnU
 }
 
 template <typename ArraySource, typename ValueSource, typename Sink>
-void resizeDynamicSize(ArraySource && array_source, ValueSource && value_source, Sink && sink, const IColumn & size_column)
+void resizeDynamicSize(
+    ArraySource && array_source,
+    ValueSource && value_source,
+    Sink && sink,
+    const IColumn & size_column)
 {
     const auto * size_nullable = typeid_cast<const ColumnNullable *>(&size_column);
     const NullMap * size_null_map = size_nullable ? &size_nullable->getNullMapData() : nullptr;

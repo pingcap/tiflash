@@ -23,10 +23,17 @@ namespace DB
 {
 class Context;
 
+<<<<<<< HEAD
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
     const LoggerPtr & log);
+=======
+class PipelineExecutorContext;
+class PipelineExecGroupBuilder;
+
+void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, Int64 max_buffered_bytes, const LoggerPtr & log);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 BlockInputStreamPtr combinedNonJoinedDataStream(
     DAGPipeline & pipeline,
@@ -61,11 +68,31 @@ void orderStreams(
     const Context & context,
     const LoggerPtr & log);
 
+<<<<<<< HEAD
 void executeCreatingSets(
     DAGPipeline & pipeline,
     const Context & context,
     size_t max_streams,
     const LoggerPtr & log);
+=======
+void executeLocalSort(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeFinalSort(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeCreatingSets(DAGPipeline & pipeline, const Context & context, size_t max_streams, const LoggerPtr & log);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,

@@ -37,4 +37,4 @@ void IRowOutputStream::write(const Block & block, size_t row_num)
     writeRowEndDelimiter();
 }
 
-}
+} // namespace DB

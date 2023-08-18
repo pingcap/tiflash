@@ -1,0 +1,46 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1;
+mysql> drop table if exists test.t2;
+mysql> drop table if exists test.t3;
+mysql> drop table if exists test.t4;
+
+mysql> create table if not exists test.t1(a int(11) DEFAULT NULL, id int(11) NOT NULL, PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */);
+mysql> create table if not exists test.t2(a int(11) DEFAULT NULL, id VARCHAR(25) NOT NULL, PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */);
+mysql> create table if not exists test.t3(a int(11) DEFAULT NULL, id double NOT NULL, PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */);
+mysql> create table if not exists test.t4(a int(11) DEFAULT NULL, id DATE NOT NULL, PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */);
+
+mysql> alter table test.t1 set tiflash replica 1;
+mysql> alter table test.t2 set tiflash replica 1;
+mysql> alter table test.t3 set tiflash replica 1;
+mysql> alter table test.t4 set tiflash replica 1;
+
+func> wait_table test t1
+func> wait_table test t2
+func> wait_table test t3
+func> wait_table test t4
+
+mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tiflash'; select sum(1) as c from test.t1 having count(*)>1 or count(a)= null;
+
+mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tiflash'; select sum(1) as c from test.t2 having count(*)>1 or count(a)= null;
+
+mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tiflash'; select sum(1) as c from test.t3 having count(*)>1 or count(a)= null;
+
+mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tiflash'; select sum(1) as c from test.t4 having count(*)>1 or count(a)= null;
+
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> drop table if exists test.t3
+mysql> drop table if exists test.t4

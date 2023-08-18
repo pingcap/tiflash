@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteHelpers.h>
-#include <IO/WriteBufferValidUTF8.h>
 #include <DataStreams/JSONEachRowRowOutputStream.h>
+#include <IO/WriteBufferValidUTF8.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
 
 
-JSONEachRowRowOutputStream::JSONEachRowRowOutputStream(WriteBuffer & ostr_, const Block & sample, const FormatSettingsJSON & settings_)
-    : ostr(ostr_), settings(settings_)
+JSONEachRowRowOutputStream::JSONEachRowRowOutputStream(
+    WriteBuffer & ostr_,
+    const Block & sample,
+    const FormatSettingsJSON & settings_)
+    : ostr(ostr_)
+    , settings(settings_)
 {
     size_t columns = sample.columns();
     fields.resize(columns);
@@ -62,4 +66,4 @@ void JSONEachRowRowOutputStream::writeRowEndDelimiter()
     field_number = 0;
 }
 
-}
+} // namespace DB

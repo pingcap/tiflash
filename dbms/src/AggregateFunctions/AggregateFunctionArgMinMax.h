@@ -59,12 +59,12 @@ public:
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    String getName() const override { return StringRef(Data::ValueData_t::name()) == StringRef("min") ? "argMin" : "argMax"; }
-
-    DataTypePtr getReturnType() const override
+    String getName() const override
     {
-        return type_res;
+        return StringRef(Data::ValueData_t::name()) == StringRef("min") ? "argMin" : "argMax";
     }
+
+    DataTypePtr getReturnType() const override { return type_res; }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {

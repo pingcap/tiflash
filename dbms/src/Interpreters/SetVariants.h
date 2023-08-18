@@ -31,7 +31,10 @@ namespace DB
 
 
 /// For the case where there is one numeric key.
-template <typename FieldType, typename TData, bool use_cache = true> /// UInt8/16/32/64 for any types with corresponding bit width.
+template <
+    typename FieldType,
+    typename TData,
+    bool use_cache = true> /// UInt8/16/32/64 for any types with corresponding bit width.
 struct SetMethodOneNumber
 {
     using Data = TData;
@@ -39,10 +42,7 @@ struct SetMethodOneNumber
 
     Data data;
 
-    using State = ColumnsHashing::HashMethodOneNumber<typename Data::value_type,
-                                                      void,
-                                                      FieldType,
-                                                      use_cache>;
+    using State = ColumnsHashing::HashMethodOneNumber<typename Data::value_type, void, FieldType, use_cache>;
 };
 
 /// For the case where there is one string key.
@@ -117,10 +117,7 @@ protected:
     /// Return the columns which actually contain the values of the keys.
     /// For a given key column, if it is nullable, we return its nested
     /// column. Otherwise we return the key column itself.
-    inline const ColumnRawPtrs & getActualColumns() const
-    {
-        return actual_columns;
-    }
+    inline const ColumnRawPtrs & getActualColumns() const { return actual_columns; }
 
     /// Create a bitmap that indicates whether, for a particular row,
     /// a key column bears a null value or not.
@@ -157,23 +154,26 @@ class BaseStateKeysFixed<Key, false>
 protected:
     void init(const ColumnRawPtrs &)
     {
-        throw Exception{"Internal error: calling init() for non-nullable"
-                        " keys is forbidden",
-                        ErrorCodes::LOGICAL_ERROR};
+        throw Exception{
+            "Internal error: calling init() for non-nullable"
+            " keys is forbidden",
+            ErrorCodes::LOGICAL_ERROR};
     }
 
     const ColumnRawPtrs & getActualColumns() const
     {
-        throw Exception{"Internal error: calling getActualColumns() for non-nullable"
-                        " keys is forbidden",
-                        ErrorCodes::LOGICAL_ERROR};
+        throw Exception{
+            "Internal error: calling getActualColumns() for non-nullable"
+            " keys is forbidden",
+            ErrorCodes::LOGICAL_ERROR};
     }
 
     KeysNullMap<Key> createBitmap(size_t) const
     {
-        throw Exception{"Internal error: calling createBitmap() for non-nullable keys"
-                        " is forbidden",
-                        ErrorCodes::LOGICAL_ERROR};
+        throw Exception{
+            "Internal error: calling createBitmap() for non-nullable keys"
+            " is forbidden",
+            ErrorCodes::LOGICAL_ERROR};
     }
 };
 
@@ -298,7 +298,10 @@ struct SetVariantsTemplate : public Variant
 
     bool empty() const { return type == Type::EMPTY; }
 
-    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators = {});
+    static Type chooseMethod(
+        const ColumnRawPtrs & key_columns,
+        Sizes & key_sizes,
+        const TiDB::TiDBCollators & collators = {});
 
     void init(Type type_);
 

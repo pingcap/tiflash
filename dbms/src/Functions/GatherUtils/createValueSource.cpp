@@ -26,14 +26,21 @@ struct ValueSourceCreator;
 template <typename Type, typename... Types>
 struct ValueSourceCreator<Type, Types...>
 {
-    static std::unique_ptr<IValueSource> create(const IColumn & col, const NullMap * null_map, bool is_const, size_t total_rows)
+    static std::unique_ptr<IValueSource> create(
+        const IColumn & col,
+        const NullMap * null_map,
+        bool is_const,
+        size_t total_rows)
     {
         if (auto column_vector = typeid_cast<const ColumnVector<Type> *>(&col))
         {
             if (null_map)
             {
                 if (is_const)
-                    return std::make_unique<ConstSource<NullableValueSource<NumericValueSource<Type>>>>(*column_vector, *null_map, total_rows);
+                    return std::make_unique<ConstSource<NullableValueSource<NumericValueSource<Type>>>>(
+                        *column_vector,
+                        *null_map,
+                        total_rows);
                 return std::make_unique<NullableValueSource<NumericValueSource<Type>>>(*column_vector, *null_map);
             }
             if (is_const)
@@ -48,12 +55,19 @@ struct ValueSourceCreator<Type, Types...>
 template <>
 struct ValueSourceCreator<>
 {
-    static std::unique_ptr<IValueSource> create(const IColumn & col, const NullMap * null_map, bool is_const, size_t total_rows)
+    static std::unique_ptr<IValueSource> create(
+        const IColumn & col,
+        const NullMap * null_map,
+        bool is_const,
+        size_t total_rows)
     {
         if (null_map)
         {
             if (is_const)
-                return std::make_unique<ConstSource<NullableValueSource<GenericValueSource>>>(col, *null_map, total_rows);
+                return std::make_unique<ConstSource<NullableValueSource<GenericValueSource>>>(
+                    col,
+                    *null_map,
+                    total_rows);
             return std::make_unique<NullableValueSource<GenericValueSource>>(col, *null_map);
         }
         if (is_const)
@@ -67,7 +81,11 @@ std::unique_ptr<IValueSource> createValueSource(const IColumn & col, bool is_con
     using Creator = typename ApplyTypeListForClass<ValueSourceCreator, TypeListNumbers>::Type;
     if (auto column_nullable = typeid_cast<const ColumnNullable *>(&col))
     {
-        return Creator::create(column_nullable->getNestedColumn(), &column_nullable->getNullMapData(), is_const, total_rows);
+        return Creator::create(
+            column_nullable->getNestedColumn(),
+            &column_nullable->getNullMapData(),
+            is_const,
+            total_rows);
     }
     return Creator::create(col, nullptr, is_const, total_rows);
 }

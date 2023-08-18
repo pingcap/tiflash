@@ -107,13 +107,51 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
             const String & table = *it;
 
             /// Messages, so that it's not boring to wait for the server to load for a long time.
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0
+                || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
                 LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 
+<<<<<<< HEAD
             DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, getEngineName(), table, has_force_restore_data_flag);
+=======
+            auto [table_name, table] = DatabaseLoading::loadTable(
+                context,
+                *this,
+                metadata_path,
+                name,
+                data_path,
+                getEngineName(),
+                table_file,
+                has_force_restore_data_flag);
+
+            /// After table was basically initialized, startup it.
+            if (table)
+            {
+                try
+                {
+                    table->startup();
+                }
+                catch (DB::Exception & e)
+                {
+                    if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                    {
+                        // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                        // means that we may crashed in the middle of renaming tables. We clean the meta file
+                        // for those storages by `cleanupTables`.
+                        // - If the storage is the outdated one after renaming, remove it is right.
+                        // - If the storage should be the target table, remove it means we "rollback" the
+                        //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                        std::lock_guard lock(failed_tables_mutex);
+                        tables_failed_to_startup.emplace(table_name, table);
+                    }
+                    else
+                        throw;
+                }
+            }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         }
     };
 
@@ -142,7 +180,11 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
     DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }
 
-void DatabaseOrdinary::createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
+void DatabaseOrdinary::createTable(
+    const Context & context,
+    const String & table_name,
+    const StoragePtr & table,
+    const ASTPtr & query)
 {
     const auto & settings = context.getSettingsRef();
 
@@ -161,7 +203,9 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
     {
         std::lock_guard lock(mutex);
         if (tables.find(table_name) != tables.end())
-            throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
+            throw Exception(
+                fmt::format("Table {}.{} already exists.", name, table_name),
+                ErrorCodes::TABLE_ALREADY_EXISTS);
     }
 
     String table_metadata_path = getTableMetadataPath(table_name);
@@ -172,7 +216,14 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
         statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), true, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(
+            context.getFileProvider(),
+            table_metadata_tmp_path,
+            EncryptionPath(table_metadata_tmp_path, ""),
+            true,
+            nullptr,
+            statement.size(),
+            O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -186,14 +237,23 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
         {
             std::lock_guard lock(mutex);
             if (!tables.emplace(table_name, table).second)
-                throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
+                throw Exception(
+                    fmt::format("Table {}.{} already exists.", name, table_name),
+                    ErrorCodes::TABLE_ALREADY_EXISTS);
         }
 
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path, EncryptionPath(table_metadata_path, ""), true);
+        context.getFileProvider()->renameFile(
+            table_metadata_tmp_path,
+            EncryptionPath(table_metadata_tmp_path, ""),
+            table_metadata_path,
+            EncryptionPath(table_metadata_path, ""),
+            true);
     }
     catch (...)
     {
-        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(
+            table_metadata_tmp_path,
+            EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -229,7 +289,9 @@ void DatabaseOrdinary::renameTable(
     auto * to_database_concrete = typeid_cast<DatabaseOrdinary *>(&to_database);
 
     if (!to_database_concrete)
-        throw Exception("Moving tables between databases of different engines is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Moving tables between databases of different engines is not supported",
+            ErrorCodes::NOT_IMPLEMENTED);
 
     StoragePtr table = tryGetTable(context, table_name);
 
@@ -257,9 +319,12 @@ void DatabaseOrdinary::renameTable(
     // TODO: Atomic rename table is not fixed.
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_rename_table_data_and_metadata);
 
-    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(context, detail::getTableMetadataPath(metadata_path, table_name));
+    ASTPtr ast
+        = DatabaseLoading::getQueryFromMetadata(context, detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
-        throw Exception(fmt::format("There is no metadata file for table {}", table_name), ErrorCodes::FILE_DOESNT_EXIST);
+        throw Exception(
+            fmt::format("There is no metadata file for table {}", table_name),
+            ErrorCodes::FILE_DOESNT_EXIST);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
     ast_create_query.table = to_table_name;
 
@@ -285,7 +350,10 @@ time_t DatabaseOrdinary::getTableMetadataModificationTime(const Context & /*cont
     }
 }
 
-ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const
+ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(
+    const Context & context,
+    const String & table_name,
+    bool throw_on_error) const
 {
     ASTPtr ast;
 
@@ -296,7 +364,8 @@ ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context, const 
         /// Handle system.* tables for which there are no table.sql files.
         bool has_table = tryGetTable(context, table_name) != nullptr;
 
-        const auto * msg = has_table ? "There is no CREATE TABLE query for table " : "There is no metadata file for table ";
+        const auto * msg
+            = has_table ? "There is no CREATE TABLE query for table " : "There is no metadata file for table ";
 
         throw Exception(fmt::format("{}{}", msg, table_name), ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
     }
@@ -405,7 +474,12 @@ void DatabaseOrdinary::alterTable(
     }
 
     ParserCreateQuery parser;
-    ASTPtr ast = parseQuery(parser, statement.data(), statement.data() + statement.size(), "in file " + table_metadata_path, 0);
+    ASTPtr ast = parseQuery(
+        parser,
+        statement.data(),
+        statement.data() + statement.size(),
+        "in file " + table_metadata_path,
+        0);
 
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
 
@@ -418,11 +492,18 @@ void DatabaseOrdinary::alterTable(
     statement = getTableDefinitionFromCreateQuery(ast);
 
     bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
-    EncryptionPath encryption_path
-        = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
+    EncryptionPath encryption_path = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "")
+                                                             : EncryptionPath(table_metadata_tmp_path, "");
     {
         bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(
+            context.getFileProvider(),
+            table_metadata_tmp_path,
+            encryption_path,
+            create_new_encryption_info,
+            nullptr,
+            statement.size(),
+            O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -433,7 +514,12 @@ void DatabaseOrdinary::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path, EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
+        context.getFileProvider()->renameFile(
+            table_metadata_tmp_path,
+            encryption_path,
+            table_metadata_path,
+            EncryptionPath(table_metadata_path, ""),
+            !use_target_encrypt_info);
     }
     catch (...)
     {

@@ -47,7 +47,11 @@ public:
         , parent(parent)
     {}
 
-    Throttler(size_t max_speed_, size_t limit_, const char * limit_exceeded_exception_message_, const std::shared_ptr<Throttler> & parent = nullptr)
+    Throttler(
+        size_t max_speed_,
+        size_t limit_,
+        const char * limit_exceeded_exception_message_,
+        const std::shared_ptr<Throttler> & parent = nullptr)
         : max_speed(max_speed_)
         , limit(limit_)
         , limit_exceeded_exception_message(limit_exceeded_exception_message_)
@@ -78,7 +82,9 @@ public:
         }
 
         if (limit && new_count > limit)
-            throw Exception(limit_exceeded_exception_message + std::string(" Maximum: ") + toString(limit), ErrorCodes::LIMIT_EXCEEDED);
+            throw Exception(
+                limit_exceeded_exception_message + std::string(" Maximum: ") + toString(limit),
+                ErrorCodes::LIMIT_EXCEEDED);
 
         if (max_speed)
         {
@@ -100,10 +106,7 @@ public:
     }
 
     /// Not thread safe
-    void setParent(const std::shared_ptr<Throttler> & parent_)
-    {
-        parent = parent_;
-    }
+    void setParent(const std::shared_ptr<Throttler> & parent_) { parent = parent_; }
 
     void reset()
     {

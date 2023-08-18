@@ -92,7 +92,10 @@ void ExecutorTest::initializeClientInfo()
     client_info.interface = ClientInfo::Interface::GRPC;
 }
 
-void ExecutorTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+void ExecutorTest::executeInterpreter(
+    const String & expected_string,
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
@@ -102,6 +105,55 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 
+<<<<<<< HEAD
+=======
+void ExecutorTest::executeInterpreterWithDeltaMerge(
+    const String & expected_string,
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
+{
+    DAGContext dag_context(*request, "interpreter_test_with_delta_merge", concurrency);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    // Don't care regions information in interpreter tests.
+    auto query_executor = queryExecute(*context.context, /*internal=*/true);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
+}
+
+namespace
+{
+String testInfoMsg(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    bool enable_planner,
+    bool enable_pipeline,
+    size_t concurrency,
+    size_t block_size)
+{
+    const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
+    assert(test_info);
+    return fmt::format(
+        "test info:\n"
+        "    file: {}\n"
+        "    line: {}\n"
+        "    test_case_name: {}\n"
+        "    test_func_name: {}\n"
+        "    enable_planner: {}\n"
+        "    enable_pipeline: {}\n"
+        "    concurrency: {}\n"
+        "    block_size: {}\n"
+        "    dag_request: \n{}",
+        test_info->file(),
+        test_info->line(),
+        test_info->test_case_name(),
+        test_info->name(),
+        enable_planner,
+        enable_pipeline,
+        concurrency,
+        block_size,
+        ExecutorSerializer().serialize(request.get()));
+}
+} // namespace
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
@@ -115,6 +167,7 @@ void ExecutorTest::executeExecutor(
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto res = executeStreams(request, concurrency);
+<<<<<<< HEAD
             auto test_info_msg = [&]() {
                 const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
                 assert(test_info);
@@ -143,14 +196,86 @@ void ExecutorTest::executeExecutor(
         }
     }
     WRAP_FOR_DIS_ENABLE_PLANNER_END
+=======
+            ASSERT_TRUE(assert_func(res))
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+        }
+    }
+    WRAP_FOR_TEST_END
 }
 
-void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+void ExecutorTest::checkBlockSorted(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    const SortInfos & sort_infos,
+    std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)>
+        assert_func)
+{
+    WRAP_FOR_TEST_BEGIN
+    if (enable_pipeline && !Pipeline::isSupported(*request, context.context->getSettingsRef()))
+        continue;
+    std::vector<size_t> concurrencies{2, 5, 10};
+    for (auto concurrency : concurrencies)
+    {
+        auto expected_res = executeStreams(request, concurrency);
+        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        for (auto block_size : block_sizes)
+        {
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            auto return_blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+            if (!return_blocks.empty())
+            {
+                SortDescription sort_desc;
+                for (auto sort_info : sort_infos)
+                    sort_desc.emplace_back(
+                        return_blocks.back().getColumnsWithTypeAndName()[sort_info.column_index].name,
+                        sort_info.desc ? -1 : 1,
+                        -1);
+
+                for (auto & block : return_blocks)
+                    ASSERT_TRUE(isAlreadySorted(block, sort_desc))
+                        << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+
+                auto res = vstackBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
+                ASSERT_TRUE(assert_func(expected_res, res))
+                    << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+            }
+        };
+    }
+    WRAP_FOR_TEST_END
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
+}
+
+void ExecutorTest::executeAndAssertColumnsEqual(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    const ColumnsWithTypeAndName & expect_columns)
 {
     executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
+<<<<<<< HEAD
         return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
                                                                       << getColumnsContent(expect_columns);
     });
+=======
+        return columnsEqual(expect_columns, res, /*_restrict=*/false)
+            << "\n  expect_block: \n"
+            << getColumnsContent(expect_columns) << "\n actual_block: \n"
+            << getColumnsContent(res);
+    });
+}
+
+void ExecutorTest::executeAndAssertSortedBlocks(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    const SortInfos & sort_infos)
+{
+    checkBlockSorted(
+        request,
+        sort_infos,
+        [&](const ColumnsWithTypeAndName & expect_columns, const ColumnsWithTypeAndName & res) {
+            return columnsEqual(expect_columns, res, /*_restrict=*/false)
+                << "\n  expect_block: \n"
+                << getColumnsContent(expect_columns) << "\n actual_block: \n"
+                << getColumnsContent(res);
+        });
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows)
@@ -159,7 +284,8 @@ void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequ
         auto actual_rows = Block(res).rows();
         if (expect_rows != actual_rows)
         {
-            String msg = fmt::format("\nColumns rows mismatch\nexpected_rows: {}\nactual_rows: {}", expect_rows, actual_rows);
+            String msg
+                = fmt::format("\nColumns rows mismatch\nexpected_rows: {}\nactual_rows: {}", expect_rows, actual_rows);
             return testing::AssertionFailure() << msg;
         }
         return testing::AssertionSuccess();
@@ -230,8 +356,74 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
+<<<<<<< HEAD
     queryExecute(context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return mergeBlocks(blocks).getColumnsWithTypeAndName();
+=======
+    queryExecute(*context.context, /*internal=*/true)
+        ->execute([&blocks](const Block & block) { blocks.push_back(block); })
+        .verify();
+    return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
+}
+
+Blocks ExecutorTest::getExecuteStreamsReturnBlocks(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
+{
+    DAGContext dag_context(*request, "executor_test", concurrency);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    // Currently, don't care about regions information in tests.
+    Blocks blocks;
+    queryExecute(*context.context, /*internal=*/true)
+        ->execute([&blocks](const Block & block) { blocks.push_back(block); })
+        .verify();
+    return blocks;
+}
+
+void ExecutorTest::testForExecutionSummary(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    const Expect & expect,
+    size_t concurrency)
+{
+    request->set_collect_execution_summaries(true);
+    DAGContext dag_context(*request, "test_execution_summary", concurrency);
+    executeStreams(&dag_context);
+    ASSERT_TRUE(dag_context.collect_execution_summaries);
+    ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+    statistics_collector.initialize(&dag_context);
+    auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+    bool enable_planner = context.context->getSettingsRef().enable_planner;
+    bool enable_pipeline = context.context->getSettingsRef().enable_pipeline
+        || context.context->getSettingsRef().enforce_enable_pipeline;
+    ASSERT_EQ(summaries.size(), expect.size())
+        << "\n"
+        << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+    for (const auto & summary : summaries)
+    {
+        ASSERT_TRUE(summary.has_executor_id())
+            << "\n"
+            << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+        auto it = expect.find(summary.executor_id());
+        ASSERT_TRUE(it != expect.end())
+            << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
+            << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+        if (it->second.first != not_check_rows)
+            ASSERT_EQ(summary.num_produced_rows(), it->second.first)
+                << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+        if (it->second.second != not_check_concurrency)
+            ASSERT_EQ(summary.concurrency(), it->second.second)
+                << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+
+        // Normally, `summary.time_processed_ns` should always be less than or equal to the execution time of the `executeStream`.
+        // However, sometimes the check fails in CI.
+        // TODO check time_processed_ns here.
+        // ASSERT_LE(summary.time_processed_ns(), time_ns_used of executeStream(&dag_context));
+
+        // num_iterations and tiflash_scan_context are not checked here.
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)

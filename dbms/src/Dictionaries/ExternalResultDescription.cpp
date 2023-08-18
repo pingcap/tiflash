@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <ext/range.h>
-#include <Dictionaries/ExternalResultDescription.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
-#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Dictionaries/ExternalResultDescription.h>
+
+#include <ext/range.h>
 
 
 namespace DB
@@ -26,7 +27,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TYPE;
+extern const int UNKNOWN_TYPE;
 }
 
 void ExternalResultDescription::init(const Block & sample_block_)
@@ -70,9 +71,7 @@ void ExternalResultDescription::init(const Block & sample_block_)
         else if (typeid_cast<const DataTypeDateTime *>(type))
             types.push_back(ValueType::DateTime);
         else
-            throw Exception{
-                "Unsupported type " + type->getName(),
-                ErrorCodes::UNKNOWN_TYPE};
+            throw Exception{"Unsupported type " + type->getName(), ErrorCodes::UNKNOWN_TYPE};
 
         names.emplace_back(column.name);
         sample_columns.emplace_back(column.column);
@@ -87,4 +86,4 @@ void ExternalResultDescription::init(const Block & sample_block_)
     }
 }
 
-}
+} // namespace DB

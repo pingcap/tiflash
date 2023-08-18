@@ -14,8 +14,9 @@
 
 #pragma once
 
-#include <ostream>
 #include <Parsers/IAST.h>
+
+#include <ostream>
 
 
 namespace DB
@@ -26,7 +27,13 @@ namespace DB
   */
 void formatAST(const IAST & ast, std::ostream & s, bool hilite = true, bool one_line = false);
 
-inline std::ostream & operator<<(std::ostream & os, const IAST & ast) { return formatAST(ast, os, false, true), os; }
-inline std::ostream & operator<<(std::ostream & os, const ASTPtr & ast) { return formatAST(*ast, os, false, true), os; }
-
+inline std::ostream & operator<<(std::ostream & os, const IAST & ast)
+{
+    return formatAST(ast, os, false, true), os;
 }
+inline std::ostream & operator<<(std::ostream & os, const ASTPtr & ast)
+{
+    return formatAST(*ast, os, false, true), os;
+}
+
+} // namespace DB

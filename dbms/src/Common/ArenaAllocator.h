@@ -24,10 +24,7 @@ namespace DB
 class ArenaAllocator
 {
 public:
-    static void * alloc(size_t size, Arena * arena)
-    {
-        return arena->alloc(size);
-    }
+    static void * alloc(size_t size, Arena * arena) { return arena->alloc(size); }
 
     static void * realloc(void * buf, size_t old_size, size_t new_size, Arena * arena)
     {
@@ -54,7 +51,10 @@ public:
 
 
 /// Switches to ordinary Allocator after REAL_ALLOCATION_TRESHOLD bytes to avoid fragmentation and trash in Arena.
-template <size_t REAL_ALLOCATION_TRESHOLD = 4096, typename TRealAllocator = Allocator<false>, typename TArenaAllocator = ArenaAllocator>
+template <
+    size_t REAL_ALLOCATION_TRESHOLD = 4096,
+    typename TRealAllocator = Allocator<false>,
+    typename TArenaAllocator = ArenaAllocator>
 class MixedArenaAllocator : private TRealAllocator
 {
 public:
@@ -92,10 +92,7 @@ class ArenaAllocatorWithStackMemoty : public Base
     char stack_memory[N];
 
 public:
-    void * alloc(size_t size, Arena * arena)
-    {
-        return (size > N) ? Base::alloc(size, arena) : stack_memory;
-    }
+    void * alloc(size_t size, Arena * arena) { return (size > N) ? Base::alloc(size, arena) : stack_memory; }
 
     void * realloc(void * buf, size_t old_size, size_t new_size, Arena * arena)
     {

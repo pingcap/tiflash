@@ -26,4 +26,6 @@ UInt16 getNumberOfPhysicalCPUCores();
 // set cpu cores any more.
 void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_);
 
-void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores, UInt16 number_of_hardware_physical_cores);
+void computeAndSetNumberOfPhysicalCPUCores(
+    UInt16 number_of_logical_cpu_cores,
+    UInt16 number_of_hardware_physical_cores);

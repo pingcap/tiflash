@@ -18,9 +18,18 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 
 BlockOutputStreamFromRowOutputStream::BlockOutputStreamFromRowOutputStream(RowOutputStreamPtr row_output_, const Block & header_)
     : row_output(row_output_), header(header_) {}
+=======
+BlockOutputStreamFromRowOutputStream::BlockOutputStreamFromRowOutputStream(
+    RowOutputStreamPtr row_output_,
+    const Block & header_)
+    : row_output(row_output_)
+    , header(header_)
+{}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 
 void BlockOutputStreamFromRowOutputStream::write(const Block & block)

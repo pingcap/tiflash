@@ -58,8 +58,7 @@ WriteBufferValidUTF8::WriteBufferValidUTF8(
     , output_buffer(output_buffer)
     , group_replacements(group_replacements)
     , replacement(replacement)
-{
-}
+{}
 
 
 inline void WriteBufferValidUTF8::putReplacement()

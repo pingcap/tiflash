@@ -123,7 +123,9 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             current = &current->exchange_sender().child();
             break;
         case tipb::ExecType::TypeIndexScan:
-            throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), Errors::Coprocessor::Internal);
+            throw TiFlashException(
+                "Unsupported executor in DAG request: " + current->DebugString(),
+                Errors::Coprocessor::Internal);
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }

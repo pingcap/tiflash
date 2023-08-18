@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <common/crc64_fast.h>
-#if defined(TIFLASH_CRC64_HAS_SIMD_SUPPORT) && defined(TIFLASH_ENABLE_AVX_SUPPORT) && TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
+#if defined(TIFLASH_CRC64_HAS_SIMD_SUPPORT) && defined(TIFLASH_ENABLE_AVX_SUPPORT) \
+    && TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
 #include <common/crc64.h>
 #include <common/crc64_arch/crc64_x86.h>
 #include <common/crc64_table.h>
@@ -34,7 +35,11 @@ uint64_t update_vpclmulqdq_avx2(uint64_t state, const void * src, size_t length)
     const auto * ptr = reinterpret_cast<const avx256_t *>(__builtin_assume_aligned(src, 256));
 
     auto load_slice = [](const avx256_t * address) -> Slice<4> {
-        return {_mm256_load_si256(address), _mm256_load_si256(address + 1), _mm256_load_si256(address + 2), _mm256_load_si256(address + 3)};
+        return {
+            _mm256_load_si256(address),
+            _mm256_load_si256(address + 1),
+            _mm256_load_si256(address + 2),
+            _mm256_load_si256(address + 3)};
     };
 
     auto x = load_slice(ptr);

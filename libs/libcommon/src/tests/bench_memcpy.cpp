@@ -57,7 +57,8 @@ protected:
 
     void SetUp(const ::benchmark::State & /*state*/) override
     {
-        size_t src_buffer_size = (sysconf(_SC_PAGE_SIZE) * std::ceil(static_cast<double>(max + 2 * align) / sysconf(_SC_PAGE_SIZE)));
+        size_t src_buffer_size
+            = (sysconf(_SC_PAGE_SIZE) * std::ceil(static_cast<double>(max + 2 * align) / sysconf(_SC_PAGE_SIZE)));
         size_t dst_buffer_size;
         if (hot)
         {
@@ -82,12 +83,8 @@ protected:
 
         src_offsets.resize(4096);
         dst_offsets.resize(4096);
-        std::uniform_int_distribution<size_t> src_offset_dist(
-            0,
-            (src_buffer_size - max) / align);
-        std::uniform_int_distribution<size_t> dst_offset_dist(
-            0,
-            (dst_buffer_size - max) / align);
+        std::uniform_int_distribution<size_t> src_offset_dist(0, (src_buffer_size - max) / align);
+        std::uniform_int_distribution<size_t> dst_offset_dist(0, (dst_buffer_size - max) / align);
         for (size_t i = 0; i < src_offsets.size(); i++)
         {
             src_offsets[i] = align * src_offset_dist(gen);

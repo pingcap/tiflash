@@ -105,12 +105,13 @@ public:
     using ObjectsMap = std::unordered_map<std::string, LoadableInfo>;
 
     /// Objects will be loaded immediately and then will be updated in separate thread, each 'reload_period' seconds.
-    ExternalLoader(const Configuration & config,
-                   const ExternalLoaderUpdateSettings & update_settings,
-                   const ExternalLoaderConfigSettings & config_settings,
-                   std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
-                   Poco::Logger * log,
-                   const std::string & loadable_object_name);
+    ExternalLoader(
+        const Configuration & config,
+        const ExternalLoaderUpdateSettings & update_settings,
+        const ExternalLoaderConfigSettings & config_settings,
+        std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
+        Poco::Logger * log,
+        const std::string & loadable_object_name);
     virtual ~ExternalLoader();
 
     /// Forcibly reloads all loadable objects.
@@ -123,7 +124,11 @@ public:
     LoadablePtr tryGetLoadable(const std::string & name) const;
 
 protected:
-    virtual std::unique_ptr<IExternalLoadable> create(const std::string & name, const Configuration & config, const std::string & config_prefix) = 0;
+    virtual std::unique_ptr<IExternalLoadable> create(
+        const std::string & name,
+        const Configuration & config,
+        const std::string & config_prefix)
+        = 0;
 
     class LockedObjectsMap
     {
@@ -183,8 +188,15 @@ private:
 
     /// Check objects definitions in config files and reload or/and add new ones if the definition is changed
     /// If loadable_name is not empty, load only loadable object with name loadable_name
-    void reloadFromConfigFiles(bool throw_on_error, bool force_reload = false, const std::string & only_dictionary = "");
-    void reloadFromConfigFile(const std::string & config_path, bool throw_on_error, bool force_reload, const std::string & loadable_name);
+    void reloadFromConfigFiles(
+        bool throw_on_error,
+        bool force_reload = false,
+        const std::string & only_dictionary = "");
+    void reloadFromConfigFile(
+        const std::string & config_path,
+        bool throw_on_error,
+        bool force_reload,
+        const std::string & loadable_name);
 
     /// Check config files and update expired loadable objects
     void reloadAndUpdate(bool throw_on_error = false);

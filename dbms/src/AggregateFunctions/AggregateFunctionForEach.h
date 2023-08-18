@@ -55,14 +55,18 @@ struct AggregateFunctionForEachData
   *
   * TODO Allow variable number of arguments.
   */
-class AggregateFunctionForEach final : public IAggregateFunctionDataHelper<AggregateFunctionForEachData, AggregateFunctionForEach>
+class AggregateFunctionForEach final
+    : public IAggregateFunctionDataHelper<AggregateFunctionForEachData, AggregateFunctionForEach>
 {
 private:
     AggregateFunctionPtr nested_func;
     size_t nested_size_of_data = 0;
     size_t num_arguments;
 
-    AggregateFunctionForEachData & ensureAggregateData(AggregateDataPtr __restrict place, size_t new_size, Arena & arena) const
+    AggregateFunctionForEachData & ensureAggregateData(
+        AggregateDataPtr __restrict place,
+        size_t new_size,
+        Arena & arena) const
     {
         AggregateFunctionForEachData & state = data(place);
 
@@ -115,22 +119,20 @@ public:
         nested_size_of_data = nested_func->sizeOfData();
 
         if (arguments.empty())
-            throw Exception("Aggregate function " + getName() + " require at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Aggregate function " + getName() + " require at least one argument",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
             if (!typeid_cast<const DataTypeArray *>(type.get()))
-                throw Exception("All arguments for aggregate function " + getName() + " must be arrays", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "All arguments for aggregate function " + getName() + " must be arrays",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    String getName() const override
-    {
-        return nested_func->getName() + "ForEach";
-    }
+    String getName() const override { return nested_func->getName() + "ForEach"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(nested_func->getReturnType());
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(nested_func->getReturnType()); }
 
     void destroy(AggregateDataPtr __restrict place) const noexcept override
     {
@@ -144,10 +146,7 @@ public:
         }
     }
 
-    bool hasTrivialDestructor() const override
-    {
-        return nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return nested_func->hasTrivialDestructor(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -169,7 +168,9 @@ public:
             const IColumn::Offsets & ith_offsets = ith_column.getOffsets();
 
             if (ith_offsets[row_num] != end || (row_num != 0 && ith_offsets[row_num - 1] != begin))
-                throw Exception("Arrays passed to " + getName() + " aggregate function have different sizes", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
+                throw Exception(
+                    "Arrays passed to " + getName() + " aggregate function have different sizes",
+                    ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
         }
 
         AggregateFunctionForEachData & state = ensureAggregateData(place, end - begin, *arena);
@@ -244,13 +245,11 @@ public:
             nested_state += nested_size_of_data;
         }
 
-        offsets_to.push_back(offsets_to.empty() ? state.dynamic_array_size : offsets_to.back() + state.dynamic_array_size);
+        offsets_to.push_back(
+            offsets_to.empty() ? state.dynamic_array_size : offsets_to.back() + state.dynamic_array_size);
     }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };

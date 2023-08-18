@@ -63,9 +63,7 @@ void ColumnGathererStream::init()
                 "Block should have 1 or 2 columns, but contains " + toString(block.columns()),
                 ErrorCodes::INCORRECT_NUMBER_OF_COLUMNS);
         if (!block.has(name))
-            throw Exception(
-                "Not found column `" + name + "' in block.",
-                ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+            throw Exception("Not found column `" + name + "' in block.", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 
         if (i == 0)
         {
@@ -112,14 +110,17 @@ void ColumnGathererStream::fetchNewBlock(Source & source, size_t source_num)
     }
     catch (Exception & e)
     {
-        e.addMessage("Cannot fetch required block. Stream " + children[source_num]->getName() + ", part " + toString(source_num));
+        e.addMessage(
+            "Cannot fetch required block. Stream " + children[source_num]->getName() + ", part "
+            + toString(source_num));
         throw;
     }
 
     if (0 == source.size)
     {
-        throw Exception("Fetched block is empty. Stream " + children[source_num]->getName() + ", part " + toString(source_num),
-                        ErrorCodes::RECEIVED_EMPTY_DATA);
+        throw Exception(
+            "Fetched block is empty. Stream " + children[source_num]->getName() + ", part " + toString(source_num),
+            ErrorCodes::RECEIVED_EMPTY_DATA);
     }
 }
 
@@ -135,13 +136,17 @@ void ColumnGathererStream::readSuffixImpl()
     double seconds = profile_info.total_stopwatch.elapsedSeconds();
     String speed;
     if (seconds)
-        speed = fmt::format(", {:.2f} rows/sec., {:.2f} MiB/sec.", profile_info.rows / seconds, profile_info.bytes / 1048576.0 / seconds);
-    LOG_TRACE(log,
-              "Gathered column {} ({:.2f} bytes/elem.) in {} sec.{}",
-              name,
-              static_cast<double>(profile_info.bytes) / profile_info.rows,
-              seconds,
-              speed);
+        speed = fmt::format(
+            ", {:.2f} rows/sec., {:.2f} MiB/sec.",
+            profile_info.rows / seconds,
+            profile_info.bytes / 1048576.0 / seconds);
+    LOG_TRACE(
+        log,
+        "Gathered column {} ({:.2f} bytes/elem.) in {} sec.{}",
+        name,
+        static_cast<double>(profile_info.bytes) / profile_info.rows,
+        seconds,
+        speed);
 }
 
 } // namespace DB

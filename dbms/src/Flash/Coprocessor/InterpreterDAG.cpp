@@ -24,8 +24,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
     , max_streams(context.getMaxStreams())
-{
-}
+{}
 
 void setRestorePipelineConcurrency(DAGQueryBlock & query_block)
 {
@@ -53,11 +52,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
         BlockInputStreams child_streams = executeQueryBlock(*child);
         input_streams_vec.push_back(child_streams);
     }
-    DAGQueryBlockInterpreter query_block_interpreter(
-        context,
-        input_streams_vec,
-        query_block,
-        max_streams);
+    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, max_streams);
     return query_block_interpreter.execute();
 }
 

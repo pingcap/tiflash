@@ -33,7 +33,9 @@ public:
     // TODO: currently hashing contains redundant computations when doing distributed or external aggregations
     size_t hash(const Key & x) const
     {
-        return const_cast<Self &>(*this).dispatch(*this, x, [&](const auto &, const auto &, size_t hash) { return hash; });
+        return const_cast<Self &>(*this).dispatch(*this, x, [&](const auto &, const auto &, size_t hash) {
+            return hash;
+        });
     }
 
     size_t operator()(const Key & x) const { return hash(x); }
@@ -182,10 +184,7 @@ public:
         dispatch(*this, key_holder, typename Impl::EmplaceCallable{it, inserted});
     }
 
-    LookupResult ALWAYS_INLINE find(const Key x)
-    {
-        return dispatch(*this, x, typename Impl::FindCallable{});
-    }
+    LookupResult ALWAYS_INLINE find(const Key x) { return dispatch(*this, x, typename Impl::FindCallable{}); }
 
     ConstLookupResult ALWAYS_INLINE find(const Key x) const
     {

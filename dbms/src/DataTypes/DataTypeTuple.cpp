@@ -61,7 +61,9 @@ DataTypeTuple::DataTypeTuple(const DataTypes & elems_, const Strings & names_)
 {
     size_t size = elems.size();
     if (names.size() != size)
-        throw Exception("Wrong number of names passed to constructor of DataTypeTuple", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Wrong number of names passed to constructor of DataTypeTuple",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     std::unordered_set<String> names_set;
     for (size_t i = 0; i < size; ++i)
@@ -70,7 +72,9 @@ DataTypeTuple::DataTypeTuple(const DataTypes & elems_, const Strings & names_)
             throw Exception("Names of tuple elements cannot be empty", ErrorCodes::BAD_ARGUMENTS);
 
         if (isNumericASCII(names[i][0]))
-            throw Exception("Explicitly specified names of tuple elements cannot start with digit", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                "Explicitly specified names of tuple elements cannot start with digit",
+                ErrorCodes::BAD_ARGUMENTS);
 
         if (!names_set.insert(names[i]).second)
             throw Exception("Names of tuple elements must be unique", ErrorCodes::DUPLICATE_COLUMN);
@@ -220,7 +224,11 @@ void DataTypeTuple::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) c
     deserializeText(column, istr);
 }
 
-void DataTypeTuple::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON & settings) const
+void DataTypeTuple::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON & settings) const
 {
     writeChar('[', ostr);
     for (const auto i : ext::range(0, ext::size(elems)))

@@ -31,15 +31,9 @@ public:
     static constexpr auto name = "replicate";
     static FunctionPtr create(const Context & context);
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 2;
-    }
+    size_t getNumberOfArguments() const override { return 2; }
 
     bool useDefaultImplementationForNulls() const override { return false; }
 
@@ -50,7 +44,8 @@ public:
 
 
 /// Executes expression. Uses for lambda functions implementation. Can't be created from factory.
-class FunctionExpression : public IFunctionBase
+class FunctionExpression
+    : public IFunctionBase
     , public IExecutableFunction
     , public std::enable_shared_from_this<FunctionExpression>
 {
@@ -66,8 +61,7 @@ public:
         , argument_names(argument_names)
         , return_type(return_type)
         , return_name(return_name)
-    {
-    }
+    {}
 
     String getName() const override { return "FunctionExpression"; }
 
@@ -108,13 +102,19 @@ private:
 /// Returns ColumnFunction with captured columns.
 /// For lambda(x, x + y) x is in lambda_arguments, y is in captured arguments, expression_actions is 'x + y'.
 ///  execute(y) returns ColumnFunction(FunctionExpression(x + y), y) with type Function(x) -> function_return_type.
-class FunctionCapture : public IFunctionBase
+class FunctionCapture
+    : public IFunctionBase
     , public IExecutableFunction
     , public IFunctionBuilder
     , public std::enable_shared_from_this<FunctionCapture>
 {
 public:
-    FunctionCapture(const ExpressionActionsPtr & expression_actions, const Names & captured, const NamesAndTypesList & lambda_arguments, const DataTypePtr & function_return_type, const std::string & expression_return_name)
+    FunctionCapture(
+        const ExpressionActionsPtr & expression_actions,
+        const Names & captured,
+        const NamesAndTypesList & lambda_arguments,
+        const DataTypePtr & function_return_type,
+        const std::string & expression_return_name)
         : expression_actions(expression_actions)
         , captured_names(captured)
         , lambda_arguments(lambda_arguments)
@@ -134,8 +134,9 @@ public:
             {
                 auto it = arguments_map.find(name);
                 if (it == arguments_map.end())
-                    throw Exception("Lambda captured argument " + name + " not found in required columns.",
-                                    ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "Lambda captured argument " + name + " not found in required columns.",
+                        ErrorCodes::LOGICAL_ERROR);
 
                 types.push_back(it->second);
                 arguments_map.erase(it);
@@ -190,7 +191,12 @@ public:
         for (const auto & argument : arguments)
             columns.push_back(block.getByPosition(argument));
 
-        auto function = std::make_shared<FunctionExpression>(expression_actions, types, names, function_return_type, expression_return_name);
+        auto function = std::make_shared<FunctionExpression>(
+            expression_actions,
+            types,
+            names,
+            function_return_type,
+            expression_return_name);
         auto size = block.rows();
         block.getByPosition(result).column = ColumnFunction::create(size, std::move(function), columns);
     }
@@ -200,10 +206,8 @@ public:
 protected:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName &) const override { return return_type; }
     bool useDefaultImplementationForNulls() const override { return false; }
-    FunctionBasePtr buildImpl(
-        const ColumnsWithTypeAndName &,
-        const DataTypePtr &,
-        const TiDB::TiDBCollatorPtr &) const override
+    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, const TiDB::TiDBCollatorPtr &)
+        const override
     {
         return std::const_pointer_cast<FunctionCapture>(shared_from_this());
     }

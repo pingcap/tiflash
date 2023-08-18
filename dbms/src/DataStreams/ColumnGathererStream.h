@@ -14,11 +14,14 @@
 
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Common/PODArray.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 
 namespace DB
@@ -44,15 +47,9 @@ struct RowSourcePart
     /// In CollapsingMergeTree case flag means "skip this rows"
     bool getSkipFlag() const { return (data & MASK_FLAG) != 0; }
 
-    void setSourceNum(size_t source_num)
-    {
-        data = (data & MASK_FLAG) | (static_cast<UInt8>(source_num) & MASK_NUMBER);
-    }
+    void setSourceNum(size_t source_num) { data = (data & MASK_FLAG) | (static_cast<UInt8>(source_num) & MASK_NUMBER); }
 
-    void setSkipFlag(bool flag)
-    {
-        data = flag ? data | MASK_FLAG : data & ~MASK_FLAG;
-    }
+    void setSkipFlag(bool flag) { data = flag ? data | MASK_FLAG : data & ~MASK_FLAG; }
 
     static constexpr size_t MAX_PARTS = 0x7F;
     static constexpr UInt8 MASK_NUMBER = 0x7F;
@@ -70,8 +67,10 @@ class ColumnGathererStream : public IProfilingBlockInputStream
 {
 public:
     ColumnGathererStream(
-            const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-            size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE);
+        const String & column_name_,
+        const BlockInputStreams & source_streams,
+        ReadBuffer & row_sources_buf_,
+        size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE);
 
     String getName() const override { return "ColumnGatherer"; }
 
@@ -94,7 +93,8 @@ private:
         size_t size;
         Block block;
 
-        Source(Block && block_, const String & name) : block(std::move(block_))
+        Source(Block && block_, const String & name)
+            : block(std::move(block_))
         {
             update(name);
         }
@@ -139,7 +139,8 @@ void ColumnGathererStream::gather(Column & column_res)
     RowSourcePart * row_source_pos = reinterpret_cast<RowSourcePart *>(row_sources_buf.position());
     RowSourcePart * row_sources_end = reinterpret_cast<RowSourcePart *>(row_sources_buf.buffer().end());
 
-    size_t cur_block_preferred_size = std::min(static_cast<size_t>(row_sources_end - row_source_pos), block_preferred_size);
+    size_t cur_block_preferred_size
+        = std::min(static_cast<size_t>(row_sources_end - row_source_pos), block_preferred_size);
     column_res.reserve(cur_block_preferred_size);
 
     size_t cur_size = 0;
@@ -159,7 +160,9 @@ void ColumnGathererStream::gather(Column & column_res)
 
         /// Consecutive optimization. TODO: precompute lengths
         size_t len = 1;
-        size_t max_len = std::min(static_cast<size_t>(row_sources_end - row_source_pos), source.size - source.pos); // interval should be in the same block
+        size_t max_len = std::min(
+            static_cast<size_t>(row_sources_end - row_source_pos),
+            source.size - source.pos); // interval should be in the same block
         while (len < max_len && row_source_pos->data == row_source.data)
         {
             ++len;
@@ -197,4 +200,4 @@ void ColumnGathererStream::gather(Column & column_res)
     }
 }
 
-}
+} // namespace DB

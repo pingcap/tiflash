@@ -68,10 +68,8 @@ public:
     // If dir_path_as_encryption_path is true, use dir_path_ as EncryptionPath
     // If false, use every file's path inside dir_path_ as EncryptionPath
     // Note this method is not atomic, and after calling it, the files in dir_path_ cannot be read again.
-    void deleteDirectory(
-        const String & dir_path_,
-        bool dir_path_as_encryption_path = false,
-        bool recursive = false) const;
+    void deleteDirectory(const String & dir_path_, bool dir_path_as_encryption_path = false, bool recursive = false)
+        const;
 
     void deleteRegularFile(const String & file_path_, const EncryptionPath & encryption_path_) const;
 
@@ -83,7 +81,8 @@ public:
     // It will be link_encryption_name_ link to src_encryption_path_
     // For example: file0 have some data, file1 want to keep same data as file0
     //  Then call linkEncryptionInfo(file0,file1);
-    void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & link_encryption_name_) const;
+    void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & link_encryption_name_)
+        const;
 
     bool isFileEncrypted(const EncryptionPath & encryption_path_) const;
 

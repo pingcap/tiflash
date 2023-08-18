@@ -146,7 +146,9 @@ struct ModuloByConstantImpl : BinaryOperationImplBase<A, B, ModuloImpl<A, B>>
         /// Here we failed to make the SSE variant from libdivide give an advantage.
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
-            c[i] = a[i] - (a[i] / divider) * b; /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
+            c[i] = a[i]
+                - (a[i] / divider)
+                    * b; /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
     }
 };
 

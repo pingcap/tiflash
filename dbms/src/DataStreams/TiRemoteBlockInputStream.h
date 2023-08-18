@@ -175,7 +175,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
+    TiRemoteBlockInputStream(
+        std::shared_ptr<RemoteReader> remote_reader_,
+        const String & req_id,
+        const String & executor_id,
+        size_t stream_id_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemote({})", RemoteReader::name))
@@ -228,10 +232,14 @@ public:
         return block;
     }
 
+<<<<<<< HEAD
     const std::unordered_map<String, ExecutionSummary> * getRemoteExecutionSummaries(size_t index)
     {
         return execution_summaries_inited[index].load() ? &execution_summaries[index] : nullptr;
     }
+=======
+    const RemoteExecutionSummary & getRemoteExecutionSummary() { return remote_execution_summary; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     size_t getTotalRows() const { return total_rows; }
     size_t getSourceNum() const { return source_num; }
@@ -239,10 +247,7 @@ public:
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
 
 protected:
-    void readSuffixImpl() override
-    {
-        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
-    }
+    void readSuffixImpl() override { LOG_DEBUG(log, "finish read {} rows from remote", total_rows); }
 
     void appendInfo(FmtBuffer & buffer) const override
     {
@@ -250,9 +255,7 @@ protected:
         buffer.joinStr(
             sample_block.begin(),
             sample_block.end(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName());
-            },
+            [](const auto & arg, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName()); },
             ", ");
         buffer.append("}");
     }

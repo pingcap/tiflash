@@ -97,16 +97,22 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
 }
 
 
-std::pair<String, StoragePtr> createTableFromDefinition(const String & definition,
-                                                        const String & database_name,
-                                                        const String & database_data_path,
-                                                        const String & database_engine,
-                                                        Context & context,
-                                                        bool has_force_restore_data_flag,
-                                                        const String & description_for_error_message)
+std::pair<String, StoragePtr> createTableFromDefinition(
+    const String & definition,
+    const String & database_name,
+    const String & database_data_path,
+    const String & database_engine,
+    Context & context,
+    bool has_force_restore_data_flag,
+    const String & description_for_error_message)
 {
     ParserCreateQuery parser;
-    ASTPtr ast = parseQuery(parser, definition.data(), definition.data() + definition.size(), description_for_error_message, 0);
+    ASTPtr ast = parseQuery(
+        parser,
+        definition.data(),
+        definition.data() + definition.size(),
+        description_for_error_message,
+        0);
 
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
     ast_create_query.attach = true;
@@ -120,8 +126,19 @@ std::pair<String, StoragePtr> createTableFromDefinition(const String & definitio
 
     ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns, context);
 
-    return {ast_create_query.table,
-            StorageFactory::instance().get(ast_create_query, database_data_path, ast_create_query.table, database_name, database_engine, context, context.getGlobalContext(), columns, true, has_force_restore_data_flag)};
+    return {
+        ast_create_query.table,
+        StorageFactory::instance().get(
+            ast_create_query,
+            database_data_path,
+            ast_create_query.table,
+            database_name,
+            database_engine,
+            context,
+            context.getGlobalContext(),
+            columns,
+            true,
+            has_force_restore_data_flag)};
 }
 
 
@@ -215,16 +232,26 @@ ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_pat
 
     String query;
     {
-        ReadBufferFromFileProvider in(context.getFileProvider(), metadata_path, EncryptionPath(metadata_path, ""), 4096);
+        ReadBufferFromFileProvider in(
+            context.getFileProvider(),
+            metadata_path,
+            EncryptionPath(metadata_path, ""),
+            4096);
         readStringUntilEOF(query, in);
     }
 
     ParserCreateQuery parser;
     const char * pos = query.data();
     std::string error_message;
-    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false, "in file " + metadata_path,
-                             /* allow_multi_statements = */ false,
-                             0);
+    auto ast = tryParseQuery(
+        parser,
+        pos,
+        pos + query.size(),
+        error_message,
+        /* hilite = */ false,
+        "in file " + metadata_path,
+        /* allow_multi_statements = */ false,
+        0);
 
     if (!ast && throw_on_error)
         throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
@@ -232,7 +259,11 @@ ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_pat
     return ast;
 }
 
-ASTPtr getCreateQueryFromMetadata(const Context & context, const String & metadata_path, const String & database, bool throw_on_error)
+ASTPtr getCreateQueryFromMetadata(
+    const Context & context,
+    const String & metadata_path,
+    const String & database,
+    bool throw_on_error)
 {
     ASTPtr ast = DatabaseLoading::getQueryFromMetadata(context, metadata_path, throw_on_error);
     if (ast)
@@ -282,6 +313,7 @@ std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log
     return filenames;
 }
 
+<<<<<<< HEAD
 void loadTable(Context & context,
                IDatabase & database,
                const String & database_metadata_path,
@@ -290,13 +322,29 @@ void loadTable(Context & context,
                const String & database_engine,
                const String & file_name,
                bool has_force_restore_data_flag)
+=======
+std::tuple<String, StoragePtr> loadTable(
+    Context & context,
+    IDatabase & database,
+    const String & database_metadata_path,
+    const String & database_name,
+    const String & database_data_path,
+    const String & database_engine,
+    const String & file_name,
+    bool has_force_restore_data_flag)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     Poco::Logger * log = &Poco::Logger::get("loadTable");
-    const String table_metadata_path = database_metadata_path + (endsWith(database_metadata_path, "/") ? "" : "/") + file_name;
+    const String table_metadata_path
+        = database_metadata_path + (endsWith(database_metadata_path, "/") ? "" : "/") + file_name;
 
     String s;
     {
-        ReadBufferFromFileProvider in(context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), 1024);
+        ReadBufferFromFileProvider in(
+            context.getFileProvider(),
+            table_metadata_path,
+            EncryptionPath(table_metadata_path, ""),
+            1024);
         readStringUntilEOF(s, in);
     }
 
@@ -316,24 +364,40 @@ void loadTable(Context & context,
         StoragePtr table;
         try
         {
-            std::tie(table_name, table) = createTableFromDefinition(s, database_name, database_data_path, database_engine, context, has_force_restore_data_flag, "in file " + table_metadata_path);
+            std::tie(table_name, table) = createTableFromDefinition(
+                s,
+                database_name,
+                database_data_path,
+                database_engine,
+                context,
+                has_force_restore_data_flag,
+                "in file " + table_metadata_path);
         }
         catch (const PrimaryKeyNotMatchException & pri_key_ex)
         {
             // Replace the primary key and update statement in `table_metadata_path`. The correct statement will be return.
-            const String statement = fixCreateStatementWithPriKeyNotMatchException(context, s, table_metadata_path, pri_key_ex, log);
+            const String statement
+                = fixCreateStatementWithPriKeyNotMatchException(context, s, table_metadata_path, pri_key_ex, log);
             // Then try to load with correct statement.
-            std::tie(table_name, table) = createTableFromDefinition(statement, database_name, database_data_path, database_engine, context, has_force_restore_data_flag, "in file " + table_metadata_path);
+            std::tie(table_name, table) = createTableFromDefinition(
+                statement,
+                database_name,
+                database_data_path,
+                database_engine,
+                context,
+                has_force_restore_data_flag,
+                "in file " + table_metadata_path);
         }
         database.attachTable(table_name, table);
     }
     catch (const Exception & e)
     {
         throw Exception(
-            fmt::format("Cannot create table from metadata file {}, error: {}, stack trace:\n{}",
-                        table_metadata_path,
-                        e.displayText(),
-                        e.getStackTrace().toString()),
+            fmt::format(
+                "Cannot create table from metadata file {}, error: {}, stack trace:\n{}",
+                table_metadata_path,
+                e.displayText(),
+                e.getStackTrace().toString()),
             ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
     }
 }

@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadBufferFromIStream.h>
 #include <IO/HashingReadBuffer.h>
+#include <IO/ReadBufferFromIStream.h>
 #include <IO/WriteBufferFromOStream.h>
-#include "hashing_buffer.h"
+
 #include <iostream>
+
+#include "hashing_buffer.h"
 
 void test(size_t data_size)
 {
@@ -31,7 +33,7 @@ void test(size_t data_size)
     std::vector<size_t> block_sizes = {56, 128, 513, 2048, 3055, 4097, 4096};
     for (size_t read_buffer_block_size : block_sizes)
     {
-        std::cout  << "block size " << read_buffer_block_size << std::endl;
+        std::cout << "block size " << read_buffer_block_size << std::endl;
         std::stringstream io;
         DB::WriteBufferFromOStream out_(io);
         DB::HashingWriteBuffer out(out_);
@@ -65,7 +67,9 @@ void test(size_t data_size)
             FAIL("failed on data size " << data_size << " reading by blocks of size " << read_buffer_block_size);
         }
         if (buf.getHash() != out.getHash())
-            FAIL("Hash of HashingReadBuffer doesn't match with hash of HashingWriteBuffer on data size " << data_size << " reading by blocks of size " << read_buffer_block_size);
+            FAIL(
+                "Hash of HashingReadBuffer doesn't match with hash of HashingWriteBuffer on data size "
+                << data_size << " reading by blocks of size " << read_buffer_block_size);
     }
 }
 

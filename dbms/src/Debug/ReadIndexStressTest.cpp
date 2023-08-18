@@ -28,16 +28,15 @@
 
 namespace DB
 {
-const std::map<ReadIndexStressTest::TestType, std::string> ReadIndexStressTest::TestTypeName = {
-    {ReadIndexStressTest::TestType::V1, "batch-read-index-v1"},
-    {ReadIndexStressTest::TestType::Async, "async-read-index"}};
+const std::map<ReadIndexStressTest::TestType, std::string> ReadIndexStressTest::TestTypeName
+    = {{ReadIndexStressTest::TestType::V1, "batch-read-index-v1"},
+       {ReadIndexStressTest::TestType::Async, "async-read-index"}};
 
-static const std::map<std::string, ReadIndexStressTest::TestType> TestName2Type = {
-    {"batch-read-index-v1", ReadIndexStressTest::TestType::V1},
-    {"async-read-index", ReadIndexStressTest::TestType::Async}};
+static const std::map<std::string, ReadIndexStressTest::TestType> TestName2Type
+    = {{"batch-read-index-v1", ReadIndexStressTest::TestType::V1},
+       {"async-read-index", ReadIndexStressTest::TestType::Async}};
 
-ReadIndexStressTest::ReadIndexStressTest(
-    const TMTContext & tmt_)
+ReadIndexStressTest::ReadIndexStressTest(const TMTContext & tmt_)
     : tmt(tmt_)
 {
     MockStressTestCfg::enable = true;
@@ -53,14 +52,19 @@ ReadIndexStressTest::~ReadIndexStressTest()
 void ReadIndexStressTest::dbgFuncStressTest(Context & context, const ASTs & args, DBGInvoker::Printer printer)
 {
     if (args.size() < 4)
-        throw Exception("Args not matched, should be: min_region_cnt, loop_cnt, type(batch-read-index-v1, async-read-index), concurrency", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: min_region_cnt, loop_cnt, type(batch-read-index-v1, async-read-index), "
+            "concurrency",
+            ErrorCodes::BAD_ARGUMENTS);
     auto min_region_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     auto loop_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     TestType ver = TestName2Type.at(typeid_cast<const ASTIdentifier &>(*args[2]).name);
     auto concurrency = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     {
         if (min_region_cnt < 1 || loop_cnt < 1 || concurrency < 1)
-            throw Exception("Invalid args: `min_region_cnt < 1 or loop_cnt < 1 or concurrency < 1` ", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Invalid args: `min_region_cnt < 1 or loop_cnt < 1 or concurrency < 1` ",
+                ErrorCodes::LOGICAL_ERROR);
     }
     ReadIndexStressTest cxt{context.getTMTContext()};
     size_t req_cnt{};
@@ -97,7 +101,8 @@ void ReadIndexStressTest::dbgFuncStressTest(Context & context, const ASTs & args
     }
     std::string addition_info = max_tc >= std::chrono::seconds{10} ? "Error: meet timeout" : "";
     printer(fmt::format(
-        "region count each round {}, loop count {}, concurrency {}, type `{}`, time cost min {}, max {}, avg {}, median {}, {}",
+        "region count each round {}, loop count {}, concurrency {}, type `{}`, time cost min {}, max {}, avg {}, "
+        "median {}, {}",
         req_cnt,
         loop_cnt,
         concurrency,
@@ -157,9 +162,7 @@ void ReadIndexStressTest::runConcurrency(
         t.join();
 }
 
-ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
-    std::vector<kvrpcpb::ReadIndexRequest> reqs,
-    TestType ver)
+ReadIndexStressTest::TimeCost ReadIndexStressTest::run(std::vector<kvrpcpb::ReadIndexRequest> reqs, TestType ver)
 {
     const auto & kvstore = *tmt.getKVStore();
     size_t timeout_ms = 10 * 1000;
@@ -174,33 +177,32 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
     switch (ver)
     {
     case TestType::V1:
-        return wrap_time_cost(
-            [&]() {
-                LOG_INFO(logger, "begin to run `{}`: req size {}, ", TestTypeName.at(ver), reqs.size());
-                kvstore.getProxyHelper()->batchReadIndex_v1(reqs, timeout_ms);
-            });
+        return wrap_time_cost([&]() {
+            LOG_INFO(logger, "begin to run `{}`: req size {}, ", TestTypeName.at(ver), reqs.size());
+            kvstore.getProxyHelper()->batchReadIndex_v1(reqs, timeout_ms);
+        });
     case TestType::Async:
-        return wrap_time_cost(
-            [&]() {
-                if (!kvstore.read_index_worker_manager)
-                {
-                    LOG_ERROR(logger, "no read_index_worker_manager");
-                    return;
-                }
-                LOG_INFO(logger, "begin to run `{}`: req size {}", TestTypeName.at(ver), reqs.size());
-                for (size_t i = 0; i < reqs.size(); ++i)
-                {
-                    auto & req = reqs[i];
-                    req.mutable_context()->set_region_id(req.context().region_id() + MockStressTestCfg::RegionIdPrefix * (i + 1));
-                }
-                LOG_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
-                auto resps = kvstore.batchReadIndex(reqs, timeout_ms);
-                for (const auto & resp : resps)
-                {
-                    if (resp.first.read_index() == 0)
-                        throw Exception("meet region error", ErrorCodes::LOGICAL_ERROR);
-                }
-            });
+        return wrap_time_cost([&]() {
+            if (!kvstore.read_index_worker_manager)
+            {
+                LOG_ERROR(logger, "no read_index_worker_manager");
+                return;
+            }
+            LOG_INFO(logger, "begin to run `{}`: req size {}", TestTypeName.at(ver), reqs.size());
+            for (size_t i = 0; i < reqs.size(); ++i)
+            {
+                auto & req = reqs[i];
+                req.mutable_context()->set_region_id(
+                    req.context().region_id() + MockStressTestCfg::RegionIdPrefix * (i + 1));
+            }
+            LOG_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
+            auto resps = kvstore.batchReadIndex(reqs, timeout_ms);
+            for (const auto & resp : resps)
+            {
+                if (resp.first.read_index() == 0)
+                    throw Exception("meet region error", ErrorCodes::LOGICAL_ERROR);
+            }
+        });
     default:
         throw Exception("unknown type", ErrorCodes::LOGICAL_ERROR);
     }

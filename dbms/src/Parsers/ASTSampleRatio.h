@@ -26,9 +26,9 @@ class ASTSampleRatio : public IAST
 {
 public:
 #ifdef __SIZEOF_INT128__
-    using BigNum = __uint128_t;    /// Must contain the result of multiplying two UInt64.
+    using BigNum = __uint128_t; /// Must contain the result of multiplying two UInt64.
 #else
-    #warning "No uint128_t type. Sampling ratios cannot work correctly."
+#warning "No uint128_t type. Sampling ratios cannot work correctly."
     using BigNum = uint64_t;
 #endif
 
@@ -40,7 +40,9 @@ public:
 
     Rational ratio;
 
-    ASTSampleRatio(Rational & ratio_) : ratio(ratio_) {}
+    ASTSampleRatio(Rational & ratio_)
+        : ratio(ratio_)
+    {}
 
     String getID() const override { return "SampleRatio_" + toString(ratio); }
 
@@ -55,4 +57,4 @@ public:
     }
 };
 
-}
+} // namespace DB

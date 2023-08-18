@@ -41,20 +41,22 @@ XMLRowOutputStream::XMLRowOutputStream(WriteBuffer & ostr_, const Block & sample
         for (const char * pos = begin; pos != end; ++pos)
         {
             char c = *pos;
+<<<<<<< HEAD
             if (!( isAlphaASCII(c)
                 || (pos != begin && isNumericASCII(c))
                 || c == '_'
                 || c == '-'
                 || c == '.'))
+=======
+            if (!(isAlphaASCII(c) || (pos != begin && isNumericASCII(c)) || c == '_' || c == '-' || c == '.'))
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             {
                 is_column_name_suitable = false;
                 break;
             }
         }
 
-        field_tag_names[i] = is_column_name_suitable
-            ? fields[i].name
-            : "field";
+        field_tag_names[i] = is_column_name_suitable ? fields[i].name : "field";
     }
 
     if (need_validate_utf8)
@@ -151,6 +153,7 @@ void XMLRowOutputStream::writeRowsBeforeLimitAtLeast()
     }
 }
 
+<<<<<<< HEAD
 void XMLRowOutputStream::writeTotals()
 {
     if (totals)
@@ -177,6 +180,14 @@ void XMLRowOutputStream::writeTotals()
 
 
 static void writeExtremesElement(const char * title, const Block & extremes, size_t row_num, const Names & field_tag_names, WriteBuffer & ostr)
+=======
+static void writeExtremesElement(
+    const char * title,
+    const Block & extremes,
+    size_t row_num,
+    const Names & field_tag_names,
+    WriteBuffer & ostr)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     writeCString("\t\t<", ostr);
     writeCString(title, ostr);

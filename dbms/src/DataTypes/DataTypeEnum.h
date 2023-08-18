@@ -85,7 +85,9 @@ public:
     {
         const auto it = value_to_name_map.find(value);
         if (it == std::end(value_to_name_map))
-            throw Exception{"Unexpected value " + toString(value) + " for type " + getName(), ErrorCodes::LOGICAL_ERROR};
+            throw Exception{
+                "Unexpected value " + toString(value) + " for type " + getName(),
+                ErrorCodes::LOGICAL_ERROR};
 
         return it->second;
     }
@@ -100,7 +102,9 @@ public:
     {
         const auto it = name_to_value_map.find(name);
         if (it == std::end(name_to_value_map))
-            throw Exception{"Unknown element '" + name.toString() + "' for type " + getName(), ErrorCodes::LOGICAL_ERROR};
+            throw Exception{
+                "Unknown element '" + name.toString() + "' for type " + getName(),
+                ErrorCodes::LOGICAL_ERROR};
 
         return it->getMapped();
     }
@@ -117,14 +121,20 @@ public:
     void deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const override;
     void serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const override;
-    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const override;
+    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
+        const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
-    void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, const size_t offset, size_t limit) const override;
-    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, const size_t limit, const double avg_value_size_hint) const override;
+    void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, const size_t offset, size_t limit)
+        const override;
+    void deserializeBinaryBulk(
+        IColumn & column,
+        ReadBuffer & istr,
+        const size_t limit,
+        const double avg_value_size_hint) const override;
 
     MutableColumnPtr createColumn() const override { return ColumnType::create(); }
 

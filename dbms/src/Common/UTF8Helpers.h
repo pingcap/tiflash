@@ -87,8 +87,8 @@ inline size_t countCodePoints(const UInt8 * data, size_t size)
     const auto threshold = _mm_set1_epi8(0xBF);
 
     for (; data < src_end_sse; data += bytes_sse)
-        res += __builtin_popcount(_mm_movemask_epi8(
-            _mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(data)), threshold)));
+        res += __builtin_popcount(
+            _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(data)), threshold)));
 #endif
 
     for (; data < end; ++data) /// Skip UTF-8 continuation bytes.

@@ -52,21 +52,8 @@ private:
 
     static const std::array<size_t, 14> & getSizes()
     {
-        static constexpr std::array<size_t, 14> sizes{
-            8,
-            16,
-            32,
-            64,
-            128,
-            256,
-            512,
-            1024,
-            2048,
-            4096,
-            8192,
-            16384,
-            32768,
-            65536};
+        static constexpr std::array<size_t, 14>
+            sizes{8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536};
 
         static_assert(sizes.front() >= sizeof(Block), "Can't make allocations smaller than sizeof(Block)");
 
@@ -104,8 +91,7 @@ public:
         const size_t growth_factor = 2,
         const size_t linear_growth_threshold = 128 * 1024 * 1024)
         : pool{initial_size, growth_factor, linear_growth_threshold}
-    {
-    }
+    {}
 
     char * alloc(const size_t size)
     {
@@ -141,10 +127,7 @@ public:
     }
 
     /// Size of the allocated pool in bytes
-    size_t size() const
-    {
-        return pool.size();
-    }
+    size_t size() const { return pool.size(); }
 };
 
 #endif
@@ -176,19 +159,7 @@ struct Dictionary
     struct Attribute final
     {
         AttributeUnderlyingType type;
-        std::tuple<
-            UInt8,
-            UInt16,
-            UInt32,
-            UInt64,
-            Int8,
-            Int16,
-            Int32,
-            Int64,
-            Float32,
-            Float64,
-            String>
-            null_values;
+        std::tuple<UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64, String> null_values;
         std::tuple<
             ContainerPtrType<UInt8>,
             ContainerPtrType<UInt16>,
@@ -295,12 +266,10 @@ int main(int argc, char ** argv)
         }
 
         watch.stop();
-        std::cerr
-            << "Read. Elements: " << data.size() << ", bytes: " << sum_strings_size
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << data.size() / watch.elapsedSeconds() << " elem/sec.,"
-            << " " << sum_strings_size / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)"
-            << std::endl;
+        std::cerr << "Read. Elements: " << data.size() << ", bytes: " << sum_strings_size
+                  << ", elapsed: " << watch.elapsedSeconds() << " (" << data.size() / watch.elapsedSeconds()
+                  << " elem/sec.,"
+                  << " " << sum_strings_size / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)" << std::endl;
 
         rusage resource_usage;
         if (0 != getrusage(RUSAGE_SELF, &resource_usage))
@@ -325,12 +294,9 @@ int main(int argc, char ** argv)
         }
 
         watch.stop();
-        std::cerr
-            << "Insert info arena. Bytes: " << arena.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << data.size() / watch.elapsedSeconds() << " elem/sec.,"
-            << " " << sum_strings_size / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)"
-            << std::endl;
+        std::cerr << "Insert info arena. Bytes: " << arena.size() << ", elapsed: " << watch.elapsedSeconds() << " ("
+                  << data.size() / watch.elapsedSeconds() << " elem/sec.,"
+                  << " " << sum_strings_size / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)" << std::endl;
     }
 
     //while (true)
@@ -353,12 +319,10 @@ int main(int argc, char ** argv)
         }
 
         watch.stop();
-        std::cerr
-            << "Randomly remove and insert elements. Bytes: " << arena.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << data.size() / watch.elapsedSeconds() << " elem/sec.,"
-            << " " << bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)"
-            << std::endl;
+        std::cerr << "Randomly remove and insert elements. Bytes: " << arena.size()
+                  << ", elapsed: " << watch.elapsedSeconds() << " (" << data.size() / watch.elapsedSeconds()
+                  << " elem/sec.,"
+                  << " " << bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)" << std::endl;
     }
 
     Dictionary dictionary;
@@ -386,11 +350,8 @@ int main(int argc, char ** argv)
         }
 
         watch.stop();
-        std::cerr
-            << "Filling cache. Bytes: " << arena.size()
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << data.size() / watch.elapsedSeconds() << " elem/sec.,"
-            << " " << bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)"
-            << std::endl;
+        std::cerr << "Filling cache. Bytes: " << arena.size() << ", elapsed: " << watch.elapsedSeconds() << " ("
+                  << data.size() / watch.elapsedSeconds() << " elem/sec.,"
+                  << " " << bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)" << std::endl;
     }
 }

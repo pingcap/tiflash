@@ -17,16 +17,25 @@
 
 namespace DB::GatherUtils
 {
-struct SliceDynamicOffsetBoundedSelectArraySource : public ArraySinkSourceSelector<SliceDynamicOffsetBoundedSelectArraySource>
+struct SliceDynamicOffsetBoundedSelectArraySource
+    : public ArraySinkSourceSelector<SliceDynamicOffsetBoundedSelectArraySource>
 {
     template <typename Source, typename Sink>
-    static void selectSourceSink(Source && source, Sink && sink, const IColumn & offset_column, const IColumn & length_column)
+    static void selectSourceSink(
+        Source && source,
+        Sink && sink,
+        const IColumn & offset_column,
+        const IColumn & length_column)
     {
         sliceDynamicOffsetBounded(source, sink, offset_column, length_column);
     }
 };
 
-void sliceDynamicOffsetBounded(IArraySource & src, IArraySink & sink, const IColumn & offset_column, const IColumn & length_column)
+void sliceDynamicOffsetBounded(
+    IArraySource & src,
+    IArraySink & sink,
+    const IColumn & offset_column,
+    const IColumn & length_column)
 {
     SliceDynamicOffsetBoundedSelectArraySource::select(src, sink, offset_column, length_column);
 }

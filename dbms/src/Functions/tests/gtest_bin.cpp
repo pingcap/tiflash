@@ -23,9 +23,7 @@ class TestBin : public DB::tests::FunctionTest
 TEST_F(TestBin, Simple)
 try
 {
-    ASSERT_COLUMN_EQ(
-        createColumn<String>({"1100100"}),
-        executeFunction("bin", createColumn<Int64>({100})));
+    ASSERT_COLUMN_EQ(createColumn<String>({"1100100"}), executeFunction("bin", createColumn<Int64>({100})));
 }
 CATCH
 
@@ -36,17 +34,22 @@ try
         createColumn<String>({"0", "1111111111111111111111111111111111111111111111111111111110000000", "1111111"}),
         executeFunction("bin", createColumn<Int8>({0, INT8_MIN, INT8_MAX})));
     ASSERT_COLUMN_EQ(
-        createColumn<String>({"0", "1111111111111111111111111111111111111111111111111000000000000000", "111111111111111"}),
+        createColumn<String>(
+            {"0", "1111111111111111111111111111111111111111111111111000000000000000", "111111111111111"}),
         executeFunction("bin", createColumn<Int16>({0, INT16_MIN, INT16_MAX})));
     ASSERT_COLUMN_EQ(
-        createColumn<String>({"0", "1111111111111111111111111111111110000000000000000000000000000000", "1111111111111111111111111111111"}),
+        createColumn<String>(
+            {"0",
+             "1111111111111111111111111111111110000000000000000000000000000000",
+             "1111111111111111111111111111111"}),
         executeFunction("bin", createColumn<Int32>({0, INT32_MIN, INT32_MAX})));
     ASSERT_COLUMN_EQ(
-        createColumn<String>({"0", "1000000000000000000000000000000000000000000000000000000000000000", "111111111111111111111111111111111111111111111111111111111111111"}),
+        createColumn<String>(
+            {"0",
+             "1000000000000000000000000000000000000000000000000000000000000000",
+             "111111111111111111111111111111111111111111111111111111111111111"}),
         executeFunction("bin", createColumn<Int64>({0, INT64_MIN, INT64_MAX})));
-    ASSERT_COLUMN_EQ(
-        createColumn<String>({"0", "11111111"}),
-        executeFunction("bin", createColumn<UInt8>({0, 255})));
+    ASSERT_COLUMN_EQ(createColumn<String>({"0", "11111111"}), executeFunction("bin", createColumn<UInt8>({0, 255})));
     ASSERT_COLUMN_EQ(
         createColumn<String>({"0", "1111111111111111"}),
         executeFunction("bin", createColumn<UInt16>({0, 65535})));

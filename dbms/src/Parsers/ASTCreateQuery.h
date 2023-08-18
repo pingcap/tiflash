@@ -57,12 +57,14 @@ public:
     {
         if (engine)
         {
-            s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "ENGINE" << (s.hilite ? hilite_none : "") << " = ";
+            s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "ENGINE" << (s.hilite ? hilite_none : "")
+                   << " = ";
             engine->formatImpl(s, state, frame);
         }
         if (partition_by)
         {
-            s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PARTITION BY " << (s.hilite ? hilite_none : "");
+            s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PARTITION BY "
+                   << (s.hilite ? hilite_none : "");
             partition_by->formatImpl(s, state, frame);
         }
         if (order_by)
@@ -133,8 +135,7 @@ protected:
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "")
                           << (attach ? "ATTACH DATABASE " : "CREATE DATABASE ")
-                          << (if_not_exists ? "IF NOT EXISTS " : "")
-                          << (settings.hilite ? hilite_none : "")
+                          << (if_not_exists ? "IF NOT EXISTS " : "") << (settings.hilite ? hilite_none : "")
                           << backQuoteIfNeed(database);
 
             if (storage)
@@ -150,28 +151,24 @@ protected:
             if (is_materialized_view)
                 what = "MATERIALIZED VIEW";
 
-            settings.ostr
-                << (settings.hilite ? hilite_keyword : "")
-                << (attach ? "ATTACH " : "CREATE ")
-                << (is_temporary ? "TEMPORARY " : "")
-                << what << " "
-                << (if_not_exists ? "IF NOT EXISTS " : "")
-                << (settings.hilite ? hilite_none : "")
-                << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << (attach ? "ATTACH " : "CREATE ")
+                          << (is_temporary ? "TEMPORARY " : "") << what << " "
+                          << (if_not_exists ? "IF NOT EXISTS " : "") << (settings.hilite ? hilite_none : "")
+                          << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
         }
 
         if (!to_table.empty())
         {
-            settings.ostr
-                << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
-                << (!to_database.empty() ? backQuoteIfNeed(to_database) + "." : "") << backQuoteIfNeed(to_table);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
+                          << (!to_database.empty() ? backQuoteIfNeed(to_database) + "." : "")
+                          << backQuoteIfNeed(to_table);
         }
 
         if (!as_table.empty())
         {
-            settings.ostr
-                << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "")
-                << (!as_database.empty() ? backQuoteIfNeed(as_database) + "." : "") << backQuoteIfNeed(as_table);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "")
+                          << (!as_database.empty() ? backQuoteIfNeed(as_database) + "." : "")
+                          << backQuoteIfNeed(as_table);
         }
 
         if (columns)
@@ -188,12 +185,14 @@ protected:
 
         if (is_populate)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE" << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE"
+                          << (settings.hilite ? hilite_none : "");
         }
 
         if (select)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS" << settings.nl_or_ws << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS" << settings.nl_or_ws
+                          << (settings.hilite ? hilite_none : "");
             select->formatImpl(settings, state, frame);
         }
     }

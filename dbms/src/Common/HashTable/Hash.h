@@ -130,7 +130,8 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         return updated_value;
     }
     static_assert(
-        DB::IsDecimal<T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        DB::IsDecimal<
+            T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -231,20 +232,20 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
     else if constexpr (std::is_same_v<T, DB::Int128>)
     {
         const auto * begin = reinterpret_cast<const DB::UInt64 *>(&key);
-        return CityHash_v1_0_2::Hash128to64({unalignedLoad<DB::UInt64>(begin),
-                                             unalignedLoad<DB::UInt64>(begin + 1)});
+        return CityHash_v1_0_2::Hash128to64({unalignedLoad<DB::UInt64>(begin), unalignedLoad<DB::UInt64>(begin + 1)});
     }
     else if constexpr (std::is_same_v<T, DB::UInt256>)
     {
-        return CityHash_v1_0_2::Hash128to64({CityHash_v1_0_2::Hash128to64({key.a, key.b}),
-                                             CityHash_v1_0_2::Hash128to64({key.c, key.d})});
+        return CityHash_v1_0_2::Hash128to64(
+            {CityHash_v1_0_2::Hash128to64({key.a, key.b}), CityHash_v1_0_2::Hash128to64({key.c, key.d})});
     }
     else if constexpr (is_boost_number_v<T>)
     {
         return boost::multiprecision::hash_value(key);
     }
     static_assert(
-        is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        is_boost_number_v<
+            T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -254,28 +255,19 @@ struct DefaultHash;
 template <typename T>
 struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T> && is_fit_register<T>, void>>
 {
-    std::enable_if_t<is_fit_register<T>, size_t> operator()(T key) const
-    {
-        return defaultHash64<T>(key);
-    }
+    std::enable_if_t<is_fit_register<T>, size_t> operator()(T key) const { return defaultHash64<T>(key); }
 };
 
 template <typename T>
 struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T> && !is_fit_register<T>, void>>
 {
-    size_t operator()(const T & key) const
-    {
-        return defaultHash64<T>(key);
-    }
+    size_t operator()(const T & key) const { return defaultHash64<T>(key); }
 };
 
 template <typename T>
 struct DefaultHash<T, std::enable_if_t<DB::IsDecimal<T>>>
 {
-    size_t operator()(const T & key) const
-    {
-        return defaultHash64<typename T::NativeType>(key.value);
-    }
+    size_t operator()(const T & key) const { return defaultHash64<typename T::NativeType>(key.value); }
 };
 
 template <>
@@ -305,26 +297,20 @@ inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 template <typename T>
 struct HashCRC32;
 
-#define DEFINE_HASH(T)                     \
-    template <>                            \
-    struct HashCRC32<T>                    \
-    {                                      \
-        static_assert(is_fit_register<T>); \
-        size_t operator()(T key) const     \
-        {                                  \
-            return hashCRC32<T>(key);      \
-        }                                  \
+#define DEFINE_HASH(T)                                               \
+    template <>                                                      \
+    struct HashCRC32<T>                                              \
+    {                                                                \
+        static_assert(is_fit_register<T>);                           \
+        size_t operator()(T key) const { return hashCRC32<T>(key); } \
     };
 
-#define DEFINE_HASH_WIDE(T)                    \
-    template <>                                \
-    struct HashCRC32<T>                        \
-    {                                          \
-        static_assert(!is_fit_register<T>);    \
-        size_t operator()(const T & key) const \
-        {                                      \
-            return hashCRC32<T>(key);          \
-        }                                      \
+#define DEFINE_HASH_WIDE(T)                                                  \
+    template <>                                                              \
+    struct HashCRC32<T>                                                      \
+    {                                                                        \
+        static_assert(!is_fit_register<T>);                                  \
+        size_t operator()(const T & key) const { return hashCRC32<T>(key); } \
     };
 
 DEFINE_HASH(DB::UInt8)
@@ -355,20 +341,11 @@ struct TrivialHash
         return key;
     }
 
-    size_t operator()(const UInt128 & key) const
-    {
-        return key.low;
-    }
+    size_t operator()(const UInt128 & key) const { return key.low; }
 
-    size_t operator()(const Int128 & key) const
-    {
-        return key;
-    }
+    size_t operator()(const Int128 & key) const { return key; }
 
-    size_t operator()(const UInt256 & key) const
-    {
-        return key.a;
-    }
+    size_t operator()(const UInt256 & key) const { return key.a; }
 
     template <typename T, std::enable_if_t<is_boost_number_v<T>, int> = 0>
     size_t operator()(const T & key) const
@@ -417,10 +394,7 @@ struct IntHash32;
 template <typename T, DB::UInt64 salt>
 struct IntHash32<T, salt, std::enable_if_t<is_fit_register<T>, void>>
 {
-    size_t operator()(T key) const
-    {
-        return intHash32<salt>(key);
-    }
+    size_t operator()(T key) const { return intHash32<salt>(key); }
 };
 
 template <typename T, DB::UInt64 salt>

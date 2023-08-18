@@ -43,10 +43,7 @@ private:
     Small small;
     Large * large = nullptr;
 
-    bool isLarge() const
-    {
-        return large != nullptr;
-    }
+    bool isLarge() const { return large != nullptr; }
 
     void toLarge()
     {
@@ -91,10 +88,7 @@ public:
             large->insert(value);
     }
 
-    UInt64 size() const
-    {
-        return !isLarge() ? small.size() : large->size();
-    }
+    UInt64 size() const { return !isLarge() ? small.size() : large->size(); }
 
     void merge(const HyperLogLogWithSmallSetOptimization & rhs)
     {

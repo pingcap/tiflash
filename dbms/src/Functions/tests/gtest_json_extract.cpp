@@ -129,7 +129,8 @@ try
     col_null_map = ColumnUInt8::create(1, 1);
     json_col = ColumnNullable::create(std::move(null_json), std::move(col_null_map));
     auto const_null_json_col = ColumnConst::create(std::move(json_col), 3);
-    auto const_null_input_col = ColumnWithTypeAndName(std::move(const_null_json_col), nullable_string_type_ptr, "input0");
+    auto const_null_input_col
+        = ColumnWithTypeAndName(std::move(const_null_json_col), nullable_string_type_ptr, "input0");
     res = executeFunction(func_name, {const_null_input_col, path_col});
     ASSERT_TRUE(res.column->size() == 3);
     expect_string_vec = {"", "", ""};
@@ -165,7 +166,8 @@ try
     col_null_map = ColumnUInt8::create(3, 0);
     json_col = ColumnNullable::create(std::move(nested_str_col), std::move(col_null_map));
     auto const_json_col = ColumnConst::create(std::move(json_col), 3);
-    auto const_nullable_input_col = ColumnWithTypeAndName(std::move(const_json_col), nullable_string_type_ptr, "input0");
+    auto const_nullable_input_col
+        = ColumnWithTypeAndName(std::move(const_json_col), nullable_string_type_ptr, "input0");
     res = executeFunction(func_name, {const_nullable_input_col, path_col});
     ASSERT_TRUE(res.column->size() == 3);
     expect_string_vec = {"[2, 3]", "[2, 3]", "[2, 3]"};

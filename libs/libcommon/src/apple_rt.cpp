@@ -23,15 +23,16 @@
 
 #if APPLE_SIERRA_OR_NEWER == 0
 
-#include <time.h>
-#include <stdlib.h>
 #include <mach/mach_init.h>
-#include <mach/thread_act.h>
 #include <mach/mach_port.h>
+#include <mach/thread_act.h>
+#include <stdlib.h>
 #include <sys/time.h>
+#include <time.h>
 
 
-int clock_gettime_thread(timespec *spec) {
+int clock_gettime_thread(timespec * spec)
+{
     thread_port_t thread = mach_thread_self();
 
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
@@ -46,7 +47,8 @@ int clock_gettime_thread(timespec *spec) {
     return 0;
 }
 
-int clock_gettime(int clk_id, struct timespec* t) {
+int clock_gettime(int clk_id, struct timespec * t)
+{
     if (clk_id == CLOCK_THREAD_CPUTIME_ID)
         return clock_gettime_thread(t);
 
@@ -55,7 +57,7 @@ int clock_gettime(int clk_id, struct timespec* t) {
 
     if (rv)
         return rv;
-    t->tv_sec  = now.tv_sec;
+    t->tv_sec = now.tv_sec;
     t->tv_nsec = now.tv_usec * 1000;
 
     return 0;

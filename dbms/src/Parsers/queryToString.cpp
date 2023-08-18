@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/queryToString.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/queryToString.h>
+
 #include <sstream>
 
 namespace DB
 {
-    String queryToString(const ASTPtr & query)
-    {
-        return queryToString(*query);
-    }
-
-    String queryToString(const IAST & query)
-    {
-        std::ostringstream out;
-        formatAST(query, out, false, true);
-        return out.str();
-    }
+String queryToString(const ASTPtr & query)
+{
+    return queryToString(*query);
 }
+
+String queryToString(const IAST & query)
+{
+    std::ostringstream out;
+    formatAST(query, out, false, true);
+    return out.str();
+}
+} // namespace DB

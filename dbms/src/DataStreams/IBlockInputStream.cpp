@@ -64,7 +64,9 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
         return 0;
 
     if (level > max_depth)
-        throw Exception(fmt::format("Query pipeline is too deep. Maximum: {}", max_depth), ErrorCodes::TOO_DEEP_PIPELINE);
+        throw Exception(
+            fmt::format("Query pipeline is too deep. Maximum: {}", max_depth),
+            ErrorCodes::TOO_DEEP_PIPELINE);
 
     size_t res = 0;
     for (const auto & child : children)
@@ -79,11 +81,7 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
 
 void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)
 {
-    buffer.fmtAppend(
-        "{}{}{}",
-        String(indent, ' '),
-        getName(),
-        multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
+    buffer.fmtAppend("{}{}{}", String(indent, ' '), getName(), multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
     if (!extra_info.empty())
         buffer.fmtAppend(": <{}>", extra_info);
     appendInfo(buffer);

@@ -14,15 +14,16 @@
 
 #pragma once
 
-#include <Dictionaries/IDictionary.h>
-#include <Dictionaries/IDictionarySource.h>
-#include <Dictionaries/DictionaryStructure.h>
-#include <common/StringRef.h>
-#include <Common/HashTable/HashMap.h>
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
-#include <ext/range.h>
+#include <Common/HashTable/HashMap.h>
+#include <Dictionaries/DictionaryStructure.h>
+#include <Dictionaries/IDictionary.h>
+#include <Dictionaries/IDictionarySource.h>
+#include <common/StringRef.h>
+
 #include <atomic>
+#include <ext/range.h>
 #include <memory>
 #include <tuple>
 
@@ -36,8 +37,12 @@ class ComplexKeyHashedDictionary final : public IDictionaryBase
 {
 public:
     ComplexKeyHashedDictionary(
-        const std::string & name, const DictionaryStructure & dict_struct, DictionarySourcePtr source_ptr,
-        const DictionaryLifetime dict_lifetime, bool require_nonempty, BlockPtr saved_block = nullptr);
+        const std::string & name,
+        const DictionaryStructure & dict_struct,
+        DictionarySourcePtr source_ptr,
+        const DictionaryLifetime dict_lifetime,
+        bool require_nonempty,
+        BlockPtr saved_block = nullptr);
 
     ComplexKeyHashedDictionary(const ComplexKeyHashedDictionary & other);
 
@@ -61,7 +66,10 @@ public:
 
     bool isCached() const override { return false; }
 
-    std::unique_ptr<IExternalLoadable> clone() const override { return std::make_unique<ComplexKeyHashedDictionary>(*this); }
+    std::unique_ptr<IExternalLoadable> clone() const override
+    {
+        return std::make_unique<ComplexKeyHashedDictionary>(*this);
+    }
 
     const IDictionarySource * getSource() const override { return source_ptr.get(); }
 
@@ -69,19 +77,18 @@ public:
 
     const DictionaryStructure & getStructure() const override { return dict_struct; }
 
-    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override
-    {
-        return creation_time;
-    }
+    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override { return creation_time; }
 
     bool isInjective(const std::string & attribute_name) const override
     {
         return dict_struct.attributes[&getAttribute(attribute_name) - attributes.data()].injective;
     }
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,\
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
         PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
@@ -97,13 +104,18 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
         ColumnString * out) const;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,\
-        const PaddedPODArray<TYPE> & def, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        const PaddedPODArray<TYPE> & def,   \
+        PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -118,13 +130,19 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,
-        const ColumnString * const def, ColumnString * const out) const;
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
+        const ColumnString * const def,
+        ColumnString * const out) const;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,\
-        const TYPE def, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        const TYPE def,                     \
+        PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -139,32 +157,41 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types,
-        const String & def, ColumnString * const out) const;
+        const std::string & attribute_name,
+        const Columns & key_columns,
+        const DataTypes & key_types,
+        const String & def,
+        ColumnString * const out) const;
 
     void has(const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<UInt8> & out) const;
 
     BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const override;
 
 private:
-    template <typename Value> using ContainerType = HashMapWithSavedHash<StringRef, Value, StringRefHash>;
-    template <typename Value> using ContainerPtrType = std::unique_ptr<ContainerType<Value>>;
+    template <typename Value>
+    using ContainerType = HashMapWithSavedHash<StringRef, Value, StringRefHash>;
+    template <typename Value>
+    using ContainerPtrType = std::unique_ptr<ContainerType<Value>>;
 
     struct Attribute final
     {
         AttributeUnderlyingType type;
+        std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String>
+            null_values;
         std::tuple<
-            UInt8, UInt16, UInt32, UInt64,
-            UInt128,
-            Int8, Int16, Int32, Int64,
-            Float32, Float64,
-            String> null_values;
-        std::tuple<
-            ContainerPtrType<UInt8>, ContainerPtrType<UInt16>, ContainerPtrType<UInt32>, ContainerPtrType<UInt64>,
+            ContainerPtrType<UInt8>,
+            ContainerPtrType<UInt16>,
+            ContainerPtrType<UInt32>,
+            ContainerPtrType<UInt64>,
             ContainerPtrType<UInt128>,
-            ContainerPtrType<Int8>, ContainerPtrType<Int16>, ContainerPtrType<Int32>, ContainerPtrType<Int64>,
-            ContainerPtrType<Float32>, ContainerPtrType<Float64>,
-            ContainerPtrType<StringRef>> maps;
+            ContainerPtrType<Int8>,
+            ContainerPtrType<Int16>,
+            ContainerPtrType<Int32>,
+            ContainerPtrType<Int64>,
+            ContainerPtrType<Float32>,
+            ContainerPtrType<Float64>,
+            ContainerPtrType<StringRef>>
+            maps;
         std::unique_ptr<Arena> string_arena;
     };
 
@@ -209,8 +236,7 @@ private:
 
     const Attribute & getAttribute(const std::string & attribute_name) const;
 
-    static StringRef placeKeysInPool(
-        const size_t row, const Columns & key_columns, StringRefs & keys, Arena & pool);
+    static StringRef placeKeysInPool(const size_t row, const Columns & key_columns, StringRefs & keys, Arena & pool);
 
     template <typename T>
     void has(const Attribute & attribute, const Columns & key_columns, PaddedPODArray<UInt8> & out) const;
@@ -244,4 +270,4 @@ private:
 };
 
 
-}
+} // namespace DB

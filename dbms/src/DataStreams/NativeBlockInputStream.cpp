@@ -40,16 +40,12 @@ NativeBlockInputStream::NativeBlockInputStream(
     : istr(istr_)
     , server_revision(server_revision_)
     , output_names(std::move(output_names_))
-{
-}
+{}
 
-NativeBlockInputStream::NativeBlockInputStream(
-    ReadBuffer & istr_,
-    UInt64 server_revision_)
+NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_)
     : istr(istr_)
     , server_revision(server_revision_)
-{
-}
+{}
 
 NativeBlockInputStream::NativeBlockInputStream(
     ReadBuffer & istr_,
@@ -78,7 +74,9 @@ NativeBlockInputStream::NativeBlockInputStream(
 {
     istr_concrete = typeid_cast<CompressedReadBufferFromFile<> *>(&istr);
     if (!istr_concrete)
-        throw Exception("When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.",
+            ErrorCodes::LOGICAL_ERROR);
 
     if (index_block_it == index_block_end)
         return;
@@ -196,9 +194,13 @@ Block NativeBlockInputStream::readImpl()
         {
             /// Index allows to do more checks.
             if (index_column_it->name != column.name)
-                throw Exception("Index points to column with wrong name: corrupted index or data", ErrorCodes::INCORRECT_INDEX);
+                throw Exception(
+                    "Index points to column with wrong name: corrupted index or data",
+                    ErrorCodes::INCORRECT_INDEX);
             if (index_column_it->type != type_name)
-                throw Exception("Index points to column with wrong type: corrupted index or data", ErrorCodes::INCORRECT_INDEX);
+                throw Exception(
+                    "Index points to column with wrong type: corrupted index or data",
+                    ErrorCodes::INCORRECT_INDEX);
         }
 
         /// Data

@@ -72,7 +72,10 @@ static void localBackupImpl(const Poco::Path & source_path, const Poco::Path & d
                         DB::throwFromErrno("Cannot stat " + destination_str);
 
                     if (source_descr.st_ino != destination_descr.st_ino)
-                        DB::throwFromErrno("Destination file " + destination_str + " is already exist and have different inode.", 0, link_errno);
+                        DB::throwFromErrno(
+                            "Destination file " + destination_str + " is already exist and have different inode.",
+                            0,
+                            link_errno);
                 }
                 else
                     DB::throwFromErrno("Cannot link " + source_str + " to " + destination_str);
@@ -87,10 +90,11 @@ static void localBackupImpl(const Poco::Path & source_path, const Poco::Path & d
 
 void localBackup(const Poco::Path & source_path, const Poco::Path & destination_path)
 {
-    if (Poco::File(destination_path).exists()
-        && Poco::DirectoryIterator(destination_path) != Poco::DirectoryIterator())
+    if (Poco::File(destination_path).exists() && Poco::DirectoryIterator(destination_path) != Poco::DirectoryIterator())
     {
-        throw DB::Exception("Directory " + destination_path.toString() + " already exists and is not empty.", DB::ErrorCodes::DIRECTORY_ALREADY_EXISTS);
+        throw DB::Exception(
+            "Directory " + destination_path.toString() + " already exists and is not empty.",
+            DB::ErrorCodes::DIRECTORY_ALREADY_EXISTS);
     }
 
     size_t try_no = 0;

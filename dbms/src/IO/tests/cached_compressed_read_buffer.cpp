@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <iomanip>
-#include <limits>
-
+#include <Common/Stopwatch.h>
 #include <IO/CachedCompressedReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/copyData.h>
 
-#include <Common/Stopwatch.h>
+#include <iomanip>
+#include <iostream>
+#include <limits>
 
 
 int main(int argc, char ** argv)

@@ -42,7 +42,13 @@ public:
 
     bool hasPushDownFilter() const;
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalTableScan.h
     const String & getPushDownFilterId() const;
+=======
+    const String & getFilterConditionsId() const;
+
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalTableScan.h
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;

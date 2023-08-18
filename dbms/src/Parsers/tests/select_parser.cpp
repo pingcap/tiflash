@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-
 #include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/parseQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
+
+#include <iostream>
 
 
 int main(int, char **)
@@ -25,16 +24,16 @@ try
 {
     using namespace DB;
 
-    std::string input =
-        " SELECT 18446744073709551615, f(1), '\\\\', [a, b, c], (a, b, c), 1 + 2 * -3, a = b OR c > d.1 + 2 * -g[0] AND NOT e < f * (x + y)"
-        " FROM default.hits"
-        " WHERE CounterID = 101500 AND UniqID % 3 = 0"
-        " GROUP BY UniqID"
-        " HAVING SUM(Refresh) > 100"
-        " ORDER BY Visits, PageViews"
-        " LIMIT 1000, 10"
-        " INTO OUTFILE 'test.out'"
-        " FORMAT TabSeparated";
+    std::string input = " SELECT 18446744073709551615, f(1), '\\\\', [a, b, c], (a, b, c), 1 + 2 * -3, a = b OR c > "
+                        "d.1 + 2 * -g[0] AND NOT e < f * (x + y)"
+                        " FROM default.hits"
+                        " WHERE CounterID = 101500 AND UniqID % 3 = 0"
+                        " GROUP BY UniqID"
+                        " HAVING SUM(Refresh) > 100"
+                        " ORDER BY Visits, PageViews"
+                        " LIMIT 1000, 10"
+                        " INTO OUTFILE 'test.out'"
+                        " FORMAT TabSeparated";
 
     ParserQueryWithOutput parser;
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0);

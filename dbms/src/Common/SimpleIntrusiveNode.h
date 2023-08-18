@@ -66,21 +66,12 @@ struct SimpleIntrusiveNode : private boost::noncopyable
         prev = getThis();
     }
 
-    bool isSingle() const
-    {
-        return next == getThis();
-    }
+    bool isSingle() const { return next == getThis(); }
 
 protected:
-    ALWAYS_INLINE Node * getThis()
-    {
-        return static_cast<Node *>(this);
-    }
+    ALWAYS_INLINE Node * getThis() { return static_cast<Node *>(this); }
 
-    ALWAYS_INLINE const Node * getThis() const
-    {
-        return static_cast<const Node *>(this);
-    }
+    ALWAYS_INLINE const Node * getThis() const { return static_cast<const Node *>(this); }
 };
 
 } // namespace DB

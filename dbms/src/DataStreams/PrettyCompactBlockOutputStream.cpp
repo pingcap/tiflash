@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/PrettyCompactBlockOutputStream.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
-#include <DataStreams/PrettyCompactBlockOutputStream.h>
 
 
 namespace DB
@@ -101,7 +101,11 @@ void PrettyCompactBlockOutputStream::writeRow(
         if (j != 0)
             writeCString(" │ ", ostr);
 
-        writeValueWithPadding(block.getByPosition(j), row_num, widths[j].empty() ? max_widths[j] : widths[j][row_num], max_widths[j]);
+        writeValueWithPadding(
+            block.getByPosition(j),
+            row_num,
+            widths[j].empty() ? max_widths[j] : widths[j][row_num],
+            max_widths[j]);
     }
 
     writeCString(" │\n", ostr);
@@ -132,4 +136,4 @@ void PrettyCompactBlockOutputStream::write(const Block & block)
     total_rows += rows;
 }
 
-}
+} // namespace DB

@@ -97,10 +97,7 @@ public:
       *
       * Try to read after the end should throw an exception.
       */
-    bool ALWAYS_INLINE eof()
-    {
-        return !hasPendingData() && !next();
-    }
+    bool ALWAYS_INLINE eof() { return !hasPendingData() && !next(); }
 
     void ignore()
     {
@@ -167,10 +164,7 @@ public:
       * By default - the same as read.
       * Don't use for small reads.
       */
-    virtual size_t readBig(char * to, size_t n)
-    {
-        return read(to, n);
-    }
+    virtual size_t readBig(char * to, size_t n) { return read(to, n); }
 
 protected:
     /// The number of bytes to ignore from the initial position of `working_buffer` buffer.

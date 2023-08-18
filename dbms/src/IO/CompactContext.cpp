@@ -47,7 +47,9 @@ CompactWriteCtx::CompactWriteCtx(std::string compact_path_, size_t buffer_size)
     if (fd == -1)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        throwFromErrno("Cannot open file " + file_name + " errno is :" + std::to_string(errno), errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        throwFromErrno(
+            "Cannot open file " + file_name + " errno is :" + std::to_string(errno),
+            errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 }
 

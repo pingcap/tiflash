@@ -26,9 +26,13 @@ namespace DB
 class ASTInsertQuery : public IAST
 {
 public:
-    explicit ASTInsertQuery(bool is_import_ = false) : is_import(is_import_) {}
+    explicit ASTInsertQuery(bool is_import_ = false)
+        : is_import(is_import_)
+    {}
     explicit ASTInsertQuery(String database_, String table_, bool is_import_)
-        : database(std::move(database_)), table(std::move(table_)), is_import(is_import_)
+        : database(std::move(database_))
+        , table(std::move(table_))
+        , is_import(is_import_)
     {}
 
 public:

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ParserCase.h>
-#include <Parsers/ExpressionElementParsers.h>
-#include <Parsers/ExpressionListParsers.h>
+#include <Core/Field.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Core/Field.h>
+#include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserCase.h>
 
 namespace DB
 {
@@ -28,7 +28,7 @@ bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_when{"WHEN"};
     ParserKeyword s_then{"THEN"};
     ParserKeyword s_else{"ELSE"};
-    ParserKeyword s_end{ "END"};
+    ParserKeyword s_end{"END"};
     ParserExpressionWithOptionalAlias p_expr{false};
 
     if (!s_case.parse(pos, node, expected))
@@ -43,8 +43,7 @@ bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ASTs args;
 
-    auto parse_branches = [&]()
-    {
+    auto parse_branches = [&]() {
         bool has_branch = false;
         while (s_when.parse(pos, node, expected))
         {
@@ -120,4 +119,4 @@ bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-}
+} // namespace DB

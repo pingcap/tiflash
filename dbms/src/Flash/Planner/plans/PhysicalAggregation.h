@@ -54,6 +54,11 @@ public:
         , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalAggregation.h
+=======
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalAggregation.h
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;

@@ -29,7 +29,8 @@ namespace DB
   * When allocating, we take the head of the list of free blocks,
   *  or, if the list is empty - allocate a new block using Arena.
   */
-class ArenaWithFreeLists : private Allocator<false>
+class ArenaWithFreeLists
+    : private Allocator<false>
     , private boost::noncopyable
 {
 private:
@@ -45,10 +46,7 @@ private:
     static constexpr size_t max_fixed_block_size = 65536;
 
     /// Get the index in the freelist array for the specified size.
-    static size_t findFreeListIndex(const size_t size)
-    {
-        return size <= 8 ? 2 : bitScanReverse(size - 1);
-    }
+    static size_t findFreeListIndex(const size_t size) { return size <= 8 ? 2 : bitScanReverse(size - 1); }
 
     /// Arena is used to allocate blocks that are not too large.
     Arena pool;
@@ -63,8 +61,7 @@ public:
         const size_t growth_factor = 2,
         const size_t linear_growth_threshold = 128 * 1024 * 1024)
         : pool{initial_size, growth_factor, linear_growth_threshold}
-    {
-    }
+    {}
 
     char * alloc(const size_t size)
     {
@@ -103,10 +100,7 @@ public:
     }
 
     /// Size of the allocated pool in bytes
-    size_t size() const
-    {
-        return pool.size();
-    }
+    size_t size() const { return pool.size(); }
 };
 
 

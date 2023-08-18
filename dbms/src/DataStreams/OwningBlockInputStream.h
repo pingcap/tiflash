@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <memory>
-
 #include <DataStreams/IProfilingBlockInputStream.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -29,7 +29,8 @@ class OwningBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     OwningBlockInputStream(const BlockInputStreamPtr & stream, std::unique_ptr<OwnType> own)
-        : stream{stream}, own{std::move(own)}
+        : stream{stream}
+        , own{std::move(own)}
     {
         children.push_back(stream);
     }
@@ -46,4 +47,4 @@ protected:
     std::unique_ptr<OwnType> own;
 };
 
-}
+} // namespace DB

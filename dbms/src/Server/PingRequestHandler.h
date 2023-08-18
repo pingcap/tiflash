@@ -25,6 +25,16 @@ namespace DB
 /// Response with "Ok.\n". Used for availability checks.
 class PingRequestHandler : public Poco::Net::HTTPRequestHandler
 {
+<<<<<<< HEAD:dbms/src/Server/PingRequestHandler.h
+=======
+public:
+    ExpandTransformAction(const Block & header_, const Expand2Ptr & expand_);
+
+    void transform(Block & block);
+    bool tryOutput(Block & block);
+    Block getHeader() const;
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/DataStreams/ExpandTransformAction.h
 private:
     IServer & server;
 

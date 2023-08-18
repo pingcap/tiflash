@@ -55,23 +55,25 @@ using ConnectionPoolPtrs = std::vector<ConnectionPoolPtr>;
 
 /** A common connection pool, without fault tolerance.
   */
-class ConnectionPool : public IConnectionPool
+class ConnectionPool
+    : public IConnectionPool
     , private PoolBase<Connection>
 {
 public:
     using Entry = IConnectionPool::Entry;
     using Base = PoolBase<Connection>;
 
-    ConnectionPool(unsigned max_connections_,
-                   const String & host_,
-                   UInt16 port_,
-                   const String & default_database_,
-                   const String & user_,
-                   const String & password_,
-                   const ConnectionTimeouts & timeouts,
-                   const String & client_name_ = "client",
-                   Protocol::Compression compression_ = Protocol::Compression::Enable,
-                   Protocol::Secure secure_ = Protocol::Secure::Disable)
+    ConnectionPool(
+        unsigned max_connections_,
+        const String & host_,
+        UInt16 port_,
+        const String & default_database_,
+        const String & user_,
+        const String & password_,
+        const ConnectionTimeouts & timeouts,
+        const String & client_name_ = "client",
+        Protocol::Compression compression_ = Protocol::Compression::Enable,
+        Protocol::Secure secure_ = Protocol::Secure::Disable)
         : Base(max_connections_, &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")"))
         , host(host_)
         , port(port_)
@@ -83,20 +85,20 @@ public:
         , compression(compression_)
         , secure{secure_}
         , timeouts(timeouts)
-    {
-    }
+    {}
 
-    ConnectionPool(unsigned max_connections_,
-                   const String & host_,
-                   UInt16 port_,
-                   const Poco::Net::SocketAddress & resolved_address_,
-                   const String & default_database_,
-                   const String & user_,
-                   const String & password_,
-                   const ConnectionTimeouts & timeouts,
-                   const String & client_name_ = "client",
-                   Protocol::Compression compression_ = Protocol::Compression::Enable,
-                   Protocol::Secure secure_ = Protocol::Secure::Disable)
+    ConnectionPool(
+        unsigned max_connections_,
+        const String & host_,
+        UInt16 port_,
+        const Poco::Net::SocketAddress & resolved_address_,
+        const String & default_database_,
+        const String & user_,
+        const String & password_,
+        const ConnectionTimeouts & timeouts,
+        const String & client_name_ = "client",
+        Protocol::Compression compression_ = Protocol::Compression::Enable,
+        Protocol::Secure secure_ = Protocol::Secure::Disable)
         : Base(max_connections_, &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")"))
         , host(host_)
         , port(port_)
@@ -108,8 +110,7 @@ public:
         , compression(compression_)
         , secure{secure_}
         , timeouts(timeouts)
-    {
-    }
+    {}
 
     using IConnectionPool::get;
 
@@ -127,10 +128,7 @@ public:
         return entry;
     }
 
-    const std::string & getHost() const
-    {
-        return host;
-    }
+    const std::string & getHost() const { return host; }
 
 protected:
     /** Creates a new object to put in the pool. */

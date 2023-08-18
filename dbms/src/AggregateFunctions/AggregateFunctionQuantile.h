@@ -56,7 +56,10 @@ template <
     /// If true, the function will accept multiple parameters with quantile levels
     ///  and return an Array filled with many values of that quantiles.
     bool returns_many>
-class AggregateFunctionQuantile final : public IAggregateFunctionDataHelper<Data, AggregateFunctionQuantile<Value, Data, Name, have_second_arg, FloatReturnType, returns_many>>
+class AggregateFunctionQuantile final
+    : public IAggregateFunctionDataHelper<
+          Data,
+          AggregateFunctionQuantile<Value, Data, Name, have_second_arg, FloatReturnType, returns_many>>
 {
 private:
     static constexpr bool returns_float = !std::is_same_v<FloatReturnType, void>;
@@ -75,7 +78,9 @@ public:
         , argument_type(argument_type)
     {
         if (!returns_many && levels.size() > 1)
-            throw Exception("Aggregate function " + getName() + " require one parameter or less", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Aggregate function " + getName() + " require one parameter or less",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
     String getName() const override { return Name::name; }
@@ -102,8 +107,7 @@ public:
                 static_cast<const ColumnVector<Value> &>(*columns[0]).getData()[row_num],
                 columns[1]->getUInt(row_num));
         else
-            this->data(place).add(
-                static_cast<const ColumnVector<Value> &>(*columns[0]).getData()[row_num]);
+            this->data(place).add(static_cast<const ColumnVector<Value> &>(*columns[0]).getData()[row_num]);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

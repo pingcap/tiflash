@@ -48,6 +48,7 @@ WriteBufferFromFileProvider::WriteBufferFromFileProvider(
     mode_t mode,
     char * existing_memory,
     size_t alignment)
+<<<<<<< HEAD
     : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment)
     , file(file_provider_->newWritableFile(file_name_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags, mode))
 {
@@ -98,4 +99,19 @@ WriteBufferFromFileProvider::~WriteBufferFromFileProvider()
     file->close();
 }
 
+=======
+    : WriteBufferFromWritableFile(
+        file_provider_->newWritableFile(
+            file_name_,
+            encryption_path_,
+            true,
+            create_new_encryption_info_,
+            write_limiter_,
+            flags,
+            mode),
+        buf_size,
+        existing_memory,
+        alignment)
+{}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

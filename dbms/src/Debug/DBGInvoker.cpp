@@ -101,7 +101,9 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_snapshot_pre_handle_block", /**/ MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock);
     regSchemalessFunc("region_snapshot_apply_block", /*     */ MockRaftCommand::dbgFuncRegionSnapshotApplyBlock);
     regSchemalessFunc("region_snapshot_pre_handle_file", /* */ MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles);
-    regSchemalessFunc("region_snapshot_pre_handle_file_pks", MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
+    regSchemalessFunc(
+        "region_snapshot_pre_handle_file_pks",
+        MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
 
@@ -127,6 +129,13 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("gc_global_storage_pool", dbgFuncTriggerGlobalPageStorageGC);
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
+<<<<<<< HEAD
+=======
+
+    regSchemalessFunc(
+        "wait_until_no_temp_active_threads_in_dynamic_thread_pool",
+        dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
@@ -192,7 +201,8 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
         ", ");
     fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
+    std::shared_ptr<StringStreamBlockInputStream> res
+        = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
     Printer printer = [&](const std::string & s) {
         res->append(s);
     };
@@ -202,7 +212,11 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     return res;
 }
 
-BlockInputStreamPtr DBGInvoker::invokeSchemaful(Context & context, const std::string &, const SchemafulDBGFunc & func, const ASTs & args)
+BlockInputStreamPtr DBGInvoker::invokeSchemaful(
+    Context & context,
+    const std::string &,
+    const SchemafulDBGFunc & func,
+    const ASTs & args)
 {
     return func(context, args);
 }

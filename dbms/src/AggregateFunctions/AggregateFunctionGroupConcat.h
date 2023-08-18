@@ -30,13 +30,26 @@ namespace DB
 /// group_concat(distinct c0,c1 order by b0,b1) = groupUniqArray(tuple(c0,c1,b0,b1)) -> distinct (c0, c1) , i.e., remove duplicates further
 
 template <bool result_is_nullable, bool only_one_column>
-class AggregateFunctionGroupConcat final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>
+class AggregateFunctionGroupConcat final
+    : public AggregateFunctionNullBase<
+          result_is_nullable,
+          AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>
 {
     using State = AggregateFunctionGroupUniqArrayGenericData;
 
 public:
-    AggregateFunctionGroupConcat(AggregateFunctionPtr nested_function, const DataTypes & input_args, const String & sep, const UInt64 & max_len_, const SortDescription & sort_desc_, const NamesAndTypes & all_columns_names_and_types_, const TiDB::TiDBCollators & collators_, const bool has_distinct)
-        : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>(nested_function)
+    AggregateFunctionGroupConcat(
+        AggregateFunctionPtr nested_function,
+        const DataTypes & input_args,
+        const String & sep,
+        const UInt64 & max_len_,
+        const SortDescription & sort_desc_,
+        const NamesAndTypes & all_columns_names_and_types_,
+        const TiDB::TiDBCollators & collators_,
+        const bool has_distinct)
+        : AggregateFunctionNullBase<
+            result_is_nullable,
+            AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>(nested_function)
         , separator(sep)
         , max_len(max_len_)
         , sort_desc(sort_desc_)
@@ -44,7 +57,9 @@ public:
         , collators(collators_)
     {
         if (input_args.size() != 1)
-            throw Exception("Logical error: more than 1 arguments are passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: more than 1 arguments are passed to AggregateFunctionGroupConcat",
+                ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(removeNullable(input_args[0]));
 
         number_of_concat_items = all_columns_names_and_types.size() - sort_desc.size();
@@ -99,12 +114,7 @@ public:
         }
     }
 
-    DataTypePtr getReturnType() const override
-    {
-        return result_is_nullable
-            ? makeNullable(ret_type)
-            : ret_type;
-    }
+    DataTypePtr getReturnType() const override { return result_is_nullable ? makeNullable(ret_type) : ret_type; }
 
     /// reject nulls before add() of nested agg
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
@@ -203,10 +213,7 @@ public:
         }
     }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return this->nested_function->allocatesMemoryInArena();
-    }
+    bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }
 
 private:
     /// construct a block to sort in the case with order-by requirement
@@ -216,7 +223,10 @@ private:
         int concat_size = nested_cols.size();
         for (int i = 0; i < concat_size; ++i)
         {
-            res.insert(ColumnWithTypeAndName(nested_cols[i], all_columns_names_and_types[i].type, all_columns_names_and_types[i].name));
+            res.insert(ColumnWithTypeAndName(
+                nested_cols[i],
+                all_columns_names_and_types[i].type,
+                all_columns_names_and_types[i].name));
         }
         /// sort a block with collation
         sortBlock(res, sort_desc);

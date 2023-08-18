@@ -49,4 +49,4 @@ private:
     bool disable_flush = false;
 };
 
-}
+} // namespace DB

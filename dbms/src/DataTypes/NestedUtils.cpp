@@ -127,7 +127,8 @@ Block flatten(const Block & block)
                 bool is_const = elem.column->isColumnConst();
                 const ColumnArray * column_array;
                 if (is_const)
-                    column_array = typeid_cast<const ColumnArray *>(&static_cast<const ColumnConst &>(*elem.column).getDataColumn());
+                    column_array = typeid_cast<const ColumnArray *>(
+                        &static_cast<const ColumnConst &>(*elem.column).getDataColumn());
                 else
                     column_array = typeid_cast<const ColumnArray *>(elem.column.get());
 
@@ -142,9 +143,8 @@ Block flatten(const Block & block)
                     ColumnPtr column_array_of_element = ColumnArray::create(element_columns[i], column_offsets);
 
                     res.insert(ColumnWithTypeAndName(
-                        is_const
-                            ? ColumnConst::create(std::move(column_array_of_element), block.rows())
-                            : std::move(column_array_of_element),
+                        is_const ? ColumnConst::create(std::move(column_array_of_element), block.rows())
+                                 : std::move(column_array_of_element),
                         std::make_shared<DataTypeArray>(element_types[i]),
                         nested_name));
                 }
@@ -183,7 +183,10 @@ NamesAndTypesList collect(const NamesAndTypesList & names_and_types)
     }
 
     for (const auto & name_elems : nested)
-        res.emplace_back(name_elems.first, std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(name_elems.second.getTypes(), name_elems.second.getNames())));
+        res.emplace_back(
+            name_elems.first,
+            std::make_shared<DataTypeArray>(
+                std::make_shared<DataTypeTuple>(name_elems.second.getTypes(), name_elems.second.getNames())));
 
     return res;
 }

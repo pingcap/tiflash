@@ -59,8 +59,15 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_by("BY");
 
     ParserNotEmptyExpressionList exp_list(false);
+<<<<<<< HEAD
     ParserNotEmptyExpressionList exp_list_for_with_clause(false, true); /// Set prefer_alias_to_column_name for each alias.
     ParserNotEmptyExpressionList exp_list_for_select_clause(true);    /// Allows aliases without AS keyword.
+=======
+    ParserNotEmptyExpressionList exp_list_for_with_clause(
+        false,
+        true); /// Set prefer_alias_to_column_name for each alias.
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true); /// Allows aliases without AS keyword.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     ParserExpressionWithOptionalAlias exp_elem(false);
     ParserOrderByExpressionList order_list;
 

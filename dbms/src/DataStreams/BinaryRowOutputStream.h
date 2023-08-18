@@ -42,5 +42,4 @@ protected:
     WriteBuffer & ostr;
 };
 
-}
-
+} // namespace DB

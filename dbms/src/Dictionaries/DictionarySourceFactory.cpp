@@ -69,9 +69,15 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
     }
 
     if (dict_struct.range_min)
+<<<<<<< HEAD
         for (const auto & attribute : { dict_struct.range_min, dict_struct.range_max })
             block.insert(ColumnWithTypeAndName{
                 ColumnUInt16::create(1, 0), std::make_shared<DataTypeDate>(), attribute->name});
+=======
+        for (const auto & attribute : {dict_struct.range_min, dict_struct.range_max})
+            block.insert(
+                ColumnWithTypeAndName{ColumnUInt16::create(1, 0), std::make_shared<DataTypeDate>(), attribute->name});
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     for (const auto & attribute : dict_struct.attributes)
     {
@@ -89,14 +95,18 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
 
 DictionarySourceFactory::DictionarySourceFactory()
     : log(&Poco::Logger::get("DictionarySourceFactory"))
-{
-}
+{}
 
 void DictionarySourceFactory::registerSource(const std::string & source_type, Creator create_source)
 {
     LOG_DEBUG(log, "Register dictionary source type `" + source_type + "`");
     if (!registered_sources.emplace(source_type, std::move(create_source)).second)
+<<<<<<< HEAD
         throw Exception("DictionarySourceFactory: the source name '" + source_type + "' is not unique",
+=======
+        throw Exception(
+            "DictionarySourceFactory: the source name '" + source_type + "' is not unique",
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -129,8 +139,17 @@ DictionarySourcePtr DictionarySourceFactory::create(
     }
     else if ("clickhouse" == source_type)
     {
+<<<<<<< HEAD
         return std::make_unique<ClickHouseDictionarySource>(dict_struct, config, config_prefix + ".clickhouse",
             sample_block, context);
+=======
+        return std::make_unique<ClickHouseDictionarySource>(
+            dict_struct,
+            config,
+            config_prefix + ".clickhouse",
+            sample_block,
+            context);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     else if ("executable" == source_type)
     {
@@ -139,7 +158,12 @@ DictionarySourcePtr DictionarySourceFactory::create(
                 "Dictionary source of type `executable` does not support attribute expressions",
                 ErrorCodes::LOGICAL_ERROR};
 
-        return std::make_unique<ExecutableDictionarySource>(dict_struct, config, config_prefix + ".executable", sample_block, context);
+        return std::make_unique<ExecutableDictionarySource>(
+            dict_struct,
+            config,
+            config_prefix + ".executable",
+            sample_block,
+            context);
     }
     else if ("http" == source_type)
     {
@@ -158,7 +182,12 @@ DictionarySourcePtr DictionarySourceFactory::create(
     }
     else if ("library" == source_type)
     {
-        return std::make_unique<LibraryDictionarySource>(dict_struct, config, config_prefix + ".library", sample_block, context);
+        return std::make_unique<LibraryDictionarySource>(
+            dict_struct,
+            config,
+            config_prefix + ".library",
+            sample_block,
+            context);
     }
     else
     {
@@ -170,9 +199,7 @@ DictionarySourcePtr DictionarySourceFactory::create(
         }
     }
 
-    throw Exception{
-        name + ": unknown dictionary source type: " + source_type,
-        ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG};
+    throw Exception{name + ": unknown dictionary source type: " + source_type, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG};
 }
 
 }

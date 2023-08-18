@@ -36,4 +36,4 @@ public:
     ASTPtr list_of_selects;
 };
 
-}
+} // namespace DB

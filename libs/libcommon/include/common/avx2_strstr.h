@@ -33,7 +33,12 @@ FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(
 }
 
 template <typename F>
-ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * src, ssize_t n, const char *& res, const Block32 & check_block, F && callback)
+ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(
+    const char * src,
+    ssize_t n,
+    const char *& res,
+    const Block32 & check_block,
+    F && callback)
 {
     auto mask = get_block32_cmp_eq_mask(src, check_block);
     for (; mask;)
@@ -58,7 +63,11 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
 }
 
 template <typename F>
-ALWAYS_INLINE static inline bool check_block32x1(const char * src, const char *& res, const Block32 & check_block, F && callback)
+ALWAYS_INLINE static inline bool check_block32x1(
+    const char * src,
+    const char *& res,
+    const Block32 & check_block,
+    F && callback)
 {
     auto mask = get_block32_cmp_eq_mask(src, check_block);
     for (; mask;)
@@ -75,14 +84,16 @@ ALWAYS_INLINE static inline bool check_block32x1(const char * src, const char *&
 }
 
 template <typename F>
-ALWAYS_INLINE static inline bool check_block32x4(const char * src, const char *& res, const Block32 & check_block, F && callback)
+ALWAYS_INLINE static inline bool check_block32x4(
+    const char * src,
+    const char *& res,
+    const Block32 & check_block,
+    F && callback)
 {
     {
         uint32_t data{};
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-            data |= get_block32_cmp_eq_mask(
-                src + BLOCK32_SIZE * i,
-                check_block);
+            data |= get_block32_cmp_eq_mask(src + BLOCK32_SIZE * i, check_block);
 
         if (data)
         {
@@ -97,9 +108,7 @@ ALWAYS_INLINE static inline bool check_block32x4(const char * src, const char *&
     for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
     {
         const auto * start = src + BLOCK32_SIZE * i;
-        auto mask = get_block32_cmp_eq_mask(
-            start,
-            check_block);
+        auto mask = get_block32_cmp_eq_mask(start, check_block);
         for (; mask;)
         {
             auto c = rightmost_bit_one_index(mask);
@@ -221,9 +230,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
             src,
             needle[0],
             n,
-            [&](const char *) constexpr {
-                return true;
-            });
+            [&](const char *) constexpr { return true; });
     }
         M(2);
         M(3);
@@ -275,8 +282,6 @@ ALWAYS_INLINE static inline const char * avx2_memchr(const char * src, size_t n,
         src,
         target,
         n,
-        [&](const char *) constexpr {
-            return true;
-        });
+        [&](const char *) constexpr { return true; });
 }
 } // namespace mem_utils::details

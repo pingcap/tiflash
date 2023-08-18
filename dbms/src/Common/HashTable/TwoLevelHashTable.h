@@ -32,10 +32,7 @@ template <size_t initial_size_degree = 8>
 struct TwoLevelHashTableGrower : public HashTableGrower<initial_size_degree>
 {
     /// Increase the size of the hash table.
-    void increaseSize()
-    {
-        this->size_degree += this->size_degree >= 15 ? 1 : 2;
-    }
+    void increaseSize() { this->size_degree += this->size_degree >= 15 ? 1 : 2; }
 };
 
 template <
@@ -192,7 +189,10 @@ public:
             , current_it(rhs.current_it)
         {}
 
-        bool operator==(const const_iterator & rhs) const { return bucket == rhs.bucket && current_it == rhs.current_it; }
+        bool operator==(const const_iterator & rhs) const
+        {
+            return bucket == rhs.bucket && current_it == rhs.current_it;
+        }
         bool operator!=(const const_iterator & rhs) const { return !(*this == rhs); }
 
         const_iterator & operator++()

@@ -150,10 +150,7 @@ struct GetVecHelper : public IGetVecHelper<T>
     explicit GetVecHelper(const ColumnVector<T> * p_)
         : p(p_)
     {}
-    T get(size_t i) const override
-    {
-        return p->getElement(i);
-    }
+    T get(size_t i) const override { return p->getElement(i); }
 
 private:
     const ColumnVector<T> * p;
@@ -165,10 +162,7 @@ struct GetConstVecHelper : public IGetVecHelper<T>
     explicit GetConstVecHelper(const ColumnConst * p_)
         : value(p_->getValue<T>())
     {}
-    T get(size_t) const override
-    {
-        return value;
-    }
+    T get(size_t) const override { return value; }
 
 private:
     T value;

@@ -14,8 +14,9 @@
 
 #pragma once
 
-#include <Parsers/IAST.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Parsers/IAST.h>
+
 #include <cstddef>
 #include <memory>
 
@@ -33,7 +34,11 @@ class Context;
 class InputStreamFromASTInsertQuery : public IProfilingBlockInputStream
 {
 public:
-    InputStreamFromASTInsertQuery(const ASTPtr & ast, ReadBuffer & input_buffer_tail_part, const BlockIO & streams, Context & context);
+    InputStreamFromASTInsertQuery(
+        const ASTPtr & ast,
+        ReadBuffer & input_buffer_tail_part,
+        const BlockIO & streams,
+        Context & context);
 
     Block readImpl() override { return res_stream->read(); }
     void readPrefixImpl() override { return res_stream->readPrefix(); }
@@ -50,4 +55,4 @@ private:
     BlockInputStreamPtr res_stream;
 };
 
-}
+} // namespace DB

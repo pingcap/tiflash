@@ -134,9 +134,20 @@ struct SchemaGetter
 
     Poco::Logger * log;
 
+<<<<<<< HEAD
     SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_)
         : snap(cluster_, tso_)
         , log(&Poco::Logger::get("SchemaGetter"))
+=======
+    KeyspaceID keyspace_id;
+
+    LoggerPtr log;
+
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_, KeyspaceID keyspace_id_)
+        : snap(keyspace_id_, cluster_, tso_)
+        , keyspace_id(keyspace_id_)
+        , log(Logger::get())
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {}
 
     Int64 getVersion();

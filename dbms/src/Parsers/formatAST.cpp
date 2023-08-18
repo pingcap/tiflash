@@ -25,4 +25,4 @@ void formatAST(const IAST & ast, std::ostream & s, bool hilite, bool one_line)
     ast.format(settings);
 }
 
-}
+} // namespace DB

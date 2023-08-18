@@ -13,17 +13,17 @@
 // limitations under the License.
 
 #include <Core/Block.h>
-#include <IO/ReadBuffer.h>
 #include <DataStreams/BinaryRowInputStream.h>
+#include <IO/ReadBuffer.h>
 
 
 namespace DB
 {
 
 BinaryRowInputStream::BinaryRowInputStream(ReadBuffer & istr_, const Block & header_)
-    : istr(istr_), header(header_)
-{
-}
+    : istr(istr_)
+    , header(header_)
+{}
 
 
 bool BinaryRowInputStream::read(MutableColumns & columns)
@@ -38,4 +38,4 @@ bool BinaryRowInputStream::read(MutableColumns & columns)
     return true;
 }
 
-}
+} // namespace DB

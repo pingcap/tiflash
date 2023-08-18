@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <DataStreams/IRowInputStream.h>
 #include <Core/Block.h>
+#include <DataStreams/IRowInputStream.h>
 
 
 namespace DB
@@ -38,4 +38,4 @@ private:
     Block header;
 };
 
-}
+} // namespace DB

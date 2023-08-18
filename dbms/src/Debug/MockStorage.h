@@ -28,10 +28,7 @@ using CutColumnInfo = std::pair<int, int>; // <start_idx, row_num>
 class MockTableIdGenerator : public ext::Singleton<MockTableIdGenerator>
 {
 public:
-    Int64 nextTableId()
-    {
-        return ++current_id;
-    }
+    Int64 nextTableId() { return ++current_id; }
 
 private:
     std::atomic<Int64> current_id = 0;
@@ -69,10 +66,25 @@ public:
 
     void addExchangeRelation(const String & executor_id, const String & exchange_name);
 
+<<<<<<< HEAD
     MockColumnInfoVec getExchangeSchema(const String & exchange_name);
 
     /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);
+=======
+    ColumnsWithTypeAndName getExchangeColumns(const String & executor_id);
+    std::vector<ColumnsWithTypeAndName> getFineGrainedExchangeColumnsVector(
+        const String & executor_id,
+        size_t fine_grained_stream_count);
+
+    bool exchangeExists(const String & executor_id);
+
+    /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
+    ColumnsWithTypeAndName getColumnsForMPPTableScan(
+        const TiDBTableScan & table_scan,
+        Int64 partition_id,
+        Int64 partition_num);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     TableInfo getTableInfo(const String & name);
 
@@ -87,6 +99,23 @@ private:
     std::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
     std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
     std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
+<<<<<<< HEAD
+=======
+    std::unordered_map<String, std::vector<ColumnsWithTypeAndName>>
+        fine_grained_exchange_columns; /// <exchange_name, vector<columns>>
+
+    /// for mock storage delta merge
+    std::unordered_map<String, Int64> name_to_id_map_for_delta_merge; /// <table_name, table_id>
+    std::unordered_map<Int64, MockColumnInfoVec> table_schema_for_delta_merge; /// <table_id, columnInfo>
+    std::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>>
+        storage_delta_merge_map; // <table_id, StorageDeltaMerge>
+    std::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
+    std::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
+    std::unordered_map<Int64, size_t> delta_merge_table_id_to_concurrency_hint; /// <table_id, concurrency_hint>
+
+    // storage delta merge can be used in executor ut test only.
+    bool use_storage_delta_merge = false;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 private:
     void addTableInfo(const String & name, const MockColumnInfoVec & columns);

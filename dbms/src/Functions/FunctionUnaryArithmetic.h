@@ -64,10 +64,7 @@ struct UnaryOperationImpl
             c[i] = Op::apply(a[i]);
     }
 
-    static void constant(A a, ResultType & c)
-    {
-        c = Op::apply(a);
-    }
+    static void constant(A a, ResultType & c) { c = Op::apply(a); }
 };
 
 template <typename FunctionName>
@@ -94,7 +91,8 @@ private:
             }
             else
             {
-                result = std::make_shared<typename DataTypeFromFieldType<typename Op<typename T0::FieldType>::ResultType>::Type>();
+                result = std::make_shared<
+                    typename DataTypeFromFieldType<typename Op<typename T0::FieldType>::ResultType>::Type>();
             }
             return true;
         }
@@ -104,7 +102,8 @@ private:
     template <typename T0>
     bool executeType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
-        if (const ColumnVector<T0> * col = checkAndGetColumn<ColumnVector<T0>>(block.getByPosition(arguments[0]).column.get()))
+        if (const ColumnVector<T0> * col
+            = checkAndGetColumn<ColumnVector<T0>>(block.getByPosition(arguments[0]).column.get()))
         {
             using ResultType = typename Op<T0>::ResultType;
 
@@ -124,7 +123,8 @@ private:
     template <typename T0>
     bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
-        if (const ColumnDecimal<T0> * col = checkAndGetColumn<ColumnDecimal<T0>>(block.getByPosition(arguments[0]).column.get()))
+        if (const ColumnDecimal<T0> * col
+            = checkAndGetColumn<ColumnDecimal<T0>>(block.getByPosition(arguments[0]).column.get()))
         {
             using ResultType = typename Op<T0>::ResultType;
 
@@ -156,10 +156,7 @@ private:
     }
 
 public:
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const Block &) const override { return is_injective; }
@@ -169,20 +166,13 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         DataTypePtr result;
-        if (!(checkType<DataTypeUInt8>(arguments, result)
-              || checkType<DataTypeUInt16>(arguments, result)
-              || checkType<DataTypeUInt32>(arguments, result)
-              || checkType<DataTypeUInt64>(arguments, result)
-              || checkType<DataTypeInt8>(arguments, result)
-              || checkType<DataTypeInt16>(arguments, result)
-              || checkType<DataTypeInt32>(arguments, result)
-              || checkType<DataTypeInt64>(arguments, result)
-              || checkType<DataTypeFloat32>(arguments, result)
-              || checkType<DataTypeDecimal32>(arguments, result)
-              || checkType<DataTypeDecimal64>(arguments, result)
-              || checkType<DataTypeDecimal128>(arguments, result)
-              || checkType<DataTypeDecimal256>(arguments, result)
-              || checkType<DataTypeFloat64>(arguments, result)))
+        if (!(checkType<DataTypeUInt8>(arguments, result) || checkType<DataTypeUInt16>(arguments, result)
+              || checkType<DataTypeUInt32>(arguments, result) || checkType<DataTypeUInt64>(arguments, result)
+              || checkType<DataTypeInt8>(arguments, result) || checkType<DataTypeInt16>(arguments, result)
+              || checkType<DataTypeInt32>(arguments, result) || checkType<DataTypeInt64>(arguments, result)
+              || checkType<DataTypeFloat32>(arguments, result) || checkType<DataTypeDecimal32>(arguments, result)
+              || checkType<DataTypeDecimal64>(arguments, result) || checkType<DataTypeDecimal128>(arguments, result)
+              || checkType<DataTypeDecimal256>(arguments, result) || checkType<DataTypeFloat64>(arguments, result)))
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -192,29 +182,24 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!(executeType<UInt8>(block, arguments, result)
-              || executeType<UInt16>(block, arguments, result)
-              || executeType<UInt32>(block, arguments, result)
-              || executeType<UInt64>(block, arguments, result)
-              || executeType<Int8>(block, arguments, result)
-              || executeType<Int16>(block, arguments, result)
-              || executeType<Int32>(block, arguments, result)
-              || executeType<Int64>(block, arguments, result)
+        if (!(executeType<UInt8>(block, arguments, result) || executeType<UInt16>(block, arguments, result)
+              || executeType<UInt32>(block, arguments, result) || executeType<UInt64>(block, arguments, result)
+              || executeType<Int8>(block, arguments, result) || executeType<Int16>(block, arguments, result)
+              || executeType<Int32>(block, arguments, result) || executeType<Int64>(block, arguments, result)
               || executeDecimalType<Decimal32>(block, arguments, result)
               || executeDecimalType<Decimal64>(block, arguments, result)
               || executeDecimalType<Decimal128>(block, arguments, result)
               || executeDecimalType<Decimal256>(block, arguments, result)
-              || executeType<Float32>(block, arguments, result)
-              || executeType<Float64>(block, arguments, result)))
+              || executeType<Float32>(block, arguments, result) || executeType<Float64>(block, arguments, result)))
             throw Exception(
-                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                fmt::format(
+                    "Illegal column {} of argument of function {}",
+                    block.getByPosition(arguments[0]).column->getName(),
+                    getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
-    bool hasInformationAboutMonotonicity() const override
-    {
-        return FunctionUnaryArithmeticMonotonicity<Name>::has();
-    }
+    bool hasInformationAboutMonotonicity() const override { return FunctionUnaryArithmeticMonotonicity<Name>::has(); }
 
     Monotonicity getMonotonicityForRange(const IDataType &, const Field & left, const Field & right) const override
     {

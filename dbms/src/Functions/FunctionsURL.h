@@ -169,7 +169,12 @@ struct ExtractFirstSignificantSubdomain
 {
     static size_t getReserveLengthForElement() { return 10; }
 
-    static void execute(const Pos data, const size_t size, Pos & res_data, size_t & res_size, Pos * out_domain_end = nullptr)
+    static void execute(
+        const Pos data,
+        const size_t size,
+        Pos & res_data,
+        size_t & res_size,
+        Pos * out_domain_end = nullptr)
     {
         res_data = data;
         res_size = 0;
@@ -217,8 +222,7 @@ struct ExtractFirstSignificantSubdomain
             last_3_periods[2] = begin - 1;
 
         if (!strncmp(last_3_periods[1] + 1, "com.", 4) /// Note that in ColumnString every value has zero byte after it.
-            || !strncmp(last_3_periods[1] + 1, "net.", 4)
-            || !strncmp(last_3_periods[1] + 1, "org.", 4)
+            || !strncmp(last_3_periods[1] + 1, "net.", 4) || !strncmp(last_3_periods[1] + 1, "org.", 4)
             || !strncmp(last_3_periods[1] + 1, "co.", 3))
         {
             res_data += last_3_periods[2] + 1 - begin;
@@ -442,11 +446,12 @@ struct ExtractWWW
 
 struct ExtractURLParameterImpl
 {
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       std::string pattern,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        std::string pattern,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size() / 5);
         res_offsets.resize(offsets.size());
@@ -516,11 +521,12 @@ struct ExtractURLParameterImpl
 
 struct CutURLParameterImpl
 {
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       std::string pattern,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        std::string pattern,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         res_offsets.resize(offsets.size());
@@ -574,7 +580,10 @@ struct CutURLParameterImpl
             size_t cut_length = (url_end - url_begin) - (end_pos - begin_pos);
             res_data.resize(res_offset + cut_length + 1);
             memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], url_begin, begin_pos - url_begin);
-            memcpySmallAllowReadWriteOverflow15(&res_data[res_offset] + (begin_pos - url_begin), end_pos, url_end - end_pos);
+            memcpySmallAllowReadWriteOverflow15(
+                &res_data[res_offset] + (begin_pos - url_begin),
+                end_pos,
+                url_end - end_pos);
             res_offset += cut_length + 1;
             res_data[res_offset - 1] = 0;
             res_offsets[i] = res_offset;
@@ -590,7 +599,11 @@ struct CutURLParameterImpl
 template <typename Extractor>
 struct ExtractSubstringImpl
 {
-    static void vector(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         size_t size = offsets.size();
         res_offsets.resize(size);
@@ -605,7 +618,11 @@ struct ExtractSubstringImpl
 
         for (size_t i = 0; i < size; ++i)
         {
-            Extractor::execute(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1, start, length);
+            Extractor::execute(
+                reinterpret_cast<const char *>(&data[prev_offset]),
+                offsets[i] - prev_offset - 1,
+                start,
+                length);
 
             res_data.resize(res_data.size() + length + 1);
             memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], start, length);
@@ -617,8 +634,7 @@ struct ExtractSubstringImpl
         }
     }
 
-    static void constant(const std::string & data,
-                         std::string & res_data)
+    static void constant(const std::string & data, std::string & res_data)
     {
         Pos start;
         size_t length;
@@ -638,7 +654,11 @@ struct ExtractSubstringImpl
 template <typename Extractor>
 struct CutSubstringImpl
 {
-    static void vector(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -658,10 +678,7 @@ struct CutSubstringImpl
             size_t start_index = start - reinterpret_cast<const char *>(&data[0]);
 
             res_data.resize(res_data.size() + offsets[i] - prev_offset - length);
-            memcpySmallAllowReadWriteOverflow15(
-                &res_data[res_offset],
-                current,
-                start - current);
+            memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], current, start - current);
             memcpySmallAllowReadWriteOverflow15(
                 &res_data[res_offset + start - current],
                 start + length,
@@ -673,8 +690,7 @@ struct CutSubstringImpl
         }
     }
 
-    static void constant(const std::string & data,
-                         std::string & res_data)
+    static void constant(const std::string & data, std::string & res_data)
     {
         Pos start;
         size_t length;
@@ -694,10 +710,13 @@ struct CutSubstringImpl
 /// Percent decode of url data.
 struct DecodeURLComponentImpl
 {
-    static void vector(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets);
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets);
 
-    static void constant(const std::string & data,
-                         std::string & res_data);
+    static void constant(const std::string & data, std::string & res_data);
 
     static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 };

@@ -17,9 +17,17 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_)
     : output_index(0)
     , max_block_size(max_block_size)
+=======
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(
+    const tipb::ExchangeReceiver & receiver,
+    size_t max_block_size,
+    size_t rows_)
+    : max_block_size(max_block_size)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     , rows(rows_)
     , source_num(static_cast<size_t>(receiver.encoded_task_meta_size()))
 {
@@ -31,9 +39,44 @@ MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::Exc
     }
 }
 
+<<<<<<< HEAD
 MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(ColumnsWithTypeAndName columns, size_t max_block_size)
     : columns(columns)
     , output_index(0)
+=======
+void MockExchangeReceiverInputStream::initTotalRows()
+{
+    rows = 0;
+    for (const auto & columns : columns_vector)
+    {
+        size_t current_rows = 0;
+        for (const auto & elem : columns)
+        {
+            if (elem.column)
+            {
+                assert(current_rows == 0 || current_rows == elem.column->size());
+                current_rows = elem.column->size();
+            }
+        }
+        rows += current_rows;
+    }
+}
+
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(
+    const ColumnsWithTypeAndName & columns,
+    size_t max_block_size)
+    : max_block_size(max_block_size)
+{
+    assert(!columns.empty());
+    columns_vector.push_back(columns);
+    initTotalRows();
+}
+
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(
+    const std::vector<ColumnsWithTypeAndName> & columns_vector_,
+    size_t max_block_size)
+    : columns_vector(columns_vector_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     , max_block_size(max_block_size)
 {
     rows = 0;
@@ -51,7 +94,14 @@ ColumnPtr MockExchangeReceiverInputStream::makeColumn(ColumnWithTypeAndName elem
 {
     auto column = elem.type->createColumn();
     size_t row_count = 0;
+<<<<<<< HEAD
     for (size_t i = output_index; (i < rows) & (row_count < max_block_size); ++i)
+=======
+    size_t current_output_rows = output_rows;
+    for (size_t i = output_index_in_current_columns;
+         current_output_rows < rows && i < elem.column->size() && row_count < max_block_size;
+         ++i, ++current_output_rows)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         column->insert((*elem.column)[i]);
         ++row_count;

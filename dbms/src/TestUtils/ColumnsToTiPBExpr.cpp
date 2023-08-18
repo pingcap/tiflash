@@ -193,6 +193,16 @@ void columnsToTiPBExpr(
 }
 } // namespace
 
+<<<<<<< HEAD
+=======
+tipb::Expr columnToTiPBExpr(const ColumnWithTypeAndName & column, size_t index)
+{
+    tipb::Expr ret;
+    columnToTiPBExpr(&ret, column, index);
+    return ret;
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 tipb::Expr columnsToTiPBExpr(
     const String & func_name,
     const ColumnNumbers & argument_column_number,

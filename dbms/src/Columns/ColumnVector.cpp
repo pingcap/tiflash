@@ -41,7 +41,12 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 
 
 template <typename T>
-StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
+StringRef ColumnVector<T>::serializeValueIntoArena(
+    size_t n,
+    Arena & arena,
+    char const *& begin,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
 {
     auto * pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
@@ -55,7 +60,8 @@ void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB::
 }
 
 template <typename T>
-void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
+void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+    const
 {
     for (size_t i = 0, sz = size(); i < sz; ++i)
     {
@@ -70,7 +76,10 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollat
 
     if (hash.getData().size() != s)
         throw Exception(
-            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            fmt::format(
+                "Size of WeakHash32 does not match size of column: column size is {}, hash size is {}",
+                s,
+                hash.getData().size()),
             ErrorCodes::LOGICAL_ERROR);
 
     const T * begin = data.data();
@@ -98,7 +107,10 @@ struct ColumnVector<T>::less
         : parent(parent_)
         , nan_direction_hint(nan_direction_hint_)
     {}
-    bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::less(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
+    bool operator()(size_t lhs, size_t rhs) const
+    {
+        return CompareHelper<T>::less(parent.data[lhs], parent.data[rhs], nan_direction_hint);
+    }
 };
 
 template <typename T>
@@ -110,11 +122,15 @@ struct ColumnVector<T>::greater
         : parent(parent_)
         , nan_direction_hint(nan_direction_hint_)
     {}
-    bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::greater(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
+    bool operator()(size_t lhs, size_t rhs) const
+    {
+        return CompareHelper<T>::greater(parent.data[lhs], parent.data[rhs], nan_direction_hint);
+    }
 };
 
 template <typename T>
-void ColumnVector<T>::getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
+void ColumnVector<T>::getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res)
+    const
 {
     size_t s = data.size();
     res.resize(s);
@@ -192,7 +208,8 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
     if (start + length > src_vec.data.size())
         throw Exception(
             fmt::format(
-                "Parameters are out of bound in ColumnVector<T>::insertRangeFrom method, start={}, length={}, src.size()={}",
+                "Parameters are out of bound in ColumnVector<T>::insertRangeFrom method, start={}, length={}, "
+                "src.size()={}",
                 start,
                 length,
                 src_vec.data.size()),
@@ -237,7 +254,8 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 
     while (filt_pos < filt_end_sse)
     {
-        int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
+        int mask
+            = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
 
         if (0 == mask)
         {

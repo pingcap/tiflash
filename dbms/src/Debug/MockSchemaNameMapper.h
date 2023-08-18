@@ -21,16 +21,36 @@ namespace DB
 
 struct MockSchemaNameMapper : public SchemaNameMapper
 {
+<<<<<<< HEAD
     String mapDatabaseName(const TiDB::DBInfo & db_info) const override { return db_info.name; }
     String mapTableName(const TiDB::TableInfo & table_info) const override { return table_info.name; }
+=======
+    String mapDatabaseName(const TiDB::DBInfo & db_info) const override { return "db_" + std::to_string(db_info.id); }
+    String mapDatabaseName(DatabaseID database_id, KeyspaceID /*keyspace_id*/) const override
+    {
+        return "db_" + std::to_string(database_id);
+    }
+    String mapTableName(const TiDB::TableInfo & table_info) const override
+    {
+        return "t_" + std::to_string(table_info.id);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     String mapPartitionName(const TiDB::TableInfo & table_info) const override
     {
         return table_info.name + "_" + std::to_string(table_info.id);
     }
 
+<<<<<<< HEAD
     String debugDatabaseName(const TiDB::DBInfo & db_info) const override { return db_info.name; }
     String debugTableName(const TiDB::TableInfo & table_info) const override { return table_info.name; }
+=======
+    String debugDatabaseName(const TiDB::DBInfo & db_info) const override { return fmt::format("db_{}", db_info.id); }
+    String debugTableName(const TiDB::TableInfo & table_info) const override
+    {
+        return fmt::format("t_{}", table_info.id);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 } // namespace DB

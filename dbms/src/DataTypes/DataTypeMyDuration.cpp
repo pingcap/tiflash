@@ -53,11 +53,15 @@ static DataTypePtr create(const ASTPtr & arguments)
         return std::make_shared<DB::DataTypeMyDuration>(0);
 
     if (arguments->children.size() != 1)
-        throw Exception("MyDuration data type can optionally have only one argument - fsp", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "MyDuration data type can optionally have only one argument - fsp",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::UInt64)
-        throw Exception("Parameter for MyDuration data type must be uint literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+            "Parameter for MyDuration data type must be uint literal",
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return std::make_shared<DataTypeMyDuration>(arg->value.get<UInt64>());
 }

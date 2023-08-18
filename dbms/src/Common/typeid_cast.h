@@ -42,8 +42,9 @@ std::enable_if_t<std::is_reference_v<To>, To> typeid_cast(From & from)
     if (typeid(from) == typeid(To))
         return static_cast<To>(from);
     else
-        throw DB::Exception("Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
-                            DB::ErrorCodes::BAD_CAST);
+        throw DB::Exception(
+            "Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
+            DB::ErrorCodes::BAD_CAST);
 }
 
 template <typename To, typename From>

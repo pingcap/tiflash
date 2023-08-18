@@ -16,9 +16,9 @@
 
 #include <common/demangle.h>
 
-#include <type_traits>
-#include <tuple>
 #include <iomanip>
+#include <tuple>
+#include <type_traits>
 
 /** Usage:
   *
@@ -39,17 +39,22 @@ std::enable_if_t<priority == -1, Out> & dumpImpl(Out & out, T &&)
 
 /// An object, that could be output with operator <<.
 template <int priority, typename Out, typename T>
-std::enable_if_t<priority == 0, Out> & dumpImpl(Out & out, T && x, std::decay_t<decltype(std::declval<Out &>() << std::declval<T>())> * = nullptr)
+std::enable_if_t<priority == 0, Out> & dumpImpl(
+    Out & out,
+    T && x,
+    std::decay_t<decltype(std::declval<Out &>() << std::declval<T>())> * = nullptr)
 {
     return out << x;
 }
 
 /// A pointer-like object.
 template <int priority, typename Out, typename T>
-std::enable_if_t<priority == 1
-    /// Protect from the case when operator * do effectively nothing (function pointer).
-    && !std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*std::declval<T>())>>
-    , Out> & dumpImpl(Out & out, T && x, std::decay_t<decltype(*std::declval<T>())> * = nullptr)
+std::enable_if_t<
+    priority == 1
+        /// Protect from the case when operator * do effectively nothing (function pointer).
+        && !std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*std::declval<T>())>>,
+    Out> &
+dumpImpl(Out & out, T && x, std::decay_t<decltype(*std::declval<T>())> * = nullptr)
 {
     if (!x)
         return out << "nullptr";
@@ -58,7 +63,10 @@ std::enable_if_t<priority == 1
 
 /// Container.
 template <int priority, typename Out, typename T>
-std::enable_if_t<priority == 2, Out> & dumpImpl(Out & out, T && x, std::decay_t<decltype(std::begin(std::declval<T>()))> * = nullptr)
+std::enable_if_t<priority == 2, Out> & dumpImpl(
+    Out & out,
+    T && x,
+    std::decay_t<decltype(std::begin(std::declval<T>()))> * = nullptr)
 {
     bool first = true;
     out << "{";
@@ -77,8 +85,9 @@ std::enable_if_t<priority == 2, Out> & dumpImpl(Out & out, T && x, std::decay_t<
 /// string and const char * - output not as container or pointer.
 
 template <int priority, typename Out, typename T>
-std::enable_if_t<priority == 3 && (std::is_same_v<std::decay_t<T>, std::string> || std::is_same_v<std::decay_t<T>, const char *>), Out> &
-dumpImpl(Out & out, T && x)
+std::enable_if_t<priority == 3 && (std::is_same_v<std::decay_t<T>, std::string> || std::is_same_v<std::decay_t<T>, const char *>), Out> & dumpImpl(
+    Out & out,
+    T && x)
 {
     return out << std::quoted(x);
 }
@@ -86,12 +95,10 @@ dumpImpl(Out & out, T && x)
 /// UInt8 - output as number, not char.
 
 template <int priority, typename Out, typename T>
-std::enable_if_t<priority == 3 && std::is_same_v<std::decay_t<T>, unsigned char>, Out> &
-dumpImpl(Out & out, T && x)
+std::enable_if_t<priority == 3 && std::is_same_v<std::decay_t<T>, unsigned char>, Out> & dumpImpl(Out & out, T && x)
 {
     return out << int(x);
 }
-
 
 
 /// Tuple, pair
@@ -114,19 +121,28 @@ Out & dumpTupleImpl(Out & out, T && x)
 }
 
 template <int priority, typename Out, typename T>
-std::enable_if_t<priority == 4, Out> & dumpImpl(Out & out, T && x, std::decay_t<decltype(std::get<0>(std::declval<T>()))> * = nullptr)
+std::enable_if_t<priority == 4, Out> & dumpImpl(
+    Out & out,
+    T && x,
+    std::decay_t<decltype(std::get<0>(std::declval<T>()))> * = nullptr)
 {
     return dumpTupleImpl<0>(out, x);
 }
 
 
 template <int priority, typename Out, typename T>
-Out & dumpDispatchPriorities(Out & out, T && x, std::decay_t<decltype(dumpImpl<priority>(std::declval<Out &>(), std::declval<T>()))> *)
+Out & dumpDispatchPriorities(
+    Out & out,
+    T && x,
+    std::decay_t<decltype(dumpImpl<priority>(std::declval<Out &>(), std::declval<T>()))> *)
 {
     return dumpImpl<priority>(out, x);
 }
 
-struct LowPriority { LowPriority(void *) {} };
+struct LowPriority
+{
+    LowPriority(void *) {}
+};
 
 template <int priority, typename Out, typename T>
 Out & dumpDispatchPriorities(Out & out, T && x, LowPriority)
@@ -150,22 +166,44 @@ Out & dump(Out & out, const char * name, T && x)
 }
 
 
-#define DUMPVAR(VAR) dump(std::cerr, #VAR, (VAR)); std::cerr << "; ";
+#define DUMPVAR(VAR)              \
+    dump(std::cerr, #VAR, (VAR)); \
+    std::cerr << "; ";
 #define DUMPHEAD std::cerr << __FILE__ << ':' << __LINE__ << " ";
 #define DUMPTAIL std::cerr << '\n';
 
-#define DUMP1(V1) do { DUMPHEAD DUMPVAR(V1) DUMPTAIL } while(0);
-#define DUMP2(V1, V2) do { DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPTAIL } while(0);
-#define DUMP3(V1, V2, V3) do { DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPVAR(V3) DUMPTAIL } while(0);
-#define DUMP4(V1, V2, V3, V4) do { DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPVAR(V3) DUMPVAR(V4) DUMPTAIL } while(0);
-#define DUMP5(V1, V2, V3, V4, V5) do { DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPVAR(V3) DUMPVAR(V4) DUMPVAR(V5) DUMPTAIL } while(0);
+#define DUMP1(V1)                     \
+    do                                \
+    {                                 \
+        DUMPHEAD DUMPVAR(V1) DUMPTAIL \
+    } while (0);
+#define DUMP2(V1, V2)                             \
+    do                                            \
+    {                                             \
+        DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPTAIL \
+    } while (0);
+#define DUMP3(V1, V2, V3)                                     \
+    do                                                        \
+    {                                                         \
+        DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPVAR(V3) DUMPTAIL \
+    } while (0);
+#define DUMP4(V1, V2, V3, V4)                                             \
+    do                                                                    \
+    {                                                                     \
+        DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPVAR(V3) DUMPVAR(V4) DUMPTAIL \
+    } while (0);
+#define DUMP5(V1, V2, V3, V4, V5)                                                     \
+    do                                                                                \
+    {                                                                                 \
+        DUMPHEAD DUMPVAR(V1) DUMPVAR(V2) DUMPVAR(V3) DUMPVAR(V4) DUMPVAR(V5) DUMPTAIL \
+    } while (0);
 
 /// https://groups.google.com/forum/#!searchin/kona-dev/variadic$20macro%7Csort:date/kona-dev/XMA-lDOqtlI/GCzdfZsD41sJ
 
 #define VA_NUM_ARGS_IMPL(x1, x2, x3, x4, x5, N, ...) N
 #define VA_NUM_ARGS(...) VA_NUM_ARGS_IMPL(__VA_ARGS__, 5, 4, 3, 2, 1)
 
-#define MAKE_VAR_MACRO_IMPL_CONCAT(PREFIX, NUM_ARGS) PREFIX ## NUM_ARGS
+#define MAKE_VAR_MACRO_IMPL_CONCAT(PREFIX, NUM_ARGS) PREFIX##NUM_ARGS
 #define MAKE_VAR_MACRO_IMPL(PREFIX, NUM_ARGS) MAKE_VAR_MACRO_IMPL_CONCAT(PREFIX, NUM_ARGS)
 #define MAKE_VAR_MACRO(PREFIX, ...) MAKE_VAR_MACRO_IMPL(PREFIX, VA_NUM_ARGS(__VA_ARGS__))
 

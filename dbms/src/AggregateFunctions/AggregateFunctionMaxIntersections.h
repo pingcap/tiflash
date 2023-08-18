@@ -71,10 +71,14 @@ public:
         : kind(kind_)
     {
         if (!arguments[0]->isNumber())
-            throw Exception{getName() + ": first argument must be represented by integer", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception{
+                getName() + ": first argument must be represented by integer",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         if (!arguments[1]->isNumber())
-            throw Exception{getName() + ": second argument must be represented by integer", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception{
+                getName() + ": second argument must be represented by integer",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         if (!arguments[0]->equals(*arguments[1]))
             throw Exception{getName() + ": arguments must have the same type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
@@ -82,9 +86,7 @@ public:
 
     String getName() const override
     {
-        return kind == AggregateFunctionIntersectionsKind::Count
-            ? "maxIntersections"
-            : "maxIntersectionsPosition";
+        return kind == AggregateFunctionIntersectionsKind::Count ? "maxIntersections" : "maxIntersectionsPosition";
     }
 
     DataTypePtr getReturnType() const override
@@ -170,10 +172,7 @@ public:
         }
     }
 
-    const char * getHeaderFilePath() const override
-    {
-        return __FILE__;
-    }
+    const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
 } // namespace DB

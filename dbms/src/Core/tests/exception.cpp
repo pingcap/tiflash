@@ -35,5 +35,17 @@ int main(int, char **)
         std::cerr << e.displayText() << std::endl;
     }
 
+<<<<<<< HEAD:dbms/src/Core/tests/exception.cpp
     return 0;
 }
+=======
+    static ExecutionResult success() { return {true, nullptr}; }
+
+    static ExecutionResult fail(const std::exception_ptr & exception)
+    {
+        RUNTIME_CHECK(exception != nullptr);
+        return {false, exception};
+    }
+};
+} // namespace DB
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Executor/ExecutionResult.h

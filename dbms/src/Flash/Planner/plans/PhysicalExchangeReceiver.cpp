@@ -87,6 +87,29 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
     }
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalExchangeReceiver.cpp
+=======
+void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
+{
+    if (fine_grained_shuffle.enable())
+        concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
+
+    for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+    {
+        group_builder.addConcurrency(std::make_unique<ExchangeReceiverSourceOp>(
+            exec_context,
+            log->identifier(),
+            mpp_exchange_receiver,
+            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
+    }
+    context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalExchangeReceiver.cpp
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);

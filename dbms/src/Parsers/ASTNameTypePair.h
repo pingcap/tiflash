@@ -58,5 +58,4 @@ protected:
 };
 
 
-}
-
+} // namespace DB

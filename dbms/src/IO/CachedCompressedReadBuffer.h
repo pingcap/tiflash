@@ -32,7 +32,8 @@ namespace DB
   */
 
 template <bool has_checksum = true>
-class CachedCompressedReadBuffer : public CompressedReadBufferBase<has_checksum>
+class CachedCompressedReadBuffer
+    : public CompressedReadBufferBase<has_checksum>
     , public ReadBuffer
 {
 private:
@@ -56,7 +57,12 @@ private:
     clockid_t clock_type;
 
 public:
-    CachedCompressedReadBuffer(const std::string & path_, UncompressedCache * cache_, size_t estimated_size_, size_t aio_threshold_, size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE);
+    CachedCompressedReadBuffer(
+        const std::string & path_,
+        UncompressedCache * cache_,
+        size_t estimated_size_,
+        size_t aio_threshold_,
+        size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE);
 
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);

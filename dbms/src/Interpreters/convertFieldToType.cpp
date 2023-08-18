@@ -97,7 +97,8 @@ static Field convertNumericType(const Field & from, const IDataType & type)
         return convertDecimalTypeImpl<Decimal256, To>(from);
 
     throw Exception(
-        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(from.getType()),
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName()
+            + ". Got: " + Field::Types::toString(from.getType()),
         ErrorCodes::TYPE_MISMATCH);
 }
 
@@ -108,7 +109,8 @@ static Field convertIntToDecimalType(const Field & from, const To & type)
 
     From value = from.get<From>();
 
-    FieldType scaled_value = getScaleMultiplier<FieldType>(type.getScale()) * static_cast<typename FieldType::NativeType>(value);
+    FieldType scaled_value
+        = getScaleMultiplier<FieldType>(type.getScale()) * static_cast<typename FieldType::NativeType>(value);
     return DecimalField<FieldType>(scaled_value, type.getScale());
 }
 
@@ -139,7 +141,8 @@ static Field convertDecimalToDecimalType(const Field & from, const DataTypeDecim
         }
     }
     throw Exception(
-        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(from.getType()),
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName()
+            + ". Got: " + Field::Types::toString(from.getType()),
         ErrorCodes::TYPE_MISMATCH);
 }
 
@@ -162,7 +165,8 @@ static Field convertDecimalType(const Field & from, const To & type)
         return convertDecimalToDecimalType<Decimal256>(from, type);
 
     throw Exception(
-        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(from.getType()),
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName()
+            + ". Got: " + Field::Types::toString(from.getType()),
         ErrorCodes::TYPE_MISMATCH);
 }
 
@@ -249,7 +253,9 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
                 if (!(is_my_datetime = typeid_cast<const DataTypeMyDateTime *>(&type)))
                     if (!(is_uuid = typeid_cast<const DataTypeUUID *>(&type)))
                         if (!(is_enum = dynamic_cast<const IDataTypeEnum *>(&type)))
-                            throw Exception{"Logical error: unknown numeric type " + type.getName(), ErrorCodes::LOGICAL_ERROR};
+                            throw Exception{
+                                "Logical error: unknown numeric type " + type.getName(),
+                                ErrorCodes::LOGICAL_ERROR};
 
         /// Numeric values for Enums should not be used directly in IN section
         if (src.getType() == Field::Types::Int64 && !is_enum)
@@ -315,9 +321,10 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             size_t dst_tuple_size = type_tuple->getElements().size();
 
             if (dst_tuple_size != src_tuple_size)
-                throw Exception("Bad size of tuple in IN or VALUES section. Expected size: " + toString(dst_tuple_size)
-                                    + ", actual size: " + toString(src_tuple_size),
-                                ErrorCodes::TYPE_MISMATCH);
+                throw Exception(
+                    "Bad size of tuple in IN or VALUES section. Expected size: " + toString(dst_tuple_size)
+                        + ", actual size: " + toString(src_tuple_size),
+                    ErrorCodes::TYPE_MISMATCH);
 
             TupleBackend res(dst_tuple_size);
             for (size_t i = 0; i < dst_tuple_size; ++i)
@@ -328,7 +335,8 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
     }
 
     throw Exception(
-        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(src.getType()),
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName()
+            + ". Got: " + Field::Types::toString(src.getType()),
         ErrorCodes::TYPE_MISMATCH);
 }
 

@@ -49,6 +49,4 @@ String ASTSampleRatio::toString(Rational ratio)
 }
 
 
-
-
-}
+} // namespace DB

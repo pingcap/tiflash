@@ -58,8 +58,9 @@ size_t blockSize(EncryptionMethod method)
 #if defined(SM4_BLOCK_SIZE)
         return SM4_BLOCK_SIZE;
 #else
-        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
-                                   Errors::Encryption::Internal);
+        throw DB::TiFlashException(
+            "Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
+            Errors::Encryption::Internal);
 #endif
     default:
         return 0;
@@ -99,7 +100,12 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 
     if (cipher_ != nullptr)
     {
-        ret = EVP_CipherInit(ctx, cipher_, reinterpret_cast<const unsigned char *>(key_.data()), iv, (is_encrypt ? 1 : 0));
+        ret = EVP_CipherInit(
+            ctx,
+            cipher_,
+            reinterpret_cast<const unsigned char *>(key_.data()),
+            iv,
+            (is_encrypt ? 1 : 0));
         RUNTIME_CHECK_MSG(ret == 1, "Failed to create cipher context.");
 
         // Disable padding. After disabling padding, data size should always be
@@ -130,10 +136,11 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 #endif
             ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
             RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for first block, offset {}.", file_offset);
-            RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
-                              "Unexpected cipher output size for first block, expected {} actual {}",
-                              block_size,
-                              output_size);
+            RUNTIME_CHECK_MSG(
+                output_size == static_cast<int>(block_size),
+                "Unexpected cipher output size for first block, expected {} actual {}",
+                block_size,
+                output_size);
 #if USE_GM_SSL
         }
 #endif
@@ -164,10 +171,11 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 #endif
             ret = EVP_CipherUpdate(ctx, full_blocks, &output_size, full_blocks, static_cast<int>(actual_data_size));
             RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for offset {}.", file_offset + data_offset);
-            RUNTIME_CHECK_MSG(output_size == static_cast<int>(actual_data_size),
-                              "Unexpected cipher output size for block, expected {} actual {}",
-                              actual_data_size,
-                              output_size);
+            RUNTIME_CHECK_MSG(
+                output_size == static_cast<int>(actual_data_size),
+                "Unexpected cipher output size for block, expected {} actual {}",
+                actual_data_size,
+                output_size);
 #if USE_GM_SSL
         }
 #endif
@@ -198,10 +206,11 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 #endif
             ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
             RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for last block, offset {}.", file_offset + data_offset);
-            RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
-                              "Unexpected cipher output size for last block, expected {} actual {}",
-                              block_size,
-                              output_size);
+            RUNTIME_CHECK_MSG(
+                output_size == static_cast<int>(block_size),
+                "Unexpected cipher output size for last block, expected {} actual {}",
+                block_size,
+                output_size);
 #if USE_GM_SSL
         }
 #endif
@@ -232,7 +241,9 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
 {
     const auto & key = *(encryption_info_.key);
     RUNTIME_CHECK_MSG(key.size() == keySize(encryption_info_.method), "Encryption key size mismatch.");
-    RUNTIME_CHECK_MSG(encryption_info_.iv->size() == DB::blockSize(encryption_info_.method), "Encryption iv size mismatch.");
+    RUNTIME_CHECK_MSG(
+        encryption_info_.iv->size() == DB::blockSize(encryption_info_.method),
+        "Encryption iv size mismatch.");
 
     // `cipher` is just a pointer to a static storage, so no need to free it after use.
     const EVP_CIPHER * cipher = nullptr;
@@ -252,19 +263,22 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
         // Use sm4 in GmSSL, don't need to do anything here
         break;
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
-                                   Errors::Encryption::Internal);
+        throw DB::TiFlashException(
+            "Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
+            Errors::Encryption::Internal);
 #else
         // Openssl support SM4 after 1.1.1 release version.
         cipher = EVP_sm4_ctr();
         break;
 #endif
     default:
-        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
-                                   Errors::Encryption::Internal);
+        throw DB::TiFlashException(
+            "Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
+            Errors::Encryption::Internal);
     }
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(encryption_info_.iv->data()));
-    auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(encryption_info_.iv->data() + sizeof(uint64_t)));
+    auto iv_low
+        = readBigEndian<uint64_t>(reinterpret_cast<const char *>(encryption_info_.iv->data() + sizeof(uint64_t)));
     // Currently all encryption info are stored in one file called file.dict.
     // Every update of file.dict will sync the whole file.
     // So when the file is too large, the update cost increases.
@@ -275,7 +289,9 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
     {
         unsigned char md5_value[MD5_DIGEST_LENGTH];
         static_assert(MD5_DIGEST_LENGTH == sizeof(uint64_t) * 2);
-        MD5(reinterpret_cast<const unsigned char *>(encryption_path_.file_name.c_str()), encryption_path_.file_name.size(), md5_value);
+        MD5(reinterpret_cast<const unsigned char *>(encryption_path_.file_name.c_str()),
+            encryption_path_.file_name.size(),
+            md5_value);
         auto md5_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(md5_value));
         auto md5_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(md5_value + sizeof(uint64_t)));
         iv_high ^= md5_high;

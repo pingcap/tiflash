@@ -30,19 +30,13 @@ struct MoveOrCopyIfThrow;
 template <typename T>
 struct MoveOrCopyIfThrow<T, true>
 {
-    void operator()(T && src, T & dst) const
-    {
-        dst = std::forward<T>(src);
-    }
+    void operator()(T && src, T & dst) const { dst = std::forward<T>(src); }
 };
 
 template <typename T>
 struct MoveOrCopyIfThrow<T, false>
 {
-    void operator()(T && src, T & dst) const
-    {
-        dst = src;
-    }
+    void operator()(T && src, T & dst) const { dst = src; }
 };
 
 template <typename T>

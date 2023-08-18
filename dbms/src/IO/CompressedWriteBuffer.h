@@ -49,10 +49,7 @@ public:
     }
 
     /// How many uncompressed bytes were written to the buffer
-    size_t getUncompressedBytes()
-    {
-        return count();
-    }
+    size_t getUncompressedBytes() { return count(); }
 
     /// How many bytes are in the buffer (not yet compressed)
     size_t getRemainingBytes()

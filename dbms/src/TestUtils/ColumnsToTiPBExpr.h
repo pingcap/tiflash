@@ -30,6 +30,13 @@ tipb::Expr columnsToTiPBExpr(
     const String & func_name,
     const ColumnNumbers & argument_column_number,
     const ColumnsWithTypeAndName & columns,
+<<<<<<< HEAD
     const TiDB::TiDBCollatorPtr & collator);
+=======
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val);
+
+tipb::Expr columnToTiPBExpr(const ColumnWithTypeAndName & column, size_t index);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace tests
 } // namespace DB

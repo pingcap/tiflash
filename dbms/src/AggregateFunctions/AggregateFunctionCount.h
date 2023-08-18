@@ -39,15 +39,13 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 
 
 /// Simply count number of calls.
-class AggregateFunctionCount final : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCount>
+class AggregateFunctionCount final
+    : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCount>
 {
 public:
     String getName() const override { return "count"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
     {
@@ -112,17 +110,15 @@ public:
     }
 
     /// May be used for optimization.
-    void addDelta(AggregateDataPtr __restrict place, UInt64 x) const
-    {
-        data(place).count += x;
-    }
+    void addDelta(AggregateDataPtr __restrict place, UInt64 x) const { data(place).count += x; }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
 
 /// Simply count number of not-NULL values.
-class AggregateFunctionCountNotNullUnary final : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullUnary>
+class AggregateFunctionCountNotNullUnary final
+    : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullUnary>
 {
 public:
     AggregateFunctionCountNotNullUnary(const DataTypePtr & argument)
@@ -135,10 +131,7 @@ public:
 
     String getName() const override { return "count"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
@@ -170,7 +163,8 @@ public:
 
 
 /// Count number of calls where all arguments are not NULL.
-class AggregateFunctionCountNotNullVariadic final : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullVariadic>
+class AggregateFunctionCountNotNullVariadic final
+    : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullVariadic>
 {
 public:
     AggregateFunctionCountNotNullVariadic(const DataTypes & arguments)
@@ -178,11 +172,14 @@ public:
         number_of_arguments = arguments.size();
 
         if (number_of_arguments == 1)
-            throw Exception("Logical error: single argument is passed to AggregateFunctionCountNotNullVariadic", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: single argument is passed to AggregateFunctionCountNotNullVariadic",
+                ErrorCodes::LOGICAL_ERROR);
 
         if (number_of_arguments > MAX_ARGS)
             throw Exception(
-                "Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
+                "Maximum number of arguments for aggregate function with Nullable types is "
+                    + toString(size_t(MAX_ARGS)),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (size_t i = 0; i < number_of_arguments; ++i)
@@ -191,10 +188,7 @@ public:
 
     String getName() const override { return "count"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {

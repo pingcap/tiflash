@@ -72,7 +72,11 @@ public:
             std::string msg = getName() + "is out of bound";
             if (precision > decimal_max_prec)
             {
-                msg = fmt::format("{}, precision {} is greater than maximum value {}", msg, precision, decimal_max_prec);
+                msg = fmt::format(
+                    "{}, precision {} is greater than maximum value {}",
+                    msg,
+                    precision,
+                    decimal_max_prec);
             }
             else if (scale > precision)
             {
@@ -134,7 +138,8 @@ public:
     void deserializeBinary(IColumn & column, ReadBuffer & istr) const override;
 
     void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const override;
-    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
+    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint)
+        const override;
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
 
@@ -146,7 +151,8 @@ public:
 
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const override;
 
-    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const override;
+    void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &)
+        const override;
 
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, char delimiter) const override;
@@ -196,9 +202,10 @@ inline DataTypePtr createDecimal(UInt64 prec, UInt64 scale)
         throw Exception("Wrong precision:" + DB::toString(prec), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (static_cast<UInt64>(scale) > prec)
-        throw Exception("Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec)
-                            + ", scale:" + DB::toString(scale),
-                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(
+            "Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec)
+                + ", scale:" + DB::toString(scale),
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (prec <= maxDecimalPrecision<Decimal32>())
     {

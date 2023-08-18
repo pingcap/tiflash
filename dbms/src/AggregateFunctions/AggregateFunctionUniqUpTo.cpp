@@ -36,20 +36,28 @@ namespace
 constexpr UInt8 uniq_upto_max_threshold = 100;
 
 
-AggregateFunctionPtr createAggregateFunctionUniqUpTo(const std::string & name, const DataTypes & argument_types, const Array & params)
+AggregateFunctionPtr createAggregateFunctionUniqUpTo(
+    const std::string & name,
+    const DataTypes & argument_types,
+    const Array & params)
 {
     UInt8 threshold = 5; /// default value
 
     if (!params.empty())
     {
         if (params.size() != 1)
-            throw Exception(fmt::format("Aggregate function {} requires one parameter or less.", name), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Aggregate function {} requires one parameter or less.", name),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         UInt64 threshold_param = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), params[0]);
 
         if (threshold_param > uniq_upto_max_threshold)
             throw Exception(
-                fmt::format("Too large parameter for aggregate function {}. Maximum: {}", name, uniq_upto_max_threshold),
+                fmt::format(
+                    "Too large parameter for aggregate function {}. Maximum: {}",
+                    name,
+                    uniq_upto_max_threshold),
                 ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
         threshold = threshold_param;
@@ -72,7 +80,9 @@ AggregateFunctionPtr createAggregateFunctionUniqUpTo(const std::string & name, c
             return std::make_shared<AggregateFunctionUniqUpTo<DataTypeDate::FieldType>>(threshold);
         else if (typeid_cast<const DataTypeDateTime *>(&argument_type))
             return std::make_shared<AggregateFunctionUniqUpTo<DataTypeDateTime::FieldType>>(threshold);
-        else if (typeid_cast<const DataTypeString *>(&argument_type) || typeid_cast<const DataTypeFixedString *>(&argument_type))
+        else if (
+            typeid_cast<const DataTypeString *>(&argument_type)
+            || typeid_cast<const DataTypeFixedString *>(&argument_type))
             return std::make_shared<AggregateFunctionUniqUpTo<String>>(threshold);
         else if (typeid_cast<const DataTypeTuple *>(&argument_type))
             return std::make_shared<AggregateFunctionUniqUpToVariadic<true>>(argument_types, threshold);

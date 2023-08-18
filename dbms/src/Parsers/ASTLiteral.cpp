@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/SipHash.h>
 #include <Common/FieldVisitors.h>
-#include <Parsers/ASTLiteral.h>
+#include <Common/SipHash.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/ASTLiteral.h>
 
 
 namespace DB
@@ -27,7 +27,7 @@ String ASTLiteral::getColumnNameImpl() const
     /// Special case for very large arrays. Instead of listing all elements, will use hash of them.
     /// (Otherwise column name will be too long, that will lead to significant slowdown of expression analysis.)
     if (value.getType() == Field::Types::Array
-        && value.get<const Array &>().size() > 100)        /// 100 - just arbitary value.
+        && value.get<const Array &>().size() > 100) /// 100 - just arbitary value.
     {
         SipHash hash;
         applyVisitor(FieldVisitorHash(hash), value);
@@ -39,4 +39,4 @@ String ASTLiteral::getColumnNameImpl() const
     return applyVisitor(FieldVisitorToString(), value);
 }
 
-}
+} // namespace DB

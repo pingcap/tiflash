@@ -32,7 +32,9 @@ namespace tests
 class TestIfNull : public DB::tests::FunctionTest
 {
 protected:
-    ColumnWithTypeAndName executeIfNull(const ColumnWithTypeAndName & first_column, const ColumnWithTypeAndName & second_column)
+    ColumnWithTypeAndName executeIfNull(
+        const ColumnWithTypeAndName & first_column,
+        const ColumnWithTypeAndName & second_column)
     {
         return executeFunction("ifNull", first_column, second_column);
     }
@@ -45,7 +47,10 @@ protected:
         return getReturnTypeForFunction(context, "ifNull", input_columns);
     }
     template <class IntegerType>
-    ColumnWithTypeAndName createIntegerColumnInternal(const std::vector<Int64> & signed_input, const std::vector<UInt64> unsigned_input, const std::vector<Int32> & null_map)
+    ColumnWithTypeAndName createIntegerColumnInternal(
+        const std::vector<Int64> & signed_input,
+        const std::vector<UInt64> unsigned_input,
+        const std::vector<Int32> & null_map)
     {
         static_assert(std::is_integral_v<IntegerType>);
         InferredDataVector<IntegerType> data_vector;
@@ -59,16 +64,20 @@ protected:
             for (auto v : unsigned_input)
                 data_vector.push_back(static_cast<IntegerType>(v));
         }
-        return null_map.empty() ? createColumn<IntegerType>(data_vector) : createNullableColumn<IntegerType>(data_vector, null_map);
+        return null_map.empty() ? createColumn<IntegerType>(data_vector)
+                                : createNullableColumn<IntegerType>(data_vector, null_map);
     }
     template <class FloatType>
-    ColumnWithTypeAndName createFloatColumnInternal(const std::vector<Float64> & float_input, const std::vector<Int32> & null_map)
+    ColumnWithTypeAndName createFloatColumnInternal(
+        const std::vector<Float64> & float_input,
+        const std::vector<Int32> & null_map)
     {
         static_assert(std::is_floating_point_v<FloatType>);
         InferredDataVector<FloatType> data_vector;
         for (auto v : float_input)
             data_vector.push_back(static_cast<FloatType>(v));
-        return null_map.empty() ? createColumn<FloatType>(data_vector) : createNullableColumn<FloatType>(data_vector, null_map);
+        return null_map.empty() ? createColumn<FloatType>(data_vector)
+                                : createNullableColumn<FloatType>(data_vector, null_map);
     }
     void testIfNull(const ColumnsWithTypeAndName & input_columns, const std::vector<Int32> & null_map)
     {
@@ -216,7 +225,9 @@ try
             {
                 if (col_2.type->isNullable())
                 {
-                    ASSERT_COLUMN_EQ(createNullableColumn<Int64>(expr1_data, {0, 0, 0, 0, 0}), executeIfNull(col_1, col_2));
+                    ASSERT_COLUMN_EQ(
+                        createNullableColumn<Int64>(expr1_data, {0, 0, 0, 0, 0}),
+                        executeIfNull(col_1, col_2));
                 }
                 else
                 {
@@ -228,7 +239,9 @@ try
                 /// col_1 has null value
                 if (col_2.type->isNullable())
                 {
-                    ASSERT_COLUMN_EQ(createNullableColumn<Int64>(vector_vector_result, {1, 0, 0, 0, 1}), executeIfNull(col_1, col_2));
+                    ASSERT_COLUMN_EQ(
+                        createNullableColumn<Int64>(vector_vector_result, {1, 0, 0, 0, 1}),
+                        executeIfNull(col_1, col_2));
                 }
                 else
                 {
@@ -373,12 +386,13 @@ CATCH
 TEST_F(TestIfNull, TestTypeInfer)
 try
 {
-    auto test_type = [&](const String & col_1_type_name, const String & col_2_type_name, const String & result_type_name) {
-        auto result_type = DataTypeFactory::instance().get(result_type_name);
-        auto col_1_type = DataTypeFactory::instance().get(col_1_type_name);
-        auto col_2_type = DataTypeFactory::instance().get(col_2_type_name);
-        ASSERT_TRUE(result_type->equals(*getReturnTypeForIfNull(col_1_type, col_2_type)));
-    };
+    auto test_type
+        = [&](const String & col_1_type_name, const String & col_2_type_name, const String & result_type_name) {
+              auto result_type = DataTypeFactory::instance().get(result_type_name);
+              auto col_1_type = DataTypeFactory::instance().get(col_1_type_name);
+              auto col_2_type = DataTypeFactory::instance().get(col_2_type_name);
+              ASSERT_TRUE(result_type->equals(*getReturnTypeForIfNull(col_1_type, col_2_type)));
+          };
     /// test integer type Int8/Int16/Int32/Int64/UInt8/UInt16/UInt32/UInt64
     test_type("Int8", "Int8", "Int8");
     test_type("Int8", "Int16", "Int16");

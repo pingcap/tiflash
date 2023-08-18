@@ -31,11 +31,11 @@ public:
     using Type = Nullable<String>;
 
     std::vector<String> not_null_strings = {"", "www.pingcap", "中文.测.试。。。"};
-    std::vector<ColumnWithTypeAndName> nulls = {
-        createOnlyNullColumnConst(1),
-        createOnlyNullColumn(1),
-        createColumn<Type>({{}}),
-        createConstColumn<Type>(1, {})};
+    std::vector<ColumnWithTypeAndName> nulls
+        = {createOnlyNullColumnConst(1),
+           createOnlyNullColumn(1),
+           createColumn<Type>({{}}),
+           createConstColumn<Type>(1, {})};
     std::vector<ColumnWithTypeAndName> all_inputs = nulls;
     StringTiDBConcatWS()
     {
@@ -46,30 +46,18 @@ public:
         }
     }
 
-    static ColumnWithTypeAndName toColumn(std::optional<String> value)
-    {
-        return createColumn<Type>({value});
-    }
+    static ColumnWithTypeAndName toColumn(std::optional<String> value) { return createColumn<Type>({value}); }
 
-    static ColumnWithTypeAndName toConst(std::optional<String> value)
-    {
-        return createConstColumn<Type>(1, value);
-    }
+    static ColumnWithTypeAndName toConst(std::optional<String> value) { return createConstColumn<Type>(1, value); }
 
-    static bool isConst(const ColumnWithTypeAndName & value)
-    {
-        return value.column->isColumnConst();
-    }
+    static bool isConst(const ColumnWithTypeAndName & value) { return value.column->isColumnConst(); }
 
     static bool isNull(const ColumnWithTypeAndName & value)
     {
         return value.type->onlyNull() || value.column->onlyNull() || (*value.column)[0].isNull();
     }
 
-    static String getNotNullValue(const ColumnWithTypeAndName & value)
-    {
-        return (*value.column)[0].get<String>();
-    }
+    static String getNotNullValue(const ColumnWithTypeAndName & value) { return (*value.column)[0].get<String>(); }
 };
 
 TEST_F(StringTiDBConcatWS, TwoArgsTest)
@@ -82,12 +70,7 @@ try
             auto res = null_separator.type->onlyNull()
                 ? createOnlyNullColumnConst(1)
                 : (isConst(null_separator) && isConst(value) ? toConst({}) : toColumn({}));
-            ASSERT_COLUMN_EQ(
-                res,
-                executeFunction(
-                    StringTiDBConcatWS::func_name,
-                    null_separator,
-                    value));
+            ASSERT_COLUMN_EQ(res, executeFunction(StringTiDBConcatWS::func_name, null_separator, value));
         }
     };
     for (const auto & item : nulls)
@@ -102,12 +85,7 @@ try
                 auto res = isNull(value) ? "" : getNotNullValue(value);
                 bool is_result_const = is_separator_const && isConst(value);
                 auto res_column = is_result_const ? toConst(res) : toColumn(res);
-                ASSERT_COLUMN_EQ(
-                    res_column,
-                    executeFunction(
-                        StringTiDBConcatWS::func_name,
-                        separator_column,
-                        value));
+                ASSERT_COLUMN_EQ(res_column, executeFunction(StringTiDBConcatWS::func_name, separator_column, value));
             };
             separator_not_null_test(true);
             separator_not_null_test(false);
@@ -130,13 +108,7 @@ try
                 auto res = null_separator.type->onlyNull()
                     ? createOnlyNullColumnConst(1)
                     : (isConst(null_separator) && isConst(value1) && isConst(value2) ? toConst({}) : toColumn({}));
-                ASSERT_COLUMN_EQ(
-                    res,
-                    executeFunction(
-                        StringTiDBConcatWS::func_name,
-                        null_separator,
-                        value1,
-                        value2));
+                ASSERT_COLUMN_EQ(res, executeFunction(StringTiDBConcatWS::func_name, null_separator, value1, value2));
             }
         }
     };
@@ -150,7 +122,8 @@ try
             // null value is ignored.
             auto value_has_null_test = [&](bool is_separator_const, const ColumnWithTypeAndName & not_null_value) {
                 auto separator_column = is_separator_const ? toConst(separator) : toColumn(separator);
-                auto ignored_null_value_result = executeFunction(StringTiDBConcatWS::func_name, separator_column, not_null_value);
+                auto ignored_null_value_result
+                    = executeFunction(StringTiDBConcatWS::func_name, separator_column, not_null_value);
                 auto origin_result = executeFunction(StringTiDBConcatWS::func_name, separator_column, value1, value2);
                 assert(getNotNullValue(ignored_null_value_result) == getNotNullValue(origin_result));
                 assert((is_separator_const && isConst(not_null_value)) == isConst(ignored_null_value_result));
@@ -163,11 +136,7 @@ try
                 auto res_column = is_result_const ? toConst(res) : toColumn(res);
                 ASSERT_COLUMN_EQ(
                     res_column,
-                    executeFunction(
-                        StringTiDBConcatWS::func_name,
-                        separator_column,
-                        value1,
-                        value2));
+                    executeFunction(StringTiDBConcatWS::func_name, separator_column, value1, value2));
             };
             if (isNull(value1))
             {
@@ -200,14 +169,14 @@ try
         for (const auto & value : values)
             args.push_back(toColumn(value));
 
-        ASSERT_COLUMN_EQ(
-            toColumn(result),
-            executeFunction(StringTiDBConcatWS::func_name, args));
+        ASSERT_COLUMN_EQ(toColumn(result), executeFunction(StringTiDBConcatWS::func_name, args));
     };
     // 4
     more_args_test({",", "大家好", {}, "hello word"}, "大家好,hello word");
     // 5
-    more_args_test({";", "这是中文", "C'est français", "これが日本の", "This is English"}, "这是中文;C'est français;これが日本の;This is English");
+    more_args_test(
+        {";", "这是中文", "C'est français", "これが日本の", "This is English"},
+        "这是中文;C'est français;これが日本の;This is English");
     // 6
     more_args_test({"", "", "", "", "", ""}, "");
     // 7

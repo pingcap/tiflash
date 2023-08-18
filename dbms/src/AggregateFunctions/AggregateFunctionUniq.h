@@ -192,11 +192,8 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
     using Key = T;
 
     /// When creating, the hash table must be small.
-    using Set = HashSet<
-        Key,
-        HashCRC32<Key>,
-        HashTableGrower<4>,
-        HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
+    using Set
+        = HashSet<Key, HashCRC32<Key>, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
 
     Set set;
 
@@ -220,11 +217,8 @@ struct AggregateFunctionUniqExactData<String> : AggregationCollatorsWrapper<true
     using Key = UInt128;
 
     /// When creating, the hash table must be small.
-    using Set = HashSet<
-        Key,
-        TrivialHash,
-        HashTableGrower<3>,
-        HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
+    using Set
+        = HashSet<Key, TrivialHash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
 
     Set set;
 
@@ -305,10 +299,7 @@ struct AggregateFunctionUniqTraits
 template <>
 struct AggregateFunctionUniqTraits<UInt128>
 {
-    static UInt64 hash(UInt128 x)
-    {
-        return sipHash64(x);
-    }
+    static UInt64 hash(UInt128 x) { return sipHash64(x); }
 };
 
 template <>
@@ -344,10 +335,7 @@ struct AggregateFunctionUniqCombinedTraits
 template <>
 struct AggregateFunctionUniqCombinedTraits<UInt128>
 {
-    static UInt32 hash(UInt128 x)
-    {
-        return sipHash64(x);
-    }
+    static UInt32 hash(UInt128 x) { return sipHash64(x); }
 };
 
 template <>
@@ -381,7 +369,10 @@ struct OneAdder
 {
     static void ALWAYS_INLINE add(Data & data, const IColumn & column, size_t row_num)
     {
-        if constexpr (std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetData> || std::is_same_v<Data, AggregateFunctionUniqHLL12Data<T>>)
+        if constexpr (
+            std::is_same_v<
+                Data,
+                AggregateFunctionUniqUniquesHashSetData> || std::is_same_v<Data, AggregateFunctionUniqHLL12Data<T>>)
         {
             if constexpr (!std::is_same_v<T, String>)
             {
@@ -441,10 +432,7 @@ class AggregateFunctionUniq final : public IAggregateFunctionDataHelper<Data, Ag
 public:
     String getName() const override { return Data::getName(); }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
@@ -481,7 +469,10 @@ public:
   */
 template <typename Data, bool argument_is_tuple, bool raw_result = false>
 class AggregateFunctionUniqVariadic final
-    : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>, true>
+    : public IAggregateFunctionDataHelper<
+          Data,
+          AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>,
+          true>
 {
 private:
     static constexpr bool is_exact = std::is_same_v<Data, AggregateFunctionUniqExactData<String>>;
@@ -509,7 +500,8 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).set.insert(UniqVariadicHash<Data, is_exact, argument_is_tuple>::apply(this->data(place), num_args, columns, row_num));
+        this->data(place).set.insert(
+            UniqVariadicHash<Data, is_exact, argument_is_tuple>::apply(this->data(place), num_args, columns, row_num));
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

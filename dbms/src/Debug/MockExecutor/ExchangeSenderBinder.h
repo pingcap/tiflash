@@ -27,7 +27,11 @@ public:
         , partition_keys(partition_keys_)
     {}
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context) override;
 
     void columnPrune(std::unordered_set<String> &) override {}
 

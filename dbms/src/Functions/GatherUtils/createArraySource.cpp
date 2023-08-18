@@ -26,14 +26,21 @@ struct ArraySourceCreator;
 template <typename Type, typename... Types>
 struct ArraySourceCreator<Type, Types...>
 {
-    static std::unique_ptr<IArraySource> create(const ColumnArray & col, const NullMap * null_map, bool is_const, size_t total_rows)
+    static std::unique_ptr<IArraySource> create(
+        const ColumnArray & col,
+        const NullMap * null_map,
+        bool is_const,
+        size_t total_rows)
     {
         if (typeid_cast<const ColumnVector<Type> *>(&col.getData()))
         {
             if (null_map)
             {
                 if (is_const)
-                    return std::make_unique<ConstSource<NullableArraySource<NumericArraySource<Type>>>>(col, *null_map, total_rows);
+                    return std::make_unique<ConstSource<NullableArraySource<NumericArraySource<Type>>>>(
+                        col,
+                        *null_map,
+                        total_rows);
                 return std::make_unique<NullableArraySource<NumericArraySource<Type>>>(col, *null_map);
             }
             if (is_const)
@@ -48,12 +55,19 @@ struct ArraySourceCreator<Type, Types...>
 template <>
 struct ArraySourceCreator<>
 {
-    static std::unique_ptr<IArraySource> create(const ColumnArray & col, const NullMap * null_map, bool is_const, size_t total_rows)
+    static std::unique_ptr<IArraySource> create(
+        const ColumnArray & col,
+        const NullMap * null_map,
+        bool is_const,
+        size_t total_rows)
     {
         if (null_map)
         {
             if (is_const)
-                return std::make_unique<ConstSource<NullableArraySource<GenericArraySource>>>(col, *null_map, total_rows);
+                return std::make_unique<ConstSource<NullableArraySource<GenericArraySource>>>(
+                    col,
+                    *null_map,
+                    total_rows);
             return std::make_unique<NullableArraySource<GenericArraySource>>(col, *null_map);
         }
         if (is_const)

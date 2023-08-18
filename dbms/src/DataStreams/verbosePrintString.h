@@ -25,4 +25,4 @@ class WriteBuffer;
   */
 void verbosePrintString(const char * begin, const char * end, WriteBuffer & out);
 
-}
+} // namespace DB

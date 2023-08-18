@@ -46,7 +46,17 @@ String getFieldTypeName(Int32 tp);
 String getJoinExecTypeName(const tipb::JoinExecType & tp);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
+<<<<<<< HEAD
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
+=======
+void getColumnIDsFromExpr(
+    const tipb::Expr & expr,
+    const std::vector<ColumnInfo> & input_col,
+    std::unordered_set<ColumnID> & col_id_set);
+NameAndTypePair getColumnNameAndTypeForColumnExpr(
+    const tipb::Expr & expr,
+    const std::vector<NameAndTypePair> & input_col);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 bool exprHasValidFieldType(const tipb::Expr & expr);
@@ -58,10 +68,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
 SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,
     const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);
-String genFuncString(
-    const String & func_name,
-    const Names & argument_names,
-    const TiDB::TiDBCollators & collators);
+String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators);
 
 extern const Int8 VAR_SIZE;
 
@@ -71,15 +78,9 @@ TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr);
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
 
-void assertBlockSchema(
-    const DataTypes & expected_types,
-    const Block & block,
-    const String & context_description);
+void assertBlockSchema(const DataTypes & expected_types, const Block & block, const String & context_description);
 
-void assertBlockSchema(
-    const Block & header,
-    const Block & block,
-    const String & context_description);
+void assertBlockSchema(const Block & header, const Block & block, const String & context_description);
 
 class UniqueNameGenerator
 {

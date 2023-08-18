@@ -29,15 +29,9 @@ struct Rand
     uint32_t z;
     uint32_t w;
 
-    Rand()
-    {
-        reseed(static_cast<uint32_t>(0));
-    }
+    Rand() { reseed(static_cast<uint32_t>(0)); }
 
-    explicit Rand(uint32_t seed)
-    {
-        reseed(seed);
-    }
+    explicit Rand(uint32_t seed) { reseed(seed); }
 
     void reseed(uint32_t seed)
     {

@@ -1,0 +1,72 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+mysql> drop table if exists test.t;
+mysql> create table test.t(v4 varchar(100), v6 varchar(100));
+mysql> insert into test.t values('123.123.123.123', 'F746:C349:48E3:22F2:81E0:0EA8:E7B6:8286');
+mysql> insert into test.t values('0.0.0.0', '0000:0000:0000:0000:0000:0000:0000:0000');
+mysql> insert into test.t values('127.0.0.1', '2001:0:2851:b9f0:6d:2326:9036:f37a');
+mysql> insert into test.t values('192.168.0.0/10', 'fe80::2dc3:25a5:49a1:6002%24');
+mysql> insert into test.t values('192.168.99.22.123', '4207:A33A:58D3:F2C3:8EDC:A548:3EC7:0D00:0D00');
+mysql> insert into test.t values('999.999.999.999', '4207:A33A:58D3:F2C3:8EDC:A548::0D00');
+mysql> insert into test.t values('3.2.1.', '4207::::8EDC:A548:3EC7:0D00');
+mysql> insert into test.t values('3..2.1', '4207:::::A548:3EC7:0D00');
+mysql> insert into test.t values('...', '::::::');
+mysql> insert into test.t values('4556456', '4556456');
+mysql> insert into test.t values('ajdjioa', 'ajdjioa');
+mysql> insert into test.t values('', '');
+mysql> insert into test.t values(null,null);
+
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select is_ipv4(v4) from test.t;
++-------------+
+| is_ipv4(v4) |
++-------------+
+|           1 |
+|           1 |
+|           1 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
++-------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select is_ipv6(v6) from test.t;
++-------------+
+| is_ipv6(v6) |
++-------------+
+|           1 |
+|           1 |
+|           1 |
+|           0 |
+|           0 |
+|           1 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
+|           0 |
++-------------+
+mysql> drop table if exists test.t;

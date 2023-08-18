@@ -14,8 +14,9 @@
 
 #pragma once
 
-#include <cstddef>
 #include <sys/types.h>
+
+#include <cstddef>
 #if !_MSC_VER
 #include <sys/mman.h>
 #endif
@@ -26,7 +27,8 @@
 
 #define MREMAP_MAYMOVE 1
 
-void * mremap(void * old_address,
+void * mremap(
+    void * old_address,
     size_t old_size,
     size_t new_size,
     int flags = 0,
@@ -37,7 +39,8 @@ void * mremap(void * old_address,
 
 #endif
 
-inline void * clickhouse_mremap(void * old_address,
+inline void * clickhouse_mremap(
+    void * old_address,
     size_t old_size,
     size_t new_size,
     int flags = 0,
@@ -46,7 +49,8 @@ inline void * clickhouse_mremap(void * old_address,
     [[maybe_unused]] int mmap_fd = -1,
     [[maybe_unused]] off_t mmap_offset = 0)
 {
-    return mremap(old_address,
+    return mremap(
+        old_address,
         old_size,
         new_size,
         flags
@@ -57,5 +61,5 @@ inline void * clickhouse_mremap(void * old_address,
         mmap_fd,
         mmap_offset
 #endif
-        );
+    );
 }

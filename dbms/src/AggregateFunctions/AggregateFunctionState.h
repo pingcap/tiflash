@@ -41,37 +41,19 @@ public:
         , params(params)
     {}
 
-    String getName() const override
-    {
-        return nested_func->getName() + "State";
-    }
+    String getName() const override { return nested_func->getName() + "State"; }
 
     DataTypePtr getReturnType() const override;
 
-    void create(AggregateDataPtr __restrict place) const override
-    {
-        nested_func->create(place);
-    }
+    void create(AggregateDataPtr __restrict place) const override { nested_func->create(place); }
 
-    void destroy(AggregateDataPtr __restrict place) const noexcept override
-    {
-        nested_func->destroy(place);
-    }
+    void destroy(AggregateDataPtr __restrict place) const noexcept override { nested_func->destroy(place); }
 
-    bool hasTrivialDestructor() const override
-    {
-        return nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return nested_func->hasTrivialDestructor(); }
 
-    size_t sizeOfData() const override
-    {
-        return nested_func->sizeOfData();
-    }
+    size_t sizeOfData() const override { return nested_func->sizeOfData(); }
 
-    size_t alignOfData() const override
-    {
-        return nested_func->alignOfData();
-    }
+    size_t alignOfData() const override { return nested_func->alignOfData(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -101,10 +83,7 @@ public:
     /// Aggregate function or aggregate function state.
     bool isState() const override { return true; }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return nested_func->allocatesMemoryInArena();
-    }
+    bool allocatesMemoryInArena() const override { return nested_func->allocatesMemoryInArena(); }
 
     AggregateFunctionPtr getNestedFunction() const { return nested_func; }
 

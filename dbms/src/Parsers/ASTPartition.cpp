@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ASTPartition.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/ASTPartition.h>
 
 namespace DB
 {
@@ -55,4 +55,4 @@ void ASTPartition::formatImpl(const FormatSettings & settings, FormatState & sta
     }
 }
 
-}
+} // namespace DB

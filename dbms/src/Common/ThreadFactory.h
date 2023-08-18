@@ -39,6 +39,7 @@ public:
         if (propagate_memory_tracker)
             CurrentMemoryTracker::submitLocalDeltaMemory();
         auto * memory_tracker = current_memory_tracker;
+<<<<<<< HEAD
         auto wrapped_func = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::move(f)](auto &&... args) {
             UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_raw, type_max_threads_of_raw);
             MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
@@ -46,6 +47,17 @@ public:
                 setThreadName(thread_name.c_str());
             return std::invoke(f, std::forward<Args>(args)...);
         };
+=======
+        auto wrapped_func
+            = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::forward<F>(f)](
+                  auto &&... args) {
+                  UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_raw, type_max_threads_of_raw);
+                  MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
+                  if (!thread_name.empty())
+                      setThreadName(thread_name.c_str());
+                  return std::invoke(f, std::forward<Args>(args)...);
+              };
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         return std::thread(wrapped_func, std::forward<Args>(args)...);
     }
 };

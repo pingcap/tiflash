@@ -37,10 +37,19 @@ public:
         NamesAndTypesList required_columns_,
         const ColumnDefaults & column_defaults_,
         const Context & context_)
+<<<<<<< HEAD
         : output(output_), header(header_), required_columns(required_columns_),
           column_defaults(column_defaults_), context(context_)
     {
     }
+=======
+        : output(output_)
+        , header(header_)
+        , required_columns(required_columns_)
+        , column_defaults(column_defaults_)
+        , context(context_)
+    {}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;

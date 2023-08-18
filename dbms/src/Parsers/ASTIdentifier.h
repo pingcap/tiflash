@@ -25,7 +25,7 @@ namespace DB
 class ASTIdentifier : public ASTWithAlias
 {
 public:
-    enum Kind    /// TODO This is semantic, not syntax. Remove it.
+    enum Kind /// TODO This is semantic, not syntax. Remove it.
     {
         Column,
         Database,
@@ -43,21 +43,22 @@ public:
     bool can_be_alias;
 
     ASTIdentifier(const String & name_, const Kind kind_ = Column)
-        : name(name_), kind(kind_), can_be_alias(true) {}
+        : name(name_)
+        , kind(kind_)
+        , can_be_alias(true)
+    {}
 
     /** Get the text that identifies this element. */
     String getID() const override { return "Identifier_" + name; }
 
     ASTPtr clone() const override { return std::make_shared<ASTIdentifier>(*this); }
 
-    void collectIdentifierNames(IdentifierNameSet & set) const override
-    {
-        set.insert(name);
-    }
+    void collectIdentifierNames(IdentifierNameSet & set) const override { set.insert(name); }
 
 protected:
-    void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+    void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+        const override;
     String getColumnNameImpl() const override { return name; }
 };
 
-}
+} // namespace DB

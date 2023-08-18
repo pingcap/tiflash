@@ -26,4 +26,17 @@ namespace DB
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
+<<<<<<< HEAD
+=======
+
+namespace DM
+{
+struct ColumnDefine;
+using ColumnDefinesPtr = std::shared_ptr<std::vector<ColumnDefine>>;
+} // namespace DM
+
+// The column defines and `extra table id index`
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

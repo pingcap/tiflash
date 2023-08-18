@@ -30,14 +30,14 @@ extern const int LOGICAL_ERROR;
 }
 
 
-LogicalExpressionsOptimizer::OrWithExpression::OrWithExpression(ASTFunction * or_function_,
-                                                                const IAST::Hash & expression_,
-                                                                const std::string & alias_)
+LogicalExpressionsOptimizer::OrWithExpression::OrWithExpression(
+    ASTFunction * or_function_,
+    const IAST::Hash & expression_,
+    const std::string & alias_)
     : or_function(or_function_)
     , expression(expression_)
     , alias(alias_)
-{
-}
+{}
 
 bool LogicalExpressionsOptimizer::OrWithExpression::operator<(const OrWithExpression & rhs) const
 {
@@ -47,8 +47,7 @@ bool LogicalExpressionsOptimizer::OrWithExpression::operator<(const OrWithExpres
 LogicalExpressionsOptimizer::LogicalExpressionsOptimizer(ASTSelectQuery * select_query_, const Settings & settings_)
     : select_query(select_query_)
     , settings(settings_)
-{
-}
+{}
 
 void LogicalExpressionsOptimizer::perform()
 {
@@ -164,8 +163,9 @@ void LogicalExpressionsOptimizer::collectDisjunctiveEqualityChains()
             {
                 auto res = or_parent_map.insert(std::make_pair(function, ParentNodes{from_node}));
                 if (!res.second)
-                    throw Exception("LogicalExpressionsOptimizer: parent node information is corrupted",
-                                    ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "LogicalExpressionsOptimizer: parent node information is corrupted",
+                        ErrorCodes::LOGICAL_ERROR);
             }
         }
         else
@@ -250,11 +250,14 @@ void LogicalExpressionsOptimizer::addInExpression(const DisjunctiveEqualityChain
 
     /// Sort the literals so that they are specified in the same order in the IN expression.
     /// Otherwise, they would be specified in the order of the ASTLiteral addresses, which is nondeterministic.
-    std::sort(value_list->children.begin(), value_list->children.end(), [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs) {
-        const auto val_lhs = static_cast<const ASTLiteral *>(&*lhs);
-        const auto val_rhs = static_cast<const ASTLiteral *>(&*rhs);
-        return val_lhs->value < val_rhs->value;
-    });
+    std::sort(
+        value_list->children.begin(),
+        value_list->children.end(),
+        [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs) {
+            const auto val_lhs = static_cast<const ASTLiteral *>(&*lhs);
+            const auto val_rhs = static_cast<const ASTLiteral *>(&*rhs);
+            return val_lhs->value < val_rhs->value;
+        });
 
     /// Get the expression `expr` from the chain `expr = x1 OR ... OR expr = xN`
     ASTPtr equals_expr_lhs;
@@ -317,8 +320,7 @@ void LogicalExpressionsOptimizer::cleanupOrExpressions()
 
         auto it = garbage_map.find(or_with_expression.or_function);
         if (it == garbage_map.end())
-            throw Exception("LogicalExpressionsOptimizer: garbage map is corrupted",
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception("LogicalExpressionsOptimizer: garbage map is corrupted", ErrorCodes::LOGICAL_ERROR);
 
         auto & first_erased = it->second;
         first_erased = std::remove_if(operands.begin(), first_erased, [&](const ASTPtr & operand) {
@@ -353,8 +355,9 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
         {
             auto it = or_parent_map.find(or_function);
             if (it == or_parent_map.end())
-                throw Exception("LogicalExpressionsOptimizer: parent node information is corrupted",
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    "LogicalExpressionsOptimizer: parent node information is corrupted",
+                    ErrorCodes::LOGICAL_ERROR);
             auto & parents = it->second;
 
             auto it2 = column_to_position.find(or_function);
@@ -370,7 +373,10 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
             for (auto & parent : parents)
             {
                 parent->children.push_back(operands[0]);
-                auto first_erased = std::remove_if(parent->children.begin(), parent->children.end(), [or_function](const ASTPtr & ptr) { return ptr.get() == or_function; });
+                auto first_erased = std::remove_if(
+                    parent->children.begin(),
+                    parent->children.end(),
+                    [or_function](const ASTPtr & ptr) { return ptr.get() == or_function; });
 
                 parent->children.erase(first_erased, parent->children.end());
             }

@@ -74,20 +74,19 @@
   */
 struct UniquesHashSetDefaultHash
 {
-    size_t operator()(UInt64 x) const
-    {
-        return intHash32<0>(x);
-    }
+    size_t operator()(UInt64 x) const { return intHash32<0>(x); }
 };
 
 
 template <typename Hash = UniquesHashSetDefaultHash, bool use_crc32 = true>
-class UniquesHashSet : private HashTableAllocatorWithStackMemory<(1ULL << UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE) * sizeof(UInt32)>
+class UniquesHashSet
+    : private HashTableAllocatorWithStackMemory<(1ULL << UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE) * sizeof(UInt32)>
 {
 private:
     using Value_t = UInt64;
     using HashValue_t = UInt32;
-    using Allocator = HashTableAllocatorWithStackMemory<(1ULL << UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE) * sizeof(UInt32)>;
+    using Allocator
+        = HashTableAllocatorWithStackMemory<(1ULL << UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE) * sizeof(UInt32)>;
 
     UInt32 m_size; /// Number of elements
     UInt8 size_degree; /// The size of the table as a power of 2
@@ -122,15 +121,9 @@ private:
     inline size_t place(HashValue_t x) const { return (x >> UNIQUES_HASH_BITS_FOR_SKIP) & mask(); }
 
     /// The value is divided by 2 ^ skip_degree
-    inline bool good(HashValue_t hash) const
-    {
-        return hash == ((hash >> skip_degree) << skip_degree);
-    }
+    inline bool good(HashValue_t hash) const { return hash == ((hash >> skip_degree) << skip_degree); }
 
-    HashValue_t hash(Value_t key) const
-    {
-        return Hash()(key);
-    }
+    HashValue_t hash(Value_t key) const { return Hash()(key); }
 
     /// Delete all values whose hashes do not divide by 2 ^ skip_degree
     void rehash()
@@ -168,7 +161,8 @@ private:
             new_size_degree = size_degree + 1;
 
         /// Expand the space.
-        buf = reinterpret_cast<HashValue_t *>(Allocator::realloc(buf, old_size * sizeof(buf[0]), (1ULL << new_size_degree) * sizeof(buf[0])));
+        buf = reinterpret_cast<HashValue_t *>(
+            Allocator::realloc(buf, old_size * sizeof(buf[0]), (1ULL << new_size_degree) * sizeof(buf[0])));
         size_degree = new_size_degree;
 
         /** Now some items may need to be moved to a new location.
@@ -320,10 +314,7 @@ public:
         return *this;
     }
 
-    ~UniquesHashSet()
-    {
-        free();
-    }
+    ~UniquesHashSet() { free(); }
 
     void insert(Value_t x)
     {
@@ -451,7 +442,8 @@ public:
 
         if ((1ULL << size_degree) < rhs_size)
         {
-            UInt8 new_size_degree = std::max(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE, static_cast<int>(log2(rhs_size - 1)) + 2);
+            UInt8 new_size_degree
+                = std::max(UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE, static_cast<int>(log2(rhs_size - 1)) + 2);
             resize(new_size_degree);
         }
 
@@ -539,10 +531,7 @@ public:
     }
 
 #ifdef UNIQUES_HASH_SET_COUNT_COLLISIONS
-    size_t getCollisions() const
-    {
-        return collisions;
-    }
+    size_t getCollisions() const { return collisions; }
 #endif
 };
 

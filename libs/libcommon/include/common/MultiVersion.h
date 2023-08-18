@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <mutex>
 #include <memory>
+#include <mutex>
 
 
 /** Allow to store and read-only usage of an object in several threads,
@@ -44,10 +44,7 @@ public:
     /// Default initialization - by nullptr.
     MultiVersion() = default;
 
-    MultiVersion(std::unique_ptr<const T> && value)
-    {
-        set(std::move(value));
-    }
+    MultiVersion(std::unique_ptr<const T> && value) { set(std::move(value)); }
 
     /// Obtain current version for read-only usage. Returns shared_ptr, that manages lifetime of version.
     Version get() const

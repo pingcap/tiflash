@@ -45,7 +45,9 @@ NativeBlockOutputStream::NativeBlockOutputStream(
     {
         ostr_concrete = typeid_cast<CompressedWriteBuffer<> *>(&ostr);
         if (!ostr_concrete)
-            throw Exception("When need to write index for NativeBlockOutputStream, ostr must be CompressedWriteBuffer.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "When need to write index for NativeBlockOutputStream, ostr must be CompressedWriteBuffer.",
+                ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -56,7 +58,12 @@ void NativeBlockOutputStream::flush()
 }
 
 
-void NativeBlockOutputStream::writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
+void NativeBlockOutputStream::writeData(
+    const IDataType & type,
+    const ColumnPtr & column,
+    WriteBuffer & ostr,
+    size_t offset,
+    size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)

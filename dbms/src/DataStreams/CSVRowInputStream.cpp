@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadHelpers.h>
-#include <IO/Operators.h>
-
-#include <DataStreams/verbosePrintString.h>
 #include <DataStreams/CSVRowInputStream.h>
+#include <DataStreams/verbosePrintString.h>
+#include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
 
 
 namespace DB
@@ -24,13 +23,22 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INCORRECT_DATA;
-    extern const int LOGICAL_ERROR;
-}
+extern const int INCORRECT_DATA;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
-CSVRowInputStream::CSVRowInputStream(ReadBuffer & istr_, const Block & header_, const char delimiter_, bool with_names_, bool with_types_)
-    : istr(istr_), header(header_), delimiter(delimiter_), with_names(with_names_), with_types(with_types_)
+CSVRowInputStream::CSVRowInputStream(
+    ReadBuffer & istr_,
+    const Block & header_,
+    const char delimiter_,
+    bool with_names_,
+    bool with_types_)
+    : istr(istr_)
+    , header(header_)
+    , delimiter(delimiter_)
+    , with_names(with_names_)
+    , with_types(with_types_)
 {
     size_t num_columns = header.columns();
     data_types.resize(num_columns);
@@ -55,8 +63,10 @@ static void skipEndOfLine(ReadBuffer & istr)
         if (!istr.eof() && *istr.position() == '\n')
             ++istr.position();
         else
-            throw Exception("Cannot parse CSV format: found \\r (CR) not followed by \\n (LF)."
-                " Line must end by \\n (LF) or \\r\\n (CR LF) or \\n\\r.", ErrorCodes::INCORRECT_DATA);
+            throw Exception(
+                "Cannot parse CSV format: found \\r (CR) not followed by \\n (LF)."
+                " Line must end by \\n (LF) or \\r\\n (CR LF) or \\n\\r.",
+                ErrorCodes::INCORRECT_DATA);
     }
     else if (!istr.eof())
         throw Exception("Expected end of line", ErrorCodes::INCORRECT_DATA);
@@ -88,9 +98,7 @@ static void skipDelimiter(ReadBuffer & istr, const char delimiter, bool is_last_
 /// Skip `whitespace` symbols allowed in CSV.
 static inline void skipWhitespacesAndTabs(ReadBuffer & buf)
 {
-    while (!buf.eof()
-            && (*buf.position() == ' '
-                || *buf.position() == '\t'))
+    while (!buf.eof() && (*buf.position() == ' ' || *buf.position() == '\t'))
         ++buf.position();
 }
 
@@ -150,7 +158,7 @@ bool CSVRowInputStream::read(MutableColumns & columns)
 
 String CSVRowInputStream::getDiagnosticInfo()
 {
-    if (istr.eof())        /// Buffer has gone, cannot extract information about what has been parsed.
+    if (istr.eof()) /// Buffer has gone, cannot extract information about what has been parsed.
         return {};
 
     WriteBufferFromOwnString out;
@@ -204,8 +212,11 @@ String CSVRowInputStream::getDiagnosticInfo()
 }
 
 
-bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
-    WriteBuffer & out, size_t max_length_of_column_name, size_t max_length_of_data_type_name)
+bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(
+    MutableColumns & columns,
+    WriteBuffer & out,
+    size_t max_length_of_column_name,
+    size_t max_length_of_data_type_name)
 {
     size_t size = data_types.size();
     for (size_t i = 0; i < size; ++i)
@@ -216,9 +227,16 @@ bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
             return false;
         }
 
-        out << "Column " << i << ", " << std::string((i < 10 ? 2 : i < 100 ? 1 : 0), ' ')
-            << "name: " << header.safeGetByPosition(i).name << ", " << std::string(max_length_of_column_name - header.safeGetByPosition(i).name.size(), ' ')
-            << "type: " << data_types[i]->getName() << ", " << std::string(max_length_of_data_type_name - data_types[i]->getName().size(), ' ');
+        out << "Column " << i << ", "
+            << std::string(
+                   (i < 10        ? 2
+                        : i < 100 ? 1
+                                  : 0),
+                   ' ')
+            << "name: " << header.safeGetByPosition(i).name << ", "
+            << std::string(max_length_of_column_name - header.safeGetByPosition(i).name.size(), ' ')
+            << "type: " << data_types[i]->getName() << ", "
+            << std::string(max_length_of_data_type_name - data_types[i]->getName().size(), ' ');
 
         BufferBase::Position prev_position = istr.position();
         BufferBase::Position curr_position = istr.position();
@@ -258,7 +276,8 @@ bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
         if (exception)
         {
             if (data_types[i]->getName() == "DateTime")
-                out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
+                out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 "
+                       "digits) format.\n";
             else if (data_types[i]->getName() == "Date")
                 out << "ERROR: Date must be in YYYY-MM-DD format.\n";
             else
@@ -277,7 +296,8 @@ bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
                 out << "\n";
 
                 if (data_types[i]->getName() == "DateTime")
-                    out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
+                    out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 "
+                           "digits) format.\n";
                 else if (data_types[i]->getName() == "Date")
                     out << "ERROR: Date must be in YYYY-MM-DD format.\n";
 
@@ -304,8 +324,9 @@ bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
                 out << "ERROR: There is no line feed. ";
                 verbosePrintString(istr.position(), istr.position() + 1, out);
                 out << " found instead.\n"
-                    " It's like your file has more columns than expected.\n"
-                    "And if your file have right number of columns, maybe it have unquoted string value with comma.\n";
+                       " It's like your file has more columns than expected.\n"
+                       "And if your file have right number of columns, maybe it have unquoted string value with "
+                       "comma.\n";
 
                 return false;
             }
@@ -322,9 +343,10 @@ bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(MutableColumns & columns,
             {
                 if (*istr.position() == '\n' || *istr.position() == '\r')
                 {
-                    out << "ERROR: Line feed found where delimiter (" << delimiter << ") is expected."
-                        " It's like your file has less columns than expected.\n"
-                        "And if your file have right number of columns, maybe it have unescaped quotes in values.\n";
+                    out << "ERROR: Line feed found where delimiter (" << delimiter
+                        << ") is expected."
+                           " It's like your file has less columns than expected.\n"
+                           "And if your file have right number of columns, maybe it have unescaped quotes in values.\n";
                 }
                 else
                 {
@@ -357,4 +379,4 @@ void CSVRowInputStream::updateDiagnosticInfo()
     pos_of_current_row = istr.position();
 }
 
-}
+} // namespace DB

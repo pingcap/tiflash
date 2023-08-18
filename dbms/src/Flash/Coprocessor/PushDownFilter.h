@@ -29,9 +29,13 @@ struct PushDownFilter
 
     PushDownFilter() = default;
 
+<<<<<<< HEAD:dbms/src/Flash/Coprocessor/PushDownFilter.h
     PushDownFilter(
         const String & executor_id_,
         const std::vector<const tipb::Expr *> & conditions_);
+=======
+    FilterConditions(const String & executor_id_, const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions_);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Coprocessor/FilterConditions.h
 
     bool hasValue() const { return !conditions.empty(); }
 

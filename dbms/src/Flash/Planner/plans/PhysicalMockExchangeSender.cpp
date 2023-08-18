@@ -37,11 +37,19 @@ PhysicalPlanNodePtr PhysicalMockExchangeSender::build(
     return physical_mock_exchange_sender;
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalMockExchangeSender.cpp
 void PhysicalMockExchangeSender::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+=======
+void PhysicalMockExchangeSender::buildBlockInputStreamImpl(
+    DAGPipeline & pipeline,
+    Context & context,
+    size_t max_streams)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalMockExchangeSender.cpp
 {
     child->transform(pipeline, context, max_streams);
 
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier()); });
+    pipeline.transform(
+        [&](auto & stream) { stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier()); });
 }
 
 void PhysicalMockExchangeSender::finalize(const Names & parent_require)

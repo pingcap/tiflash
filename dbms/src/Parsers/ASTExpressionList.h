@@ -32,4 +32,4 @@ public:
     void formatImplMultiline(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const;
 };
 
-}
+} // namespace DB

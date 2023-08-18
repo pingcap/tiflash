@@ -100,7 +100,9 @@ public:
         auto tmp_col_float32 = ColumnFloat32::create();
         auto tmp_col_float64 = ColumnFloat64::create();
 
-        std::uniform_int_distribution<int64_t> dist64(std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max());
+        std::uniform_int_distribution<int64_t> dist64(
+            std::numeric_limits<int64_t>::min(),
+            std::numeric_limits<int64_t>::max());
 
         mt19937 mt;
         uniform_int_distribution<cpp_int> dist256(-(cpp_int(1) << 256), cpp_int(1) << 256);
@@ -140,13 +142,15 @@ public:
             tmp_col_dec_60_0->insert(DecimalField(Decimal(static_cast<Int256>(dist256(mt) % mod_prec_60)), 0));
             tmp_col_dec_60_5->insert(DecimalField(Decimal(static_cast<Int256>(dist256(mt) % mod_prec_60)), 5));
             tmp_col_date->insert(Field(static_cast<UInt64>(MyDate(2020, 10, 10).toPackedUInt())));
-            tmp_col_datetime_fsp5->insert(Field(static_cast<UInt64>(MyDateTime(2020, 1, 10, 0, 0, 0, 0).toPackedUInt())));
+            tmp_col_datetime_fsp5->insert(
+                Field(static_cast<UInt64>(MyDateTime(2020, 1, 10, 0, 0, 0, 0).toPackedUInt())));
         }
         from_col_int8 = ColumnWithTypeAndName(std::move(tmp_col_int8), from_type_int8, "from_col_int8");
         from_col_int16 = ColumnWithTypeAndName(std::move(tmp_col_int16), from_type_int16, "from_col_int16");
         from_col_int32 = ColumnWithTypeAndName(std::move(tmp_col_int32), from_type_int32, "from_col_int32");
         from_col_int64 = ColumnWithTypeAndName(std::move(tmp_col_int64), from_type_int64, "from_col_int64");
-        from_col_int64_small = ColumnWithTypeAndName(std::move(tmp_col_int64_small), from_type_int64_small, "from_col_int64_small");
+        from_col_int64_small
+            = ColumnWithTypeAndName(std::move(tmp_col_int64_small), from_type_int64_small, "from_col_int64_small");
         from_col_uint8 = ColumnWithTypeAndName(std::move(tmp_col_uint8), from_type_uint8, "from_col_uint8");
         from_col_uint16 = ColumnWithTypeAndName(std::move(tmp_col_uint16), from_type_uint16, "from_col_uint16");
         from_col_uint32 = ColumnWithTypeAndName(std::move(tmp_col_uint32), from_type_uint32, "from_col_uint32");
@@ -155,7 +159,10 @@ public:
         from_col_float64 = ColumnWithTypeAndName(std::move(tmp_col_float64), from_type_float64, "from_col_float64");
 
         from_col_dec_2_1 = ColumnWithTypeAndName(std::move(tmp_col_dec_2_1), from_type_dec_2_1, "from_col_dec_2_1");
-        from_col_dec_2_1_small = ColumnWithTypeAndName(std::move(tmp_col_dec_2_1_small), from_type_dec_2_1_small, "from_col_dec_2_1_small");
+        from_col_dec_2_1_small = ColumnWithTypeAndName(
+            std::move(tmp_col_dec_2_1_small),
+            from_type_dec_2_1_small,
+            "from_col_dec_2_1_small");
         from_col_dec_3_0 = ColumnWithTypeAndName(std::move(tmp_col_dec_3_0), from_type_dec_3_0, "from_col_dec_3_0");
         from_col_dec_10_3 = ColumnWithTypeAndName(std::move(tmp_col_dec_10_3), from_type_dec_10_3, "from_col_dec_10_3");
         from_col_dec_12_3 = ColumnWithTypeAndName(std::move(tmp_col_dec_12_3), from_type_dec_12_3, "from_col_dec_12_3");
@@ -167,7 +174,10 @@ public:
         from_col_dec_60_0 = ColumnWithTypeAndName(std::move(tmp_col_dec_60_0), from_type_dec_60_0, "from_col_dec_60_0");
         from_col_dec_60_5 = ColumnWithTypeAndName(std::move(tmp_col_dec_60_5), from_type_dec_60_5, "from_col_dec_60_5");
         from_col_date = ColumnWithTypeAndName(std::move(tmp_col_date), from_type_date, "from_col_date");
-        from_col_datetime_fsp5 = ColumnWithTypeAndName(std::move(tmp_col_datetime_fsp5), from_type_datetime_fsp5, "from_col_datetime_fsp5");
+        from_col_datetime_fsp5 = ColumnWithTypeAndName(
+            std::move(tmp_col_datetime_fsp5),
+            from_type_datetime_fsp5,
+            "from_col_datetime_fsp5");
 
         DataTypePtr dest_type_dec_2_1 = createDecimal(2, 1);
         DataTypePtr dest_type_dec_2_2 = createDecimal(2, 2);
@@ -188,24 +198,78 @@ public:
         DataTypePtr dest_type_dec_60_4 = createDecimal(60, 4);
         DataTypePtr dest_type_dec_60_30 = createDecimal(60, 30);
 
-        dest_col_dec_2_1 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_2_1->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_2_2 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_2_2->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_15_4 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_15_4->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_25_4 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_25_4->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_31_30 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_31_30->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_60_5 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_60_5->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_65_30 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_65_30->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_8_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_8_0->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_10_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_10_0->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_10_5 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_10_5->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_10_8 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_10_8->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_20_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_20_0->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_30_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_30_0->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_40_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_40_0->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_40_5 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_40_5->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_60_0 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_60_0->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_60_4 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_60_4->getName()), std::make_shared<DataTypeString>(), "");
-        dest_col_dec_60_30 = ColumnWithTypeAndName(DataTypeString().createColumnConst(row_num, dest_type_dec_60_30->getName()), std::make_shared<DataTypeString>(), "");
+        dest_col_dec_2_1 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_2_1->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_2_2 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_2_2->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_15_4 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_15_4->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_25_4 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_25_4->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_31_30 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_31_30->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_60_5 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_60_5->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_65_30 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_65_30->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_8_0 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_8_0->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_10_0 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_10_0->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_10_5 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_10_5->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_10_8 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_10_8->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_20_0 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_20_0->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_30_0 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_30_0->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_40_0 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_40_0->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_40_5 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_40_5->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_60_0 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_60_0->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_60_4 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_60_4->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
+        dest_col_dec_60_30 = ColumnWithTypeAndName(
+            DataTypeString().createColumnConst(row_num, dest_type_dec_60_30->getName()),
+            std::make_shared<DataTypeString>(),
+            "");
 
         // For test performance of casting Int64/Int128 to Int256.
         from_int64_vec = std::vector<Int64>(row_num);

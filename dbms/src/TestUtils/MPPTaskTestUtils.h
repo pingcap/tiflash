@@ -23,15 +23,21 @@
 
 namespace DB::tests
 {
+<<<<<<< HEAD
 
 DAGProperties getDAGPropertiesForTest(int server_num);
+=======
+DAGProperties getDAGPropertiesForTest(
+    int server_num,
+    int local_query_id = -1,
+    int tidb_server_id = -1,
+    int query_ts = -1,
+    int gather_id = -1);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
-    Int64 nextTs()
-    {
-        return ++current_ts;
-    }
+    Int64 nextTs() { return ++current_ts; }
 
 private:
     std::atomic<UInt64> current_ts = 0;
@@ -49,10 +55,14 @@ public:
         return "0.0.0.0:" + std::to_string(port++);
     }
 
+<<<<<<< HEAD
     void reset()
     {
         port = 3931;
     }
+=======
+    void reset() { port = 4931; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 private:
     const Int64 port_upper_bound = 65536;
@@ -118,6 +128,7 @@ protected:
         }                                                                      \
     } while (0)
 
+<<<<<<< HEAD
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
     do                                                                                 \
     {                                                                                  \
@@ -134,6 +145,22 @@ protected:
             builder,                                                                   \
             properties,                                                                \
             expect_cols);                                                              \
+=======
+#define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols)  \
+    do                                                                                  \
+    {                                                                                   \
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());              \
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)                   \
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();                           \
+        auto tasks = (builder).buildMPPTasks(context, properties);                      \
+        size_t task_size = tasks.size();                                                \
+        ASSERT_EQ(task_size, (expected_strings).size());                                \
+        for (size_t i = 0; i < task_size; ++i)                                          \
+        {                                                                               \
+            ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);       \
+        }                                                                               \
+        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM((builder), (properties), (expected_cols)); \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     } while (0)
 
 } // namespace DB::tests

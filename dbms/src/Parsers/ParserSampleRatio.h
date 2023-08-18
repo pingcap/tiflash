@@ -30,4 +30,4 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
 };
 
-}
+} // namespace DB

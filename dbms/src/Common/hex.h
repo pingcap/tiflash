@@ -123,14 +123,11 @@ inline char unhex(char c)
 
 inline char unhex2(const char * data)
 {
-    return static_cast<UInt8>(unhex(data[0])) * 0x10
-        + static_cast<UInt8>(unhex(data[1]));
+    return static_cast<UInt8>(unhex(data[0])) * 0x10 + static_cast<UInt8>(unhex(data[1]));
 }
 
 inline UInt16 unhex4(const char * data)
 {
-    return static_cast<UInt16>(unhex(data[0])) * 0x1000
-        + static_cast<UInt16>(unhex(data[1])) * 0x100
-        + static_cast<UInt16>(unhex(data[2])) * 0x10
-        + static_cast<UInt16>(unhex(data[3]));
+    return static_cast<UInt16>(unhex(data[0])) * 0x1000 + static_cast<UInt16>(unhex(data[1])) * 0x100
+        + static_cast<UInt16>(unhex(data[2])) * 0x10 + static_cast<UInt16>(unhex(data[3]));
 }

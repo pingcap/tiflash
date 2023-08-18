@@ -20,11 +20,18 @@ namespace DB
 class CollectProcInfoBackgroundTask
 {
 public:
+<<<<<<< HEAD
     CollectProcInfoBackgroundTask() = default;
     ~CollectProcInfoBackgroundTask()
     {
         end();
     }
+=======
+    CollectProcInfoBackgroundTask() { begin(); }
+    ~CollectProcInfoBackgroundTask() { end(); }
+
+private:
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void begin();
 
     void end();

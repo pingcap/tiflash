@@ -132,7 +132,11 @@ void JoinBinder::fillJoinKeyAndFieldType(
     }
 }
 
-bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool JoinBinder::toTiPBExecutor(
+    tipb::Executor * tipb_executor,
+    int32_t collator_id,
+    const MPPInfo & mpp_info,
+    const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeJoin);
     tipb_executor->set_executor_id(name);
@@ -145,8 +149,18 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
 
     for (const auto & key : join_cols)
     {
-        fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
-        fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
+        fillJoinKeyAndFieldType(
+            key,
+            children[0]->output_schema,
+            join->add_left_join_keys(),
+            join->add_probe_types(),
+            collator_id);
+        fillJoinKeyAndFieldType(
+            key,
+            children[1]->output_schema,
+            join->add_right_join_keys(),
+            join->add_build_types(),
+            collator_id);
     }
 
     for (const auto & expr : left_conds)
@@ -162,7 +176,10 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     }
 
     DAGSchema merged_children_schema{children[0]->output_schema};
-    merged_children_schema.insert(merged_children_schema.end(), children[1]->output_schema.begin(), children[1]->output_schema.end());
+    merged_children_schema.insert(
+        merged_children_schema.end(),
+        children[1]->output_schema.begin(),
+        children[1]->output_schema.end());
 
     for (const auto & expr : other_conds)
     {
@@ -176,13 +193,32 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
         astToPB(merged_children_schema, expr, cond, collator_id, context);
     }
 
+<<<<<<< HEAD
+=======
+    // add runtime filter
+    for (const auto & rf : rf_list)
+    {
+        rf->toPB(
+            children[1]->output_schema,
+            children[0]->output_schema,
+            collator_id,
+            context,
+            join->add_runtime_filter_list());
+    }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     auto * left_child_executor = join->add_children();
     children[0]->toTiPBExecutor(left_child_executor, collator_id, mpp_info, context);
     auto * right_child_executor = join->add_children();
     return children[1]->toTiPBExecutor(right_child_executor, collator_id, mpp_info, context);
 }
 
-void JoinBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+void JoinBinder::toMPPSubPlan(
+    size_t & executor_index,
+    const DAGProperties & properties,
+    std::unordered_map<
+        String,
+        std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
 {
     if (properties.use_broadcast_join)
     {
@@ -218,6 +254,7 @@ void JoinBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & pro
         push_back_partition_key(right_partition_keys, children[1]->output_schema, key);
     }
 
+<<<<<<< HEAD
     std::shared_ptr<ExchangeSenderBinder> left_exchange_sender
         = std::make_shared<ExchangeSenderBinder>(executor_index, children[0]->output_schema, tipb::Hash, left_partition_keys);
     left_exchange_sender->children.push_back(children[0]);
@@ -229,6 +266,31 @@ void JoinBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & pro
         = std::make_shared<ExchangeReceiverBinder>(executor_index, children[0]->output_schema);
     std::shared_ptr<ExchangeReceiverBinder> right_exchange_receiver
         = std::make_shared<ExchangeReceiverBinder>(executor_index, children[1]->output_schema);
+=======
+    std::shared_ptr<ExchangeSenderBinder> left_exchange_sender = std::make_shared<ExchangeSenderBinder>(
+        executor_index,
+        children[0]->output_schema,
+        tipb::Hash,
+        left_partition_keys,
+        fine_grained_shuffle_stream_count);
+    left_exchange_sender->children.push_back(children[0]);
+    std::shared_ptr<ExchangeSenderBinder> right_exchange_sender = std::make_shared<ExchangeSenderBinder>(
+        executor_index,
+        children[1]->output_schema,
+        tipb::Hash,
+        right_partition_keys,
+        fine_grained_shuffle_stream_count);
+    right_exchange_sender->children.push_back(children[1]);
+
+    std::shared_ptr<ExchangeReceiverBinder> left_exchange_receiver = std::make_shared<ExchangeReceiverBinder>(
+        executor_index,
+        children[0]->output_schema,
+        fine_grained_shuffle_stream_count);
+    std::shared_ptr<ExchangeReceiverBinder> right_exchange_receiver = std::make_shared<ExchangeReceiverBinder>(
+        executor_index,
+        children[1]->output_schema,
+        fine_grained_shuffle_stream_count);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     children[0] = left_exchange_receiver;
     children[1] = right_exchange_receiver;
 
@@ -276,6 +338,7 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
 }
 
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
+<<<<<<< HEAD
 ExecutorBinderPtr compileJoin(size_t & executor_index,
                               ExecutorBinderPtr left,
                               ExecutorBinderPtr right,
@@ -285,13 +348,43 @@ ExecutorBinderPtr compileJoin(size_t & executor_index,
                               const ASTs & right_conds,
                               const ASTs & other_conds,
                               const ASTs & other_eq_conds_from_in)
+=======
+ExecutorBinderPtr compileJoin(
+    size_t & executor_index,
+    ExecutorBinderPtr left,
+    ExecutorBinderPtr right,
+    tipb::JoinType tp,
+    const ASTs & join_cols,
+    const ASTs & left_conds,
+    const ASTs & right_conds,
+    const ASTs & other_conds,
+    const ASTs & other_eq_conds_from_in,
+    uint64_t fine_grained_shuffle_stream_count,
+    bool is_null_aware_semi_join,
+    int64_t inner_index)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     DAGSchema output_schema;
 
     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
+<<<<<<< HEAD
     auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
+=======
+    auto join = std::make_shared<mock::JoinBinder>(
+        executor_index,
+        output_schema,
+        tp,
+        join_cols,
+        left_conds,
+        right_conds,
+        other_conds,
+        other_eq_conds_from_in,
+        fine_grained_shuffle_stream_count,
+        is_null_aware_semi_join,
+        inner_index);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     join->children.push_back(left);
     join->children.push_back(right);
 

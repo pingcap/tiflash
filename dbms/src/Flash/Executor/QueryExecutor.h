@@ -50,8 +50,15 @@ using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
 class QueryExecutor
 {
 public:
+<<<<<<< HEAD
     explicit QueryExecutor(const ProcessListEntryPtr & process_list_entry_)
         : process_list_entry(process_list_entry_)
+=======
+    QueryExecutor(const MemoryTrackerPtr & memory_tracker_, Context & context_, const String & req_id)
+        : memory_tracker(memory_tracker_)
+        , context(context_)
+        , log(Logger::get(req_id))
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {}
 
     virtual ~QueryExecutor() = default;

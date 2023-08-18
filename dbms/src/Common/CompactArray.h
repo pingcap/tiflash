@@ -103,8 +103,7 @@ class CompactArray<BucketIndex, content_width, bucket_count>::Reader final
 public:
     explicit Reader(ReadBuffer & in_)
         : in(in_)
-    {
-    }
+    {}
 
     DISALLOW_COPY(Reader);
 
@@ -225,10 +224,7 @@ public:
 private:
     Locus() = default;
 
-    explicit Locus(BucketIndex bucket_index)
-    {
-        init(bucket_index);
-    }
+    explicit Locus(BucketIndex bucket_index) { init(bucket_index); }
 
     void ALWAYS_INLINE init(BucketIndex bucket_index)
     {

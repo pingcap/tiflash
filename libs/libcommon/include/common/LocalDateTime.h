@@ -14,11 +14,12 @@
 
 #pragma once
 
-#include <string>
-#include <iomanip>
-#include <exception>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
+
+#include <exception>
+#include <iomanip>
+#include <string>
 
 
 /** Stores calendar date and time in broken-down form.
@@ -54,7 +55,7 @@ private:
         m_minute = components.time.minute;
         m_second = components.time.second;
 
-        (void)pad;  /// Suppress unused private field warning.
+        (void)pad; /// Suppress unused private field warning.
     }
 
     void init(const char * s, size_t length)
@@ -74,16 +75,22 @@ private:
     }
 
 public:
-    explicit LocalDateTime(time_t time, const DateLUTImpl & time_zone = DateLUT::instance())
-    {
-        init(time, time_zone);
-    }
+    explicit LocalDateTime(time_t time, const DateLUTImpl & time_zone = DateLUT::instance()) { init(time, time_zone); }
 
-    LocalDateTime(unsigned short year_, unsigned char month_, unsigned char day_,
-        unsigned char hour_, unsigned char minute_, unsigned char second_)
-        : m_year(year_), m_month(month_), m_day(day_), m_hour(hour_), m_minute(minute_), m_second(second_)
-    {
-    }
+    LocalDateTime(
+        unsigned short year_,
+        unsigned char month_,
+        unsigned char day_,
+        unsigned char hour_,
+        unsigned char minute_,
+        unsigned char second_)
+        : m_year(year_)
+        , m_month(month_)
+        , m_day(day_)
+        , m_hour(hour_)
+        , m_minute(minute_)
+        , m_second(second_)
+    {}
 
     explicit LocalDateTime(const std::string & s)
     {
@@ -93,17 +100,19 @@ public:
         init(s.data(), s.size());
     }
 
-    LocalDateTime() : m_year(0), m_month(0), m_day(0), m_hour(0), m_minute(0), m_second(0)
-    {
-    }
+    LocalDateTime()
+        : m_year(0)
+        , m_month(0)
+        , m_day(0)
+        , m_hour(0)
+        , m_minute(0)
+        , m_second(0)
+    {}
 
-    LocalDateTime(const char * data, size_t length)
-    {
-        init(data, length);
-    }
+    LocalDateTime(const char * data, size_t length) { init(data, length); }
 
     LocalDateTime(const LocalDateTime &) noexcept = default;
-    LocalDateTime & operator= (const LocalDateTime &) noexcept = default;
+    LocalDateTime & operator=(const LocalDateTime &) noexcept = default;
 
     unsigned short year() const { return m_year; }
     unsigned char month() const { return m_month; }
@@ -145,35 +154,17 @@ public:
         return s;
     }
 
-    bool operator< (const LocalDateTime & other) const
-    {
-        return 0 > memcmp(this, &other, sizeof(*this));
-    }
+    bool operator<(const LocalDateTime & other) const { return 0 > memcmp(this, &other, sizeof(*this)); }
 
-    bool operator> (const LocalDateTime & other) const
-    {
-        return 0 < memcmp(this, &other, sizeof(*this));
-    }
+    bool operator>(const LocalDateTime & other) const { return 0 < memcmp(this, &other, sizeof(*this)); }
 
-    bool operator<= (const LocalDateTime & other) const
-    {
-        return 0 >= memcmp(this, &other, sizeof(*this));
-    }
+    bool operator<=(const LocalDateTime & other) const { return 0 >= memcmp(this, &other, sizeof(*this)); }
 
-    bool operator>= (const LocalDateTime & other) const
-    {
-        return 0 <= memcmp(this, &other, sizeof(*this));
-    }
+    bool operator>=(const LocalDateTime & other) const { return 0 <= memcmp(this, &other, sizeof(*this)); }
 
-    bool operator== (const LocalDateTime & other) const
-    {
-        return 0 == memcmp(this, &other, sizeof(*this));
-    }
+    bool operator==(const LocalDateTime & other) const { return 0 == memcmp(this, &other, sizeof(*this)); }
 
-    bool operator!= (const LocalDateTime & other) const
-    {
-        return !(*this == other);
-    }
+    bool operator!=(const LocalDateTime & other) const { return !(*this == other); }
 };
 
 static_assert(sizeof(LocalDateTime) == 8);

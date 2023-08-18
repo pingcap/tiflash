@@ -53,10 +53,7 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
 {
     for (const auto & schema_column : schema)
     {
-        RUNTIME_CHECK(
-            sample_block.has(schema_column.name),
-            sample_block.dumpJsonStructure(),
-            schema_column.name);
+        RUNTIME_CHECK(sample_block.has(schema_column.name), sample_block.dumpJsonStructure(), schema_column.name);
 
         const auto & type_in_sample_block = sample_block.getByName(schema_column.name).type;
         const auto & type_in_schema = schema_column.type;
@@ -72,10 +69,7 @@ void checkSampleBlockContainsParentRequire(const Block & sample_block, const Nam
 {
     for (const auto & parent_require_column : parent_require)
     {
-        RUNTIME_CHECK(
-            sample_block.has(parent_require_column),
-            sample_block.dumpJsonStructure(),
-            parent_require_column);
+        RUNTIME_CHECK(sample_block.has(parent_require_column), sample_block.dumpJsonStructure(), parent_require_column);
     }
 }
 } // namespace DB::FinalizeHelper

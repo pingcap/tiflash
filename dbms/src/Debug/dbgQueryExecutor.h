@@ -20,10 +20,28 @@ namespace DB
 using MockServerConfig = tests::MockServerConfig;
 using TiFlashTestEnv = tests::TiFlashTestEnv;
 
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
+BlockInputStreamPtr executeQuery(
+    Context & context,
+    RegionID region_id,
+    const DAGProperties & properties,
+    QueryTasks & query_tasks,
+    MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
+<<<<<<< HEAD
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+=======
+BlockInputStreamPtr executeNonMPPQuery(
+    Context & context,
+    RegionID region_id,
+    const DAGProperties & properties,
+    QueryTasks & query_tasks,
+    MakeResOutputStream & func_wrap_output_stream);
+BlockInputStreamPtr executeMPPQueryWithMultipleContext(
+    const DAGProperties & properties,
+    QueryTasks & query_tasks,
+    std::unordered_map<size_t, MockServerConfig> & server_config_map);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 tipb::SelectResponse executeDAGRequest(
     Context & context,
@@ -34,5 +52,9 @@ tipb::SelectResponse executeDAGRequest(
     Timestamp start_ts,
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 
-bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
+bool runAndCompareDagReq(
+    const coprocessor::Request & req,
+    const coprocessor::Response & res,
+    Context & context,
+    String & unequal_msg);
 } // namespace DB

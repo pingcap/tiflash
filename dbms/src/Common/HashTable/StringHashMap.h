@@ -32,7 +32,8 @@ struct StringHashMapCell : public HashMapCell<Key, TMapped, StringHashTableHash,
 };
 
 template <typename TMapped>
-struct StringHashMapCell<StringKey16, TMapped> : public HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell<StringKey16, TMapped>
+    : public HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>
 {
     using Base = HashMapCell<StringKey16, TMapped, StringHashTableHash, HashTableNoState>;
     using value_type = typename Base::value_type;
@@ -52,7 +53,8 @@ struct StringHashMapCell<StringKey16, TMapped> : public HashMapCell<StringKey16,
 };
 
 template <typename TMapped>
-struct StringHashMapCell<StringKey24, TMapped> : public HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell<StringKey24, TMapped>
+    : public HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>
 {
     using Base = HashMapCell<StringKey24, TMapped, StringHashTableHash, HashTableNoState>;
     using value_type = typename Base::value_type;
@@ -62,10 +64,7 @@ struct StringHashMapCell<StringKey24, TMapped> : public HashMapCell<StringKey24,
 
     // Zero means unoccupied cells in hash table. Use key with last word = 0 as
     // zero keys, because such keys are unrepresentable (no way to encode length).
-    static bool isZero(const StringKey24 & key, const HashTableNoState &)
-    {
-        return key.c == 0;
-    }
+    static bool isZero(const StringKey24 & key, const HashTableNoState &) { return key.c == 0; }
     void setZero() { this->value.first.c = 0; }
 
     // external
@@ -75,7 +74,8 @@ struct StringHashMapCell<StringKey24, TMapped> : public HashMapCell<StringKey24,
 };
 
 template <typename TMapped>
-struct StringHashMapCell<StringRef, TMapped> : public HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>
+struct StringHashMapCell<StringRef, TMapped>
+    : public HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>
 {
     using Base = HashMapCellWithSavedHash<StringRef, TMapped, StringHashTableHash, HashTableNoState>;
     using value_type = typename Base::value_type;
@@ -91,10 +91,30 @@ template <typename TMapped, typename Allocator>
 struct StringHashMapSubMaps
 {
     using T0 = StringHashTableEmpty<StringHashMapCell<StringRef, TMapped>>;
-    using T1 = HashMapTable<StringKey8, StringHashMapCell<StringKey8, TMapped>, StringHashTableHash, StringHashTableGrower<>, Allocator>;
-    using T2 = HashMapTable<StringKey16, StringHashMapCell<StringKey16, TMapped>, StringHashTableHash, StringHashTableGrower<>, Allocator>;
-    using T3 = HashMapTable<StringKey24, StringHashMapCell<StringKey24, TMapped>, StringHashTableHash, StringHashTableGrower<>, Allocator>;
-    using Ts = HashMapTable<StringRef, StringHashMapCell<StringRef, TMapped>, StringHashTableHash, StringHashTableGrower<>, Allocator>;
+    using T1 = HashMapTable<
+        StringKey8,
+        StringHashMapCell<StringKey8, TMapped>,
+        StringHashTableHash,
+        StringHashTableGrower<>,
+        Allocator>;
+    using T2 = HashMapTable<
+        StringKey16,
+        StringHashMapCell<StringKey16, TMapped>,
+        StringHashTableHash,
+        StringHashTableGrower<>,
+        Allocator>;
+    using T3 = HashMapTable<
+        StringKey24,
+        StringHashMapCell<StringKey24, TMapped>,
+        StringHashTableHash,
+        StringHashTableGrower<>,
+        Allocator>;
+    using Ts = HashMapTable<
+        StringRef,
+        StringHashMapCell<StringRef, TMapped>,
+        StringHashTableHash,
+        StringHashTableGrower<>,
+        Allocator>;
 };
 
 template <typename TMapped, typename Allocator = HashTableAllocator>

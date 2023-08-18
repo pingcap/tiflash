@@ -40,38 +40,23 @@ try
     // column, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({1, 0}),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(2, 1),
-            createColumn<Nullable<UInt8>>({1, 0})));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(2, 1), createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
         createConstColumn<UInt8>(1, 1),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(1, 1),
-            createConstColumn<Nullable<UInt8>>(1, 1)));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 1), createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({{}, 0}),
-        executeFunction(
-            func_name,
-            createOnlyNullColumnConst(2),
-            createColumn<Nullable<UInt8>>({1, 0})));
+        executeFunction(func_name, createOnlyNullColumnConst(2), createColumn<Nullable<UInt8>>({1, 0})));
     // issue 6127
     ASSERT_COLUMN_EQ(
         createColumn<UInt8>({0, 1, 0, 0}),
-        executeFunction(
-            func_name,
-            createColumn<Int64>({0, 123, 0, 41}),
-            createColumn<UInt8>({0, 11, 221, 0})));
+        executeFunction(func_name, createColumn<Int64>({0, 123, 0, 41}), createColumn<UInt8>({0, 11, 221, 0})));
     // issue 6127, position of UInt8 column may affect the result
     ASSERT_COLUMN_EQ(
         createColumn<UInt8>({0, 1, 0, 0}),
-        executeFunction(
-            func_name,
-            createColumn<UInt8>({0, 123, 0, 41}),
-            createColumn<Int64>({0, 11, 221, 0})));
+        executeFunction(func_name, createColumn<UInt8>({0, 123, 0, 41}), createColumn<Int64>({0, 11, 221, 0})));
 }
 CATCH
 
@@ -90,31 +75,19 @@ try
     // column, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({1, 1}),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(2, 1),
-            createColumn<Nullable<UInt8>>({1, 0})));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(2, 1), createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
         createConstColumn<UInt8>(1, 1),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(1, 1),
-            createConstColumn<Nullable<UInt8>>(1, 0)));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 1), createConstColumn<Nullable<UInt8>>(1, 0)));
     // only null
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({1, {}}),
-        executeFunction(
-            func_name,
-            createOnlyNullColumnConst(2),
-            createColumn<Nullable<UInt8>>({1, 0})));
+        executeFunction(func_name, createOnlyNullColumnConst(2), createColumn<Nullable<UInt8>>({1, 0})));
     // issue 5849
     ASSERT_COLUMN_EQ(
         createColumn<UInt8>({0, 1, 1, 1}),
-        executeFunction(
-            func_name,
-            createColumn<UInt8>({0, 123, 0, 41}),
-            createColumn<Int64>({0, 11, 221, 0})));
+        executeFunction(func_name, createColumn<UInt8>({0, 123, 0, 41}), createColumn<Int64>({0, 11, 221, 0})));
 }
 CATCH
 
@@ -133,24 +106,15 @@ try
     // column, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({0, 1}),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(2, 1),
-            createColumn<Nullable<UInt8>>({1, 0})));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(2, 1), createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
         createConstColumn<UInt8>(1, 0),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(1, 1),
-            createConstColumn<Nullable<UInt8>>(1, 1)));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 1), createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
     ASSERT_COLUMN_EQ(
         createOnlyNullColumnConst(2),
-        executeFunction(
-            func_name,
-            createOnlyNullColumnConst(2),
-            createColumn<Nullable<UInt8>>({1, 0})));
+        executeFunction(func_name, createOnlyNullColumnConst(2), createColumn<Nullable<UInt8>>({1, 0})));
 }
 CATCH
 
@@ -162,21 +126,13 @@ try
     // column
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({1, 0, {}}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<UInt8>>({0, 1, {}})));
+        executeFunction(func_name, createColumn<Nullable<UInt8>>({0, 1, {}})));
     // const
     ASSERT_COLUMN_EQ(
         createConstColumn<UInt8>(1, 0),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<UInt8>>(1, 1)));
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(1),
-        executeFunction(
-            func_name,
-            createOnlyNullColumnConst(1)));
+    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(1), executeFunction(func_name, createOnlyNullColumnConst(1)));
 }
 CATCH
 

@@ -41,7 +41,12 @@ void FunctionComparison<EqualsOp, NameEquals>::executeTupleImpl(
     const ColumnsWithTypeAndName & y,
     size_t tuple_size) const
 {
-    return executeTupleEqualityImpl<FunctionComparison<EqualsOp, NameEquals>, FunctionAnd>(block, result, x, y, tuple_size);
+    return executeTupleEqualityImpl<FunctionComparison<EqualsOp, NameEquals>, FunctionAnd>(
+        block,
+        result,
+        x,
+        y,
+        tuple_size);
 }
 
 template <>
@@ -52,7 +57,12 @@ void FunctionComparison<NotEqualsOp, NameNotEquals>::executeTupleImpl(
     const ColumnsWithTypeAndName & y,
     size_t tuple_size) const
 {
-    return executeTupleEqualityImpl<FunctionComparison<NotEqualsOp, NameNotEquals>, FunctionOr>(block, result, x, y, tuple_size);
+    return executeTupleEqualityImpl<FunctionComparison<NotEqualsOp, NameNotEquals>, FunctionOr>(
+        block,
+        result,
+        x,
+        y,
+        tuple_size);
 }
 
 template <>
@@ -63,9 +73,12 @@ void FunctionComparison<LessOp, NameLess>::executeTupleImpl(
     const ColumnsWithTypeAndName & y,
     size_t tuple_size) const
 {
-    return executeTupleLessGreaterImpl<
-        FunctionComparison<LessOp, NameLess>,
-        FunctionComparison<LessOp, NameLess>>(block, result, x, y, tuple_size);
+    return executeTupleLessGreaterImpl<FunctionComparison<LessOp, NameLess>, FunctionComparison<LessOp, NameLess>>(
+        block,
+        result,
+        x,
+        y,
+        tuple_size);
 }
 
 template <>

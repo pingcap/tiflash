@@ -99,8 +99,12 @@ ProcessList::EntryPtr ProcessList::insert(
         {
             auto max_wait_ms = settings.queue_max_wait_ms.totalMilliseconds();
 
-            if (!max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(max_wait_ms), [&] { return cur_size < max_size; }))
-                throw Exception("Too many simultaneous queries. Maximum: " + toString(max_size), ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
+            if (!max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(max_wait_ms), [&] {
+                    return cur_size < max_size;
+                }))
+                throw Exception(
+                    "Too many simultaneous queries. Maximum: " + toString(max_size),
+                    ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
         }
 
         /** Why we use current user?
@@ -120,17 +124,19 @@ ProcessList::EntryPtr ProcessList::insert(
             {
                 if (!is_unlimited_query && settings.max_concurrent_queries_for_user
                     && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user)
-                    throw Exception("Too many simultaneous queries for user " + client_info.current_user
-                                        + ". Current: " + toString(user_process_list->second.queries.size())
-                                        + ", maximum: " + settings.max_concurrent_queries_for_user.toString(),
-                                    ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
+                    throw Exception(
+                        "Too many simultaneous queries for user " + client_info.current_user
+                            + ". Current: " + toString(user_process_list->second.queries.size())
+                            + ", maximum: " + settings.max_concurrent_queries_for_user.toString(),
+                        ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
 
                 auto range = user_process_list->second.queries.equal_range(client_info.current_query_id);
                 if (range.first != range.second)
                 {
                     if (!settings.replace_running_query)
-                        throw Exception("Query with id = " + client_info.current_query_id + " is already running.",
-                                        ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
+                        throw Exception(
+                            "Query with id = " + client_info.current_query_id + " is already running.",
+                            ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
 
                     /// Ask queries to cancel. They will check this flag.
                     for (auto it = range.first; it != range.second; ++it)
@@ -141,7 +147,20 @@ ProcessList::EntryPtr ProcessList::insert(
 
         ++cur_size;
 
+<<<<<<< HEAD
         res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage, settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
+=======
+        res = std::make_shared<Entry>(
+            *this,
+            cont.emplace(
+                cont.end(),
+                query_,
+                client_info,
+                settings.max_memory_usage.getActualBytes(total_memory),
+                settings.memory_tracker_fault_probability,
+                priorities.insert(settings.priority),
+                is_dag_task));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());
@@ -153,7 +172,12 @@ ProcessList::EntryPtr ProcessList::insert(
             ///  setting from one query effectively sets values for all other queries.
 
             /// Track memory usage for all simultaneously running queries from single user.
+<<<<<<< HEAD
             user_process_list.user_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_user);
+=======
+            user_process_list.user_memory_tracker->setOrRaiseLimit(
+                settings.max_memory_usage_for_user.getActualBytes(total_memory));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             user_process_list.user_memory_tracker->setDescription("(for user)");
             current_memory_tracker->setNext(user_process_list.user_memory_tracker.get());
 
@@ -161,7 +185,12 @@ ProcessList::EntryPtr ProcessList::insert(
             /// You should specify this value in configuration for default profile,
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
+<<<<<<< HEAD
             total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
+=======
+            total_memory_tracker->setOrRaiseLimit(
+                settings.max_memory_usage_for_all_queries.getActualBytes(total_memory));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             total_memory_tracker->setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker->setDescription("(total)");
             total_memory_tracker->setAccuracyDiffForTest(settings.memory_tracker_accuracy_diff_for_test);
@@ -176,7 +205,8 @@ ProcessList::EntryPtr ProcessList::insert(
         if (!user_process_list.user_throttler)
         {
             if (settings.max_network_bandwidth_for_user)
-                user_process_list.user_throttler = std::make_shared<Throttler>(settings.max_network_bandwidth_for_user, total_network_throttler);
+                user_process_list.user_throttler
+                    = std::make_shared<Throttler>(settings.max_network_bandwidth_for_user, total_network_throttler);
             else if (settings.max_network_bandwidth_for_all_users)
                 user_process_list.user_throttler = total_network_throttler;
         }
@@ -230,7 +260,9 @@ ProcessListEntry::~ProcessListEntry()
 
     if (!found)
     {
-        LOG_ERROR(&Poco::Logger::get("ProcessList"), "Logical error: cannot find query by query_id and pointer to ProcessListElement in ProcessListForUser");
+        LOG_ERROR(
+            &Poco::Logger::get("ProcessList"),
+            "Logical error: cannot find query by query_id and pointer to ProcessListElement in ProcessListForUser");
         std::terminate();
     }
 
@@ -321,7 +353,10 @@ ProcessListElement * ProcessList::tryGetProcessListElement(const String & curren
 }
 
 
-ProcessList::CancellationCode ProcessList::sendCancelToQuery(const String & current_query_id, const String & current_user, bool kill)
+ProcessList::CancellationCode ProcessList::sendCancelToQuery(
+    const String & current_query_id,
+    const String & current_user,
+    bool kill)
 {
     std::lock_guard lock(mutex);
 

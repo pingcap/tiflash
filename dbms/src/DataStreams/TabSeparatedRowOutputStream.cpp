@@ -20,10 +20,23 @@
 namespace DB
 {
 
+<<<<<<< HEAD
 TabSeparatedRowOutputStream::TabSeparatedRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool with_names_, bool with_types_)
     : ostr(ostr_), sample(sample_), with_names(with_names_), with_types(with_types_)
 {
 }
+=======
+TabSeparatedRowOutputStream::TabSeparatedRowOutputStream(
+    WriteBuffer & ostr_,
+    const Block & sample_,
+    bool with_names_,
+    bool with_types_)
+    : ostr(ostr_)
+    , sample(sample_)
+    , with_names(with_names_)
+    , with_types(with_types_)
+{}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 
 void TabSeparatedRowOutputStream::flush()

@@ -42,6 +42,7 @@ void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, siz
 {
     child->transform(pipeline, context, max_streams);
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalLimit.cpp
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
     if (pipeline.hasMoreThanOneStream())
     {
@@ -50,6 +51,40 @@ void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, siz
     }
 }
 
+=======
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier());
+    });
+    if (pipeline.hasMoreThanOneStream())
+    {
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            false,
+            "for partial limit");
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier());
+        });
+    }
+}
+
+void PhysicalLimit::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(
+            std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, log->identifier(), global_limit));
+    });
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalLimit.cpp
 void PhysicalLimit::finalize(const Names & parent_require)
 {
     child->finalize(parent_require);

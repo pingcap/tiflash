@@ -28,11 +28,16 @@ class BlocksListBlockInputStream : public IProfilingBlockInputStream
 public:
     /// Acquires the ownership of the block list.
     BlocksListBlockInputStream(BlocksList && list_)
-        : list(std::move(list_)), it(list.begin()), end(list.end()) {}
+        : list(std::move(list_))
+        , it(list.begin())
+        , end(list.end())
+    {}
 
     /// Uses a list of blocks lying somewhere else.
     BlocksListBlockInputStream(const BlocksList::iterator & begin_, const BlocksList::iterator & end_)
-        : it(begin_), end(end_) {}
+        : it(begin_)
+        , end(end_)
+    {}
 
     String getName() const override { return "BlocksList"; }
 
@@ -62,4 +67,4 @@ private:
     const BlocksList::iterator end;
 };
 
-}
+} // namespace DB

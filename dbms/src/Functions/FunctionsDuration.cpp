@@ -72,7 +72,8 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
                 name),
             ErrorCodes::ILLEGAL_COLUMN);
     }
-    const auto * duration_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
+    const auto * duration_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(
+        block.getByPosition(arguments[0]).column.get());
     if (duration_col != nullptr)
     {
         const auto & vec_duration = duration_col->getData();
@@ -103,7 +104,10 @@ DataTypePtr FunctionMyDurationToSec<Impl>::getReturnTypeImpl(const ColumnsWithTy
     if (!arguments[0].type->isMyTime())
     {
         throw Exception(
-            fmt::format("Illegal type {} of the first argument of function {}", arguments[0].type->getName(), getName()),
+            fmt::format(
+                "Illegal type {} of the first argument of function {}",
+                arguments[0].type->getName(),
+                getName()),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
     return std::make_shared<DataTypeInt64>();
@@ -124,7 +128,8 @@ void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbe
     }
 
     using FromFieldType = typename DataTypeMyDuration::FieldType;
-    const auto * col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+    const auto * col_from
+        = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
     if (col_from != nullptr)
     {
         const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -151,37 +156,25 @@ void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbe
 struct DurationSplitHourImpl
 {
     static constexpr auto name = "hour";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.hours();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.hours(); }
 };
 
 struct DurationSplitMinuteImpl
 {
     static constexpr auto name = "minute";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.minutes();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.minutes(); }
 };
 
 struct DurationSplitSecondImpl
 {
     static constexpr auto name = "second";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.seconds();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.seconds(); }
 };
 
 struct DurationSplitMicroSecondImpl
 {
     static constexpr auto name = "microSecond";
-    static Int64 apply(const MyDuration & dur)
-    {
-        return dur.microSecond();
-    }
+    static Int64 apply(const MyDuration & dur) { return dur.microSecond(); }
 };
 
 struct TiDBTimeToSecTransformerImpl

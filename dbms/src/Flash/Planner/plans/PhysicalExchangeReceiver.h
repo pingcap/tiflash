@@ -40,10 +40,7 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    size_t getSourceNum() const
-    {
-        return mpp_exchange_receiver->getSourceNum();
-    }
+    size_t getSourceNum() const { return mpp_exchange_receiver->getSourceNum(); }
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;

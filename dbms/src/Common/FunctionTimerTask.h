@@ -29,15 +29,9 @@ public:
         : task(task_)
     {}
 
-    void run() override
-    {
-        task();
-    }
+    void run() override { task(); }
 
-    static Poco::Util::TimerTask::Ptr create(Task task)
-    {
-        return new FunctionTimerTask(task);
-    }
+    static Poco::Util::TimerTask::Ptr create(Task task) { return new FunctionTimerTask(task); }
 
 private:
     Task task;

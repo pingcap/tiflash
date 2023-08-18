@@ -36,14 +36,16 @@ StoragePtr TableFunctionNumbers::executeImpl(const ASTPtr & ast_function, const 
     ASTs & args_func = typeid_cast<ASTFunction &>(*ast_function).children;
 
     if (args_func.size() != 1)
-        throw Exception("Table function 'numbers' requires exactly one argument: amount of numbers.",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Table function 'numbers' requires exactly one argument: amount of numbers.",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     ASTs & args = typeid_cast<ASTExpressionList &>(*args_func.at(0)).children;
 
     if (args.size() != 1)
-        throw Exception("Table function 'numbers' requires exactly one argument: amount of numbers.",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Table function 'numbers' requires exactly one argument: amount of numbers.",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(args[0], context);
 

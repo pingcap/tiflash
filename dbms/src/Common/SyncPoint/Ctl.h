@@ -86,8 +86,7 @@ private:
 
     static std::pair<SyncChannelPtr, SyncChannelPtr> mustGetChannel(const char * name);
 
-    inline static std::unordered_map<std::string, std::pair<SyncChannelPtr, SyncChannelPtr>>
-        channels{};
+    inline static std::unordered_map<std::string, std::pair<SyncChannelPtr, SyncChannelPtr>> channels{};
     inline static std::mutex mu{};
 };
 

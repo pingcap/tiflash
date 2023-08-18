@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteHelpers.h>
-#include <IO/WriteBufferFromString.h>
 #include <DataStreams/TSKVRowOutputStream.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -51,4 +51,4 @@ void TSKVRowOutputStream::writeRowEndDelimiter()
 }
 
 
-}
+} // namespace DB

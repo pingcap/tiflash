@@ -52,7 +52,8 @@ public:
         /// group_concat reuses groupArray and groupUniqArray with the special warp function `AggregateFunctionGroupConcat` to process,
         /// the warp function needs more complex arguments, including collators, sort descriptions and others, which are hard to deliver via Array type,
         /// so it is specially added outside, instead of being added here, so directly return in this function.
-        if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray"))
+        if (nested_function
+            && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray"))
             return nested_function;
         bool has_nullable_types = false;
         bool has_null_types = false;

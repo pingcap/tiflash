@@ -14,21 +14,22 @@
 
 #pragma once
 
-#include <Dictionaries/IDictionary.h>
-#include <Dictionaries/IDictionarySource.h>
-#include <Dictionaries/DictionaryStructure.h>
+#include <Columns/ColumnString.h>
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/CurrentMetrics.h>
-#include <Columns/ColumnString.h>
-#include <ext/bit_cast.h>
-#include <cmath>
+#include <Dictionaries/DictionaryStructure.h>
+#include <Dictionaries/IDictionary.h>
+#include <Dictionaries/IDictionarySource.h>
+
 #include <atomic>
 #include <chrono>
-#include <vector>
+#include <cmath>
+#include <ext/bit_cast.h>
 #include <map>
-#include <tuple>
 #include <pcg_random.hpp>
 #include <shared_mutex>
+#include <tuple>
+#include <vector>
 
 
 namespace DB
@@ -37,8 +38,11 @@ namespace DB
 class CacheDictionary final : public IDictionary
 {
 public:
-    CacheDictionary(const std::string & name, const DictionaryStructure & dict_struct,
-        DictionarySourcePtr source_ptr, const DictionaryLifetime dict_lifetime,
+    CacheDictionary(
+        const std::string & name,
+        const DictionaryStructure & dict_struct,
+        DictionarySourcePtr source_ptr,
+        const DictionaryLifetime dict_lifetime,
         const size_t size);
 
     CacheDictionary(const CacheDictionary & other);
@@ -55,8 +59,8 @@ public:
 
     double getHitRate() const override
     {
-        return static_cast<double>(hit_count.load(std::memory_order_acquire)) /
-            query_count.load(std::memory_order_relaxed);
+        return static_cast<double>(hit_count.load(std::memory_order_acquire))
+            / query_count.load(std::memory_order_relaxed);
     }
 
     size_t getElementCount() const override { return element_count.load(std::memory_order_relaxed); }
@@ -76,10 +80,7 @@ public:
 
     const DictionaryStructure & getStructure() const override { return dict_struct; }
 
-    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override
-    {
-        return creation_time;
-    }
+    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override { return creation_time; }
 
     bool isInjective(const std::string & attribute_name) const override
     {
@@ -90,12 +91,18 @@ public:
 
     void toParent(const PaddedPODArray<Key> & ids, PaddedPODArray<Key> & out) const override;
 
-    void isInVectorVector(const PaddedPODArray<Key> & child_ids, const PaddedPODArray<Key> & ancestor_ids, PaddedPODArray<UInt8> & out) const override;
-    void isInVectorConstant(const PaddedPODArray<Key> & child_ids, const Key ancestor_id, PaddedPODArray<UInt8> & out) const override;
-    void isInConstantVector(const Key child_id, const PaddedPODArray<Key> & ancestor_ids, PaddedPODArray<UInt8> & out) const override;
+    void isInVectorVector(
+        const PaddedPODArray<Key> & child_ids,
+        const PaddedPODArray<Key> & ancestor_ids,
+        PaddedPODArray<UInt8> & out) const override;
+    void isInVectorConstant(const PaddedPODArray<Key> & child_ids, const Key ancestor_id, PaddedPODArray<UInt8> & out)
+        const override;
+    void isInConstantVector(const Key child_id, const PaddedPODArray<Key> & ancestor_ids, PaddedPODArray<UInt8> & out)
+        const override;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(const std::string & attribute_name, const PaddedPODArray<Key> & ids, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                                                                                               \
+    void get##TYPE(const std::string & attribute_name, const PaddedPODArray<Key> & ids, PaddedPODArray<TYPE> & out) \
+        const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -111,9 +118,11 @@ public:
 
     void getString(const std::string & attribute_name, const PaddedPODArray<Key> & ids, ColumnString * out) const;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const PaddedPODArray<Key> & ids, const PaddedPODArray<TYPE> & def,\
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const PaddedPODArray<Key> & ids,    \
+        const PaddedPODArray<TYPE> & def,   \
         PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
@@ -129,12 +138,17 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const PaddedPODArray<Key> & ids, const ColumnString * const def,
+        const std::string & attribute_name,
+        const PaddedPODArray<Key> & ids,
+        const ColumnString * const def,
         ColumnString * const out) const;
 
-#define DECLARE(TYPE)\
-    void get##TYPE(\
-        const std::string & attribute_name, const PaddedPODArray<Key> & ids, const TYPE def, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const PaddedPODArray<Key> & ids,    \
+        const TYPE def,                     \
+        PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -149,7 +163,9 @@ public:
 #undef DECLARE
 
     void getString(
-        const std::string & attribute_name, const PaddedPODArray<Key> & ids, const String & def,
+        const std::string & attribute_name,
+        const PaddedPODArray<Key> & ids,
+        const String & def,
         ColumnString * const out) const;
 
     void has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8> & out) const override;
@@ -157,8 +173,10 @@ public:
     BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const override;
 
 private:
-    template <typename Value> using ContainerType = Value[];
-    template <typename Value> using ContainerPtrType = std::unique_ptr<ContainerType<Value>>;
+    template <typename Value>
+    using ContainerType = Value[];
+    template <typename Value>
+    using ContainerPtrType = std::unique_ptr<ContainerType<Value>>;
 
     struct CellMetadata final
     {
@@ -184,18 +202,22 @@ private:
     struct Attribute final
     {
         AttributeUnderlyingType type;
+        std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String>
+            null_values;
         std::tuple<
-            UInt8, UInt16, UInt32, UInt64,
-            UInt128,
-            Int8, Int16, Int32, Int64,
-            Float32, Float64,
-            String> null_values;
-        std::tuple<
-            ContainerPtrType<UInt8>, ContainerPtrType<UInt16>, ContainerPtrType<UInt32>, ContainerPtrType<UInt64>,
+            ContainerPtrType<UInt8>,
+            ContainerPtrType<UInt16>,
+            ContainerPtrType<UInt32>,
+            ContainerPtrType<UInt64>,
             ContainerPtrType<UInt128>,
-            ContainerPtrType<Int8>, ContainerPtrType<Int16>, ContainerPtrType<Int32>, ContainerPtrType<Int64>,
-            ContainerPtrType<Float32>, ContainerPtrType<Float64>,
-            ContainerPtrType<StringRef>> arrays;
+            ContainerPtrType<Int8>,
+            ContainerPtrType<Int16>,
+            ContainerPtrType<Int32>,
+            ContainerPtrType<Int64>,
+            ContainerPtrType<Float32>,
+            ContainerPtrType<Float64>,
+            ContainerPtrType<StringRef>>
+            arrays;
     };
 
     void createAttributes();
@@ -226,7 +248,8 @@ private:
 
     template <typename PresentIdHandler, typename AbsentIdHandler>
     void update(
-        const std::vector<Key> & requested_ids, PresentIdHandler && on_cell_updated,
+        const std::vector<Key> & requested_ids,
+        PresentIdHandler && on_cell_updated,
         AbsentIdHandler && on_id_not_found) const;
 
     PaddedPODArray<Key> getCachedIds() const;
@@ -251,10 +274,8 @@ private:
     FindResult findCellIdx(const Key & id, const CellMetadata::time_point_t now) const;
 
     template <typename AncestorType>
-    void isInImpl(
-        const PaddedPODArray<Key> & child_ids,
-        const AncestorType & ancestor_ids,
-        PaddedPODArray<UInt8> & out) const;
+    void isInImpl(const PaddedPODArray<Key> & child_ids, const AncestorType & ancestor_ids, PaddedPODArray<UInt8> & out)
+        const;
 
     const std::string name;
     const DictionaryStructure dict_struct;
@@ -289,4 +310,4 @@ private:
     const std::chrono::time_point<std::chrono::system_clock> creation_time = std::chrono::system_clock::now();
 };
 
-}
+} // namespace DB

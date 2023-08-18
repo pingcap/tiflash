@@ -102,7 +102,10 @@ private:
         using boost::intrusive_ptr<T>::intrusive_ptr;
 
         T & operator*() const & { return boost::intrusive_ptr<T>::operator*(); }
-        T && operator*() const && { return const_cast<typename std::remove_const<T>::type &&>(*boost::intrusive_ptr<T>::get()); }
+        T && operator*() const &&
+        {
+            return const_cast<typename std::remove_const<T>::type &&>(*boost::intrusive_ptr<T>::get());
+        }
     };
 
 protected:
@@ -222,15 +225,9 @@ public:
             return assumeMutable();
     }
 
-    MutablePtr assumeMutable() const
-    {
-        return const_cast<COWPtr *>(this)->getPtr();
-    }
+    MutablePtr assumeMutable() const { return const_cast<COWPtr *>(this)->getPtr(); }
 
-    Derived & assumeMutableRef() const
-    {
-        return const_cast<Derived &>(*derived());
-    }
+    Derived & assumeMutableRef() const { return const_cast<Derived &>(*derived()); }
 };
 
 

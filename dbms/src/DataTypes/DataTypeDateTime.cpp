@@ -29,8 +29,7 @@ namespace DB
 DataTypeDateTime::DataTypeDateTime(const std::string & time_zone_name)
     : has_explicit_time_zone(!time_zone_name.empty())
     , time_zone(DateLUT::instance(time_zone_name))
-{
-}
+{}
 
 std::string DataTypeDateTime::getName() const
 {
@@ -78,10 +77,15 @@ void DataTypeDateTime::deserializeTextQuoted(IColumn & column, ReadBuffer & istr
     {
         readIntText(x, istr);
     }
-    static_cast<ColumnUInt32 &>(column).getData().push_back(x); /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt32 &>(column).getData().push_back(
+        x); /// It's important to do this at the end - for exception safety.
 }
 
-void DataTypeDateTime::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
+void DataTypeDateTime::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON &) const
 {
     writeChar('"', ostr);
     serializeText(column, row_num, ostr);
@@ -137,11 +141,15 @@ static DataTypePtr create(const ASTPtr & arguments)
         return std::make_shared<DataTypeDateTime>();
 
     if (arguments->children.size() != 1)
-        throw Exception("DateTime data type can optionally have only one argument - time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "DateTime data type can optionally have only one argument - time zone name",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::String)
-        throw Exception("Parameter for DateTime data type must be string literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+            "Parameter for DateTime data type must be string literal",
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return std::make_shared<DataTypeDateTime>(arg->value.get<String>());
 }

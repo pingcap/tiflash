@@ -30,10 +30,7 @@ void MockComputeServerManager::addServer(const String & addr)
     MockServerConfig config;
     for (const auto & server : server_config_map)
     {
-        RUNTIME_CHECK_MSG(
-            server.second.addr != addr,
-            "Already register mock compute server with addr = {}",
-            addr);
+        RUNTIME_CHECK_MSG(server.second.addr != addr, "Already register mock compute server with addr = {}", addr);
     }
     config.partition_id = server_config_map.size();
     config.addr = addr;
@@ -49,7 +46,13 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, Context &
         TiFlashRaftConfig raft_config;
         raft_config.flash_server_addr = server_config.second.addr;
         Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
+<<<<<<< HEAD
         addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(global_context, *config, security_config, raft_config, log_ptr));
+=======
+        addServer(
+            server_config.first,
+            std::make_unique<FlashGrpcServerHolder>(global_context, *config, raft_config, log_ptr));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     prepareMockMPPServerInfo();

@@ -53,10 +53,7 @@ struct IndexForNativeFormat
 
     IndexForNativeFormat() {}
 
-    IndexForNativeFormat(ReadBuffer & istr, const NameSet & required_columns)
-    {
-        read(istr, required_columns);
-    }
+    IndexForNativeFormat(ReadBuffer & istr, const NameSet & required_columns) { read(istr, required_columns); }
 
     /// Read the index, only for the required columns.
     void read(ReadBuffer & istr, const NameSet & required_columns);
@@ -73,15 +70,10 @@ class NativeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// provide output column names explicitly
-    NativeBlockInputStream(
-        ReadBuffer & istr_,
-        UInt64 server_revision_,
-        std::vector<String> && output_names_);
+    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_);
 
     /// If a non-zero server_revision is specified, additional block information may be expected and read.
-    NativeBlockInputStream(
-        ReadBuffer & istr_,
-        UInt64 server_revision_);
+    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_);
 
     /// For cases when data structure (header) is known in advance.
     /// NOTE We may use header for data validation and/or type conversions. It is not implemented.

@@ -18,7 +18,13 @@
 
 namespace DB::mock
 {
+<<<<<<< HEAD
 class ExchangeReceiverBinder : public ExecutorBinder
+=======
+class ExchangeReceiverBinder
+    : public ExecutorBinder
+    , public std::enable_shared_from_this<ExchangeReceiverBinder>
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
 public:
     ExchangeReceiverBinder(size_t & index, const DAGSchema & output, uint64_t fine_grained_shuffle_stream_count_ = 0)
@@ -26,14 +32,34 @@ public:
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &)
+        override;
 
     void columnPrune(std::unordered_set<String> &) override {}
 
+<<<<<<< HEAD
+=======
+    void toMPPSubPlan(
+        size_t & executor_index,
+        const DAGProperties &,
+        std::unordered_map<
+            String,
+            std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+        override;
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 private:
     TaskMetas task_metas;
     uint64_t fine_grained_shuffle_stream_count;
 };
 
+<<<<<<< HEAD
 ExecutorBinderPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count);
+=======
+ExecutorBinderPtr compileExchangeReceiver(
+    size_t & executor_index,
+    DAGSchema schema,
+    uint64_t fine_grained_shuffle_stream_count,
+    const std::shared_ptr<ExchangeSenderBinder> & exchange_sender);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB::mock

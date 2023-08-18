@@ -59,7 +59,8 @@ struct UniqVariadicHash<Data, false, false>
         {
             StringRef value = (*column)->getDataAt(row_num);
             value = data.getUpdatedValueForCollator(value, column - columns);
-            hash = CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(CityHash_v1_0_2::CityHash64(value.data, value.size), hash));
+            hash = CityHash_v1_0_2::Hash128to64(
+                CityHash_v1_0_2::uint128(CityHash_v1_0_2::CityHash64(value.data, value.size), hash));
             ++column;
         }
 
@@ -88,7 +89,8 @@ struct UniqVariadicHash<Data, false, true>
         while (column < columns_end)
         {
             StringRef value = column->get()->getDataAt(row_num);
-            hash = CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(CityHash_v1_0_2::CityHash64(value.data, value.size), hash));
+            hash = CityHash_v1_0_2::Hash128to64(
+                CityHash_v1_0_2::uint128(CityHash_v1_0_2::CityHash64(value.data, value.size), hash));
             ++column;
         }
 
@@ -109,7 +111,11 @@ struct UniqVariadicHash<Data, true, false>
         while (column < columns_end)
         {
             auto collator_and_sort_key_container = data.getCollatorAndSortKeyContainer(column - columns);
-            (*column)->updateHashWithValue(row_num, hash, collator_and_sort_key_container.first, *collator_and_sort_key_container.second);
+            (*column)->updateHashWithValue(
+                row_num,
+                hash,
+                collator_and_sort_key_container.first,
+                *collator_and_sort_key_container.second);
             ++column;
         }
 

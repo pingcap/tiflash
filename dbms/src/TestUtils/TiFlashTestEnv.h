@@ -42,7 +42,16 @@ public:
         return std::make_pair(result, result);
     }
 
+<<<<<<< HEAD
     static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr);
+=======
+    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr, bool enable_colors = true);
+    static void setUpTestContext(
+        Context & context,
+        DAGContext * dag_context,
+        MockStorage * mock_storage,
+        const TestType & test_type);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     // If you want to run these tests, you should set this envrionment variablle
     // For example:
@@ -69,8 +78,20 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
+<<<<<<< HEAD
     static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
     static void addGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
+=======
+    static void initializeGlobalContext(
+        Strings testdata_path = {},
+        PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3,
+        uint64_t bg_thread_count = 2);
+    static void addGlobalContext(
+        const DB::Settings & settings,
+        Strings testdata_path = {},
+        PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3,
+        uint64_t bg_thread_count = 2);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     static Context & getGlobalContext() { return *global_contexts[0]; }
     static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
     static int globalContextSize() { return global_contexts.size(); }

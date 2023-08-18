@@ -23,7 +23,11 @@ using TableInfo = TiDB::TableInfo;
 class TableScanBinder : public ExecutorBinder
 {
 public:
+<<<<<<< HEAD
     TableScanBinder(size_t & index_, const DAGSchema & output_schema_, const TableInfo & table_info_)
+=======
+    TableScanBinder(size_t & index_, const DAGSchema & output_schema_, const TableInfo & table_info_, bool keep_order_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         : ExecutorBinder(index_, "table_scan_" + std::to_string(index_), output_schema_)
         , table_info(table_info_)
     {}
@@ -33,7 +37,12 @@ public:
 
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &) override;
 
-    void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> &) override
+    void toMPPSubPlan(
+        size_t &,
+        const DAGProperties &,
+        std::unordered_map<
+            String,
+            std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> &) override
     {}
 
     TableID getTableId() const;
@@ -47,5 +56,15 @@ private:
     void buildTable(tipb::Executor * tipb_executor);
 };
 
+<<<<<<< HEAD
 ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);
+=======
+ExecutorBinderPtr compileTableScan(
+    size_t & executor_index,
+    TableInfo & table_info,
+    const String & db,
+    const String & table_name,
+    bool append_pk_column,
+    bool keep_order = false);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB::mock

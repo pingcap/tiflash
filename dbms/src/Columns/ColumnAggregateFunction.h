@@ -82,14 +82,12 @@ private:
 
     explicit ColumnAggregateFunction(const AggregateFunctionPtr & func_)
         : func(func_)
-    {
-    }
+    {}
 
     ColumnAggregateFunction(const AggregateFunctionPtr & func_, const Arenas & arenas_)
         : arenas(arenas_)
         , func(func_)
-    {
-    }
+    {}
 
     ColumnAggregateFunction(const ColumnAggregateFunction & src_)
         : COWPtrHelper<IColumn, ColumnAggregateFunction>(src_)
@@ -97,16 +95,12 @@ private:
         , func(src_.func)
         , src(src_.getPtr())
         , data(src_.data.begin(), src_.data.end())
-    {
-    }
+    {}
 
 public:
     ~ColumnAggregateFunction();
 
-    void set(const AggregateFunctionPtr & func_)
-    {
-        func = func_;
-    }
+    void set(const AggregateFunctionPtr & func_) { func = func_; }
 
     AggregateFunctionPtr getAggregateFunction() { return func; }
     AggregateFunctionPtr getAggregateFunction() const { return func; }
@@ -121,10 +115,7 @@ public:
     std::string getName() const override { return "AggregateFunction(" + func->getName() + ")"; }
     const char * getFamilyName() const override { return "AggregateFunction"; }
 
-    size_t size() const override
-    {
-        return getData().size();
-    }
+    size_t size() const override { return getData().size(); }
 
     MutableColumnPtr cloneEmpty() const override;
 
@@ -151,13 +142,29 @@ public:
 
     void insertDefault() override;
 
+<<<<<<< HEAD
     StringRef serializeValueIntoArena(size_t n, Arena & dst, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
+=======
+    void insertManyDefaults(size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertDefault();
+    }
+
+    StringRef serializeValueIntoArena(
+        size_t n,
+        Arena & dst,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr &,
+        String &) const override;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     const char * deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &) override;
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+        const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
@@ -181,23 +188,14 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    int compareAt(size_t, size_t, const IColumn &, int) const override
-    {
-        return 0;
-    }
+    int compareAt(size_t, size_t, const IColumn &, int) const override { return 0; }
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
     /** More efficient manipulation methods */
-    Container & getData()
-    {
-        return data;
-    }
+    Container & getData() { return data; }
 
-    const Container & getData() const
-    {
-        return data;
-    }
+    const Container & getData() const { return data; }
 
     void getExtremes(Field & min, Field & max) const override;
 };

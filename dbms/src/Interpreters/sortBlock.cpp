@@ -34,7 +34,9 @@ extern const int BAD_COLLATION;
 
 using ColumnsWithSortDescriptions = std::vector<std::pair<const IColumn *, SortColumnDescription>>;
 
-static ColumnsWithSortDescriptions getColumnsWithSortDescription(const Block & block, const SortDescription & description)
+static ColumnsWithSortDescriptions getColumnsWithSortDescription(
+    const Block & block,
+    const SortDescription & description)
 {
     size_t size = description.size();
     ColumnsWithSortDescriptions res;
@@ -56,7 +58,8 @@ ALWAYS_INLINE static inline bool NeedCollation(const IColumn * column, const Sor
 {
     if (!description.collator)
         return false;
-    const auto * not_null_column = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
+    const auto * not_null_column
+        = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
 
     if (not_null_column->isColumnConst())
         return false;
@@ -94,7 +97,10 @@ struct ColumnVecCompare
     }
 
     template <size_t index>
-    ALWAYS_INLINE static inline int compareAt(size_t a, size_t b, const ColumnsWithSortDescriptions & columns_with_sort_desc)
+    ALWAYS_INLINE static inline int compareAt(
+        size_t a,
+        size_t b,
+        const ColumnsWithSortDescriptions & columns_with_sort_desc)
     {
         const auto & desc = columns_with_sort_desc[index];
         const auto * column = intoTarget(desc.first);
@@ -111,7 +117,10 @@ struct ColumnStringCompare
     }
 
     template <size_t index>
-    ALWAYS_INLINE static inline int compareAt(size_t a, size_t b, const ColumnsWithSortDescriptions & columns_with_sort_desc)
+    ALWAYS_INLINE static inline int compareAt(
+        size_t a,
+        size_t b,
+        const ColumnsWithSortDescriptions & columns_with_sort_desc)
     {
         const auto & desc = columns_with_sort_desc[index];
         const auto * column = intoTarget(desc.first);
@@ -186,23 +195,11 @@ struct FastSortDesc : boost::noncopyable
     std::array<FastPathType, max_fast_path_num> type_for_fast_path{};
     size_t fast_path_cnt = 0;
 
-    ALWAYS_INLINE static bool isUInt64(const IColumn * column)
-    {
-        return typeid_cast<const ColumnUInt64 *>(column);
-    }
-    ALWAYS_INLINE static bool isInt64(const IColumn * column)
-    {
-        return typeid_cast<const ColumnInt64 *>(column);
-    }
-    ALWAYS_INLINE static bool isString(const IColumn * column)
-    {
-        return typeid_cast<const ColumnString *>(column);
-    }
+    ALWAYS_INLINE static bool isUInt64(const IColumn * column) { return typeid_cast<const ColumnUInt64 *>(column); }
+    ALWAYS_INLINE static bool isInt64(const IColumn * column) { return typeid_cast<const ColumnInt64 *>(column); }
+    ALWAYS_INLINE static bool isString(const IColumn * column) { return typeid_cast<const ColumnString *>(column); }
 
-    inline void addFastPathType(FastPathType tp)
-    {
-        type_for_fast_path[fast_path_cnt++] = tp;
-    }
+    inline void addFastPathType(FastPathType tp) { type_for_fast_path[fast_path_cnt++] = tp; }
 
     explicit FastSortDesc(const ColumnsWithSortDescriptions & columns_with_sort_desc_)
         : columns_with_sort_desc(columns_with_sort_desc_)
@@ -271,10 +268,7 @@ struct FastSortDesc : boost::noncopyable
         }
     }
 
-    ALWAYS_INLINE inline size_t size() const
-    {
-        return columns_with_sort_desc.size();
-    }
+    ALWAYS_INLINE inline size_t size() const { return columns_with_sort_desc.size(); }
 
     ALWAYS_INLINE inline int compareAt(size_t col_index, size_t a, size_t b) const
     {
@@ -282,11 +276,13 @@ struct FastSortDesc : boost::noncopyable
 
         if (!need_collations[col_index])
         {
-            return column.second.direction * column.first->compareAt(a, b, *column.first, column.second.nulls_direction);
+            return column.second.direction
+                * column.first->compareAt(a, b, *column.first, column.second.nulls_direction);
         }
         else
         {
-            return column.second.direction * column.first->compareAt(a, b, *column.first, column.second.nulls_direction, *column.second.collator);
+            return column.second.direction
+                * column.first->compareAt(a, b, *column.first, column.second.nulls_direction, *column.second.collator);
         }
     }
 };
@@ -353,14 +349,20 @@ template <>
 struct FastPathPermutationSort<2>
 {
     template <typename A, typename B>
-    ALWAYS_INLINE static inline void FastPathPermutationSort_P2(const FastSortDesc & desc, IColumn::Permutation & perm, size_t limit)
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P2(
+        const FastSortDesc & desc,
+        IColumn::Permutation & perm,
+        size_t limit)
     {
         MultiColumnSortFastPath<A, B> cmp{desc.columns_with_sort_desc};
         return PermutationSort(perm, limit, cmp);
     }
 
     template <typename A>
-    ALWAYS_INLINE static inline void FastPathPermutationSort_P1(const FastSortDesc & desc, IColumn::Permutation & perm, size_t limit)
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P1(
+        const FastSortDesc & desc,
+        IColumn::Permutation & perm,
+        size_t limit)
     {
         constexpr size_t index = 1;
 
@@ -456,7 +458,10 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
 }
 
 
-void stableGetPermutation(const Block & block, const SortDescription & description, IColumn::Permutation & out_permutation)
+void stableGetPermutation(
+    const Block & block,
+    const SortDescription & description,
+    IColumn::Permutation & out_permutation)
 {
     if (!block)
         return;

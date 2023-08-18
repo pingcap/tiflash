@@ -17,8 +17,12 @@
 #include <Common/HashTable/StringHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashTable.h>
 
-template <typename TMapped, typename Allocator = HashTableAllocator, template <typename...> typename ImplTable = StringHashMap>
-class TwoLevelStringHashMap : public TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator>>
+template <
+    typename TMapped,
+    typename Allocator = HashTableAllocator,
+    template <typename...> typename ImplTable = StringHashMap>
+class TwoLevelStringHashMap
+    : public TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator>>
 {
 public:
     using Key = StringRef;

@@ -50,8 +50,7 @@ public:
     DataTypes expected_types;
 };
 
-CHBlockChunkCodec::CHBlockChunkCodec(
-    const Block & header_)
+CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_)
     : header(header_)
 {
     for (const auto & column : header)

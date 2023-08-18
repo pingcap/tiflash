@@ -23,7 +23,19 @@ namespace DB::mock
 class AggregationBinder : public ExecutorBinder
 {
 public:
+<<<<<<< HEAD
     AggregationBinder(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, ASTs && agg_exprs_, ASTs && gby_exprs_, bool is_final_mode_)
+=======
+    AggregationBinder(
+        size_t & index_,
+        const DAGSchema & output_schema_,
+        bool has_uniq_raw_res_,
+        bool need_append_project_,
+        ASTs && agg_exprs_,
+        ASTs && gby_exprs_,
+        bool is_final_mode_,
+        uint64_t fine_grained_shuffle_stream_count_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         : ExecutorBinder(index_, "aggregation_" + std::to_string(index_), output_schema_)
         , has_uniq_raw_res(has_uniq_raw_res_)
         , need_append_project(need_append_project_)
@@ -32,11 +44,21 @@ public:
         , is_final_mode(is_final_mode_)
     {}
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(
+        tipb::Executor * tipb_executor,
+        int32_t collator_id,
+        const MPPInfo & mpp_info,
+        const Context & context) override;
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
 
-    void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map) override;
+    void toMPPSubPlan(
+        size_t & executor_index,
+        const DAGProperties & properties,
+        std::unordered_map<
+            String,
+            std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
+        override;
 
     bool needAppendProject() const;
 
@@ -58,6 +80,15 @@ private:
     void buildAggFunc(tipb::Expr * agg_func, const ASTFunction * func, int32_t collator_id) const;
 };
 
+<<<<<<< HEAD
 ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs);
+=======
+ExecutorBinderPtr compileAggregation(
+    ExecutorBinderPtr input,
+    size_t & executor_index,
+    ASTPtr agg_funcs,
+    ASTPtr group_by_exprs,
+    uint64_t fine_grained_shuffle_stream_count = 0);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 } // namespace DB::mock

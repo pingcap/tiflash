@@ -26,7 +26,9 @@ namespace DB
 class OneBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    OneBlockInputStream(const Block & block_) : block(block_) {}
+    OneBlockInputStream(const Block & block_)
+        : block(block_)
+    {}
 
     String getName() const override { return "One"; }
 
@@ -34,7 +36,7 @@ public:
     {
         Block res;
         for (const auto & elem : block)
-            res.insert({ elem.column->cloneEmpty(), elem.type, elem.name });
+            res.insert({elem.column->cloneEmpty(), elem.type, elem.name});
         return res;
     }
 
@@ -53,4 +55,4 @@ private:
     bool has_been_read = false;
 };
 
-}
+} // namespace DB

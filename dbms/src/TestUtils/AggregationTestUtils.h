@@ -26,6 +26,7 @@ namespace DB::tests
 class AggregationTest : public ::testing::Test
 {
 public:
+<<<<<<< HEAD
     ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
     {
         AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
@@ -34,6 +35,12 @@ public:
             return ::testing::AssertionSuccess();
         return ::testing::AssertionFailure() << "Expect type: " << expect_type->getName() << " Actual type: " << ret_type->getName();
     }
+=======
+    ::testing::AssertionResult checkAggReturnType(
+        const String & agg_name,
+        const DataTypes & data_types,
+        const DataTypePtr & expect_type);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     static void SetUpTestCase();
 };

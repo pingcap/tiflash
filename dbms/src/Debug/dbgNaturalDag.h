@@ -50,26 +50,11 @@ public:
 
     void init();
     void build(Context & context);
-    const ReqRspVec & getReqAndRspVec() const
-    {
-        return req_rsp;
-    }
-    const BatchReqRspVec & getBatchReqAndRspVec() const
-    {
-        return batch_req_rsp;
-    }
-    const MPPReqRspVec & getMPPReqAndRspVec() const
-    {
-        return mpp_req_rsp;
-    }
-    const std::vector<int32_t> & getReqIDVec() const
-    {
-        return req_id_vec;
-    }
-    bool continueWhenError() const
-    {
-        return continue_when_error;
-    }
+    const ReqRspVec & getReqAndRspVec() const { return req_rsp; }
+    const BatchReqRspVec & getBatchReqAndRspVec() const { return batch_req_rsp; }
+    const MPPReqRspVec & getMPPReqAndRspVec() const { return mpp_req_rsp; }
+    const std::vector<int32_t> & getReqIDVec() const { return req_id_vec; }
+    bool continueWhenError() const { return continue_when_error; }
     static void clean(Context & context);
 
 private:
@@ -97,7 +82,14 @@ private:
     void loadTables(const JSONObjectPtr & obj);
     LoadedRegionInfo loadRegion(const Poco::Dynamic::Var & region_json) const;
     void loadReqAndRsp(const JSONObjectPtr & obj);
+<<<<<<< HEAD
     static void buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name);
+=======
+    static void buildDatabase(
+        Context & context,
+        std::shared_ptr<TiDBSchemaSyncerManager> & schema_syncer,
+        const String & db_name);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void buildTables(Context & context);
     static const String & getDatabaseName();
 

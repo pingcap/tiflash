@@ -61,10 +61,7 @@ public:
         FailPointHelper::enableFailPoint(FailPoints::force_context_path);
     }
 
-    static void TearDownTestCase()
-    {
-        FailPointHelper::disableFailPoint(FailPoints::force_context_path);
-    }
+    static void TearDownTestCase() { FailPointHelper::disableFailPoint(FailPoints::force_context_path); }
 
     void SetUp() override
     {
@@ -179,6 +176,21 @@ protected:
     Context & global_ctx;
 };
 
+<<<<<<< HEAD
+=======
+TEST_F(SchemaSyncTest, SchemaDiff)
+try
+{
+    // Note that if we want to add new fields here, please firstly check if it is present.
+    // Otherwise it will break when doing upgrading test.
+    SchemaDiff diff;
+    std::string data = "{\"version\":40,\"type\":31,\"schema_id\":69,\"table_id\":71,\"old_table_id\":0,\"old_schema_"
+                       "id\":0,\"affected_options\":null}";
+    ASSERT_NO_THROW(diff.deserialize(data));
+}
+CATCH
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 TEST_F(SchemaSyncTest, RenameTables)
 try
 {
@@ -232,8 +244,10 @@ try
 
     MockTiDB::instance().newDataBase(db_name);
     auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
-    auto part1_id = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
-    auto part2_id = MockTiDB::instance().newPartition(logical_table_id, "blue", pd_client->getTS(), /*is_add_part*/ true);
+    auto part1_id
+        = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
+    auto part2_id
+        = MockTiDB::instance().newPartition(logical_table_id, "blue", pd_client->getTS(), /*is_add_part*/ true);
 
     // TODO: write some data
 
@@ -282,9 +296,12 @@ try
 
     auto db_id = MockTiDB::instance().newDataBase(db_name);
     auto logical_table_id = MockTiDB::instance().newTable(db_name, tbl_name, cols, pd_client->getTS(), "", "dt");
-    auto part1_id = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
-    auto part2_id = MockTiDB::instance().newPartition(logical_table_id, "green", pd_client->getTS(), /*is_add_part*/ true);
-    auto part3_id = MockTiDB::instance().newPartition(logical_table_id, "blue", pd_client->getTS(), /*is_add_part*/ true);
+    auto part1_id
+        = MockTiDB::instance().newPartition(logical_table_id, "red", pd_client->getTS(), /*is_add_part*/ true);
+    auto part2_id
+        = MockTiDB::instance().newPartition(logical_table_id, "green", pd_client->getTS(), /*is_add_part*/ true);
+    auto part3_id
+        = MockTiDB::instance().newPartition(logical_table_id, "blue", pd_client->getTS(), /*is_add_part*/ true);
 
     refreshSchema();
     {
@@ -305,7 +322,8 @@ try
     resetSchemas();
 
     // add column
-    MockTiDB::instance().addColumnToTable(db_name, tbl_name, NameAndTypePair{"col_3", typeFromString("Nullable(Int8)")}, Field{});
+    MockTiDB::instance()
+        .addColumnToTable(db_name, tbl_name, NameAndTypePair{"col_3", typeFromString("Nullable(Int8)")}, Field{});
     const String new_tbl_name = "mock_part_tbl_1";
     MockTiDB::instance().renameTable(db_name, tbl_name, new_tbl_name);
     refreshSchema();

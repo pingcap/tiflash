@@ -43,30 +43,15 @@ class FunctionTuple : public IFunction
 public:
     static constexpr auto name = "tuple";
 
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionTuple>();
-    }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTuple>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    bool isVariadic() const override
-    {
-        return true;
-    }
+    bool isVariadic() const override { return true; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 0;
-    }
+    size_t getNumberOfArguments() const override { return 0; }
 
-    bool isInjective(const Block &) const override
-    {
-        return true;
-    }
+    bool isInjective(const Block &) const override { return true; }
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -74,7 +59,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 1)
-            throw Exception("Function " + getName() + " requires at least one argument.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Function " + getName() + " requires at least one argument.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<DataTypeTuple>(arguments);
     }
@@ -106,30 +93,15 @@ class FunctionTupleElement : public IFunction
 {
 public:
     static constexpr auto name = "tupleElement";
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionTupleElement>();
-    }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTupleElement>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 2;
-    }
+    size_t getNumberOfArguments() const override { return 2; }
 
-    bool useDefaultImplementationForConstants() const override
-    {
-        return true;
-    }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
-    {
-        return {1};
-    }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -144,7 +116,9 @@ public:
 
         const DataTypeTuple * tuple = checkAndGetDataType<DataTypeTuple>(tuple_col);
         if (!tuple)
-            throw Exception("First argument for function " + getName() + " must be tuple or array of tuple.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "First argument for function " + getName() + " must be tuple or array of tuple.",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         size_t index = getElementNum(arguments[1].column, *tuple);
         DataTypePtr out_return_type = tuple->getElements()[index];
@@ -175,7 +149,9 @@ public:
         const DataTypeTuple * tuple_type_concrete = checkAndGetDataType<DataTypeTuple>(tuple_type);
         const ColumnTuple * tuple_col_concrete = checkAndGetColumn<ColumnTuple>(tuple_col);
         if (!tuple_type_concrete || !tuple_col_concrete)
-            throw Exception("First argument for function " + getName() + " must be tuple or array of tuple.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "First argument for function " + getName() + " must be tuple or array of tuple.",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         size_t index = getElementNum(block.getByPosition(arguments[1]).column, *tuple_type_concrete);
         ColumnPtr res = tuple_col_concrete->getColumns()[index];
@@ -207,7 +183,9 @@ private:
             return tuple.getPositionByName(name_col->getValue<String>());
         }
         else
-            throw Exception("Second argument to " + getName() + " must be a constant UInt8 or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Second argument to " + getName() + " must be a constant UInt8 or String",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 

@@ -49,10 +49,7 @@ public:
                 ++var->counter;
         }
 
-        LockHolder(LockHolder && other) noexcept
-        {
-            *this = std::move(other);
-        }
+        LockHolder(LockHolder && other) noexcept { *this = std::move(other); }
 
         LockHolder & operator=(LockHolder && other) noexcept
         {

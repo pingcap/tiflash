@@ -47,11 +47,18 @@ public:
             {
                 PrecType precision = p.first;
                 ScaleType scale = p.second;
-                std::shared_ptr<DataTypeDecimal<T>> input_nested_type_ptr = std::make_shared<DataTypeDecimal<T>>(precision, scale);
-                std::shared_ptr<DataTypeDecimal<T>> expect_output_nested_type_ptr = std::make_shared<DataTypeDecimal<T>>(precision, scale);
-                DataTypePtr input_type_ptr = nullable == 0 ? static_cast<DataTypePtr>(input_nested_type_ptr) : static_cast<DataTypePtr>(std::make_shared<DataTypeNullable>(input_nested_type_ptr));
-                DataTypePtr expect_output_type_ptr = nullable == 0 ? static_cast<DataTypePtr>(expect_output_nested_type_ptr) : static_cast<DataTypePtr>(std::make_shared<DataTypeNullable>(expect_output_nested_type_ptr));
-                auto result = checkAggReturnType(NameSumOnPartialResult::name, {input_type_ptr}, expect_output_type_ptr);
+                std::shared_ptr<DataTypeDecimal<T>> input_nested_type_ptr
+                    = std::make_shared<DataTypeDecimal<T>>(precision, scale);
+                std::shared_ptr<DataTypeDecimal<T>> expect_output_nested_type_ptr
+                    = std::make_shared<DataTypeDecimal<T>>(precision, scale);
+                DataTypePtr input_type_ptr = nullable == 0
+                    ? static_cast<DataTypePtr>(input_nested_type_ptr)
+                    : static_cast<DataTypePtr>(std::make_shared<DataTypeNullable>(input_nested_type_ptr));
+                DataTypePtr expect_output_type_ptr = nullable == 0
+                    ? static_cast<DataTypePtr>(expect_output_nested_type_ptr)
+                    : static_cast<DataTypePtr>(std::make_shared<DataTypeNullable>(expect_output_nested_type_ptr));
+                auto result
+                    = checkAggReturnType(NameSumOnPartialResult::name, {input_type_ptr}, expect_output_type_ptr);
                 if (result)
                     continue;
                 return result;

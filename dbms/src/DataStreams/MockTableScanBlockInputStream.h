@@ -22,10 +22,14 @@ class MockTableScanBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size, bool is_infinite_ = false);
+<<<<<<< HEAD
     Block getHeader() const override
     {
         return Block(columns);
     }
+=======
+    Block getHeader() const override { return Block(columns).cloneEmpty(); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     String getName() const override { return "MockTableScan"; }
 
 protected:

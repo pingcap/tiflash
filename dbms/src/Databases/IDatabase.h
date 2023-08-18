@@ -90,7 +90,12 @@ public:
     virtual bool empty(const Context & context) const = 0;
 
     /// Add the table to the database. Record its presence in the metadata.
-    virtual void createTable(const Context & context, const String & name, const StoragePtr & table, const ASTPtr & query) = 0;
+    virtual void createTable(
+        const Context & context,
+        const String & name,
+        const StoragePtr & table,
+        const ASTPtr & query)
+        = 0;
 
     /// Delete the table from the database and return it. Delete the metadata.
     virtual void removeTable(const Context & context, const String & name) = 0;
@@ -102,7 +107,12 @@ public:
     virtual StoragePtr detachTable(const String & name) = 0;
 
     /// Rename the table and possibly move the table to another database.
-    virtual void renameTable(const Context & context, const String & name, IDatabase & to_database, const String & to_name) = 0;
+    virtual void renameTable(
+        const Context & context,
+        const String & name,
+        IDatabase & to_database,
+        const String & to_name)
+        = 0;
 
     using ASTModifier = std::function<void(IAST &)>;
 
@@ -121,7 +131,10 @@ public:
     /// Get the CREATE TABLE query for the table. It can also provide information for detached tables for which there is metadata.
     virtual ASTPtr tryGetCreateTableQuery(const Context & context, const String & name) const = 0;
 
-    virtual ASTPtr getCreateTableQuery(const Context & context, const String & name) const { return tryGetCreateTableQuery(context, name); }
+    virtual ASTPtr getCreateTableQuery(const Context & context, const String & name) const
+    {
+        return tryGetCreateTableQuery(context, name);
+    }
 
     /// Get the CREATE DATABASE query for current database.
     virtual ASTPtr getCreateDatabaseQuery(const Context & context) const = 0;

@@ -20,11 +20,7 @@ namespace DB
 {
 String TableScanDetail::toJson() const
 {
-    return fmt::format(
-        R"({{"is_local":{},"packets":{},"bytes":{}}})",
-        is_local,
-        packets,
-        bytes);
+    return fmt::format(R"({{"is_local":{},"packets":{},"bytes":{}}})", is_local, packets, bytes);
 }
 
 void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
@@ -51,7 +47,12 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                     cop_table_scan_detail.bytes += connection_profile_info.bytes;
                 }
             }
+<<<<<<< HEAD
             else if (auto * local_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); local_stream)
+=======
+            else if (const auto * local_stream = dynamic_cast<const IProfilingBlockInputStream *>(&stream);
+                     local_stream)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             {
                 /// local read input stream also is IProfilingBlockInputStream
                 local_table_scan_detail.bytes += local_stream->getProfileInfo().bytes;

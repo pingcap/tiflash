@@ -28,7 +28,9 @@ constexpr make_unsigned_t<To> toSafeUnsigned(const From & value)
 
     using ReturnType = make_unsigned_t<To>;
 
-    static_assert(actual_size_v<ReturnType> >= actual_size_v<From>, "type unsigned To can't hold all values of type From");
+    static_assert(
+        actual_size_v<ReturnType> >= actual_size_v<From>,
+        "type unsigned To can't hold all values of type From");
 
     if constexpr (is_signed_v<From>)
     {

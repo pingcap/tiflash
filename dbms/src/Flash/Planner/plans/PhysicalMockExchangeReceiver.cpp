@@ -80,9 +80,18 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     const LoggerPtr & log,
     const tipb::ExchangeReceiver & exchange_receiver)
 {
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalMockExchangeReceiver.cpp
     assert(context.isExecutorTest());
 
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver);
+=======
+    auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(
+        context,
+        executor_id,
+        log,
+        exchange_receiver,
+        fine_grained_shuffle.stream_count);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalMockExchangeReceiver.cpp
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,
@@ -94,12 +103,33 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     return physical_mock_exchange_receiver;
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalMockExchangeReceiver.cpp
 void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
+=======
+void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(
+    DAGPipeline & pipeline,
+    Context & /*context*/,
+    size_t /*max_streams*/)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalMockExchangeReceiver.cpp
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
+<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalMockExchangeReceiver.cpp
+=======
+void PhysicalMockExchangeReceiver::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
+{
+    for (auto & mock_stream : mock_streams)
+        group_builder.addConcurrency(
+            std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), mock_stream));
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Planner/Plans/PhysicalMockExchangeReceiver.cpp
 void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);

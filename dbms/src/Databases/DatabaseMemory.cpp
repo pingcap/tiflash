@@ -46,47 +46,34 @@ void DatabaseMemory::createTable(
     attachTable(table_name, table);
 }
 
-void DatabaseMemory::removeTable(
-    const Context & /*context*/,
-    const String & table_name)
+void DatabaseMemory::removeTable(const Context & /*context*/, const String & table_name)
 {
     detachTable(table_name);
 }
 
-void DatabaseMemory::renameTable(
-    const Context &,
-    const String &,
-    IDatabase &,
-    const String &)
+void DatabaseMemory::renameTable(const Context &, const String &, IDatabase &, const String &)
 {
     throw Exception("DatabaseMemory: renameTable() is not supported", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void DatabaseMemory::alterTable(
-    const Context &,
-    const String &,
-    const ColumnsDescription &,
-    const ASTModifier &)
+void DatabaseMemory::alterTable(const Context &, const String &, const ColumnsDescription &, const ASTModifier &)
 {
     throw Exception("DatabaseMemory: alterTable() is not supported", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-time_t DatabaseMemory::getTableMetadataModificationTime(
-    const Context &,
-    const String &)
+time_t DatabaseMemory::getTableMetadataModificationTime(const Context &, const String &)
 {
     return static_cast<time_t>(0);
 }
 
-ASTPtr DatabaseMemory::getCreateTableQuery(
-    const Context &,
-    const String &) const
+ASTPtr DatabaseMemory::getCreateTableQuery(const Context &, const String &) const
 {
-    throw Exception("There is no CREATE TABLE query for DatabaseMemory tables", ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
+    throw Exception(
+        "There is no CREATE TABLE query for DatabaseMemory tables",
+        ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
 }
 
-ASTPtr DatabaseMemory::getCreateDatabaseQuery(
-    const Context &) const
+ASTPtr DatabaseMemory::getCreateDatabaseQuery(const Context &) const
 {
     throw Exception("There is no CREATE DATABASE query for DatabaseMemory", ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
 }

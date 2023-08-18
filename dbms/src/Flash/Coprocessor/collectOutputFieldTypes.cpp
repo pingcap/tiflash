@@ -63,7 +63,9 @@ bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const t
 {
     // collect output_field_types of child
     getChildren(executor).forEach([&output_field_types](const tipb::Executor & child) {
-        traverseExecutorTree(child, [&output_field_types](const tipb::Executor & e) { return collectForExecutor(output_field_types, e); });
+        traverseExecutorTree(child, [&output_field_types](const tipb::Executor & e) {
+            return collectForExecutor(output_field_types, e);
+        });
     });
 
     for (const auto & expr : executor.window().func_desc())
@@ -99,6 +101,60 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
+<<<<<<< HEAD
+=======
+bool collectForExpand2(std::vector<tipb::FieldType> & output_field_types, const tipb::Expand2 & expand2)
+{
+    // just collect from the level one.
+    for (const auto & expr : expand2.proj_exprs().Get(0).exprs())
+        output_field_types.push_back(expr.field_type());
+    return false;
+}
+
+bool collectForExpand(std::vector<tipb::FieldType> & out_field_types, const tipb::Executor & executor)
+{
+    auto & out_child_fields = out_field_types;
+    // collect output_field_types of children
+    getChildren(executor).forEach([&out_child_fields](const tipb::Executor & child) {
+        traverseExecutorTree(child, [&out_child_fields](const tipb::Executor & e) {
+            return collectForExecutor(out_child_fields, e);
+        });
+    });
+
+    // make the columns from grouping sets nullable.
+    for (const auto & grouping_set : executor.expand().grouping_sets())
+    {
+        for (const auto & grouping_exprs : grouping_set.grouping_exprs())
+        {
+            for (const auto & grouping_col : grouping_exprs.grouping_expr())
+            {
+                // assert that: grouping_col must be the column ref guaranteed by tidb.
+                auto column_index = decodeDAGInt64(grouping_col.val());
+                RUNTIME_CHECK_MSG(
+                    column_index >= 0 || column_index < static_cast<Int64>(out_child_fields.size()),
+                    "Column index out of bound");
+                out_child_fields[column_index].set_flag(
+                    out_child_fields[column_index].flag() & (~TiDB::ColumnFlagNotNull));
+            }
+        }
+    }
+
+    {
+        // for additional groupingID column.
+        tipb::FieldType field_type{};
+        field_type.set_tp(TiDB::TypeLongLong);
+        field_type.set_charset("binary");
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        // groupingID column should be Uint64 and NOT NULL.
+        field_type.set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+        field_type.set_flen(-1);
+        field_type.set_decimal(-1);
+        out_field_types.push_back(field_type);
+    }
+    return false;
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
     // collect output_field_types of children
@@ -108,7 +164,9 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
     // for join, dag_request.has_root_executor() == true, can use getChildren and traverseExecutorTree directly.
     getChildren(executor).forEach([&children_output_field_types, &child_index](const tipb::Executor & child) {
         auto & child_output_field_types = children_output_field_types[child_index++];
-        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) { return collectForExecutor(child_output_field_types, e); });
+        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) {
+            return collectForExecutor(child_output_field_types, e);
+        });
     });
     assert(child_index == 2);
 
@@ -119,7 +177,8 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
         {
             /// the type of left column for right join is always nullable
             auto updated_field_type = field_type;
-            updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+            updated_field_type.set_flag(
+                static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
             output_field_types.push_back(updated_field_type);
         }
         else
@@ -131,7 +190,8 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
     /// Note: for all kinds of semi join, the right table column is ignored
     /// but for (anti) left outer semi join, a 1/0 (uint8) field is pushed back
     /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
-    if (executor.join().join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || executor.join().join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    if (executor.join().join_type() == tipb::JoinType::TypeLeftOuterSemiJoin
+        || executor.join().join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
     {
         /// Note: within DAGRequest tidb doesn't have specific field type info for this column
         /// therefore, we just use tinyType and default values to construct a new one as tidb does in `PlanBuilder::buildSemiJoin`
@@ -144,7 +204,9 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
         field_type.set_decimal(-1);
         output_field_types.push_back(field_type);
     }
-    else if (executor.join().join_type() != tipb::JoinType::TypeSemiJoin && executor.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+    else if (
+        executor.join().join_type() != tipb::JoinType::TypeSemiJoin
+        && executor.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
     {
         /// for semi/anti semi join, the right table column is ignored
         for (auto & field_type : children_output_field_types[1])
@@ -153,7 +215,8 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
             {
                 /// the type of right column for left join is always nullable
                 auto updated_field_type = field_type;
-                updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+                updated_field_type.set_flag(
+                    updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
                 output_field_types.push_back(updated_field_type);
             }
             else
@@ -198,7 +261,9 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
 std::vector<tipb::FieldType> collectOutputFieldTypes(const tipb::DAGRequest & dag_request)
 {
     std::vector<tipb::FieldType> output_field_types;
-    traverseExecutors(&dag_request, [&output_field_types](const tipb::Executor & e) { return collectForExecutor(output_field_types, e); });
+    traverseExecutors(&dag_request, [&output_field_types](const tipb::Executor & e) {
+        return collectForExecutor(output_field_types, e);
+    });
     return output_field_types;
 }
 } // namespace DB

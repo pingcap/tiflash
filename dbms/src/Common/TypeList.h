@@ -31,8 +31,7 @@ struct TypeList
 
     template <typename Func, size_t index = 0>
     static void forEach(Func && /*func*/)
-    {
-    }
+    {}
 };
 
 

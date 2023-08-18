@@ -17,11 +17,13 @@
 
 namespace DB
 {
-SquashingBlockOutputStream::SquashingBlockOutputStream(BlockOutputStreamPtr & dst, size_t min_block_size_rows, size_t min_block_size_bytes)
+SquashingBlockOutputStream::SquashingBlockOutputStream(
+    BlockOutputStreamPtr & dst,
+    size_t min_block_size_rows,
+    size_t min_block_size_bytes)
     : output(dst)
     , transform(min_block_size_rows, min_block_size_bytes, /*req_id=*/"")
-{
-}
+{}
 
 
 void SquashingBlockOutputStream::write(const Block & block)

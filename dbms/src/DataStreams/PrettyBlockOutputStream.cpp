@@ -48,7 +48,11 @@ void PrettyBlockOutputStream::flush()
 
 /// Evaluate the visible width of the values and column names.
 /// Note that number of code points is just a rough approximation of visible string width.
-void PrettyBlockOutputStream::calculateWidths(const Block & block, WidthsPerColumn & widths, Widths & max_widths, Widths & name_widths)
+void PrettyBlockOutputStream::calculateWidths(
+    const Block & block,
+    WidthsPerColumn & widths,
+    Widths & max_widths,
+    Widths & name_widths)
 {
     size_t rows = block.rows();
     size_t columns = block.columns();
@@ -72,7 +76,9 @@ void PrettyBlockOutputStream::calculateWidths(const Block & block, WidthsPerColu
                 elem.type->serializeTextEscaped(*elem.column, j, out);
             }
 
-            widths[i][j] = UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(serialized_value.data()), serialized_value.size());
+            widths[i][j] = UTF8::countCodePoints(
+                reinterpret_cast<const UInt8 *>(serialized_value.data()),
+                serialized_value.size());
             max_widths[i] = std::max(max_widths[i], widths[i][j]);
         }
 
@@ -84,7 +90,9 @@ void PrettyBlockOutputStream::calculateWidths(const Block & block, WidthsPerColu
                 writeEscapedString(elem.name, out);
             }
 
-            name_widths[i] = UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(serialized_value.data()), serialized_value.size());
+            name_widths[i] = UTF8::countCodePoints(
+                reinterpret_cast<const UInt8 *>(serialized_value.data()),
+                serialized_value.size());
             max_widths[i] = std::max(max_widths[i], name_widths[i]);
         }
     }
@@ -194,7 +202,11 @@ void PrettyBlockOutputStream::write(const Block & block)
             if (j != 0)
                 writeCString(" │ ", ostr);
 
-            writeValueWithPadding(block.getByPosition(j), i, widths[j].empty() ? max_widths[j] : widths[j][i], max_widths[j]);
+            writeValueWithPadding(
+                block.getByPosition(j),
+                i,
+                widths[j].empty() ? max_widths[j] : widths[j][i],
+                max_widths[j]);
         }
 
         writeCString(" │\n", ostr);
@@ -206,7 +218,11 @@ void PrettyBlockOutputStream::write(const Block & block)
 }
 
 
-void PrettyBlockOutputStream::writeValueWithPadding(const ColumnWithTypeAndName & elem, size_t row_num, size_t value_width, size_t pad_to_width)
+void PrettyBlockOutputStream::writeValueWithPadding(
+    const ColumnWithTypeAndName & elem,
+    size_t row_num,
+    size_t value_width,
+    size_t pad_to_width)
 {
     auto writePadding = [&]()
     {

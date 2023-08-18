@@ -60,13 +60,26 @@ private:
     void executeImpl(DAGPipeline & pipeline);
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
-    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count);
+    void handleJoin(
+        const tipb::Join & join,
+        DAGPipeline & pipeline,
+        SubqueryForSet & right_query,
+        size_t fine_grained_shuffle_count);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleMockExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window, bool enable_fine_grained_shuffle);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort, bool enable_fine_grained_shuffle);
+<<<<<<< HEAD
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, const String & extra_info = "");
+=======
+    void handleExpand2(DAGPipeline & pipeline, const tipb::Expand2 & expand2);
+    void executeWhere(
+        DAGPipeline & pipeline,
+        const ExpressionActionsPtr & expressionActionsPtr,
+        String & filter_column,
+        const String & extra_info = "");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle);
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);

@@ -65,7 +65,14 @@ struct QueryTask
     Int64 task_id;
     Int64 partition_id;
     bool is_root_task;
-    QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_, Int64 task_id_, Int64 partition_id_, bool is_root_task_)
+    QueryTask(
+        std::shared_ptr<tipb::DAGRequest> request,
+        TableID table_id_,
+        const DAGSchema & result_schema_,
+        QueryTaskType type_,
+        Int64 task_id_,
+        Int64 partition_id_,
+        bool is_root_task_)
         : dag_request(std::move(request))
         , table_id(table_id_)
         , result_schema(result_schema_)
@@ -86,7 +93,13 @@ struct QueryFragment
     std::vector<Int64> sender_target_task_ids;
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     std::vector<Int64> task_ids;
-    QueryFragment(ExecutorBinderPtr root_executor_, TableID table_id_, bool is_top_fragment_, std::vector<Int64> && sender_target_task_ids_ = {}, std::unordered_map<String, std::vector<Int64>> && receiver_source_task_ids_map_ = {}, std::vector<Int64> && task_ids_ = {})
+    QueryFragment(
+        ExecutorBinderPtr root_executor_,
+        TableID table_id_,
+        bool is_top_fragment_,
+        std::vector<Int64> && sender_target_task_ids_ = {},
+        std::unordered_map<String, std::vector<Int64>> && receiver_source_task_ids_map_ = {},
+        std::vector<Int64> && task_ids_ = {})
         : root_executor(std::move(root_executor_))
         , table_id(table_id_)
         , is_top_fragment(is_top_fragment_)
@@ -101,7 +114,8 @@ struct QueryFragment
         tipb::DAGRequest & dag_request = *dag_request_ptr;
         dag_request.set_time_zone_name(properties.tz_name);
         dag_request.set_time_zone_offset(properties.tz_offset);
-        dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
+        dag_request.set_flags(
+            dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
         if (is_top_fragment)
         {
             if (properties.encode_type == "chunk")
@@ -120,7 +134,14 @@ struct QueryFragment
             dag_request.add_output_offsets(i);
         auto * root_tipb_executor = dag_request.mutable_root_executor();
         root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info, context);
-        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.empty() ? QueryTaskType::DAG : QueryTaskType::MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
+        return QueryTask(
+            dag_request_ptr,
+            table_id,
+            root_executor->output_schema,
+            mpp_info.sender_target_task_ids.empty() ? QueryTaskType::DAG : QueryTaskType::MPP_DISPATCH,
+            mpp_info.task_id,
+            mpp_info.partition_id,
+            is_top_fragment);
     }
 
     QueryTasks toQueryTasks(const DAGProperties & properties, const Context & context) const
@@ -141,7 +162,20 @@ struct QueryFragment
         }
         else
         {
+<<<<<<< HEAD
             MPPInfo mpp_info(properties.start_ts, /*partition_id*/ -1, /*task_id*/ -1, /*sender_target_task_ids*/ {}, /*receiver_source_task_ids_map*/ {});
+=======
+            MPPInfo mpp_info(
+                properties.start_ts,
+                properties.gather_id,
+                properties.query_ts,
+                properties.server_id,
+                properties.local_query_id,
+                /*partition_id*/ -1,
+                /*task_id*/ -1,
+                /*sender_target_task_ids*/ {},
+                /*receiver_source_task_ids_map*/ {});
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             ret.push_back(toQueryTask(properties, mpp_info, context));
         }
         return ret;

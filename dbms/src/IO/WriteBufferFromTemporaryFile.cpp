@@ -57,7 +57,10 @@ public:
         return std::make_shared<ReadBufferFromTemporaryWriteBuffer>(fd, file_name, std::move(origin->tmp_file));
     }
 
-    ReadBufferFromTemporaryWriteBuffer(int fd, const std::string & file_name, std::unique_ptr<Poco::TemporaryFile> && tmp_file_)
+    ReadBufferFromTemporaryWriteBuffer(
+        int fd,
+        const std::string & file_name,
+        std::unique_ptr<Poco::TemporaryFile> && tmp_file_)
         : ReadBufferFromFile(fd, file_name)
         , tmp_file(std::move(tmp_file_))
     {}
