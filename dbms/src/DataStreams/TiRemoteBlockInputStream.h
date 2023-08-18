@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,7 +110,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
+    TiRemoteBlockInputStream(
+        std::shared_ptr<RemoteReader> remote_reader_,
+        const String & req_id,
+        const String & executor_id,
+        size_t stream_id_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemote({})", RemoteReader::name))
@@ -157,10 +161,7 @@ public:
         return block;
     }
 
-    const RemoteExecutionSummary & getRemoteExecutionSummary()
-    {
-        return remote_execution_summary;
-    }
+    const RemoteExecutionSummary & getRemoteExecutionSummary() { return remote_execution_summary; }
 
     size_t getTotalRows() const { return total_rows; }
     size_t getSourceNum() const { return source_num; }
@@ -168,10 +169,7 @@ public:
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
 
 protected:
-    void readSuffixImpl() override
-    {
-        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
-    }
+    void readSuffixImpl() override { LOG_DEBUG(log, "finish read {} rows from remote", total_rows); }
 
     void appendInfo(FmtBuffer & buffer) const override
     {
@@ -179,9 +177,7 @@ protected:
         buffer.joinStr(
             sample_block.begin(),
             sample_block.end(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName());
-            },
+            [](const auto & arg, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName()); },
             ", ");
         buffer.append("}");
     }

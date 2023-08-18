@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
 
     if (unlikely(aggregate_context->useNullSource()))
     {
+<<<<<<< HEAD
         group_builder.init(1);
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<NullSourceOp>(
@@ -51,6 +52,29 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
                 index++,
                 log->identifier()));
         });
+=======
+        auto restorers = aggregate_context->buildSharedRestorer(exec_context);
+        for (auto & restorer : restorers)
+        {
+            group_builder.addConcurrency(std::make_unique<AggregateRestoreSourceOp>(
+                exec_context,
+                aggregate_context,
+                std::move(restorer),
+                log->identifier()));
+        }
+    }
+    else
+    {
+        aggregate_context->initConvergent();
+        for (size_t index = 0; index < aggregate_context->getConvergentConcurrency(); ++index)
+        {
+            group_builder.addConcurrency(std::make_unique<AggregateConvergentSourceOp>(
+                exec_context,
+                aggregate_context,
+                index,
+                log->identifier()));
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     executeExpression(exec_status, group_builder, expr_after_agg, log);

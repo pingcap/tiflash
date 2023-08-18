@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,13 @@ namespace DB
 {
 std::vector<TaskPtr> FineGrainedPipelineEvent::scheduleImpl()
 {
+<<<<<<< HEAD
     std::vector<TaskPtr> tasks;
     tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
     return tasks;
+=======
+    addTask(
+        std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 } // namespace DB

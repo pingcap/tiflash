@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,12 @@ namespace DB
 class ScanHashMapAfterProbeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ScanHashMapAfterProbeBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
+    ScanHashMapAfterProbeBlockInputStream(
+        const Join & parent_,
+        const Block & left_sample_block,
+        size_t index_,
+        size_t step_,
+        size_t max_block_size_);
 
     String getName() const override { return "ScanHashMapAfterProbe"; }
 
@@ -74,12 +79,13 @@ private:
     }
 
     template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
-    void fillColumns(const Map & map,
-                     size_t num_columns_left,
-                     MutableColumns & mutable_columns_left,
-                     size_t num_columns_right,
-                     MutableColumns & mutable_columns_right,
-                     IColumn * row_counter_column);
+    void fillColumns(
+        const Map & map,
+        size_t num_columns_left,
+        MutableColumns & mutable_columns_left,
+        size_t num_columns_right,
+        MutableColumns & mutable_columns_right,
+        IColumn * row_counter_column);
 
     template <bool row_flagged, bool output_joined_rows>
     void fillColumnsUsingCurrentPartition(

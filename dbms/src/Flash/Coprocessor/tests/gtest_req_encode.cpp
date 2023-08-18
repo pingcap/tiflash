@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,8 +37,7 @@ bool isSameKeyRange(const coprocessor::KeyRange & actual, const pingcap::coproce
 
 bool isSameRegionId(const coprocessor::RegionInfo & actual, const pingcap::kv::RegionVerID & expect)
 {
-    return actual.region_id() == expect.id
-        && actual.region_epoch().conf_ver() == expect.conf_ver
+    return actual.region_id() == expect.id && actual.region_epoch().conf_ver() == expect.conf_ver
         && actual.region_epoch().version() == expect.ver;
 }
 #define ASSERT_REGION_ID_EQ(pb_region, expect) ASSERT_TRUE(isSameRegionId((pb_region), (expect)))

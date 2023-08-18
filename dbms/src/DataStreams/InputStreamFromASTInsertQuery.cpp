@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,9 @@ InputStreamFromASTInsertQuery::InputStreamFromASTInsertQuery(
     const ASTInsertQuery * ast_insert_query = dynamic_cast<const ASTInsertQuery *>(ast.get());
 
     if (!ast_insert_query)
-        throw Exception("Logical error: query requires data to insert, but it is not INSERT query", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: query requires data to insert, but it is not INSERT query",
+            ErrorCodes::LOGICAL_ERROR);
 
     String format = ast_insert_query->format;
     if (format.empty())
@@ -60,7 +62,11 @@ InputStreamFromASTInsertQuery::InputStreamFromASTInsertQuery(
 
     input_buffer_contacenated = std::make_unique<ConcatReadBuffer>(buffers);
 
-    res_stream = context.getInputFormat(format, *input_buffer_contacenated, streams.out->getHeader(), context.getSettingsRef().max_insert_block_size);
+    res_stream = context.getInputFormat(
+        format,
+        *input_buffer_contacenated,
+        streams.out->getHeader(),
+        context.getSettingsRef().max_insert_block_size);
 }
 
 } // namespace DB

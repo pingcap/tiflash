@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ public:
         , expr_after_agg(expr_after_agg_)
     {}
 
+<<<<<<< HEAD
     void buildPipeline(PipelineBuilder & builder) override;
 
     void buildPipelineExecGroup(
@@ -60,6 +61,9 @@ public:
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;
+=======
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     void finalize(const Names & parent_require) override;
 

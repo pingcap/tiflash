@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,10 +45,7 @@ public:
         type = ExecutorImpl::type;
     }
 
-    void setChild(const String & child_id) override
-    {
-        children.push_back(child_id);
-    }
+    void setChild(const String & child_id) override { children.push_back(child_id); }
 
     void setChildren(const std::vector<String> & children_) override
     {
@@ -58,10 +55,7 @@ public:
     String toJson() const override
     {
         FmtBuffer fmt_buffer;
-        fmt_buffer.fmtAppend(
-            R"({{"id":"{}","type":"{}","children":[)",
-            executor_id,
-            type);
+        fmt_buffer.fmtAppend(R"({{"id":"{}","type":"{}","children":[)", executor_id, type);
         fmt_buffer.joinStr(
             children.cbegin(),
             children.cend(),
@@ -88,6 +82,7 @@ public:
         auto it = profile_streams_map.find(executor_id);
         if (it != profile_streams_map.end())
         {
+<<<<<<< HEAD
             for (const auto & input_stream : it->second)
             {
                 if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()); p_stream)
@@ -96,6 +91,22 @@ public:
                     base.append(profile_info);
                 }
             }
+=======
+        case ExecutionMode::None:
+            break;
+        case ExecutionMode::Stream:
+            transformProfileForStream(dag_context, executor_id, [&](const IProfilingBlockInputStream & p_stream) {
+                base.append(p_stream.getProfileInfo());
+            });
+            // Special handling of join build time is only required for streams.
+            collectJoinBuildTime();
+            break;
+        case ExecutionMode::Pipeline:
+            transformProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+                base.append(profile_info);
+            });
+            break;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         }
 
         if constexpr (ExecutorImpl::has_extra_info)
@@ -106,10 +117,7 @@ public:
         collectJoinBuildTime();
     }
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return ExecutorImpl::isMatch(executor);
-    }
+    static bool isMatch(const tipb::Executor * executor) { return ExecutorImpl::isMatch(executor); }
 
 protected:
     String executor_id;
@@ -140,7 +148,8 @@ protected:
                     UInt64 time = 0;
                     for (const auto & join_build_stream : it->second.join_build_streams)
                     {
-                        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)
+                        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get());
+                            p_stream)
                             time = std::max(time, p_stream->getProfileInfo().execution_time);
                     }
                     process_time_for_join_build += time;

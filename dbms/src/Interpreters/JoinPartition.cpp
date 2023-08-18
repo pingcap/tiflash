@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -396,13 +396,25 @@ struct KeyGetterForType
 template <ASTTableJoin::Strictness STRICTNESS, typename Map, typename KeyGetter>
 struct Inserter
 {
-    static void insert(Map & map, const typename Map::key_type & key, Block * stored_block, size_t i, Arena & pool, std::vector<String> & sort_key_containers);
+    static void insert(
+        Map & map,
+        const typename Map::key_type & key,
+        Block * stored_block,
+        size_t i,
+        Arena & pool,
+        std::vector<String> & sort_key_containers);
 };
 
 template <typename Map, typename KeyGetter>
 struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
 {
-    static void insert(Map & map, KeyGetter & key_getter, Block * stored_block, size_t i, Arena & pool, std::vector<String> & sort_key_container)
+    static void insert(
+        Map & map,
+        KeyGetter & key_getter,
+        Block * stored_block,
+        size_t i,
+        Arena & pool,
+        std::vector<String> & sort_key_container)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
@@ -415,7 +427,13 @@ template <typename Map, typename KeyGetter>
 struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
 {
     using MappedType = typename Map::mapped_type;
-    static void insert(Map & map, KeyGetter & key_getter, Block * stored_block, size_t i, Arena & pool, std::vector<String> & sort_key_container)
+    static void insert(
+        Map & map,
+        KeyGetter & key_getter,
+        Block * stored_block,
+        size_t i,
+        Arena & pool,
+        std::vector<String> & sort_key_container)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
@@ -435,7 +453,16 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
 };
 
 /// insert Block into one map, don't need acquire lock inside this function
+<<<<<<< HEAD
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
+=======
+template <
+    ASTTableJoin::Strictness STRICTNESS,
+    typename KeyGetter,
+    typename Map,
+    bool has_null_map,
+    bool need_record_not_insert_rows>
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void NO_INLINE insertBlockIntoMapTypeCase(
     JoinPartition & join_partition,
     size_t rows,
@@ -466,18 +493,21 @@ void NO_INLINE insertBlockIntoMapTypeCase(
             continue;
         }
 
-        Inserter<STRICTNESS, Map, KeyGetter>::insert(
-            map,
-            key_getter,
-            stored_block,
-            i,
-            pool,
-            sort_key_containers);
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(map, key_getter, stored_block, i, pool, sort_key_containers);
     }
 }
 
 /// insert Block into maps, for each map, need to acquire lock before insert
+<<<<<<< HEAD
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
+=======
+template <
+    ASTTableJoin::Strictness STRICTNESS,
+    typename KeyGetter,
+    typename Map,
+    bool has_null_map,
+    bool need_record_not_insert_rows>
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void NO_INLINE insertBlockIntoMapsTypeCase(
     JoinPartitions & join_partitions,
     size_t rows,
@@ -539,8 +569,48 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         segment_index_info[segment_index].push_back(i);
     }
 
+<<<<<<< HEAD
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
+=======
+    std::list<size_t> insert_indexes;
+    for (size_t i = 0; i < segment_index_info.size(); ++i)
+    {
+        size_t insert_index = (i + stream_index) % segment_index_info.size();
+        insert_indexes.emplace_back(insert_index);
+    }
+
+#define INSERT_TO_MAP(join_partition, segment_index)          \
+    auto & current_map = (join_partition)->getHashMap<Map>(); \
+    for (auto & i : (segment_index))                          \
+    {                                                         \
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
+            current_map,                                      \
+            key_getter,                                       \
+            stored_block,                                     \
+            i,                                                \
+            pool,                                             \
+            sort_key_containers);                             \
+    }
+
+#define INSERT_TO_NOT_INSERTED_MAP                                                                      \
+    /* null value */                                                                                    \
+    /* here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread */   \
+    /* for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map */ \
+    assert(rows_not_inserted_to_map != nullptr);                                                        \
+    assert(segment_index_info.size() == (1 + segment_size));                                            \
+    bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());          \
+    for (auto index : segment_index_info[segment_size])                                                 \
+    {                                                                                                   \
+        rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);          \
+    }
+
+    // First use tryLock to traverse twice to find all segments that can acquire locks immediately and execute insert.
+    //
+    // If there is only one segment left, there is no need to use try locks
+    // since it only causes unnecessary CPU consumption, and a blocking lock can be used directly.
+    for (size_t i = 0; i <= 1 && insert_indexes.size() > 1; ++i)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
@@ -565,6 +635,25 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
             }
         }
     }
+<<<<<<< HEAD
+=======
+
+    // Next use blocking locks to insert the remaining segments to avoid unnecessary cpu consumption.
+    for (auto segment_index : insert_indexes)
+    {
+        // When segment_index is segment_size, it must be processed in first step.
+        RUNTIME_CHECK_MSG(
+            segment_index < segment_size,
+            "Internal Error: When segment_index is segment_size, it must be processed in first step.");
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
+        auto & join_partition = join_partitions[segment_index];
+        auto lock = join_partition->lockPartition();
+        INSERT_TO_MAP(join_partition, segment_index_info[segment_index]);
+    }
+
+#undef INSERT_TO_MAP
+#undef INSERT_TO_NOT_INSERTED_MAP
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
@@ -586,35 +675,186 @@ void insertBlockIntoMapsImplType(
     {
         /// case 1, join with spill support, the partition level lock is acquired in `Join::insertFromBlock`
         if (null_map)
+<<<<<<< HEAD
             insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
         else
             insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+=======
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, true>(
+                    *current_join_partition,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
+                    *current_join_partition,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    nullptr);
+        }
+        else
+        {
+            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false, false>(
+                *current_join_partition,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                nullptr);
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         return;
     }
     else if (enable_fine_grained_shuffle)
     {
         /// case 2, join with fine_grained_shuffle, no need to acquire any lock
         if (null_map)
+<<<<<<< HEAD
             insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
         else
             insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+=======
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, true>(
+                    *current_join_partition,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
+                    *current_join_partition,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    nullptr);
+        }
+        else
+        {
+            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false, false>(
+                *current_join_partition,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                nullptr);
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     else if (insert_concurrency > 1)
     {
         /// case 3, normal join with concurrency > 1, will acquire lock in `insertBlockIntoMapsTypeCase`
         if (null_map)
+<<<<<<< HEAD
             insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index);
         else
             insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, false>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index);
+=======
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true, true>(
+                    join_partitions,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    stream_index,
+                    rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
+                    join_partitions,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    stream_index,
+                    nullptr);
+        }
+        else
+        {
+            insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, false, false>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                nullptr);
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
     else
     {
         /// case 4, normal join with concurrency == 1, no need to acquire any lock
         RUNTIME_CHECK(stream_index == 0);
         if (null_map)
+<<<<<<< HEAD
             insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
         else
             insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+=======
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, true>(
+                    *current_join_partition,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
+                    *current_join_partition,
+                    rows,
+                    key_columns,
+                    key_sizes,
+                    collators,
+                    stored_block,
+                    null_map,
+                    nullptr);
+        }
+        else
+        {
+            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false, false>(
+                *current_join_partition,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                nullptr);
+        }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 }
 
@@ -639,20 +879,23 @@ void insertBlockIntoMapsImpl(
     case JoinMapMethod::CROSS:
         break; /// Do nothing. We have already saved block, and it is enough.
 
-#define M(METHOD)                                                                                                                                                  \
-    case JoinMapMethod::METHOD:                                                                                                                                    \
-        insertBlockIntoMapsImplType<STRICTNESS, typename KeyGetterForType<JoinMapMethod::METHOD, typename Maps::METHOD##Type>::Type, typename Maps::METHOD##Type>( \
-            join_partitions,                                                                                                                                       \
-            rows,                                                                                                                                                  \
-            key_columns,                                                                                                                                           \
-            key_sizes,                                                                                                                                             \
-            collators,                                                                                                                                             \
-            stored_block,                                                                                                                                          \
-            null_map,                                                                                                                                              \
-            stream_index,                                                                                                                                          \
-            insert_concurrency,                                                                                                                                    \
-            enable_fine_grained_shuffle,                                                                                                                           \
-            enable_join_spill);                                                                                                                                    \
+#define M(METHOD)                                                                                \
+    case JoinMapMethod::METHOD:                                                                  \
+        insertBlockIntoMapsImplType<                                                             \
+            STRICTNESS,                                                                          \
+            typename KeyGetterForType<JoinMapMethod::METHOD, typename Maps::METHOD##Type>::Type, \
+            typename Maps::METHOD##Type>(                                                        \
+            join_partitions,                                                                     \
+            rows,                                                                                \
+            key_columns,                                                                         \
+            key_sizes,                                                                           \
+            collators,                                                                           \
+            stored_block,                                                                        \
+            null_map,                                                                            \
+            stream_index,                                                                        \
+            insert_concurrency,                                                                  \
+            enable_fine_grained_shuffle,                                                         \
+            enable_join_spill);                                                                  \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -709,30 +952,118 @@ void JoinPartition::insertBlockIntoMaps(
     if (isNullAwareSemiFamily(current_kind))
     {
         if (current_join_partition->strictness == ASTTableJoin::Strictness::Any)
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAny>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAny>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
         else
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
     }
     else if (isRightSemiFamily(current_kind))
     {
         if (current_join_partition->has_other_condition)
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFullWithRowFlag>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFullWithRowFlag>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
         else
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
     }
     else if (getFullness(current_kind))
     {
         if (current_join_partition->strictness == ASTTableJoin::Strictness::Any)
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAnyFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAnyFull>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
         else
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
     }
     else
     {
         if (current_join_partition->strictness == ASTTableJoin::Strictness::Any)
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAny>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAny>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
         else
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(
+                join_partitions,
+                rows,
+                key_columns,
+                key_sizes,
+                collators,
+                stored_block,
+                null_map,
+                stream_index,
+                insert_concurrency,
+                enable_fine_grained_shuffle,
+                enable_join_spill);
     }
 }
 namespace
@@ -744,14 +1075,36 @@ struct Adder;
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::LeftOuter, ASTTableJoin::Strictness::Any, Map>
 {
+<<<<<<< HEAD
     static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & right_indexes, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
+=======
+    static bool addFound(
+        const typename Map::ConstLookupResult & it,
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t /*i*/,
+        IColumn::Filter * /*filter*/,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        const std::vector<size_t> & right_indexes,
+        ProbeProcessInfo & /*probe_process_info*/)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertFrom(*it->getMapped().block->getByPosition(right_indexes[j]).column.get(), it->getMapped().row_num);
+            added_columns[j]->insertFrom(
+                *it->getMapped().block->getByPosition(right_indexes[j]).column.get(),
+                it->getMapped().row_num);
         return false;
     }
 
-    static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, ProbeProcessInfo & /*probe_process_info*/)
+    static bool addNotFound(
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t /*i*/,
+        IColumn::Filter * /*filter*/,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        ProbeProcessInfo & /*probe_process_info*/)
     {
         for (size_t j = 0; j < num_columns_to_add; ++j)
             added_columns[j]->insertDefault();
@@ -762,17 +1115,39 @@ struct Adder<ASTTableJoin::Kind::LeftOuter, ASTTableJoin::Strictness::Any, Map>
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any, Map>
 {
+<<<<<<< HEAD
     static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & right_indexes, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
+=======
+    static bool addFound(
+        const typename Map::ConstLookupResult & it,
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Filter * filter,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        const std::vector<size_t> & right_indexes,
+        ProbeProcessInfo & /*probe_process_info*/)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         (*filter)[i] = 1;
 
         for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertFrom(*it->getMapped().block->getByPosition(right_indexes[j]).column.get(), it->getMapped().row_num);
+            added_columns[j]->insertFrom(
+                *it->getMapped().block->getByPosition(right_indexes[j]).column.get(),
+                it->getMapped().row_num);
 
         return false;
     }
 
-    static bool addNotFound(size_t /*num_columns_to_add*/, MutableColumns & /*added_columns*/, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, ProbeProcessInfo & /*probe_process_info*/)
+    static bool addNotFound(
+        size_t /*num_columns_to_add*/,
+        MutableColumns & /*added_columns*/,
+        size_t i,
+        IColumn::Filter * filter,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        ProbeProcessInfo & /*probe_process_info*/)
     {
         (*filter)[i] = 0;
         return false;
@@ -782,13 +1157,33 @@ struct Adder<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any, Map>
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
 {
+<<<<<<< HEAD
     static bool addFound(const typename Map::ConstLookupResult & /*it*/, size_t /*num_columns_to_add*/, MutableColumns & /*added_columns*/, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & /*right_indexes*/, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
+=======
+    static bool addFound(
+        const typename Map::ConstLookupResult & /*it*/,
+        size_t /*num_columns_to_add*/,
+        MutableColumns & /*added_columns*/,
+        size_t i,
+        IColumn::Filter * filter,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        const std::vector<size_t> & /*right_indexes*/,
+        ProbeProcessInfo & /*probe_process_info*/)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         (*filter)[i] = 0;
         return false;
     }
 
-    static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, ProbeProcessInfo & /*probe_process_info*/)
+    static bool addNotFound(
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Filter * filter,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        ProbeProcessInfo & /*probe_process_info*/)
     {
         (*filter)[i] = 1;
         for (size_t j = 0; j < num_columns_to_add; ++j)
@@ -800,7 +1195,20 @@ struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::Any, Map>
 {
+<<<<<<< HEAD
     static bool addFound(const typename Map::ConstLookupResult & /*it*/, size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & /*right_indexes*/, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
+=======
+    static bool addFound(
+        const typename Map::ConstLookupResult & /*it*/,
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t /*i*/,
+        IColumn::Filter * /*filter*/,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        const std::vector<size_t> & /*right_indexes*/,
+        ProbeProcessInfo & /*probe_process_info*/)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         for (size_t j = 0; j < num_columns_to_add - 1; ++j)
             added_columns[j]->insertDefault();
@@ -808,7 +1216,14 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::Any, M
         return false;
     }
 
-    static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, ProbeProcessInfo & /*probe_process_info*/)
+    static bool addNotFound(
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t /*i*/,
+        IColumn::Filter * /*filter*/,
+        IColumn::Offset & /*current_offset*/,
+        IColumn::Offsets * /*offsets*/,
+        ProbeProcessInfo & /*probe_process_info*/)
     {
         for (size_t j = 0; j < num_columns_to_add - 1; ++j)
             added_columns[j]->insertDefault();
@@ -820,12 +1235,29 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::Any, M
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, Map>
 {
+<<<<<<< HEAD
     static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
+=======
+    static bool addFound(
+        const typename Map::ConstLookupResult & it,
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Filter * /*filter*/,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * offsets,
+        const std::vector<size_t> & right_indexes,
+        ProbeProcessInfo & /*probe_process_info*/)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+             current != nullptr;
+             current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add - 1; ++j)
-                added_columns[j]->insertFrom(*current->block->getByPosition(right_indexes[j]).column.get(), current->row_num);
+                added_columns[j]->insertFrom(
+                    *current->block->getByPosition(right_indexes[j]).column.get(),
+                    current->row_num);
             ++current_offset;
         }
         (*offsets)[i] = current_offset;
@@ -835,7 +1267,14 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
         return false;
     }
 
-    static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, ProbeProcessInfo & /*probe_process_info*/)
+    static bool addNotFound(
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Filter * /*filter*/,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * offsets,
+        ProbeProcessInfo & /*probe_process_info*/)
     {
         ++current_offset;
         (*offsets)[i] = current_offset;
@@ -903,13 +1342,29 @@ struct Adder<ASTTableJoin::Kind::RightAnti, ASTTableJoin::Strictness::All, Map>
 template <ASTTableJoin::Kind KIND, typename Map>
 struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 {
+<<<<<<< HEAD
     static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & probe_process_info, MutableColumnPtr & /* ptr_col */)
+=======
+    static_assert(KIND != ASTTableJoin::Kind::RightSemi && KIND != ASTTableJoin::Kind::RightAnti);
+    static bool addFound(
+        const typename Map::ConstLookupResult & it,
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Filter * filter,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * offsets,
+        const std::vector<size_t> & right_indexes,
+        ProbeProcessInfo & probe_process_info)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         size_t rows_joined = 0;
         // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
         // and it means the rows in this block are not joined finish.
 
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+             current != nullptr;
+             current = current->next)
             ++rows_joined;
 
         if (current_offset && current_offset + rows_joined > probe_process_info.max_block_size)
@@ -917,10 +1372,14 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             return true;
         }
 
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+             current != nullptr;
+             current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(*current->block->getByPosition(right_indexes[j]).column.get(), current->row_num);
+                added_columns[j]->insertFrom(
+                    *current->block->getByPosition(right_indexes[j]).column.get(),
+                    current->row_num);
         }
 
         current_offset += rows_joined;
@@ -934,7 +1393,14 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         return false;
     }
 
-    static bool addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, ProbeProcessInfo & probe_process_info)
+    static bool addNotFound(
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Filter * filter,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * offsets,
+        ProbeProcessInfo & probe_process_info)
     {
         if constexpr (KIND == ASTTableJoin::Kind::Inner)
         {
@@ -957,7 +1423,72 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         return false;
     }
 };
+<<<<<<< HEAD
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
+=======
+
+
+template <typename Map>
+struct RowFlaggedHashMapAdder
+{
+    static bool addFound(
+        const typename Map::ConstLookupResult & it,
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * offsets,
+        const std::vector<size_t> & right_indexes,
+        ProbeProcessInfo & probe_process_info,
+        MutableColumnPtr & ptr_col)
+    {
+        size_t rows_joined = 0;
+        // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
+        // and it means the rows in this block are not joined finish.
+
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+             current != nullptr;
+             current = current->next)
+            ++rows_joined;
+
+        if (current_offset && current_offset + rows_joined > probe_process_info.max_block_size)
+        {
+            return true;
+        }
+
+        auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*ptr_col);
+        auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
+        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+             current != nullptr;
+             current = current->next)
+        {
+            for (size_t j = 0; j < num_columns_to_add; ++j)
+                added_columns[j]->insertFrom(
+                    *current->block->getByPosition(right_indexes[j]).column.get(),
+                    current->row_num);
+
+            container.template push_back(reinterpret_cast<std::intptr_t>(current));
+            ++current_offset;
+        }
+        (*offsets)[i] = current_offset;
+        return false;
+    }
+
+    static bool addNotFound(size_t i, IColumn::Offset & current_offset, IColumn::Offsets * offsets)
+    {
+        (*offsets)[i] = current_offset;
+        return false;
+    }
+};
+
+template <
+    ASTTableJoin::Kind KIND,
+    ASTTableJoin::Strictness STRICTNESS,
+    typename KeyGetter,
+    typename Map,
+    bool has_null_map,
+    bool row_flagged_map>
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void NO_INLINE probeBlockImplTypeCase(
     const JoinPartitions & join_partitions,
     size_t rows,
@@ -1011,7 +1542,13 @@ void NO_INLINE probeBlockImplTypeCase(
         /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
         ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
         /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-        computeDispatchHash(rows, key_columns, collators, sort_key_containers, join_build_info.restore_round, build_hash);
+        computeDispatchHash(
+            rows,
+            key_columns,
+            collators,
+            sort_key_containers,
+            join_build_info.restore_round,
+            build_hash);
     }
 
     const auto & build_hash_data = build_hash.getData();
@@ -1024,6 +1561,7 @@ void NO_INLINE probeBlockImplTypeCase(
         {
             if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti)
             {
+<<<<<<< HEAD
                 if (record_mapped_entry_column)
                     block_full = Adder<KIND, STRICTNESS, Map>::addNotFound(
                         num_columns_to_add,
@@ -1033,6 +1571,9 @@ void NO_INLINE probeBlockImplTypeCase(
                         current_offset,
                         offsets_to_replicate.get(),
                         probe_process_info);
+=======
+                block_full = RowFlaggedHashMapAdder<Map>::addNotFound(i, current_offset, offsets_to_replicate.get());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             }
             else
             {
@@ -1132,6 +1673,7 @@ void NO_INLINE probeBlockImplTypeCase(
             {
                 if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti)
                 {
+<<<<<<< HEAD
                     if (record_mapped_entry_column)
                         block_full = Adder<KIND, STRICTNESS, Map>::addNotFound(
                             num_columns_to_add,
@@ -1141,6 +1683,10 @@ void NO_INLINE probeBlockImplTypeCase(
                             current_offset,
                             offsets_to_replicate.get(),
                             probe_process_info);
+=======
+                    block_full
+                        = RowFlaggedHashMapAdder<Map>::addNotFound(i, current_offset, offsets_to_replicate.get());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
                 }
                 else
                 {
@@ -1168,7 +1714,16 @@ void NO_INLINE probeBlockImplTypeCase(
     probe_process_info.all_rows_joined_finish = (i == rows);
 }
 
+<<<<<<< HEAD
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
+=======
+template <
+    ASTTableJoin::Kind KIND,
+    ASTTableJoin::Strictness STRICTNESS,
+    typename KeyGetter,
+    typename Map,
+    bool row_flagged_map>
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void probeBlockImplType(
     const JoinPartitions & join_partitions,
     size_t rows,
@@ -1218,8 +1773,15 @@ void probeBlockImplType(
             probe_process_info,
             record_mapped_entry_column);
 }
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
-std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> NO_INLINE probeBlockNullAwareInternal(
+template <
+    ASTTableJoin::Kind KIND,
+    ASTTableJoin::Strictness STRICTNESS,
+    typename KeyGetter,
+    typename Map,
+    bool has_null_map,
+    bool has_filter_map>
+std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> NO_INLINE
+probeBlockNullAwareInternal(
     const JoinPartitions & join_partitions,
     Block & block,
     const ColumnRawPtrs & key_columns,
@@ -1228,8 +1790,9 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     const NALeftSideInfo & left_side_info,
     const NARightSideInfo & right_side_info)
 {
-    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti
-                  || KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi);
+    static_assert(
+        KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti
+        || KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi);
     static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
 
     size_t rows = block.rows();
@@ -1271,7 +1834,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
             {
                 if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
                 {
-                    if (key_columns.size() == 1 || right_side_info.has_all_key_null_row || (left_side_info.all_key_null_map && (*left_side_info.all_key_null_map)[i]))
+                    if (key_columns.size() == 1 || right_side_info.has_all_key_null_row
+                        || (left_side_info.all_key_null_map && (*left_side_info.all_key_null_map)[i]))
                     {
                         /// Note that right_table_is_empty must be false here so the right table is not empty.
                         /// The result is NULL if
@@ -1509,6 +2073,7 @@ void JoinPartition::probeBlockImpl(
     auto method = current_join_partition->join_map_method;
     switch (method)
     {
+<<<<<<< HEAD
 #define M(METHOD)                                                                                                                                               \
     case JoinMapMethod::METHOD:                                                                                                                                 \
         probeBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<JoinMapMethod::METHOD, typename Maps::METHOD##Type>::Type, typename Maps::METHOD##Type>( \
@@ -1526,6 +2091,30 @@ void JoinPartition::probeBlockImpl(
             join_build_info,                                                                                                                                    \
             probe_process_info,                                                                                                                                 \
             record_mapped_entry_column);                                                                                                                        \
+=======
+#define M(METHOD)                                                                                \
+    case JoinMapMethod::METHOD:                                                                  \
+        probeBlockImplType<                                                                      \
+            KIND,                                                                                \
+            STRICTNESS,                                                                          \
+            typename KeyGetterForType<JoinMapMethod::METHOD, typename Maps::METHOD##Type>::Type, \
+            typename Maps::METHOD##Type,                                                         \
+            row_flagged_map>(                                                                    \
+            join_partitions,                                                                     \
+            rows,                                                                                \
+            key_columns,                                                                         \
+            key_sizes,                                                                           \
+            added_columns,                                                                       \
+            null_map,                                                                            \
+            filter,                                                                              \
+            current_offset,                                                                      \
+            offsets_to_replicate,                                                                \
+            right_indexes,                                                                       \
+            collators,                                                                           \
+            join_build_info,                                                                     \
+            probe_process_info,                                                                  \
+            record_mapped_entry_column);                                                         \
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -1536,27 +2125,32 @@ void JoinPartition::probeBlockImpl(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> JoinPartition::probeBlockNullAware(
-    const JoinPartitions & join_partitions,
-    Block & block,
-    const ColumnRawPtrs & key_columns,
-    const Sizes & key_sizes,
-    const TiDB::TiDBCollators & collators,
-    const NALeftSideInfo & left_side_info,
-    const NARightSideInfo & right_side_info)
+std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> JoinPartition::
+    probeBlockNullAware(
+        const JoinPartitions & join_partitions,
+        Block & block,
+        const ColumnRawPtrs & key_columns,
+        const Sizes & key_sizes,
+        const TiDB::TiDBCollators & collators,
+        const NALeftSideInfo & left_side_info,
+        const NARightSideInfo & right_side_info)
 {
     auto method = join_partitions[0]->join_map_method;
     switch (method)
     {
-#define M(METHOD)                                                                                                                                                           \
-    case JoinMapMethod::METHOD:                                                                                                                                             \
-        return probeBlockNullAwareType<KIND, STRICTNESS, typename KeyGetterForType<JoinMapMethod::METHOD, typename Maps::METHOD##Type>::Type, typename Maps::METHOD##Type>( \
-            join_partitions,                                                                                                                                                \
-            block,                                                                                                                                                          \
-            key_columns,                                                                                                                                                    \
-            key_sizes,                                                                                                                                                      \
-            collators,                                                                                                                                                      \
-            left_side_info,                                                                                                                                                 \
+#define M(METHOD)                                                                                \
+    case JoinMapMethod::METHOD:                                                                  \
+        return probeBlockNullAwareType<                                                          \
+            KIND,                                                                                \
+            STRICTNESS,                                                                          \
+            typename KeyGetterForType<JoinMapMethod::METHOD, typename Maps::METHOD##Type>::Type, \
+            typename Maps::METHOD##Type>(                                                        \
+            join_partitions,                                                                     \
+            block,                                                                               \
+            key_columns,                                                                         \
+            key_sizes,                                                                           \
+            collators,                                                                           \
+            left_side_info,                                                                      \
             right_side_info);
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -1577,16 +2171,17 @@ void JoinPartition::releasePartition()
     }
 }
 
-#define M(KIND, STRICTNESS, MAPTYPE)                                                                                          \
-    template std::pair<PaddedPODArray<NASemiJoinResult<KIND, (STRICTNESS)>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> \
-    JoinPartition::probeBlockNullAware<KIND, STRICTNESS, MAPTYPE>(                                                            \
-        const JoinPartitions & join_partitions,                                                                               \
-        Block & block,                                                                                                        \
-        const ColumnRawPtrs & key_columns,                                                                                    \
-        const Sizes & key_sizes,                                                                                              \
-        const TiDB::TiDBCollators & collators,                                                                                \
-        const NALeftSideInfo & left_side_info,                                                                                \
-        const NARightSideInfo & right_side_info);
+#define M(KIND, STRICTNESS, MAPTYPE)                                                                                \
+    template std::                                                                                                  \
+        pair<PaddedPODArray<NASemiJoinResult<KIND, (STRICTNESS)>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> \
+        JoinPartition::probeBlockNullAware<KIND, STRICTNESS, MAPTYPE>(                                              \
+            const JoinPartitions & join_partitions,                                                                 \
+            Block & block,                                                                                          \
+            const ColumnRawPtrs & key_columns,                                                                      \
+            const Sizes & key_sizes,                                                                                \
+            const TiDB::TiDBCollators & collators,                                                                  \
+            const NALeftSideInfo & left_side_info,                                                                  \
+            const NARightSideInfo & right_side_info);
 
 APPLY_FOR_NULL_AWARE_JOIN(M)
 #undef M

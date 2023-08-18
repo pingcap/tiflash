@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,8 @@ public:
     using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 
     const String single_col_name{"single_col"};
-    const ColumnWithString col0_ori{"col0-1  ", "col0-7", "col0-0    ", "col0-3", "col0-4", "col0-6", "col0-2 ", "col0-5"};
+    const ColumnWithString
+        col0_ori{"col0-1  ", "col0-7", "col0-0    ", "col0-3", "col0-4", "col0-6", "col0-2 ", "col0-5"};
     const std::vector<String> col_name{"age", "gender", "country", "region", "zip"};
 };
 
@@ -53,14 +54,12 @@ try
 {
     {
         // test basic block expand operation. (two grouping set: {<age>}, {<gender, country>})
-        const ColumnsWithTypeAndName
-            ori_col
-            = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
-                toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
-                toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
-                toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
-            };
+        const ColumnsWithTypeAndName ori_col = {
+            toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
+            toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
+            toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
+            toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
+        };
         // group set<gender>, group set<country>
         GroupingSet g_age = GroupingSet{GroupingColumnNames{col_name[0]}};
         GroupingSet g_gender_country = GroupingSet{GroupingColumnNames{col_name[1], col_name[2]}};
@@ -163,14 +162,12 @@ try
 {
     {
         // test basic block expand operation. (two grouping set)
-        const ColumnsWithTypeAndName
-            ori_col
-            = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
-                toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
-                toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
-                toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
-            };
+        const ColumnsWithTypeAndName ori_col = {
+            toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
+            toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
+            toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
+            toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
+        };
         // group set<gender>, group set<country>
         GroupingSet g_gender = GroupingSet{GroupingColumnNames{col_name[1]}};
         GroupingSet g_country = GroupingSet{GroupingColumnNames{col_name[2]}};
@@ -259,14 +256,12 @@ try
     }
     {
         // test block expand operation for multi grouping set (triple here)
-        const ColumnsWithTypeAndName
-            ori_col
-            = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
-                toVec<String>(col_name[1], ColumnWithString{"aaa", "bbb", "ccc"}),
-                toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
-                toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
-            };
+        const ColumnsWithTypeAndName ori_col = {
+            toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
+            toVec<String>(col_name[1], ColumnWithString{"aaa", "bbb", "ccc"}),
+            toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
+            toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
+        };
         // group set<gender>, group set<country>
         GroupingSet g_gender = GroupingSet{GroupingColumnNames{col_name[1]}};
         GroupingSet g_country = GroupingSet{GroupingColumnNames{col_name[2]}};
@@ -344,7 +339,16 @@ try
         }
 
         // use UInt64(-1) to represent null.
-        const auto res3 = ColumnWithUInt64{static_cast<UInt64>(-1), static_cast<UInt64>(-1), 1, static_cast<UInt64>(-1), static_cast<UInt64>(-1), 1, static_cast<UInt64>(-1), static_cast<UInt64>(-1), 0};
+        const auto res3 = ColumnWithUInt64{
+            static_cast<UInt64>(-1),
+            static_cast<UInt64>(-1),
+            1,
+            static_cast<UInt64>(-1),
+            static_cast<UInt64>(-1),
+            1,
+            static_cast<UInt64>(-1),
+            static_cast<UInt64>(-1),
+            0};
         const auto * col_3 = typeid_cast<const ColumnNullable *>(block.getColumns()[3].get());
         const auto * col_3_nest = &typeid_cast<const ColumnUInt64 &>(col_3->getNestedColumn());
         for (int i = 0; i < static_cast<int>(expand_rows); ++i)
@@ -368,14 +372,12 @@ try
     }
     {
         /// test a empty block
-        const ColumnsWithTypeAndName
-            ori_col
-            = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{}), // without data.
-                toVec<String>(col_name[1], ColumnWithString{}),
-                toVec<String>(col_name[2], ColumnWithString{}),
-                toVec<UInt64>(col_name[3], ColumnWithUInt64{}),
-            };
+        const ColumnsWithTypeAndName ori_col = {
+            toVec<Int64>(col_name[0], ColumnWithInt64{}), // without data.
+            toVec<String>(col_name[1], ColumnWithString{}),
+            toVec<String>(col_name[2], ColumnWithString{}),
+            toVec<UInt64>(col_name[3], ColumnWithUInt64{}),
+        };
         // group set<gender>, group set<country>
         GroupingSet g_gender = GroupingSet{GroupingColumnNames{col_name[1]}};
         GroupingSet g_country = GroupingSet{GroupingColumnNames{col_name[2]}};

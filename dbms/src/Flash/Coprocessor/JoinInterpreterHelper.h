@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -105,7 +105,8 @@ struct JoinNonEqualConditions
         if (isNullAwareSemiFamily(kind))
         {
             if unlikely (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
-                return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is nullptr";
+                return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is "
+                       "nullptr";
             if unlikely (!other_eq_cond_from_in_name.empty())
                 return "null-aware semi join should not have other_eq_cond_from_in_name";
         }
@@ -131,9 +132,17 @@ struct TiFlashJoin
     ASTTableJoin::Strictness strictness;
 
     /// (cartesian) (anti) left outer semi join.
-    bool isLeftOuterSemiFamily() const { return join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin; }
+    bool isLeftOuterSemiFamily() const
+    {
+        return join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin
+            || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
+    }
 
-    bool isSemiJoin() const { return join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || isLeftOuterSemiFamily(); }
+    bool isSemiJoin() const
+    {
+        return join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin
+            || isLeftOuterSemiFamily();
+    }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getBuildJoinKeys() const
     {
@@ -155,7 +164,10 @@ struct TiFlashJoin
         return build_side_index == 0 ? join.right_conditions() : join.left_conditions();
     }
 
-    bool isTiFlashLeftOuterJoin() const { return kind == ASTTableJoin::Kind::LeftOuter || kind == ASTTableJoin::Kind::Cross_LeftOuter; }
+    bool isTiFlashLeftOuterJoin() const
+    {
+        return kind == ASTTableJoin::Kind::LeftOuter || kind == ASTTableJoin::Kind::Cross_LeftOuter;
+    }
 
     /// Cross_RightOuter join will be converted to Cross_LeftOuter join, so no need to check Cross_RightOuter
     bool isTiFlashRightOuterJoin() const { return kind == ASTTableJoin::Kind::RightOuter; }
@@ -197,6 +209,14 @@ struct TiFlashJoin
         const Block & left_input_header,
         const Block & right_input_header,
         const ExpressionActionsPtr & probe_prepare_join_actions) const;
+<<<<<<< HEAD
+=======
+
+    std::vector<RuntimeFilterPtr> genRuntimeFilterList(
+        const Context & context,
+        const Block & input_header,
+        const LoggerPtr & log);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column

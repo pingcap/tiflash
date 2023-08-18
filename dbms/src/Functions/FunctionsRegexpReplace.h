@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,17 @@ extern template class Param<ParamInt<false>, true>;
 extern template class Param<ParamInt<true>, true>;
 extern template class Param<ParamInt<false>, false>;
 
-#define EXECUTE_REGEXP_REPLACE()                                                                                                                                                                                                        \
-    do                                                                                                                                                                                                                                  \
-    {                                                                                                                                                                                                                                   \
-        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(REPL_PARAM_PTR_VAR_NAME), *(POS_PARAM_PTR_VAR_NAME), *(OCCUR_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
+#define EXECUTE_REGEXP_REPLACE()               \
+    do                                         \
+    {                                          \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(       \
+            RES_ARG_VAR_NAME,                  \
+            *(EXPR_PARAM_PTR_VAR_NAME),        \
+            *(PAT_PARAM_PTR_VAR_NAME),         \
+            *(REPL_PARAM_PTR_VAR_NAME),        \
+            *(POS_PARAM_PTR_VAR_NAME),         \
+            *(OCCUR_PARAM_PTR_VAR_NAME),       \
+            *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
 // Method to get actual match type param
@@ -96,7 +103,8 @@ extern template class Param<ParamInt<false>, false>;
 
 // Implementation of regexp_replace function
 template <typename Name>
-class FunctionStringRegexpReplace : public FunctionStringRegexpBase
+class FunctionStringRegexpReplace
+    : public FunctionStringRegexpBase
     , public IFunction
 {
 public:
@@ -140,7 +148,14 @@ public:
     }
 
     template <typename ExprT, typename PatT, typename ReplT, typename PosT, typename OccurT, typename MatchTypeT>
-    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const ReplT & repl_param, const PosT & pos_param, const OccurT & occur_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(
+        ColumnWithTypeAndName & res_arg,
+        const ExprT & expr_param,
+        const PatT & pat_param,
+        const ReplT & repl_param,
+        const PosT & pos_param,
+        const OccurT & occur_param,
+        const MatchTypeT & match_type_param) const
     {
         size_t col_size = expr_param.getDataNum();
 
@@ -157,9 +172,12 @@ public:
         Int64 occur_const_val = OccurT::isConst() ? occur_param.template getInt<Int64>(0) : -1;
 
         // Check if args are all const columns
-        if constexpr (ExprT::isConst() && PatT::isConst() && ReplT::isConst() && PosT::isConst() && OccurT::isConst() && MatchTypeT::isConst())
+        if constexpr (
+            ExprT::isConst() && PatT::isConst() && ReplT::isConst() && PosT::isConst() && OccurT::isConst()
+            && MatchTypeT::isConst())
         {
-            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || repl_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || repl_param.isNullAt(0) || pos_param.isNullAt(0)
+                || occur_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
@@ -179,9 +197,21 @@ public:
             ColumnString::Chars_t res_data;
             IColumn::Offset offset = 0;
 
+<<<<<<< HEAD
             Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), FunctionsRegexp::getDefaultFlags());
             regexp.replace(expr_ref.data, expr_ref.size, res_data, offset, repl_ref, pos_const_val, occur_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(reinterpret_cast<const char *>(&res_data[0]), offset - 1)));
+=======
+            Regexps::Regexp regexp(
+                FunctionsRegexp::addMatchTypeForPattern<false>(pat, match_type, collator),
+                replace_default_flag);
+            instructions = regexp.getInstructions(repl_ref);
+            regexp
+                .replace(expr_ref.data, expr_ref.size, res_data, offset, instructions, pos_const_val, occur_const_val);
+            res_arg.column = res_arg.type->createColumnConst(
+                col_size,
+                toField(String(reinterpret_cast<const char *>(&res_data[0]), offset - 1)));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             return;
         }
 
@@ -194,7 +224,8 @@ public:
         res_offsets.resize(col_size);
         ColumnString::Offset res_offset = 0;
 
-        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || ReplT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
+        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || ReplT::isNullableCol()
+            || PosT::isNullableCol() || OccurT::isNullableCol() || MatchTypeT::isNullableCol();
 
 #define GET_POS_VALUE(idx)                          \
     do                                              \
@@ -248,7 +279,8 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expr_param.isNullAt(i) || repl_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i))
+                    if (expr_param.isNullAt(i) || repl_param.isNullAt(i) || pos_param.isNullAt(i)
+                        || occur_param.isNullAt(i))
                     {
                         null_map[i] = 1;
                         res_data.resize(res_data.size() + 1);
@@ -300,7 +332,8 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || repl_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
+                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || repl_param.isNullAt(i)
+                        || pos_param.isNullAt(i) || occur_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
                         null_map[i] = 1;
                         res_data.resize(res_data.size() + 1);
@@ -321,8 +354,18 @@ public:
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
+<<<<<<< HEAD
                     auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
+=======
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType<false>(
+                        pat,
+                        match_type,
+                        collator,
+                        replace_default_flag);
+                    instructions = regexp.getInstructions(repl_ref);
+                    regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, instructions, pos, occur);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
                     res_offsets[i] = res_offset;
                 }
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(null_map_col));
@@ -342,8 +385,18 @@ public:
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
+<<<<<<< HEAD
                     auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
                     regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
+=======
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType<false>(
+                        pat,
+                        match_type,
+                        collator,
+                        replace_default_flag);
+                    instructions = regexp.getInstructions(repl_ref);
+                    regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, instructions, pos, occur);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
                     res_offsets[i] = res_offset;
                 }
                 res_arg.column = std::move(col_res);
@@ -360,7 +413,8 @@ public:
 
         if (null_presence.has_null_constant)
         {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            block.getByPosition(result).column
+                = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }
 

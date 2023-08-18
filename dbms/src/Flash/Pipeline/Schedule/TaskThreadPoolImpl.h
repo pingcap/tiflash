@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,12 +25,13 @@ struct CPUImpl
 
     static constexpr bool is_cpu = true;
 
+<<<<<<< HEAD:dbms/src/Flash/Pipeline/Schedule/TaskThreadPoolImpl.h
     static constexpr auto TargetStatus = ExecTaskStatus::RUNNING;
+=======
+    static bool isTargetStatus(ExecTaskStatus status) { return status == ExecTaskStatus::RUNNING; }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h
 
-    static ExecTaskStatus exec(TaskPtr & task)
-    {
-        return task->execute();
-    }
+    static ExecTaskStatus exec(TaskPtr & task) { return task->execute(); }
 
     using QueueType = std::unique_ptr<FIFOTaskQueue>;
 
@@ -48,10 +49,7 @@ struct IOImpl
 
     static constexpr auto TargetStatus = ExecTaskStatus::IO;
 
-    static ExecTaskStatus exec(TaskPtr & task)
-    {
-        return task->executeIO();
-    }
+    static ExecTaskStatus exec(TaskPtr & task) { return task->executeIO(); }
 
     using QueueType = std::unique_ptr<FIFOTaskQueue>;
 

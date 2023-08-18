@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,13 @@ namespace DB
 class TabSeparatedRawRowOutputStream : public TabSeparatedRowOutputStream
 {
 public:
-    TabSeparatedRawRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool with_names_ = false, bool with_types_ = false)
-        : TabSeparatedRowOutputStream(ostr_, sample_, with_names_, with_types_) {}
+    TabSeparatedRawRowOutputStream(
+        WriteBuffer & ostr_,
+        const Block & sample_,
+        bool with_names_ = false,
+        bool with_types_ = false)
+        : TabSeparatedRowOutputStream(ostr_, sample_, with_names_, with_types_)
+    {}
 
     void writeField(const IColumn & column, const IDataType & type, size_t row_num) override
     {
@@ -35,5 +40,4 @@ public:
     }
 };
 
-}
-
+} // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,12 @@ void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t 
         throw Exception("Attempt to read after EOF.", ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF);
 }
 
-void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t bytes, std::function<void()> cancellation_hook)
+void copyDataImpl(
+    ReadBuffer & from,
+    WriteBuffer & to,
+    bool check_bytes,
+    size_t bytes,
+    std::function<void()> cancellation_hook)
 {
     /// If read to the end of the buffer, eof() either fills the buffer with new data and moves the cursor to the beginning, or returns false.
     while (bytes > 0 && !from.eof())

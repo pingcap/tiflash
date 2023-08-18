@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,8 +114,9 @@ private:
                     continue;
                 else
                 {
-                    throw TiFlashException(fmt::format("cannot flush checksum framed data to {} (errno = {})", out->getFileName(), errno),
-                                           Errors::Checksum::IOFailure);
+                    throw TiFlashException(
+                        fmt::format("cannot flush checksum framed data to {} (errno = {})", out->getFileName(), errno),
+                        Errors::Checksum::IOFailure);
                 }
             }
             iter += count;
@@ -123,7 +124,9 @@ private:
             expected -= count;
         }
 
-        ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWriteBytes, len + sizeof(ChecksumFrame<Backend>));
+        ProfileEvents::increment(
+            ProfileEvents::WriteBufferFromFileDescriptorWriteBytes,
+            len + sizeof(ChecksumFrame<Backend>));
         frame_count++;
     }
 
@@ -160,10 +163,7 @@ private:
             throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);
     }
 
-    void close() override
-    {
-        out->close();
-    }
+    void close() override { out->close(); }
 
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
@@ -241,15 +241,18 @@ public:
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
         auto read_header = [&]() -> bool {
-            auto header_length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
+            auto header_length
+                = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
             if (header_length == 0)
                 return false;
             if (unlikely(header_length != sizeof(ChecksumFrame<Backend>)))
             {
-                throw TiFlashException(fmt::format("readBig expects to read a new header, but only {}/{} bytes returned",
-                                                   header_length,
-                                                   sizeof(ChecksumFrame<Backend>)),
-                                       Errors::Checksum::IOFailure);
+                throw TiFlashException(
+                    fmt::format(
+                        "readBig expects to read a new header, but only {}/{} bytes returned",
+                        header_length,
+                        sizeof(ChecksumFrame<Backend>)),
+                    Errors::Checksum::IOFailure);
             }
             return true;
         };
@@ -259,7 +262,10 @@ public:
             if (unlikely(body_length != frame.bytes))
             {
                 throw TiFlashException(
-                    fmt::format("readBig expects to read the body, but only {}/{} bytes returned", body_length, frame.bytes),
+                    fmt::format(
+                        "readBig expects to read the body, but only {}/{} bytes returned",
+                        body_length,
+                        frame.bytes),
                     Errors::Checksum::IOFailure);
             }
         };
@@ -295,7 +301,9 @@ public:
                 digest.update(buffer, frame.bytes);
                 if (unlikely(frame.checksum != digest.checksum()))
                 {
-                    throw TiFlashException("checksum mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
+                    throw TiFlashException(
+                        "checksum mismatch for " + in->getFileName(),
+                        Errors::Checksum::DataCorruption);
                 }
             }
 
@@ -343,8 +351,9 @@ private:
                     continue;
                 else
                 {
-                    throw TiFlashException(fmt::format("cannot load checksum framed data from {} (errno = {})", in->getFileName(), errno),
-                                           Errors::Checksum::IOFailure);
+                    throw TiFlashException(
+                        fmt::format("cannot load checksum framed data from {} (errno = {})", in->getFileName(), errno),
+                        Errors::Checksum::IOFailure);
                 }
             }
             expected -= count;
@@ -380,17 +389,21 @@ private:
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
         // read header and body
-        auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
+        auto length = expectRead(
+            working_buffer.begin() - sizeof(ChecksumFrame<Backend>),
+            sizeof(ChecksumFrame<Backend>) + frame_size);
         if (length == 0)
             return false; // EOF
         if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
         {
-            throw TiFlashException(fmt::format("frame length (header = {}, body = {}, read = {}) mismatch for {}",
-                                               sizeof(ChecksumFrame<Backend>),
-                                               frame.bytes,
-                                               length,
-                                               in->getFileName()),
-                                   Errors::Checksum::DataCorruption);
+            throw TiFlashException(
+                fmt::format(
+                    "frame length (header = {}, body = {}, read = {}) mismatch for {}",
+                    sizeof(ChecksumFrame<Backend>),
+                    frame.bytes,
+                    length,
+                    in->getFileName()),
+                Errors::Checksum::DataCorruption);
         }
 
         // body checksum examination
@@ -412,7 +425,9 @@ private:
         }
         else if (whence != SEEK_SET)
         {
-            throw TiFlashException("FramedChecksumReadBuffer::seek expects SEEK_SET or SEEK_CUR as whence", Errors::Checksum::Internal);
+            throw TiFlashException(
+                "FramedChecksumReadBuffer::seek expects SEEK_SET or SEEK_CUR as whence",
+                Errors::Checksum::Internal);
         }
         auto target_frame = offset / frame_size;
         auto target_offset = offset % frame_size;
@@ -429,9 +444,13 @@ private:
             auto result = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
             if (result == -1)
             {
-                throw TiFlashException("checksum framed file " + in->getFileName() + " is not seekable", Errors::Checksum::IOFailure);
+                throw TiFlashException(
+                    "checksum framed file " + in->getFileName() + " is not seekable",
+                    Errors::Checksum::IOFailure);
             }
-            auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
+            auto length = expectRead(
+                working_buffer.begin() - sizeof(ChecksumFrame<Backend>),
+                sizeof(ChecksumFrame<Backend>) + frame_size);
             if (length == 0)
             {
                 current_frame = target_frame;
@@ -441,12 +460,14 @@ private:
             }
             if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
             {
-                throw TiFlashException(fmt::format("frame length (header = {}, body = {}, read = {}) mismatch for {}",
-                                                   sizeof(ChecksumFrame<Backend>),
-                                                   frame.bytes,
-                                                   length,
-                                                   in->getFileName()),
-                                       Errors::Checksum::DataCorruption);
+                throw TiFlashException(
+                    fmt::format(
+                        "frame length (header = {}, body = {}, read = {}) mismatch for {}",
+                        sizeof(ChecksumFrame<Backend>),
+                        frame.bytes,
+                        length,
+                        in->getFileName()),
+                    Errors::Checksum::DataCorruption);
             }
 
             // body checksum examination

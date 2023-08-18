@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
+
 #include <boost/noncopyable.hpp>
 #include <memory>
 #include <string>
-
-#include <Columns/IColumn.h>
 
 
 namespace DB
@@ -35,8 +35,8 @@ public:
       */
     virtual bool read(MutableColumns & columns) = 0;
 
-    virtual void readPrefix() {};                /// delimiter before begin of result
-    virtual void readSuffix() {};                /// delimiter after end of result
+    virtual void readPrefix(){}; /// delimiter before begin of result
+    virtual void readSuffix(){}; /// delimiter after end of result
 
     /// Skip data until next row.
     /// This is intended for text streams, that allow skipping of errors.
@@ -54,4 +54,4 @@ public:
 
 using RowInputStreamPtr = std::shared_ptr<IRowInputStream>;
 
-}
+} // namespace DB

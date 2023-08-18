@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,7 +111,10 @@ bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
 bool ParserColumnDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserColumnDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(
+               std::make_unique<ParserColumnDeclaration>(),
+               std::make_unique<ParserToken>(TokenType::Comma),
+               false)
         .parse(pos, node, expected);
 }
 

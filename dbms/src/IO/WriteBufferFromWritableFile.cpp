@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,9 @@ void WriteBufferFromWritableFile::nextImpl()
 
         if ((-1 == res || 0 == res) && errno != EINTR)
         {
-            throwFromErrno("Cannot write to file " + getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR); // NOLINT
+            throwFromErrno(
+                "Cannot write to file " + getFileName(),
+                ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR); // NOLINT
         }
 
         if (res > 0)

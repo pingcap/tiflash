@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,8 +71,22 @@ using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 class JoinPartition
 {
 public:
+<<<<<<< HEAD
     JoinPartition(JoinMapMethod join_map_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_, bool has_other_condition_)
         : kind(kind_)
+=======
+    JoinPartition(
+        JoinMapMethod join_map_type_,
+        ASTTableJoin::Kind kind_,
+        ASTTableJoin::Strictness strictness_,
+        size_t partition_index_,
+        size_t max_block_size,
+        const HashJoinSpillContextPtr & hash_join_spill_context_,
+        const LoggerPtr & log_,
+        bool has_other_condition_)
+        : partition_index(partition_index_)
+        , kind(kind_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , strictness(strictness_)
         , join_map_method(join_map_type_)
         , pool(std::make_shared<Arena>())
@@ -117,10 +131,7 @@ public:
     Blocks trySpillBuildPartition(bool force, size_t max_cached_data_bytes, std::unique_lock<std::mutex> & partition_lock);
     Blocks trySpillProbePartition(bool force, size_t max_cached_data_bytes, std::unique_lock<std::mutex> & partition_lock);
     bool hasBuildData() const { return !build_partition.original_blocks.empty(); }
-    void addMemoryUsage(size_t delta)
-    {
-        memory_usage += delta;
-    }
+    void addMemoryUsage(size_t delta) { memory_usage += delta; }
     void subMemoryUsage(size_t delta)
     {
         if likely (memory_usage >= delta)
@@ -218,8 +229,14 @@ private:
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
+<<<<<<< HEAD
     MapsAllFullWithRowFlag maps_all_full_with_row_flag; /// For RIGHT_SEMI | RIGHT_ANTI_SEMI with other conditions
     /// For right/full/rightSemi/rightAnti join, including
+=======
+    MapsAllFullWithRowFlag
+        maps_all_full_with_row_flag; /// For RIGHT_SEMI | RIGHT_ANTI_SEMI | RIGHT_OUTER with other conditions
+    /// For right outer/full/rightSemi/rightAnti join, including
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.

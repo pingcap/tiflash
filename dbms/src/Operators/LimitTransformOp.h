@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,18 +23,20 @@ template <typename LimitActionPtr>
 class LimitTransformOp : public TransformOp
 {
 public:
+<<<<<<< HEAD
     LimitTransformOp(
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
         const LimitActionPtr & action_)
         : TransformOp(exec_status_, req_id)
+=======
+    LimitTransformOp(PipelineExecutorContext & exec_context_, const String & req_id, const LimitActionPtr & action_)
+        : TransformOp(exec_context_, req_id)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , action(action_)
     {}
 
-    String getName() const override
-    {
-        return "LimitTransformOp";
-    }
+    String getName() const override { return "LimitTransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

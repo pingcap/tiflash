@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,10 +32,14 @@ class Context;
 class PipelineExecutorStatus;
 struct PipelineExecGroupBuilder;
 
+<<<<<<< HEAD
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
     const LoggerPtr & log);
+=======
+void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, Int64 max_buffered_bytes, const LoggerPtr & log);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 void executeUnion(
     DAGPipeline & pipeline,
@@ -73,11 +81,7 @@ void executeLocalSort(
     const Context & context,
     const LoggerPtr & log);
 
-void executeCreatingSets(
-    DAGPipeline & pipeline,
-    const Context & context,
-    size_t max_streams,
-    const LoggerPtr & log);
+void executeCreatingSets(DAGPipeline & pipeline, const Context & context, size_t max_streams, const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,

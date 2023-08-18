@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,9 +65,40 @@ static Poco::Logger * getLogger()
     return logger;
 }
 
+<<<<<<< HEAD
 void MemoryTracker::logPeakMemoryUsage() const
 {
     LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
+=======
+static String storageMemoryUsageDetail()
+{
+    return fmt::format(
+        "non-query: peak={}, amount={}; "
+        "query-storage-task: peak={}, amount={}; "
+        "fetch-pages: peak={}, amount={}.",
+        root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->getPeak())
+                                       : "0",
+        root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->get())
+                                       : "0",
+        sub_root_of_query_storage_task_mem_trackers
+            ? formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->getPeak())
+            : "0",
+        sub_root_of_query_storage_task_mem_trackers
+            ? formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->get())
+            : "0",
+        fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->getPeak()) : "0",
+        fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->get()) : "0");
+}
+
+void MemoryTracker::logPeakMemoryUsage() const
+{
+    const char * tmp_decr = description.load();
+    LOG_DEBUG(
+        getLogger(),
+        "Peak memory usage{}: {}.",
+        (tmp_decr ? " " + std::string(tmp_decr) : ""),
+        formatReadableSizeWithBinarySuffix(peak));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
@@ -85,13 +116,16 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     {
         Int64 current_limit = limit.load(std::memory_order_relaxed);
         Int64 current_accuracy_diff_for_test = accuracy_diff_for_test.load(std::memory_order_relaxed);
-        if (unlikely(!next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit && real_rss > current_accuracy_diff_for_test + current_limit))
+        if (unlikely(
+                !next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit
+                && real_rss > current_accuracy_diff_for_test + current_limit))
         {
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
+<<<<<<< HEAD
             fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, memory usage tracked by ProcessList: peak {}, current {}, memory usage not tracked by ProcessList: peak {}, current {} . Virtual memory size: {}",
                               formatReadableSizeWithBinarySuffix(real_rss),
                               formatReadableSizeWithBinarySuffix(current_limit),
@@ -101,6 +135,20 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
                               proc_virt_size.load());
+=======
+            fmt_buf.fmtAppend(
+                ": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, "
+                "memory usage tracked by ProcessList: peak {}, current {}. Virtual memory size: {}.",
+                formatReadableSizeWithBinarySuffix(real_rss),
+                formatReadableSizeWithBinarySuffix(current_limit),
+                proc_num_threads.load(),
+                (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->peak)
+                                            : "0"),
+                (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->amount)
+                                            : "0"),
+                proc_virt_size.load());
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -112,6 +160,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
+<<<<<<< HEAD
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
             fmt_buf.fmtAppend(": fault injected. Would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
@@ -119,14 +168,25 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               size,
                               formatReadableSizeWithBinarySuffix(current_limit));
 
+=======
+            const char * tmp_decr = description.load();
+            if (tmp_decr)
+                fmt_buf.fmtAppend(" {}", tmp_decr);
+            fmt_buf.fmtAppend(
+                ": fault injected. Would use {} (attempt to allocate chunk of {} bytes), maximum: {}.",
+                formatReadableSizeWithBinarySuffix(will_be),
+                size,
+                formatReadableSizeWithBinarySuffix(current_limit));
+            fmt_buf.fmtAppend(" Memory Usage of Storage: {}", storageMemoryUsageDetail());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
         Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
-        bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
-                                 && real_rss > current_limit + current_bytes_rss_larger_than_limit
-                                 && will_be > baseline_of_query_mem_tracker);
-        if (is_rss_too_large
-            || unlikely(current_limit && will_be > current_limit))
+        bool is_rss_too_large
+            = (!next.load(std::memory_order_relaxed) && current_limit
+               && real_rss > current_limit + current_bytes_rss_larger_than_limit
+               && will_be > baseline_of_query_mem_tracker);
+        if (is_rss_too_large || unlikely(current_limit && will_be > current_limit))
         {
             DB::GET_METRIC(tiflash_memory_exceed_quota_count).Increment();
             amount.fetch_sub(size, std::memory_order_relaxed);
@@ -138,6 +198,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             if (!is_rss_too_large)
             { // out of memory quota
+<<<<<<< HEAD
                 fmt_buf.fmtAppend(" exceeded caused by 'out of memory quota for data computing' : would use {} for data computing (attempt to allocate chunk of {} bytes), limit of memory for data computing: {}",
                                   formatReadableSizeWithBinarySuffix(will_be),
                                   size,
@@ -149,6 +210,23 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                                   formatReadableSizeWithBinarySuffix(real_rss),
                                   size,
                                   formatReadableSizeWithBinarySuffix(current_limit));
+=======
+                fmt_buf.fmtAppend(
+                    " exceeded caused by 'out of memory quota for data computing' : would use {} for data computing "
+                    "(attempt to allocate chunk of {} bytes), limit of memory for data computing: {}.",
+                    formatReadableSizeWithBinarySuffix(will_be),
+                    size,
+                    formatReadableSizeWithBinarySuffix(current_limit));
+            }
+            else
+            { // RSS too large
+                fmt_buf.fmtAppend(
+                    " exceeded caused by 'RSS(Resident Set Size) much larger than limit' : process memory size would "
+                    "be {} for (attempt to allocate chunk of {} bytes), limit of memory for data computing : {}.",
+                    formatReadableSizeWithBinarySuffix(real_rss),
+                    size,
+                    formatReadableSizeWithBinarySuffix(current_limit));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             }
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
@@ -224,6 +302,30 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::createGlobalRoot();
 std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
 
+<<<<<<< HEAD
+=======
+std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
+std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
+
+void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
+{
+    LOG_INFO(
+        getLogger(),
+        "Storage task memory limit={}, larger_than_limit={}",
+        formatReadableSizeWithBinarySuffix(limit),
+        formatReadableSizeWithBinarySuffix(larger_than_limit));
+    RUNTIME_CHECK(sub_root_of_query_storage_task_mem_trackers == nullptr);
+    sub_root_of_query_storage_task_mem_trackers = MemoryTracker::create(limit);
+    sub_root_of_query_storage_task_mem_trackers->setBytesThatRssLargerThanLimit(larger_than_limit);
+    sub_root_of_query_storage_task_mem_trackers->setAmountMetric(CurrentMetrics::MemoryTrackingQueryStorageTask);
+
+    RUNTIME_CHECK(fetch_pages_mem_tracker == nullptr);
+    fetch_pages_mem_tracker = MemoryTracker::create();
+    fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
+    fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingFetchPages);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 namespace CurrentMemoryTracker
 {
 static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB

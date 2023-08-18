@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,17 @@ namespace DB
         return (op_status);                                                                       \
     }
 
+<<<<<<< HEAD
+=======
+PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_)
+    : source_op(std::move(source_op_))
+    , transform_ops(std::move(transform_ops_))
+    , sink_op(std::move(sink_op_))
+{
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
@@ -88,7 +99,8 @@ OperatorStatus PipelineExec::executeImpl()
         return op_status;
 
     // start from the next transform op after fetched block transform op.
-    for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size(); ++transform_op_index)
+    for (size_t transform_op_index = start_transform_op_index; transform_op_index < transform_ops.size();
+         ++transform_op_index)
     {
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);

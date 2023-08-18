@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ namespace DB
 class EventTask : public Task
 {
 public:
+<<<<<<< HEAD
     EventTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
@@ -33,6 +34,10 @@ public:
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
+=======
+    // Only used for unit test.
+    EventTask(PipelineExecutorContext & exec_context_, const EventPtr & event_);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     ~EventTask();
 

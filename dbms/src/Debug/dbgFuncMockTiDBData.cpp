@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,9 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
 void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 4)
-        throw Exception("Args not matched, should be: database-name, table-name, region-id, handle-id, values", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database-name, table-name, region-id, handle-id, values",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -102,7 +104,9 @@ void dbgFuncRaftInsertRowFull(Context & context, const ASTs & args, DBGInvoker::
 void dbgFuncRaftDeleteRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 4)
-        throw Exception("Args not matched, should be: database-name, table-name, region-id, handle-id", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database-name, table-name, region-id, handle-id",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -140,10 +144,18 @@ void dbgInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer out
     using TablePtr = MockTiDB::TablePtr;
 
     TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
-    RegionBench::concurrentBatchInsert(table->table_info, concurrent_num, flush_num, batch_num, min_strlen, max_strlen, context);
+    RegionBench::concurrentBatchInsert(
+        table->table_info,
+        concurrent_num,
+        flush_num,
+        batch_num,
+        min_strlen,
+        max_strlen,
+        context);
 
-    output("wrote " + std::to_string(concurrent_num * flush_num * batch_num) + " row to " + database_name + "." + table_name
-           + (" with raft commands"));
+    output(
+        "wrote " + std::to_string(concurrent_num * flush_num * batch_num) + " row to " + database_name + "."
+        + table_name + (" with raft commands"));
 }
 
 void dbgFuncRaftInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -168,7 +180,8 @@ void dbgFuncRaftUpdateRows(Context & context, const ASTs & args, DBGInvoker::Pri
     using TablePtr = MockTiDB::TablePtr;
 
     TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
-    Int64 tol = RegionBench::concurrentRangeOperate(table->table_info, start_handle, end_handle, context, magic_num, false);
+    Int64 tol
+        = RegionBench::concurrentRangeOperate(table->table_info, start_handle, end_handle, context, magic_num, false);
 
     output("update " + std::to_string(tol) + " row in " + database_name + "." + table_name);
 }

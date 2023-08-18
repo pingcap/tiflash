@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,9 +53,20 @@ size_t CompressionEncode(
         compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::LZ4);
 
         if (compression_settings.method == CompressionMethod::LZ4)
-            compressed_size = header_size + LZ4_compress_fast(source.data(), &compressed_buffer[header_size], source.size(), LZ4_COMPRESSBOUND(source.size()), compression_settings.level);
+            compressed_size = header_size
+                + LZ4_compress_fast(
+                                  source.data(),
+                                  &compressed_buffer[header_size],
+                                  source.size(),
+                                  LZ4_COMPRESSBOUND(source.size()),
+                                  compression_settings.level);
         else
-            compressed_size = header_size + LZ4_compress_HC(source.data(), &compressed_buffer[header_size], source.size(), LZ4_COMPRESSBOUND(source.size()), compression_settings.level);
+            compressed_size = header_size
+                + LZ4_compress_HC(source.data(),
+                                  &compressed_buffer[header_size],
+                                  source.size(),
+                                  LZ4_COMPRESSBOUND(source.size()),
+                                  compression_settings.level);
 
         UInt32 compressed_size_32 = compressed_size;
         UInt32 uncompressed_size_32 = source.size();
@@ -81,7 +92,9 @@ size_t CompressionEncode(
             compression_settings.level);
 
         if (ZSTD_isError(res))
-            throw Exception("Cannot compress block with ZSTD: " + std::string(ZSTD_getErrorName(res)), ErrorCodes::CANNOT_COMPRESS);
+            throw Exception(
+                "Cannot compress block with ZSTD: " + std::string(ZSTD_getErrorName(res)),
+                ErrorCodes::CANNOT_COMPRESS);
 
         compressed_size = header_size + res;
 
@@ -111,6 +124,37 @@ size_t CompressionEncode(
 
         break;
     }
+<<<<<<< HEAD
+=======
+#if USE_QPL
+    case CompressionMethod::QPL:
+    {
+        static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
+
+        compressed_buffer.resize(header_size + QPL_Compressbound(source.size()));
+
+        compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::QPL);
+        int res = QPL::QPL_compress(
+            source.data(),
+            source.size(),
+            &compressed_buffer[header_size],
+            QPL_Compressbound(source.size()));
+
+        if (res == -1)
+            throw Exception("Cannot compress block with QplCompressData", ErrorCodes::CANNOT_COMPRESS);
+
+        compressed_size = header_size + res;
+
+        UInt32 compressed_size_32 = compressed_size;
+        UInt32 uncompressed_size_32 = source.size();
+
+        unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
+        unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
+
+        break;
+    }
+#endif
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     default:
         throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
     }
@@ -146,8 +190,7 @@ CompressedWriteBuffer<add_checksum>::CompressedWriteBuffer(
     : BufferWithOwnMemory<WriteBuffer>(buf_size)
     , out(out_)
     , compression_settings(compression_settings_)
-{
-}
+{}
 
 template <bool add_checksum>
 CompressedWriteBuffer<add_checksum>::~CompressedWriteBuffer()
@@ -164,12 +207,6 @@ CompressedWriteBuffer<add_checksum>::~CompressedWriteBuffer()
 
 template class CompressedWriteBuffer<true>;
 template class CompressedWriteBuffer<false>;
-template size_t CompressionEncode<PODArray<char>>(
-    std::string_view,
-    const CompressionSettings &,
-    PODArray<char> &);
-template size_t CompressionEncode<String>(
-    std::string_view,
-    const CompressionSettings &,
-    String &);
+template size_t CompressionEncode<PODArray<char>>(std::string_view, const CompressionSettings &, PODArray<char> &);
+template size_t CompressionEncode<String>(std::string_view, const CompressionSettings &, String &);
 } // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,11 @@ public:
 
     const String & getFilterConditionsId() const;
 
+<<<<<<< HEAD
+=======
+    void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
     void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);

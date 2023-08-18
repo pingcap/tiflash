@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,8 +56,8 @@ public:
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "")
-                      << "DESCRIBE TABLE " << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "DESCRIBE TABLE "
+                      << (settings.hilite ? hilite_none : "");
         table_expression->formatImpl(settings, state, frame);
     }
 };

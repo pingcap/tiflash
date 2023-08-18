@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,13 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
         {
             if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
             {
+<<<<<<< HEAD
                 exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+=======
+                if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get());
+                    exchange_receiver_stream_ptr)
+                    exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             }
         }
     }
@@ -53,9 +59,7 @@ String ExecutorStatisticsCollector::profilesToJson() const
     buffer.joinStr(
         profiles.cbegin(),
         profiles.cend(),
-        [](const auto & s, FmtBuffer & fb) {
-            fb.append(s.second->toJson());
-        },
+        [](const auto & s, FmtBuffer & fb) { fb.append(s.second->toJson()); },
         ",");
     buffer.append("]");
     return buffer.toString();
@@ -142,7 +146,12 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
         current.scan_context->merge(*(iter->second));
 
     current.time_processed_ns += dag_context->compile_time_ns;
-    fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, force_fill_executor_id);
+    fillTiExecutionSummary(
+        *dag_context,
+        response.add_execution_summaries(),
+        current,
+        executor_id,
+        force_fill_executor_id);
 }
 
 void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & response)
@@ -203,7 +212,12 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectRespo
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
-        fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, force_fill_executor_id);
+        fillTiExecutionSummary(
+            *dag_context,
+            response.add_execution_summaries(),
+            p.second,
+            p.first,
+            force_fill_executor_id);
 }
 
 } // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,10 +57,15 @@ void DataTypeMyDate::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) 
     assertChar('\'', istr);
     readMyDateText(x, istr);
     assertChar('\'', istr);
-    static_cast<ColumnUInt64 &>(column).getData().push_back(x); /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt64 &>(column).getData().push_back(
+        x); /// It's important to do this at the end - for exception safety.
 }
 
-void DataTypeMyDate::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
+void DataTypeMyDate::serializeTextJSON(
+    const IColumn & column,
+    size_t row_num,
+    WriteBuffer & ostr,
+    const FormatSettingsJSON &) const
 {
     writeChar('"', ostr);
     serializeText(column, row_num, ostr);

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,8 +81,17 @@ public:
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
+<<<<<<< HEAD
     PipelineEvents toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
     PipelineEvents doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
+=======
+    PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
+    PipelineEvents doToEvents(
+        PipelineExecutorContext & exec_context,
+        Context & context,
+        size_t concurrency,
+        Events & all_events);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 private:
     const UInt32 id;

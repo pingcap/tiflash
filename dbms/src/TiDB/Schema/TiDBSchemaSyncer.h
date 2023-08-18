@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,6 +75,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
     }
 
+<<<<<<< HEAD
     // just for test
     // It clear all synced database info and reset the `cur_version` to 0.
     // All info will fetch from the `getter` again the next time
@@ -86,6 +87,35 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         databases.clear();
         cur_versions.clear();
     }
+=======
+    std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID physical_table_id);
+
+public:
+    TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
+        : cluster(std::move(cluster_))
+        , keyspace_id(keyspace_id_)
+        , cur_version(0)
+        , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
+        , table_id_map(log)
+    {}
+
+    /*
+     * Sync all tables' schemas based on schema diff. This method mainly update the TableID mapping of this keyspace.
+     */
+    bool syncSchemas(Context & context) override;
+
+    /*
+     * Sync the table's inner schema(like add columns, modify columns, etc) for given physical_table_id
+     * This function will be called concurrently when the schema not matches during reading or writing
+     */
+    bool syncTableSchema(Context & context, TableID physical_table_id) override;
+
+    /*
+     * When the table is physically dropped from the TiFlash node, use this method to unregister
+     * the TableID mapping.
+     */
+    void removeTableID(TableID table_id) override { table_id_map.erase(table_id); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     std::vector<TiDB::DBInfoPtr> fetchAllDBs(KeyspaceID keyspace_id) override
     {
@@ -175,7 +205,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard lock(schema_mutex);
 
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
+            return pair.second->name == database_name;
+        });
         if (it == databases.end())
             return nullptr;
         return it->second;
@@ -185,7 +217,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard lock(schema_mutex);
 
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
+            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
+        });
         if (it == databases.end())
             return nullptr;
         return it->second;

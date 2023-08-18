@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 // Hold the shared_ptr of memory tracker.
 // To avoid the current_memory_tracker being an illegal pointer.
 #define TRACE_MEMORY(task)                         \
@@ -36,6 +37,9 @@ namespace DB
 
 #define FINISH_STATUS \
     ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
+=======
+#define FINISH_STATUS ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
         auto await_status = awaitImpl();
         if (await_status == OperatorStatus::HAS_OUTPUT)
         {
+<<<<<<< HEAD
             assert(recv_res);
             assert(recv_res->recv_status != ReceiveStatus::empty);
             auto result = exchange_receiver->toExchangeReceiveResult(
@@ -51,6 +52,14 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
                 header,
                 decoder_ptr);
             recv_res.reset();
+=======
+            assert(receive_status != ReceiveStatus::empty);
+            auto result
+                = exchange_receiver
+                      ->toExchangeReceiveResult(stream_id, receive_status, recv_msg, block_queue, header, decoder_ptr);
+            recv_msg = nullptr;
+            receive_status = ReceiveStatus::empty;
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
             if (result.meet_error)
             {

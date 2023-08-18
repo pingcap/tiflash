@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,11 @@ namespace DB
 class FIFOTaskQueue : public TaskQueue
 {
 public:
+<<<<<<< HEAD:dbms/src/Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h
     void submit(TaskPtr && task) noexcept override;
+=======
+    ExpandTransformAction(const Block & header_, const Expand2Ptr & expand_);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):dbms/src/DataStreams/ExpandTransformAction.h
 
     void submit(std::vector<TaskPtr> & tasks) noexcept override;
 

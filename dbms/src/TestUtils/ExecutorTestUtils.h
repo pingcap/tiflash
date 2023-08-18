@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,11 +73,19 @@ public:
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
-    void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
-    void executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
+    void executeInterpreter(
+        const String & expected_string,
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        size_t concurrency);
+    void executeInterpreterWithDeltaMerge(
+        const String & expected_string,
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        size_t concurrency);
 
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
-    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+    void executeAndAssertColumnsEqual(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & expect_columns);
 
     // To check the output column with index = column_index sorted.
     struct SortInfo
@@ -107,14 +115,13 @@ public:
         case ExchangeReceiver:
             return "exchange_receiver_0";
         default:
-            throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                            "Unknown Executor Source type {}",
-                            type);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown Executor Source type {}", type);
         }
     }
 
     ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enable_memory_tracker = false);
 
+<<<<<<< HEAD
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1,
@@ -124,6 +131,11 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1,
         bool enable_memory_tracker = false);
+=======
+    ColumnsWithTypeAndName executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency = 1);
+
+    Blocks getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency = 1);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     /// test execution summary
     // <rows, concurrency>
@@ -146,7 +158,8 @@ private:
     void checkBlockSorted(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const SortInfos & sort_infos,
-        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func);
+        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)>
+            assert_func);
 
 protected:
     MockDAGRequestContext context;

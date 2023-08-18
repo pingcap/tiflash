@@ -1,4 +1,8 @@
+<<<<<<< HEAD:tests/docker/config/tiflash_dt_enable_pipeline.toml
 # Copyright 2022 PingCAP, Ltd.
+=======
+# Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962)):tests/docker/config/tiflash_dt_force_enable_lm.toml
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

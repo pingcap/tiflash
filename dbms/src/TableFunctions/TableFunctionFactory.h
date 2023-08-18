@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,15 +42,11 @@ public:
     template <typename Function>
     void registerFunction()
     {
-        registerFunction(Function::name, []() -> TableFunctionPtr {
-            return std::make_shared<Function>();
-        });
+        registerFunction(Function::name, []() -> TableFunctionPtr { return std::make_shared<Function>(); });
     }
 
     /// Throws an exception if not found.
-    TableFunctionPtr get(
-        const std::string & name,
-        const Context & context) const;
+    TableFunctionPtr get(const std::string & name, const Context & context) const;
 
 private:
     using TableFunctions = std::unordered_map<std::string, Creator>;

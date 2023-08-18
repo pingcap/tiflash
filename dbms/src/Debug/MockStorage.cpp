@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2022 PingCAP, Ltd.
+=======
+// Copyright 2023 PingCAP, Inc.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,14 +119,15 @@ Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & n
         }
         astptr->children.emplace_back(new ASTIdentifier(columns[0].name));
 
-        storage_delta_merge_map[table_id] = StorageDeltaMerge::create("TiFlash",
-                                                                      /* db_name= */ "default",
-                                                                      name,
-                                                                      std::nullopt,
-                                                                      ColumnsDescription{names_and_types_list},
-                                                                      astptr,
-                                                                      0,
-                                                                      context);
+        storage_delta_merge_map[table_id] = StorageDeltaMerge::create(
+            "TiFlash",
+            /* db_name= */ "default",
+            name,
+            std::nullopt,
+            ColumnsDescription{names_and_types_list},
+            astptr,
+            0,
+            context);
 
         auto storage = storage_delta_merge_map[table_id];
         assert(storage);
@@ -141,7 +146,14 @@ Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & n
     return table_id;
 }
 
+<<<<<<< HEAD
 std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareForRead(Context & context, Int64 table_id)
+=======
+std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareForRead(
+    Context & context,
+    Int64 table_id,
+    bool keep_order)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
@@ -156,8 +168,16 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     auto scan_context = std::make_shared<DM::ScanContext>();
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
+<<<<<<< HEAD
     query_info.keep_order = false;
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+=======
+    query_info.keep_order = keep_order;
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(
+        context.getSettingsRef().resolve_locks,
+        std::numeric_limits<UInt64>::max(),
+        scan_context);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     return {storage, column_names, query_info};
 }
 
@@ -174,8 +194,15 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
             pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
-        BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
+        auto [before_where, filter_column_name, project_after_where]
+            = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
+        BlockInputStreams ins = storage->read(
+            column_names,
+            query_info,
+            context,
+            stage,
+            8192,
+            1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];
         in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
@@ -193,11 +220,66 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
 }
 
 
+<<<<<<< HEAD
 SourceOps MockStorage::getSourceOpsFromDeltaMerge(PipelineExecutorStatus & exec_status_, Context & context, Int64 table_id, size_t concurrency)
 {
     auto [storage, column_names, query_info] = prepareForRead(context, table_id);
     // Currently don't support test for late materialization
     return storage->readSourceOps(exec_status_, column_names, query_info, context, context.getSettingsRef().max_block_size, concurrency);
+=======
+    auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
+    if (filter_conditions && filter_conditions->hasValue())
+    {
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            filter_conditions->conditions,
+            empty_pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
+        // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
+        auto build_ret = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
+        storage->read(
+            exec_context_,
+            group_builder,
+            column_names,
+            query_info,
+            context,
+            context.getSettingsRef().max_block_size,
+            concurrency);
+        auto log = Logger::get("test for late materialization");
+        auto input_header = group_builder.getCurrentHeader();
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<FilterTransformOp>(
+                exec_context_,
+                log->identifier(),
+                input_header,
+                std::get<0>(build_ret),
+                std::get<1>(build_ret)));
+        });
+        executeExpression(exec_context_, group_builder, std::get<2>(build_ret), log);
+    }
+    else
+    {
+        static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            empty_filters,
+            empty_pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
+        storage->read(
+            exec_context_,
+            group_builder,
+            column_names,
+            query_info,
+            context,
+            context.getSettingsRef().max_block_size,
+            concurrency);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)
@@ -285,7 +367,9 @@ void MockStorage::addExchangeData(const String & exchange_name, const ColumnsWit
     exchange_columns[exchange_name] = columns;
 }
 
-void MockStorage::addFineGrainedExchangeData(const String & exchange_name, const std::vector<ColumnsWithTypeAndName> & columns)
+void MockStorage::addFineGrainedExchangeData(
+    const String & exchange_name,
+    const std::vector<ColumnsWithTypeAndName> & columns)
 {
     fine_grained_exchange_columns[exchange_name] = columns;
 }
@@ -300,16 +384,19 @@ bool MockStorage::exchangeExistsWithName(const String & name)
     return exchange_schemas.find(name) != exchange_schemas.end();
 }
 
-std::vector<ColumnsWithTypeAndName> MockStorage::getFineGrainedExchangeColumnsVector(const String & executor_id, size_t fine_grained_stream_count)
+std::vector<ColumnsWithTypeAndName> MockStorage::getFineGrainedExchangeColumnsVector(
+    const String & executor_id,
+    size_t fine_grained_stream_count)
 {
     if (exchangeExists(executor_id))
     {
         auto exchange_name = executor_id_to_name_map[executor_id];
         if (fine_grained_exchange_columns.find(exchange_name) != fine_grained_exchange_columns.end())
         {
-            RUNTIME_CHECK_MSG(fine_grained_exchange_columns[exchange_name].size() == fine_grained_stream_count,
-                              "Fine grained exchange data does not match fine grained stream count for exchange receiver {}",
-                              executor_id);
+            RUNTIME_CHECK_MSG(
+                fine_grained_exchange_columns[exchange_name].size() == fine_grained_stream_count,
+                "Fine grained exchange data does not match fine grained stream count for exchange receiver {}",
+                executor_id);
             return fine_grained_exchange_columns[exchange_name];
         }
         if (exchange_columns.find(exchange_name) != exchange_columns.end())
@@ -317,7 +404,8 @@ std::vector<ColumnsWithTypeAndName> MockStorage::getFineGrainedExchangeColumnsVe
             auto columns = exchange_columns[exchange_name];
             if (columns[0].column == nullptr || columns[0].column->empty())
                 return {};
-            throw Exception(fmt::format("Failed to get fine grained exchange columns by executor_id '{}'", executor_id));
+            throw Exception(
+                fmt::format("Failed to get fine grained exchange columns by executor_id '{}'", executor_id));
         }
         return {};
     }
@@ -405,17 +493,19 @@ ColumnsWithTypeAndName getUsedColumns(const ColumnInfos & used_columns, const Co
         }
         if (contains)
         {
-            res.push_back(
-                ColumnWithTypeAndName(
-                    column_with_type_and_name.column,
-                    column_with_type_and_name.type,
-                    column_with_type_and_name.name));
+            res.push_back(ColumnWithTypeAndName(
+                column_with_type_and_name.column,
+                column_with_type_and_name.type,
+                column_with_type_and_name.name));
         }
     }
     return res;
 }
 
-ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num)
+ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(
+    const TiDBTableScan & table_scan,
+    Int64 partition_id,
+    Int64 partition_num)
 {
     auto table_id = table_scan.getLogicalTableID();
     if (tableExists(table_id))

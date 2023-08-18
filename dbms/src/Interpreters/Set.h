@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,8 +52,7 @@ public:
         , limits(limits)
         , set_elements(std::make_unique<SetElements>())
         , collators(std::move(collators_))
-    {
-    }
+    {}
 
     bool empty() const { return data.empty(); }
 
@@ -70,7 +69,10 @@ public:
     /**
       * Create a Set from DAG Expr, used when processing DAG Request
       */
-    std::vector<const tipb::Expr *> createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements);
+    std::vector<const tipb::Expr *> createFromDAGExpr(
+        const DataTypes & types,
+        const tipb::Expr & expr,
+        bool fill_set_elements);
 
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.

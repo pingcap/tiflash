@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,15 @@ struct AdderRowFlaggedMapEntry;
 template <typename Mapped>
 struct AdderMapEntry<ASTTableJoin::Strictness::Any, Mapped>
 {
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *&, const size_t)
+    static size_t add(
+        const Mapped & mapped,
+        size_t key_num,
+        size_t num_columns_left,
+        MutableColumns & columns_left,
+        size_t num_columns_right,
+        MutableColumns & columns_right,
+        const void *&,
+        const size_t)
     {
         for (size_t j = 0; j < num_columns_left; ++j)
             /// should fill the key column with key columns from right block
@@ -52,7 +60,15 @@ struct AdderMapEntry<ASTTableJoin::Strictness::Any, Mapped>
 template <typename Mapped>
 struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
 {
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *& next_element_in_row_list, const size_t max_row_added)
+    static size_t add(
+        const Mapped & mapped,
+        size_t key_num,
+        size_t num_columns_left,
+        MutableColumns & columns_left,
+        size_t num_columns_right,
+        MutableColumns & columns_right,
+        const void *& next_element_in_row_list,
+        const size_t max_row_added)
     {
         size_t rows_added = 0;
         auto current = &static_cast<const typename Mapped::Base_t &>(mapped);
@@ -62,7 +78,9 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
         {
             /// handle left columns later to utilize insertManyDefaults
             for (size_t j = 0; j < num_columns_right; ++j)
-                columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
+                columns_right[j]->insertFrom(
+                    *current->block->getByPosition(key_num + j).column.get(),
+                    current->row_num);
             ++rows_added;
         }
         for (size_t j = 0; j < num_columns_left; ++j)
@@ -80,7 +98,15 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
 template <bool add_joined, typename Mapped>
 struct AdderRowFlaggedMapEntry
 {
-    static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *& next_element_in_row_list, const size_t max_row_added)
+    static size_t add(
+        const Mapped & mapped,
+        size_t key_num,
+        size_t num_columns_left,
+        MutableColumns & columns_left,
+        size_t num_columns_right,
+        MutableColumns & columns_right,
+        const void *& next_element_in_row_list,
+        const size_t max_row_added)
     {
         size_t rows_added = 0;
         const auto * current = &static_cast<const typename Mapped::Base_t &>(mapped);
@@ -95,7 +121,9 @@ struct AdderRowFlaggedMapEntry
             {
                 /// handle left columns later to utilize insertManyDefaults if any
                 for (size_t j = 0; j < num_columns_right; ++j)
-                    columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
+                    columns_right[j]->insertFrom(
+                        *current->block->getByPosition(key_num + j).column.get(),
+                        current->row_num);
                 ++rows_added;
             }
         }
@@ -111,7 +139,12 @@ struct AdderRowFlaggedMapEntry
     }
 };
 
-ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
+ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
+    const Join & parent_,
+    const Block & left_sample_block,
+    size_t index_,
+    size_t step_,
+    size_t max_block_size_)
     : parent(parent_)
     , index(index_)
     , step(step_)
@@ -119,7 +152,9 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(con
 {
     size_t build_concurrency = parent.getBuildConcurrency();
     if (unlikely(step > build_concurrency || index >= build_concurrency))
-        LOG_WARNING(parent.log, "The concurrency of ScanHashMapAfterProbBlockInputStream is larger than join build concurrency");
+        LOG_WARNING(
+            parent.log,
+            "The concurrency of ScanHashMapAfterProbBlockInputStream is larger than join build concurrency");
 
     /** left_sample_block contains keys and "left" columns.
           * result_sample_block - keys, "left" columns, and "right" columns.
@@ -153,7 +188,8 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(con
     for (size_t i = 0; i < num_columns_left; ++i)
     {
         const auto & column_with_type_and_name = result_sample_block.getByPosition(column_indices_left[i]);
-        if (parent.key_names_left.end() == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
+        if (parent.key_names_left.end()
+            == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
             /// if it is not the key, then convert to nullable, if it is key, then just keep the original type
             /// actually we don't care about the key column now refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
             /// for detailed explanation
@@ -174,7 +210,10 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
     if unlikely (parent.active_build_threads != 0 || parent.active_probe_threads != 0)
     {
         /// build/probe is not finished yet, the query must be cancelled, so just return {}
-        LOG_WARNING(parent.log, "ScanHashMapAfterProbe read without non zero active_build_threads/active_probe_threads, return empty block");
+        LOG_WARNING(
+            parent.log,
+            "ScanHashMapAfterProbe read without non zero active_build_threads/active_probe_threads, return empty "
+            "block");
         return {};
     }
     if (!parent.has_build_data_in_memory)
@@ -208,18 +247,43 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
         {
         case ASTTableJoin::Kind::RightSemi:
             if (parent.has_other_condition)
-                fillColumnsUsingCurrentPartition<true, true>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+                fillColumnsUsingCurrentPartition<true, true>(
+                    num_columns_left,
+                    columns_left,
+                    num_columns_right,
+                    columns_right,
+                    row_counter_column);
             else
-                fillColumnsUsingCurrentPartition<false, true>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+                fillColumnsUsingCurrentPartition<false, true>(
+                    num_columns_left,
+                    columns_left,
+                    num_columns_right,
+                    columns_right,
+                    row_counter_column);
             break;
         case ASTTableJoin::Kind::RightAnti:
             if (parent.has_other_condition)
-                fillColumnsUsingCurrentPartition<true, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+                fillColumnsUsingCurrentPartition<true, false>(
+                    num_columns_left,
+                    columns_left,
+                    num_columns_right,
+                    columns_right,
+                    row_counter_column);
             else
-                fillColumnsUsingCurrentPartition<false, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+                fillColumnsUsingCurrentPartition<false, false>(
+                    num_columns_left,
+                    columns_left,
+                    num_columns_right,
+                    columns_right,
+                    row_counter_column);
             break;
         default:
-            fillColumnsUsingCurrentPartition<false, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+            fillColumnsUsingCurrentPartition<false, false>(
+                num_columns_left,
+                columns_left,
+                num_columns_right,
+                columns_right,
+                row_counter_column);
         }
     }
 
@@ -351,12 +415,13 @@ private:
 };
 
 template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
-void ScanHashMapAfterProbeBlockInputStream::fillColumns(const Map & map,
-                                                        size_t num_columns_left,
-                                                        MutableColumns & mutable_columns_left,
-                                                        size_t num_columns_right,
-                                                        MutableColumns & mutable_columns_right,
-                                                        IColumn * row_counter_column)
+void ScanHashMapAfterProbeBlockInputStream::fillColumns(
+    const Map & map,
+    size_t num_columns_left,
+    MutableColumns & mutable_columns_left,
+    size_t num_columns_right,
+    MutableColumns & mutable_columns_right,
+    IColumn * row_counter_column)
 {
     size_t key_num = parent.key_names_right.size();
     /// first add rows that is not in the hash table
@@ -366,8 +431,9 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(const Map & map,
         row_count_info.inc(1);
         /// handle left columns later to utilize insertManyDefaults
         for (size_t j = 0; j < num_columns_right; ++j)
-            mutable_columns_right[j]->insertFrom(*not_mapped_row_pos->block->getByPosition(key_num + j).column.get(),
-                                                 not_mapped_row_pos->row_num);
+            mutable_columns_right[j]->insertFrom(
+                *not_mapped_row_pos->block->getByPosition(key_num + j).column.get(),
+                not_mapped_row_pos->row_num);
 
         not_mapped_row_pos = not_mapped_row_pos->next;
         if (row_count_info.reachMaxRows())
@@ -400,7 +466,15 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(const Map & map,
     for (; *it != end;)
     {
         if constexpr (row_flagged)
-            row_count_info.inc(AdderRowFlaggedMapEntry<output_joined_rows, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
+            row_count_info.inc(AdderRowFlaggedMapEntry<output_joined_rows, typename Map::mapped_type>::add(
+                (*it)->getMapped(),
+                key_num,
+                num_columns_left,
+                mutable_columns_left,
+                num_columns_right,
+                mutable_columns_right,
+                next_element_in_row_list,
+                row_count_info.availableRowCount()));
         else
         {
             bool should_skip = (*it)->getMapped().getUsed();

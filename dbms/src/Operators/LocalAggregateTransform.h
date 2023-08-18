@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,10 +34,7 @@ public:
         const String & req_id,
         const Aggregator::Params & params_);
 
-    String getName() const override
-    {
-        return "LocalAggregateTransform";
-    }
+    String getName() const override { return "LocalAggregateTransform"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

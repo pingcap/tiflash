@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,11 @@
 
 namespace DB::mock
 {
-bool ExchangeSenderBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ExchangeSenderBinder::toTiPBExecutor(
+    tipb::Executor * tipb_executor,
+    int32_t collator_id,
+    const MPPInfo & mpp_info,
+    const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
     tipb_executor->set_executor_id(name);
@@ -53,7 +57,8 @@ bool ExchangeSenderBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_
         meta.set_local_query_id(mpp_info.local_query_id);
         meta.set_task_id(task_id);
         meta.set_partition_id(i);
-        auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[i++].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[i++].addr
+                                        : Debug::LOCAL_HOST;
         meta.set_address(addr);
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
@@ -106,7 +111,10 @@ ExecutorBinderPtr compileExchangeSender(
             return buffer.toString();
         };
         if (schema_index == input->output_schema.size())
-            throw Exception(fmt::format("Unknown partition key: {}, schema is [{}]", partition_key->getColumnName(), schema_string()));
+            throw Exception(fmt::format(
+                "Unknown partition key: {}, schema is [{}]",
+                partition_key->getColumnName(),
+                schema_string()));
     }
     ExecutorBinderPtr exchange_sender = std::make_shared<mock::ExchangeSenderBinder>(
         executor_index,

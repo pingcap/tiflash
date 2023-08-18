@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,7 +98,8 @@ namespace FunctionsRegexp
 inline int getDefaultFlags()
 {
     int flags = 0;
-    flags |= OptimizedRegularExpressionImpl<false>::RE_NO_CAPTURE | OptimizedRegularExpressionImpl<false>::RE_NO_OPTIMIZE;
+    flags
+        |= OptimizedRegularExpressionImpl<false>::RE_NO_CAPTURE | OptimizedRegularExpressionImpl<false>::RE_NO_OPTIMIZE;
     return flags;
 }
 
@@ -111,7 +112,16 @@ inline String addMatchTypeForPattern(const String & pattern, const String & matc
     return fmt::format("{}{}", mode, pattern);
 }
 
+<<<<<<< HEAD
 inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
+=======
+template <bool need_subpattern = false>
+inline Regexps::Regexp createRegexpWithMatchType(
+    const String & pattern,
+    const String & match_type,
+    TiDB::TiDBCollatorPtr collator,
+    int flags = 0)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 {
     String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
     return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
@@ -121,7 +131,9 @@ inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const S
 template <typename T>
 inline constexpr bool check_int_type()
 {
-    return std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>;
+    return std::is_same_v<
+               T,
+               UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>;
 }
 
 inline Int64 getIntFromField(Field & field)
@@ -248,10 +260,7 @@ public:
         throw Exception("ParamString should not call this constructor");
     }
 
-    ~ParamString()
-    {
-        delete[] const_string_data;
-    }
+    ~ParamString() { delete[] const_string_data; }
 
     static IntType getIntType() { throw Exception("ParamString not supports this function"); }
 
@@ -349,7 +358,9 @@ public:
             return const_int_val;
         else
         {
-            const auto * tmp = reinterpret_cast<const typename ColumnVector<std::enable_if_t<FunctionsRegexp::check_int_type<T>(), T>>::Container *>(int_container);
+            const auto * tmp = reinterpret_cast<
+                const typename ColumnVector<std::enable_if_t<FunctionsRegexp::check_int_type<T>(), T>>::Container *>(
+                int_container);
             return static_cast<Int64>((*tmp)[idx]);
         }
     }
@@ -584,10 +595,14 @@ public:
             switch (param_type)
             {
                 // Expand the macro to enumerate string param cases
-                APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, param, actual_param_ptr, ({ delete actual_param_ptr; }))
+                APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, param, actual_param_ptr, ({
+                                                    delete actual_param_ptr;
+                                                }))
 
                 // Expand the macro to enumerate int param cases
-                APPLY_FOR_PARAM_INT_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, param, actual_param_ptr, ({ delete actual_param_ptr; }))
+                APPLY_FOR_PARAM_INT_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, param, actual_param_ptr, ({
+                                                 delete actual_param_ptr;
+                                             }))
             default:
                 throw Exception("Unexpected ParamType");
             }
@@ -628,7 +643,11 @@ private:
             const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_ptr)).getNullMapData());
 
             // Construct actual param
-            param = new ParamStringNullableAndNotConst(col_size, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));
+            param = new ParamStringNullableAndNotConst(
+                col_size,
+                null_map,
+                static_cast<const void *>(&(tmp->getChars())),
+                static_cast<const void *>(&(tmp->getOffsets())));
             param_type = ParamType::StringNullableAndNotConst;
         }
         else
@@ -637,7 +656,10 @@ private:
             const auto * tmp = checkAndGetColumn<ColumnString>(&(*(col_ptr)));
 
             // Construct actual param
-            param = new ParamStringNotNullableAndNotConst(col_size, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));
+            param = new ParamStringNotNullableAndNotConst(
+                col_size,
+                static_cast<const void *>(&(tmp->getChars())),
+                static_cast<const void *>(&(tmp->getOffsets())));
             param_type = ParamType::StringNotNullableAndNotConst;
         }
     }
@@ -694,15 +716,17 @@ private:
             // Construct actual param
             param_type = ParamType::IntNullableAndNotConst;
 
-#define M(INT_TYPE, col_ptr, null_map, param)                                                                                                \
-    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr))))                                                        \
-    {                                                                                                                                        \
-        (param) = new ParamIntNullableAndNotConst(col_size, null_map, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
+#define M(INT_TYPE, col_ptr, null_map, param)                                         \
+    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
+    {                                                                                 \
+        (param) = new ParamIntNullableAndNotConst(                                    \
+            col_size,                                                                 \
+            null_map,                                                                 \
+            reinterpret_cast<const void *>(&(ptr->getData())),                        \
+            IntType::INT_TYPE);                                                       \
     }
 
-            if (false)
-            {
-            }
+            if (false) {}
             APPLY_FOR_INT_CONTAINER(M, nested_ptr, null_map, param)
             else throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -713,15 +737,16 @@ private:
             // Construct actual param
             param_type = ParamType::IntNotNullableAndNotConst;
 
-#define M(INT_TYPE, col_ptr, null_map, param)                                                                                         \
-    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr))))                                                 \
-    {                                                                                                                                 \
-        (param) = new ParamIntNotNullableAndNotConst(col_size, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
+#define M(INT_TYPE, col_ptr, null_map, param)                                         \
+    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
+    {                                                                                 \
+        (param) = new ParamIntNotNullableAndNotConst(                                 \
+            col_size,                                                                 \
+            reinterpret_cast<const void *>(&(ptr->getData())),                        \
+            IntType::INT_TYPE);                                                       \
     }
 
-            if (false)
-            {
-            }
+            if (false) {}
             APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param)
             else throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -819,7 +844,15 @@ public:
     //  - only pattern column is provided and it's a constant column
     //  - pattern and match type columns are provided and they are both constant columns
     template <bool need_subpattern, typename ExprT, typename MatchTypeT>
+<<<<<<< HEAD
     std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
+=======
+    std::unique_ptr<Regexps::Regexp> memorize(
+        const ExprT & pat_param,
+        const MatchTypeT & match_type_param,
+        TiDB::TiDBCollatorPtr collator,
+        int flags = 0) const
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {
         if (pat_param.isNullAt(0) || match_type_param.isNullAt(0))
             return nullptr;
@@ -845,7 +878,11 @@ public:
         return (PatT::isConst() && MatchTypeT::isConst());
     }
 
-    static void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing)
+    static void checkInputArg(
+        const DataTypePtr & arg,
+        bool is_str,
+        bool * has_nullable_col,
+        bool * has_data_type_nothing)
     {
         if (is_str)
             checkStringTypeArg(arg, has_nullable_col, has_data_type_nothing);
@@ -868,7 +905,9 @@ private:
             if (!nested_type->isString())
             {
                 if (nested_type->getTypeId() != TypeIndex::Nothing)
-                    throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(
+                        fmt::format("Illegal type {} of argument of regexp function", arg->getName()),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
                 else
                     *has_data_type_nothing = true;
             }
@@ -876,7 +915,9 @@ private:
         else
         {
             if (!arg->isString())
-                throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    fmt::format("Illegal type {} of argument of regexp function", arg->getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
@@ -894,7 +935,9 @@ private:
             if (!nested_type->isInteger())
             {
                 if (nested_type->getTypeId() != TypeIndex::Nothing)
-                    throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(
+                        fmt::format("Illegal type {} of argument of regexp function", arg->getName()),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
                 else
                     *has_data_type_nothing = true;
             }
@@ -902,7 +945,9 @@ private:
         else
         {
             if (!arg->isInteger())
-                throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    fmt::format("Illegal type {} of argument of regexp function", arg->getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 };

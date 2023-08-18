@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,11 +27,16 @@ namespace
 class BaseTask : public EventTask
 {
 public:
+<<<<<<< HEAD
     BaseTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         std::atomic_int64_t & counter_)
         : EventTask(exec_status_, event_)
+=======
+    BaseTask(PipelineExecutorContext & exec_context_, const EventPtr & event_, std::atomic_int64_t & counter_)
+        : EventTask(exec_context_, event_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , counter(counter_)
     {}
 
@@ -49,10 +54,15 @@ private:
 class BaseEvent : public Event
 {
 public:
+<<<<<<< HEAD
     BaseEvent(
         PipelineExecutorStatus & exec_status_,
         std::atomic_int64_t & counter_)
         : Event(exec_status_, nullptr)
+=======
+    BaseEvent(PipelineExecutorContext & exec_context_, std::atomic_int64_t & counter_)
+        : Event(exec_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , counter(counter_)
     {}
 
@@ -67,10 +77,7 @@ protected:
         return tasks;
     }
 
-    void finishImpl() override
-    {
-        --counter;
-    }
+    void finishImpl() override { --counter; }
 
 private:
     std::atomic_int64_t & counter;
@@ -79,10 +86,15 @@ private:
 class RunTask : public EventTask
 {
 public:
+<<<<<<< HEAD
     RunTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
         : EventTask(exec_status_, event_)
+=======
+    RunTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
+        : EventTask(exec_context_, event_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {}
 
 protected:
@@ -100,10 +112,15 @@ private:
 class RunEvent : public Event
 {
 public:
+<<<<<<< HEAD
     RunEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_tasks_)
         : Event(exec_status_, nullptr)
+=======
+    RunEvent(PipelineExecutorContext & exec_context_, bool with_tasks_)
+        : Event(exec_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , with_tasks(with_tasks_)
     {}
 
@@ -126,10 +143,15 @@ private:
 class DeadLoopTask : public EventTask
 {
 public:
+<<<<<<< HEAD
     DeadLoopTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
         : EventTask(exec_status_, event_)
+=======
+    DeadLoopTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
+        : EventTask(exec_context_, event_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     {}
 
 protected:
@@ -143,10 +165,15 @@ protected:
 class DeadLoopEvent : public Event
 {
 public:
+<<<<<<< HEAD
     DeadLoopEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_tasks_)
         : Event(exec_status_, nullptr)
+=======
+    DeadLoopEvent(PipelineExecutorContext & exec_context_, bool with_tasks_)
+        : Event(exec_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , with_tasks(with_tasks_)
     {}
 
@@ -180,11 +207,15 @@ public:
     static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
+<<<<<<< HEAD
     std::vector<TaskPtr> scheduleImpl() override
     {
         exec_status.onErrorOccurred(err_msg);
         return {};
     }
+=======
+    void scheduleImpl() override { exec_context.onErrorOccurred(err_msg); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 class AssertMemoryTraceEvent : public Event
@@ -195,21 +226,23 @@ public:
     {}
 
 protected:
+<<<<<<< HEAD
     std::vector<TaskPtr> scheduleImpl() override
     {
         assert(mem_tracker.get() == current_memory_tracker);
         return {};
     }
+=======
+    void scheduleImpl() override { assert(mem_tracker.get() == current_memory_tracker); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
-    void finishImpl() override
-    {
-        assert(mem_tracker.get() == current_memory_tracker);
-    }
+    void finishImpl() override { assert(mem_tracker.get() == current_memory_tracker); }
 };
 
 class ThrowExceptionTask : public EventTask
 {
 public:
+<<<<<<< HEAD
     ThrowExceptionTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
@@ -221,15 +254,28 @@ protected:
     {
         throw Exception("throw exception in doExecuteImpl");
     }
+=======
+    ThrowExceptionTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
+        : EventTask(exec_context_, event_)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override { throw Exception("throw exception in doExecuteImpl"); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 class ThrowExceptionEvent : public Event
 {
 public:
+<<<<<<< HEAD
     ThrowExceptionEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_task_)
         : Event(exec_status_, nullptr)
+=======
+    ThrowExceptionEvent(PipelineExecutorContext & exec_context_, bool with_task_)
+        : Event(exec_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , with_task(with_task_)
     {}
 
@@ -258,10 +304,15 @@ private:
 class ManyTasksEvent : public Event
 {
 public:
+<<<<<<< HEAD
     ManyTasksEvent(
         PipelineExecutorStatus & exec_status_,
         size_t task_num_)
         : Event(exec_status_, nullptr)
+=======
+    ManyTasksEvent(PipelineExecutorContext & exec_context_, size_t task_num_)
+        : Event(exec_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , task_num(task_num_)
     {}
 
@@ -284,22 +335,31 @@ private:
 class DoInsertEvent : public Event
 {
 public:
+<<<<<<< HEAD
     DoInsertEvent(
         PipelineExecutorStatus & exec_status_,
         std::atomic_int16_t & counter_)
         : Event(exec_status_, nullptr)
+=======
+    DoInsertEvent(PipelineExecutorContext & exec_context_, int16_t & counter_)
+        : Event(exec_context_)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         , counter(counter_)
     {
         assert(counter > 0);
     }
 
 protected:
+<<<<<<< HEAD
     std::vector<TaskPtr> scheduleImpl() override
     {
         std::vector<TaskPtr> tasks;
         tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
         return tasks;
     }
+=======
+    void scheduleImpl() override { addTask(std::make_unique<RunTask>(exec_context, shared_from_this())); }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     void finishImpl() override
     {
@@ -309,7 +369,93 @@ protected:
     }
 
 private:
+<<<<<<< HEAD
     std::atomic_int16_t & counter;
+=======
+    int16_t & counter;
+};
+
+class CreateTaskFailEvent : public Event
+{
+public:
+    explicit CreateTaskFailEvent(PipelineExecutorContext & exec_context_)
+        : Event(exec_context_)
+    {}
+
+protected:
+    void scheduleImpl() override
+    {
+        addTask(std::make_unique<RunTask>(exec_context, shared_from_this()));
+        addTask(std::make_unique<RunTask>(exec_context, shared_from_this()));
+        throw Exception("create task fail");
+    }
+};
+
+class TestPorfileTask : public EventTask
+{
+public:
+    static constexpr size_t min_time = 500'000'000L; // 500ms
+
+    static constexpr size_t per_execute_time = 10'000'000L; // 10ms
+
+    TestPorfileTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
+        : EventTask(exec_context_, event_)
+    {}
+
+protected:
+    // executeImpl min_time ==> executeIOImpl min_time ==> awaitImpl min_time.
+    ExecTaskStatus executeImpl() override
+    {
+        if (cpu_execute_time < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            cpu_execute_time += per_execute_time;
+            return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::IO_IN;
+    }
+
+    ExecTaskStatus executeIOImpl() override
+    {
+        if (io_execute_time < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            io_execute_time += per_execute_time;
+            return ExecTaskStatus::IO_IN;
+        }
+        return ExecTaskStatus::WAITING;
+    }
+
+    ExecTaskStatus awaitImpl() override
+    {
+        if unlikely (!wait_stopwatch)
+            wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+        return wait_stopwatch->elapsed() < min_time ? ExecTaskStatus::WAITING : ExecTaskStatus::FINISHED;
+    }
+
+private:
+    size_t cpu_execute_time = 0;
+    size_t io_execute_time = 0;
+    std::optional<Stopwatch> wait_stopwatch;
+};
+
+class TestPorfileEvent : public Event
+{
+public:
+    explicit TestPorfileEvent(PipelineExecutorContext & exec_context_, size_t task_num_)
+        : Event(exec_context_)
+        , task_num(task_num_)
+    {}
+
+    const size_t task_num;
+
+protected:
+    void scheduleImpl() override
+    {
+        for (size_t i = 0; i < task_num; ++i)
+            addTask(std::make_unique<TestPorfileTask>(exec_context, shared_from_this()));
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 } // namespace
 

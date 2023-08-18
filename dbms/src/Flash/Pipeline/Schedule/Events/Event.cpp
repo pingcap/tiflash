@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,9 +73,15 @@ void Event::insertEvent(const EventPtr & insert_event) noexcept
 
 void Event::onInputFinish() noexcept
 {
+<<<<<<< HEAD
     auto cur_value = unfinished_inputs.fetch_sub(1);
     assert(cur_value >= 1);
     if (1 == cur_value)
+=======
+    auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
+    RUNTIME_ASSERT(cur_value >= 0, log, "unfinished_inputs cannot < 0, but actual value is {}", cur_value);
+    if (0 == cur_value)
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         schedule();
 }
 
@@ -181,8 +187,15 @@ void Event::onTaskFinish() noexcept
 {
     assert(status != EventStatus::FINISHED);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
+<<<<<<< HEAD
     assert(remaining_tasks >= 0);
     LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+=======
+    RUNTIME_ASSERT(remaining_tasks >= 0, log, "remaining_tasks must >= 0, but actual value is {}", remaining_tasks);
+#ifndef NDEBUG
+    LOG_TRACE(log, "one task finished, {} tasks remaining", remaining_tasks);
+#endif // !NDEBUG
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     if (0 == remaining_tasks)
         finish();
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,21 +25,38 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+<<<<<<< HEAD
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+=======
 
-        context.addExchangeReceiver("test_exchange",
-                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
-                                     toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+        context.addMockTable(
+            {"test_db", "test_table"},
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>(
+                 "s1",
+                 {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
+             toNullableVec<String>(
+                 "s2",
+                 {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
-        context.addMockTable({"test_db", "empty_table"},
-                             {{"s1", TiDB::TP::TypeString},
-                              {"s2", TiDB::TP::TypeString}},
-                             {toNullableVec<Int32>("s1", {}),
-                              toNullableVec<String>("s2", {})});
+        context.addExchangeReceiver(
+            "test_exchange",
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>(
+                 "s1",
+                 {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
+             toNullableVec<String>(
+                 "s2",
+                 {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+
+        context.addMockTable(
+            {"test_db", "empty_table"},
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<Int32>("s1", {}), toNullableVec<String>("s2", {})});
     }
 
     static constexpr size_t concurrency = 10;
@@ -70,24 +87,32 @@ try
 {
     WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .filter(eq(col("s1"), col("s2")))
-                           .build(context, t);
+        auto request = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}};
         testForExecutionSummary(request, expect);
     }
     {
+<<<<<<< HEAD
         auto request = context
                            .scan("test_db", "test_table")
                            .filter(eq(col("s1"), col("s2")))
                            .limit(2)
                            .build(context, t);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
+=======
+        auto request
+            = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).limit(2).build(context, t);
+        Expect expect{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"selection_1", {not_check_rows, concurrency}},
+            {"limit_2",
+             {2, enable_pipeline ? concurrency : 1}}}; // for pipeline mode, limit can be executed in parallel.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         testForExecutionSummary(request, expect);
     }
     {
+<<<<<<< HEAD
         auto request = context
                            .scan("test_db", "test_table")
                            .limit(5)
@@ -101,26 +126,46 @@ try
                            .topN("s1", true, 5)
                            .build(context, t);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}};
+=======
+        auto request = context.scan("test_db", "test_table").limit(5).build(context, t);
+        Expect expect{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"limit_1",
+             {5, enable_pipeline ? concurrency : 1}}}; // for pipeline mode, limit can be executed in parallel.
+        testForExecutionSummary(request, expect);
+    }
+    {
+        auto request = context.scan("test_db", "test_table").topN("s1", true, 5).build(context, t);
+        Expect expect{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"topn_1",
+             {not_check_rows,
+              enable_pipeline ? concurrency : 1}}}; // for pipeline mode, topn can be executed in parallel.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         testForExecutionSummary(request, expect);
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .filter(eq(col("s1"), col("s2")))
                            .topN("s1", true, 12)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {4, concurrency}}, {"topn_2", {4, not_check_concurrency}}};
+        Expect expect{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"selection_1", {4, concurrency}},
+            {"topn_2", {4, not_check_concurrency}}};
         testForExecutionSummary(request, expect);
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .aggregation({col("s2")}, {col("s2")})
                            .topN("s2", true, 12)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}, {"topn_2", {3, not_check_concurrency}}};
+        Expect expect{
+            {"table_scan_0", {12, concurrency}},
+            {"aggregation_1", {3, not_check_concurrency}},
+            {"topn_2", {3, not_check_concurrency}}};
         testForExecutionSummary(request, expect);
     }
 
@@ -135,7 +180,10 @@ try
         auto t1 = context.scan("test_db", "test_table");
         auto t2 = context.scan("test_db", "test_table");
         auto request = t1.join(t2, tipb::JoinType::TypeInnerJoin, {col("s1")}).build(context);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"table_scan_1", {12, concurrency}}, {"Join_2", {64, concurrency}}};
+        Expect expect{
+            {"table_scan_0", {12, concurrency}},
+            {"table_scan_1", {12, concurrency}},
+            {"Join_2", {64, concurrency}}};
         testForExecutionSummary(request, expect);
     }
 }
@@ -146,18 +194,27 @@ try
 {
     WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .filter(eq(col("s1"), col("s2")))
                            .limit(2)
                            .project({col("s1")})
                            .build(context);
+<<<<<<< HEAD
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
 
+=======
+        Expect expect{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"selection_1", {not_check_rows, concurrency}},
+            {"limit_2",
+             {2, enable_pipeline ? concurrency : 1}}, // for pipeline mode, limit can be executed in parallel.
+            {"project_3", {2, concurrency}}};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         testForExecutionSummary(request, expect);
     }
 
     {
+<<<<<<< HEAD
         auto request = context
                            .scan("test_db", "test_table")
                            .topN("s1", true, 5)
@@ -165,74 +222,103 @@ try
                            .build(context);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}, {"project_2", {not_check_rows, concurrency}}};
         Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, concurrency}}, {"project_2", {not_check_rows, concurrency}}};
+=======
+        auto request = context.scan("test_db", "test_table").topN("s1", true, 5).project({col("s2")}).build(context);
+        Expect expect{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"topn_1",
+             {not_check_rows,
+              enable_pipeline ? concurrency : 1}}, // for pipeline mode, topn can be executed in parallel.
+            {"project_2", {not_check_rows, concurrency}}};
+        Expect expect_pipeline{
+            {"table_scan_0", {not_check_rows, concurrency}},
+            {"topn_1", {not_check_rows, concurrency}},
+            {"project_2", {not_check_rows, concurrency}}};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         testForExecutionSummary(request, expect);
     }
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .project({col("s2")})
-                           .build(context);
+        auto request = context.scan("test_db", "test_table").project({col("s2")}).build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}};
 
         testForExecutionSummary(request, expect);
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .project({col("s2")})
-                           .project({col("s2")})
-                           .build(context);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}, {"project_2", {12, concurrency}}};
+        auto request = context.scan("test_db", "test_table").project({col("s2")}).project({col("s2")}).build(context);
+        Expect expect{
+            {"table_scan_0", {12, concurrency}},
+            {"project_1", {12, concurrency}},
+            {"project_2", {12, concurrency}}};
         testForExecutionSummary(request, expect);
     }
 
     {
-        auto request = context
-                           .scan("test_db", "empty_table")
-                           .project({col("s2")})
-                           .build(context);
+        auto request = context.scan("test_db", "empty_table").project({col("s2")}).build(context);
         Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}};
 
         testForExecutionSummary(request, expect);
     }
 
     {
+<<<<<<< HEAD
         auto request = context
                            .scan("test_db", "empty_table")
                            .project({col("s2")})
                            .topN("s2", true, 12)
                            .build(context);
         Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, 1}}};
+=======
+        auto request = context.scan("test_db", "empty_table").project({col("s2")}).topN("s2", true, 12).build(context);
+        Expect expect{
+            {"table_scan_0", {0, concurrency}},
+            {"project_1", {0, concurrency}},
+            {"topn_2", {0, enable_pipeline ? concurrency : 1}}}; // for pipeline mode, topn can be executed in parallel.
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         testForExecutionSummary(request, expect);
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .aggregation({col("s2")}, {col("s2")})
                            .project({col("s2")})
                            .build(context);
+<<<<<<< HEAD
         Expect expect{{"table_scan_0", {12, concurrency}},
                       {"aggregation_1", {3, -1}},
                       {"project_2", {3, concurrency}}};
+=======
+        Expect expect{
+            {"table_scan_0", {12, concurrency}},
+            {"aggregation_1", {3, not_check_concurrency}},
+            // for pipeline mode, the concurrency of agg convergent is determined by the amount of data. Because the amount of data is small, the concurrency here is 1.
+            {"project_2", {3, enable_pipeline ? 1 : concurrency}}};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         testForExecutionSummary(request, expect);
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .aggregation({}, {col("s2")})
                            .project({col("s2")})
                            .limit(2)
                            .build(context);
 
+<<<<<<< HEAD
         Expect expect{{"table_scan_0", {12, concurrency}},
                       {"aggregation_1", {3, not_check_concurrency}},
                       {"project_2", {not_check_rows, concurrency}},
                       {"limit_3", {2, 1}}};
+=======
+        Expect expect{
+            {"table_scan_0", {12, concurrency}},
+            {"aggregation_1", {3, not_check_concurrency}},
+            // for pipeline mode, the concurrency of agg convergent is determined by the amount of data. Because the amount of data is small, the concurrency here is 1.
+            {"project_2", {not_check_rows, enable_pipeline ? 1 : concurrency}},
+            {"limit_3", {2, 1}}};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
         testForExecutionSummary(request, expect);
     }
@@ -246,8 +332,7 @@ try
 {
     WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .expand(MockVVecColumnNameVec{
                                MockVecColumnNameVec{
                                    MockColumnNameVec{"s1"},
@@ -270,11 +355,16 @@ try
 {
     WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
     {
+<<<<<<< HEAD
         auto request = context
                            .scan("test_db", "test_table")
                            .aggregation({col("s2")}, {col("s2")})
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, -1}}};
+=======
+        auto request = context.scan("test_db", "test_table").aggregation({col("s2")}, {col("s2")}).build(context, t);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}};
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         testForExecutionSummary(request, expect);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END

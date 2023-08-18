@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,9 +67,7 @@ Block MergeSortingBlocksBlockInputStream::readImpl()
         return res;
     }
 
-    return !has_collation
-        ? mergeImpl<SortCursor>(queue)
-        : mergeImpl<SortCursorWithCollation>(queue_with_collation);
+    return !has_collation ? mergeImpl<SortCursor>(queue) : mergeImpl<SortCursorWithCollation>(queue_with_collation);
 }
 
 

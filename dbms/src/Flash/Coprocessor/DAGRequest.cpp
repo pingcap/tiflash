@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,11 @@ public:
             if (executor.has_executor_id())
             {
                 const auto & executor_id = executor.executor_id();
-                check(executor_id_set.find(executor_id) == executor_id_set.end(), fmt::format("in list based request, executor id `{}` duplicate, which is unexpected.", executor_id));
+                check(
+                    executor_id_set.find(executor_id) == executor_id_set.end(),
+                    fmt::format(
+                        "in list based request, executor id `{}` duplicate, which is unexpected.",
+                        executor_id));
                 executor_id_set.insert(executor_id);
             }
         }
@@ -61,7 +65,9 @@ public:
                 return gen_id;
             }
         }
-        throw Exception(fmt::format("We have failed five times to generate a unique id for list base executor, exists ids are: [{}]", fmt::join(executor_id_set, ",")));
+        throw Exception(fmt::format(
+            "We have failed five times to generate a unique id for list base executor, exists ids are: [{}]",
+            fmt::join(executor_id_set, ",")));
     }
 
 private:
@@ -116,7 +122,9 @@ DAGRequest::DAGRequest(tipb::DAGRequest * dag_request_)
     if unlikely (!dag_request)
         return;
 
-    check((dag_request->executors_size() > 0) != dag_request->has_root_executor(), "dagrequest must be one of list based and tree based");
+    check(
+        (dag_request->executors_size() > 0) != dag_request->has_root_executor(),
+        "dagrequest must be one of list based and tree based");
     is_tree_based = dag_request->has_root_executor();
 
     checkOrSetExecutorId();
@@ -131,7 +139,9 @@ void DAGRequest::checkOrSetExecutorId()
         traverseExecutorTree(dag_request->root_executor(), [&](const tipb::Executor & executor) {
             check(executor.has_executor_id(), "for tree based request, executor id cannot be null");
             const auto & executor_id = executor.executor_id();
-            check(ids.find(executor_id) == ids.end(), fmt::format("in tree based request, executor id `{}` duplicate, which is unexpected.", executor_id));
+            check(
+                ids.find(executor_id) == ids.end(),
+                fmt::format("in tree based request, executor id `{}` duplicate, which is unexpected.", executor_id));
             ids.insert(executor_id);
             return true;
         });

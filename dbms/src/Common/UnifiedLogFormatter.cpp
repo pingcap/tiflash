@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -170,11 +170,20 @@ void writeTimestamp(FmtBuffer & buf)
     int hour = local_tm->tm_hour;
     int minute = local_tm->tm_min;
     int second = local_tm->tm_sec;
-    int milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(time_point.time_since_epoch()).count() % 1000;
+    int milliseconds
+        = std::chrono::duration_cast<std::chrono::milliseconds>(time_point.time_since_epoch()).count() % 1000;
 
     int zone_offset = local_tm->tm_gmtoff;
 
-    buf.fmtAppend(FMT_COMPILE("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d} "), year, month, day, hour, minute, second, milliseconds);
+    buf.fmtAppend(
+        FMT_COMPILE("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d} "),
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        milliseconds);
 
     // Handle time zone section
     int offset_value = std::abs(zone_offset);

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,6 +81,16 @@ struct SchemaNameMapper
     {
         return debugDatabaseName(db_info) + "." + debugTableName(table_info);
     }
+<<<<<<< HEAD
+=======
+
+    virtual String debugCanonicalName(const TiDB::TableInfo & table_info, DatabaseID db_id, KeyspaceID keyspace_id)
+        const
+    {
+        auto db_name = DATABASE_PREFIX + std::to_string(db_id);
+        return map2Keyspace(keyspace_id, db_name) + "." + debugTableName(table_info);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 };
 
 } // namespace DB

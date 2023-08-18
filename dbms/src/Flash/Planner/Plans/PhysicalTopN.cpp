@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,7 +76,27 @@ void PhysicalTopN::buildPipelineExecGroup(
 {
     executeExpression(exec_status, group_builder, before_sort_actions, log);
 
+<<<<<<< HEAD
     executeLocalSort(exec_status, group_builder, order_descr, limit, context, log);
+=======
+    // If the `limit` is very large, using a `final sort` can avoid outputting excessively large amounts of data.
+    // TODO find a suitable threshold is necessary; 10000 is just a value picked without much consideration.
+    if (group_builder.concurrency() * limit <= 10000)
+    {
+        executeLocalSort(exec_context, group_builder, order_descr, limit, context, log);
+    }
+    else
+    {
+        executeFinalSort(exec_context, group_builder, order_descr, limit, context, log);
+        if (is_restore_concurrency)
+            restoreConcurrency(
+                exec_context,
+                group_builder,
+                concurrency,
+                context.getSettingsRef().max_buffered_bytes_in_executor,
+                log);
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

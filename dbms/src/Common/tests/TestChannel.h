@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,15 +36,9 @@ public:
         _lastMessage = msg;
     }
 
-    MsgList & list()
-    {
-        return _msgList;
-    }
+    MsgList & list() { return _msgList; }
 
-    void clear()
-    {
-        _msgList.clear();
-    }
+    void clear() { _msgList.clear(); }
 
     const Poco::Message & getLastMessage() const { return _lastMessage; }
 

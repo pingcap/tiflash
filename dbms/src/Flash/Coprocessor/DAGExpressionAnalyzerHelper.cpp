@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,14 +46,13 @@ struct DateAdd
 };
 
 const std::unordered_map<String, String> DateAdd::unit_to_func_name_map
-    = {
-        {"DAY", "addDays"},
-        {"WEEK", "addWeeks"},
-        {"MONTH", "addMonths"},
-        {"YEAR", "addYears"},
-        {"HOUR", "addHours"},
-        {"MINUTE", "addMinutes"},
-        {"SECOND", "addSeconds"}};
+    = {{"DAY", "addDays"},
+       {"WEEK", "addWeeks"},
+       {"MONTH", "addMonths"},
+       {"YEAR", "addYears"},
+       {"HOUR", "addHours"},
+       {"MINUTE", "addMinutes"},
+       {"SECOND", "addSeconds"}};
 
 struct DateSub
 {
@@ -62,14 +61,13 @@ struct DateSub
 };
 
 const std::unordered_map<String, String> DateSub::unit_to_func_name_map
-    = {
-        {"DAY", "subtractDays"},
-        {"WEEK", "subtractWeeks"},
-        {"MONTH", "subtractMonths"},
-        {"YEAR", "subtractYears"},
-        {"HOUR", "subtractHours"},
-        {"MINUTE", "subtractMinutes"},
-        {"SECOND", "subtractSeconds"}};
+    = {{"DAY", "subtractDays"},
+       {"WEEK", "subtractWeeks"},
+       {"MONTH", "subtractMonths"},
+       {"YEAR", "subtractYears"},
+       {"HOUR", "subtractHours"},
+       {"MINUTE", "subtractMinutes"},
+       {"SECOND", "subtractSeconds"}};
 } // namespace
 
 String DAGExpressionAnalyzerHelper::buildMultiIfFunction(
@@ -114,7 +112,8 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     String condition_arg_name = analyzer->getActions(expr.children(0), actions, false);
     String else_arg_name = analyzer->getActions(expr.children(1), actions, false);
     String is_null_result = analyzer->applyFunction("isNull", {condition_arg_name}, actions, getCollatorFromExpr(expr));
-    String not_null_condition_arg_name = analyzer->applyFunction("assumeNotNull", {condition_arg_name}, actions, nullptr);
+    String not_null_condition_arg_name
+        = analyzer->applyFunction("assumeNotNull", {condition_arg_name}, actions, nullptr);
 
     argument_names.push_back(std::move(is_null_result));
     argument_names.push_back(std::move(else_arg_name));
@@ -188,7 +187,8 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
         eq_arg_names.push_back(analyzer->getActions(*non_constant_expr, actions));
         // do not need extra cast because TiDB will ensure type of key_name and right_expr_name is the same
         argument_names.push_back(
-            analyzer->applyFunction(is_not_in ? "notEquals" : "equals", eq_arg_names, actions, getCollatorFromExpr(expr)));
+            analyzer
+                ->applyFunction(is_not_in ? "notEquals" : "equals", eq_arg_names, actions, getCollatorFromExpr(expr)));
     }
     // logical op does not need collator
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
@@ -252,7 +252,8 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
     function_builder_tidb_cast->setInUnion(in_union);
     function_builder_tidb_cast->setTiDBFieldType(field_type);
 
-    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
+    const ExpressionAction & apply_function
+        = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
     actions->add(apply_function);
     return result_name;
 }
@@ -286,7 +287,9 @@ String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
 {
     if (expr.children_size() != 3)
     {
-        throw TiFlashException(fmt::format("{} function requires three arguments", Impl::name), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            fmt::format("{} function requires three arguments", Impl::name),
+            Errors::Coprocessor::BadRequest);
     }
     String date_column = analyzer->getActions(expr.children(0), actions);
     String delta_column = analyzer->getActions(expr.children(1), actions);
@@ -401,6 +404,41 @@ String DAGExpressionAnalyzerHelper::buildRegexpFunction(
     return analyzer->applyFunction(func_name, argument_names, actions, collator);
 }
 
+<<<<<<< HEAD
+=======
+String DAGExpressionAnalyzerHelper::buildGroupingFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+
+    // Get the result by function name and parameters is **NOT** enough, grouping functions like: grouping(a) and grouping(b) will be rewritten as the same signature:
+    //  grouping(gid), grouping(gid) with different metadata.
+    // In TiDB, we don't reuse the action by the signature name, while TiFlash does, we should distinguish different grouping function out from their metadata.
+    String result_name = genFuncString(func_name, argument_names, {getCollatorFromExpr(expr)});
+    // grouping function's metadata has naturally been encoded as proto-message as string, just appending them to the result name as new grouping functions' result_name.
+    result_name += expr.val();
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
+    auto * function_builder_grouping = dynamic_cast<FunctionBuilderGrouping *>(function_builder.get());
+    function_builder_grouping->setExpr(expr);
+
+    const ExpressionAction & apply_function
+        = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
+    actions->add(apply_function);
+    return result_name;
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,

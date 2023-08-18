@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,9 +81,22 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     else
     {
         /// If there are several streams, we merge them into one.
+<<<<<<< HEAD
         executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
         assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+=======
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            false,
+            "merge into one for window input");
+        RUNTIME_CHECK(pipeline.streams.size() == 1);
+        pipeline.firstStream()
+            = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     }
 
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
@@ -103,10 +116,26 @@ void PhysicalWindow::buildPipelineExecGroup(
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
+<<<<<<< HEAD
         builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
     });
 
     executeExpression(exec_status, group_builder, window_description.after_window, log);
+=======
+        builder.appendTransformOp(
+            std::make_unique<WindowTransformOp>(exec_context, log->identifier(), window_description));
+    });
+
+    if (!fine_grained_shuffle.enable() && is_restore_concurrency)
+        restoreConcurrency(
+            exec_context,
+            group_builder,
+            concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
+
+    executeExpression(exec_context, group_builder, window_description.after_window, log);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

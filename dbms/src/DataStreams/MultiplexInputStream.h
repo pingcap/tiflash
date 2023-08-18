@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,8 +38,7 @@ public:
         if (cur_streams.empty())
             return;
         std::unique_lock lk(mu);
-        streams_queue_by_partition.push_back(
-            std::make_shared<std::queue<std::shared_ptr<IBlockInputStream>>>());
+        streams_queue_by_partition.push_back(std::make_shared<std::queue<std::shared_ptr<IBlockInputStream>>>());
         for (const auto & stream : cur_streams)
             streams_queue_by_partition.back()->push(stream);
         added_streams.insert(added_streams.end(), cur_streams.begin(), cur_streams.end());
@@ -104,16 +103,14 @@ private:
             return 0;
     }
 
-    static void swap(std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & a,
-                     std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & b)
+    static void swap(
+        std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & a,
+        std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & b)
     {
         a.swap(b);
     }
 
-    std::vector<
-        std::shared_ptr<std::queue<
-            std::shared_ptr<IBlockInputStream>>>>
-        streams_queue_by_partition;
+    std::vector<std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>>> streams_queue_by_partition;
     std::vector<std::shared_ptr<IBlockInputStream>> added_streams;
     int streams_queue_id = 0;
     std::mutex mu;
@@ -125,9 +122,7 @@ private:
     static constexpr auto NAME = "Multiplex";
 
 public:
-    MultiplexInputStream(
-        std::shared_ptr<MultiPartitionStreamPool> & shared_pool,
-        const String & req_id)
+    MultiplexInputStream(std::shared_ptr<MultiPartitionStreamPool> & shared_pool, const String & req_id)
         : log(Logger::get(req_id))
         , shared_pool(shared_pool)
     {
@@ -137,10 +132,7 @@ public:
         {
             Block header = children.at(0)->getHeader();
             for (size_t i = 1; i < num_children; ++i)
-                assertBlocksHaveEqualStructure(
-                    children[i]->getHeader(),
-                    header,
-                    "MULTIPLEX");
+                assertBlocksHaveEqualStructure(children[i]->getHeader(), header, "MULTIPLEX");
         }
     }
 
@@ -168,11 +160,7 @@ public:
             is_killed = true;
 
         bool old_val = false;
-        if (!is_cancelled.compare_exchange_strong(
-                old_val,
-                true,
-                std::memory_order_seq_cst,
-                std::memory_order_relaxed))
+        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
             return;
 
         if (cur_stream)
@@ -188,9 +176,7 @@ public:
 
 protected:
     /// Do nothing, to make the preparation when underlying InputStream is picked from the pool
-    void readPrefix() override
-    {
-    }
+    void readPrefix() override {}
 
     /** The following options are possible:
       * 1. `readImpl` function is called until it returns an empty block.

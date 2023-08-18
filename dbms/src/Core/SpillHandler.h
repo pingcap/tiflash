@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,12 @@ private:
     class SpillWriter
     {
     public:
-        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, bool append_write, const Block & header, size_t spill_version);
+        SpillWriter(
+            const FileProviderPtr & file_provider,
+            const String & file_name,
+            bool append_write,
+            const Block & header,
+            size_t spill_version);
         SpillDetails finishWrite();
         void write(const Block & block);
 

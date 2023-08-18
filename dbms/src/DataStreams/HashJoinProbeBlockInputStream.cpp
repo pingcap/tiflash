@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,12 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
 {
-    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
+    LOG_DEBUG(
+        log,
+        "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}",
+        joined_rows + scan_hash_map_rows,
+        joined_rows,
+        scan_hash_map_rows);
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
@@ -82,7 +87,8 @@ void HashJoinProbeBlockInputStream::onCurrentScanHashMapDone()
 
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 {
-    if (auto restore_probe_exec = probe_exec->tryGetRestoreExec(); restore_probe_exec && unlikely(!isCancelledOrThrowIfKilled()))
+    if (auto restore_probe_exec = probe_exec->tryGetRestoreExec();
+        restore_probe_exec && unlikely(!isCancelledOrThrowIfKilled()))
     {
         probe_exec.set(std::move(restore_probe_exec));
         switchStatus(ProbeStatus::RESTORE_BUILD);

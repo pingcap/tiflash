@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,4 +51,39 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
             return OperatorStatus::HAS_OUTPUT;
     }
 }
+<<<<<<< HEAD
+=======
+
+void UnorderedSourceOp::operatePrefixImpl()
+{
+    std::call_once(task_pool->addToSchedulerFlag(), [&]() {
+        if (waiting_rf_list.empty())
+        {
+            DM::SegmentReadTaskScheduler::instance().add(task_pool);
+        }
+        else
+        {
+            // Check if the RuntimeFilters is ready immediately.
+            RuntimeFilteList ready_rf_list;
+            RFWaitTask::filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
+
+            if (max_wait_time_ms <= 0 || waiting_rf_list.empty())
+            {
+                RFWaitTask::submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
+            }
+            else
+            {
+                // Poll and check if the RuntimeFilters is ready in the WaitReactor.
+                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(
+                    exec_context,
+                    log->identifier(),
+                    task_pool,
+                    max_wait_time_ms,
+                    std::move(waiting_rf_list),
+                    std::move(ready_rf_list)));
+            }
+        }
+    });
+}
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 } // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,15 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
     bool need_scan_hash_map_after_probe = needScanHashMapAfterProbe(join->getKind());
     BlockInputStreamPtr scan_hash_map_stream = nullptr;
     if (need_scan_hash_map_after_probe)
+<<<<<<< HEAD
         scan_hash_map_stream = join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), scan_hash_map_after_probe_stream_index, join->getProbeConcurrency(), max_block_size);
+=======
+        scan_hash_map_stream = join->createScanHashMapAfterProbeStream(
+            probe_stream->getHeader(),
+            stream_index,
+            join->getProbeConcurrency(),
+            max_block_size);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     return std::make_shared<HashJoinProbeExec>(
         join,
@@ -153,6 +161,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
         /// get a restore join
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
         {
+<<<<<<< HEAD
             /// restored join should always enable spill
             assert(restore_info->join && restore_info->join->isEnableSpill());
             size_t scan_hash_map_stream_index = 0;
@@ -161,6 +170,13 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
                 assert(restore_info->scan_hash_map_stream);
                 scan_hash_map_stream_index = dynamic_cast<ScanHashMapAfterProbeBlockInputStream *>(restore_info->scan_hash_map_stream.get())->getIndex();
             }
+=======
+            auto hash_join_build_stream = std::make_shared<HashJoinBuildBlockInputStream>(
+                restore_info->build_stream,
+                restore_info->join,
+                restore_info->stream_index,
+                log->identifier());
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
                 restore_info->join,
                 restore_info->build_stream,
@@ -199,7 +215,8 @@ void HashJoinProbeExec::cancel()
     join->wakeUpAllWaitingThreads();
     if (scan_hash_map_after_probe_stream != nullptr)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(scan_hash_map_after_probe_stream.get()); p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(scan_hash_map_after_probe_stream.get());
+            p_stream != nullptr)
             p_stream->cancel(false);
     }
     if (probe_stream != nullptr)
@@ -209,7 +226,8 @@ void HashJoinProbeExec::cancel()
     }
     if (restore_build_stream != nullptr)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_build_stream.get()); p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_build_stream.get());
+            p_stream != nullptr)
             p_stream->cancel(false);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,7 +93,9 @@ struct TxnStructure
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
         if (char(tp) != HashData)
         {
-            throw TiFlashException("invalid encoded hash data key flag:" + std::to_string(tp), Errors::Table::SyncError);
+            throw TiFlashException(
+                "invalid encoded hash data key flag:" + std::to_string(tp),
+                Errors::Table::SyncError);
         }
 
         String field = DecodeBytes(idx, key);
@@ -263,11 +265,68 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
     if (table_info_json.empty())
         return nullptr;
+<<<<<<< HEAD
+=======
+    }
+    String table_key = getTableKey(table_id);
+    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    if (table_info_json.empty())
+    {
+        LOG_WARNING(log, "The table {} is dropped in TiKV, try to get the latest table_info", table_id);
+        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        if (table_info_json.empty())
+        {
+            LOG_ERROR(
+                log,
+                "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc",
+                table_id);
+            return nullptr;
+        }
+    }
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
     return table_info;
 }
 
+<<<<<<< HEAD
+=======
+std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
+    DatabaseID db_id,
+    TableID table_id)
+{
+    String db_key = getDBKey(db_id);
+    String db_json = TxnStructure::hGet(snap, DBs, db_key);
+
+    if (db_json.empty())
+        return std::make_tuple(nullptr, nullptr);
+
+    LOG_DEBUG(log, "Get DB Info from TiKV : " + db_json);
+    auto db_info = std::make_shared<TiDB::DBInfo>(db_json, keyspace_id);
+
+    String table_key = getTableKey(table_id);
+    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    if (table_info_json.empty())
+    {
+        LOG_WARNING(log, "The table {} is dropped in TiKV, try to get the latest table_info", table_id);
+        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        if (table_info_json.empty())
+        {
+            LOG_ERROR(
+                log,
+                "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc",
+                table_id);
+            return std::make_tuple(db_info, nullptr);
+            ;
+        }
+    }
+    LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
+    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
+
+    return std::make_tuple(db_info, table_info);
+}
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {
     std::vector<TiDB::DBInfoPtr> res;

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,11 +38,16 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 
 PipelineExecPtr PipelineExecBuilder::build()
 {
+<<<<<<< HEAD
     assert(source_op && sink_op);
     return std::make_unique<PipelineExec>(
         std::move(source_op),
         std::move(transform_ops),
         std::move(sink_op));
+=======
+    RUNTIME_CHECK(source_op && sink_op);
+    return std::make_unique<PipelineExec>(std::move(source_op), std::move(transform_ops), std::move(sink_op));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 Block PipelineExecBuilder::getCurrentHeader() const
@@ -60,10 +65,41 @@ Block PipelineExecBuilder::getCurrentHeader() const
 
 void PipelineExecGroupBuilder::init(size_t init_concurrency)
 {
+<<<<<<< HEAD
     assert(concurrency == 0);
     assert(init_concurrency > 0);
     concurrency = init_concurrency;
     group.resize(concurrency);
+=======
+    auto & cur_group = getCurGroup();
+    cur_group.emplace_back();
+    cur_group.back().setSourceOp(std::move(source));
+}
+
+void PipelineExecGroupBuilder::addConcurrency(PipelineExecBuilder && exec_builder)
+{
+    RUNTIME_CHECK(exec_builder.source_op);
+    auto & cur_group = getCurGroup();
+    cur_group.push_back(std::move(exec_builder));
+}
+
+void PipelineExecGroupBuilder::reset()
+{
+    groups.clear();
+    // Re-add an empty group to ensure that the group builder after reset is available.
+    groups.emplace_back();
+}
+
+void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
+{
+    RUNTIME_CHECK(groups.size() == other.groups.size());
+    size_t group_num = groups.size();
+    for (size_t i = 0; i < group_num; ++i)
+        groups[i].insert(
+            groups[i].end(),
+            std::make_move_iterator(other.groups[i].begin()),
+            std::make_move_iterator(other.groups[i].end()));
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()

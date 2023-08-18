@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -146,11 +146,12 @@ protected:
 
 
 template <typename LogElement>
-SystemLog<LogElement>::SystemLog(Context & context_,
-                                 const String & database_name_,
-                                 const String & table_name_,
-                                 const String & storage_def_,
-                                 size_t flush_interval_milliseconds_)
+SystemLog<LogElement>::SystemLog(
+    Context & context_,
+    const String & database_name_,
+    const String & table_name_,
+    const String & storage_def_,
+    size_t flush_interval_milliseconds_)
     : context(context_)
     , database_name(database_name_)
     , table_name(table_name_)

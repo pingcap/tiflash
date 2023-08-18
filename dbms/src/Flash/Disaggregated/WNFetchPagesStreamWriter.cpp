@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,6 +71,7 @@ disaggregated::PagesPacket WNFetchPagesStreamWriter::nextPacket()
     //       We could improve it to respond in the FetchPages stage, so that the parallel FetchPages could start
     //       as soon as possible.
 
+<<<<<<< HEAD
     LOG_DEBUG(log,
               "Send FetchPagesStream, pages={} pages_size={} blocks={}",
               packet.pages_size(),
@@ -84,6 +85,17 @@ void WNFetchPagesStreamWriter::pipeTo(SyncPagePacketWriter * sync_writer)
     // Currently we only send one stream packet.
     // TODO: split the packet into smaller size
     sync_writer->Write(nextPacket());
+=======
+    LOG_DEBUG(
+        log,
+        "Send FetchPagesStream, pages={} pages_size={} blocks={} packets={} read_page_ms={} send_page_ms={}",
+        read_page_ids.size(),
+        total_pages_data_size,
+        packet.chunks_size(),
+        packet_count,
+        read_page_ns / 1000000,
+        send_page_ns / 1000000);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
-#include <Parsers/ParserQueryWithOutput.h>
+#include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <Parsers/ASTShowProcesslistQuery.h>
+#include <Parsers/IParserBase.h>
+#include <Parsers/ParserQueryWithOutput.h>
 
 
 namespace DB
@@ -44,4 +44,4 @@ protected:
     }
 };
 
-}
+} // namespace DB

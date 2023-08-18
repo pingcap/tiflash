@@ -1,0 +1,54 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+mysql> drop database if exists d1;
+mysql> create database d1;
+
+=> DBGInvoke __refresh_schemas()
+
+=> DBGInvoke mapped_database_exists(d1)
+┌─mapped_database_exists(d1)───┐
+│ true                         │
+└──────────────────────────────┘
+
+mysql> drop database d1;
+
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke mapped_database_exists(d1)
+┌─mapped_database_exists(d1)───┐
+│ false                        │
+└──────────────────────────────┘
+
+# to check even if the create database schema not sync to tiflash before insert data, 
+# when insert data, we will check the schema again to make database create
+
+=> DBGInvoke __enable_schema_sync_service('false') 
+
+mysql> drop database if exists d2;
+mysql> create database d2;
+mysql> create table d2.t1 (a int);
+mysql> alter table d2.t1 set tiflash replica 1;
+mysql> insert into d2.t1 values (1);
+
+func> wait_table d2 t1
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d2.t1;
++------+
+| a    |
++------+
+|    1 |
++------+
+
+mysql> drop table d2.t1;
+mysql> drop database d2;

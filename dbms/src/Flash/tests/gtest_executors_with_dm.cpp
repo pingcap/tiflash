@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,37 +36,39 @@ public:
         // note that
         // 1. the first column is pk.
         // 2. The decimal type is not supported.
-        context.addMockDeltaMerge({"test_db", "t0"},
-                                  {{"col0", TiDB::TP::TypeLongLong}},
-                                  {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+        context.addMockDeltaMerge(
+            {"test_db", "t0"},
+            {{"col0", TiDB::TP::TypeLongLong}},
+            {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
-        context.addMockDeltaMerge({"test_db", "t1"},
-                                  {{"col0", TiDB::TP::TypeLongLong},
-                                   {"col1", TiDB::TP::TypeString}},
-                                  {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
-                                   {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
+        context.addMockDeltaMerge(
+            {"test_db", "t1"},
+            {{"col0", TiDB::TP::TypeLongLong}, {"col1", TiDB::TP::TypeString}},
+            {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
+             {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
 
-        context.addMockDeltaMerge({"test_db", "t2"},
-                                  {{"col0", TiDB::TP::TypeLongLong},
-                                   {"col1", TiDB::TP::TypeTiny},
-                                   {"col2", TiDB::TP::TypeShort},
-                                   {"col3", TiDB::TP::TypeLong},
-                                   {"col4", TiDB::TP::TypeLongLong},
-                                   {"col5", TiDB::TP::TypeFloat},
-                                   {"col6", TiDB::TP::TypeDouble},
-                                   {"col7", TiDB::TP::TypeDate},
-                                   {"col8", TiDB::TP::TypeDatetime},
-                                   {"col9", TiDB::TP::TypeString}},
-                                  {toVec<Int64>("col0", col_id),
-                                   toNullableVec<Int8>("col1", col_tinyint),
-                                   toNullableVec<Int16>("col2", col_smallint),
-                                   toNullableVec<Int32>("col3", col_int),
-                                   toNullableVec<Int64>("col4", col_bigint),
-                                   toNullableVec<Float32>("col5", col_float),
-                                   toNullableVec<Float64>("col6", col_double),
-                                   toNullableVec<MyDate>("col7", col_mydate),
-                                   toNullableVec<MyDateTime>("col8", col_mydatetime),
-                                   toNullableVec<String>("col9", col_string)});
+        context.addMockDeltaMerge(
+            {"test_db", "t2"},
+            {{"col0", TiDB::TP::TypeLongLong},
+             {"col1", TiDB::TP::TypeTiny},
+             {"col2", TiDB::TP::TypeShort},
+             {"col3", TiDB::TP::TypeLong},
+             {"col4", TiDB::TP::TypeLongLong},
+             {"col5", TiDB::TP::TypeFloat},
+             {"col6", TiDB::TP::TypeDouble},
+             {"col7", TiDB::TP::TypeDate},
+             {"col8", TiDB::TP::TypeDatetime},
+             {"col9", TiDB::TP::TypeString}},
+            {toVec<Int64>("col0", col_id),
+             toNullableVec<Int8>("col1", col_tinyint),
+             toNullableVec<Int16>("col2", col_smallint),
+             toNullableVec<Int32>("col3", col_int),
+             toNullableVec<Int64>("col4", col_bigint),
+             toNullableVec<Float32>("col5", col_float),
+             toNullableVec<Float64>("col6", col_double),
+             toNullableVec<MyDate>("col7", col_mydate),
+             toNullableVec<MyDateTime>("col8", col_mydatetime),
+             toNullableVec<String>("col9", col_string)});
 
         // with 200 rows.
         std::vector<TypeTraits<Int64>::FieldType> key(200);
@@ -78,8 +80,7 @@ public:
         }
         context.addMockDeltaMerge(
             {"test_db", "big_table"},
-            {{"key", TiDB::TP::TypeLongLong},
-             {"value", TiDB::TP::TypeString}},
+            {{"key", TiDB::TP::TypeLongLong}, {"value", TiDB::TP::TypeString}},
             {toVec<Int64>("key", key), toNullableVec<String>("value", value)});
 
         context.addMockDeltaMerge(
@@ -100,6 +101,18 @@ public:
     ColumnWithNullableString col_string{{}, "pingcap", "PingCAP", {}, "PINGCAP", "PingCAP", {}, "Shanghai", "Shanghai"};
 };
 
+<<<<<<< HEAD
+=======
+#define WRAP_FOR_DM_TEST_BEGIN                     \
+    enablePlanner(true);                           \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_DM_TEST_END }
+
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 TEST_F(ExecutorsWithDMTestRunner, Basic)
 try
 {
@@ -111,6 +124,7 @@ try
         request,
         {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
+<<<<<<< HEAD
     request = context
                   .scan("test_db", "t1")
                   .build(context);
@@ -135,6 +149,21 @@ try
          toNullableVec<MyDate>(col_mydate),
          toNullableVec<MyDateTime>(col_mydatetime),
          toNullableVec<String>(col_string)});
+=======
+    WRAP_FOR_DM_TEST_BEGIN
+    for (auto keep_order : keep_order_opt)
+    {
+        auto request = context.scan("test_db", "t0", keep_order).build(context);
+        executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+
+        request = context.scan("test_db", "t1", keep_order).build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
+             {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
+
+        request = context.scan("test_db", "t2", keep_order).build(context);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     request = context
                   .scan("test_db", "big_table")
@@ -142,6 +171,7 @@ try
     enablePlanner(false);
     auto expect = executeStreams(request, 1);
 
+<<<<<<< HEAD
     executeAndAssertColumnsEqual(
         request,
         expect);
@@ -187,6 +217,41 @@ try
         request,
         {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
          {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
+=======
+        request = context.scan("test_db", "big_table", keep_order).build(context);
+        enablePlanner(false);
+        auto expect = executeStreams(request, 1);
+
+        executeAndAssertColumnsEqual(request, expect);
+
+        request = context.scan("test_db", "empty_table", keep_order).build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        // projection
+        request = context.scan("test_db", "t1", keep_order).project({col("col0")}).build(context);
+        executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+
+        request = context.scan("test_db", "t1", keep_order).project({col("col1")}).build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
+
+        // filter
+        request = context.scan("test_db", "t0", keep_order)
+                      .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3})}});
+
+        request = context.scan("test_db", "t1", keep_order)
+                      .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
+             {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
+    }
+    WRAP_FOR_DM_TEST_END
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 CATCH
 

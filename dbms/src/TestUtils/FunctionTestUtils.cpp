@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,36 +60,30 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 #define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display) \
     do                                                                                                \
     {                                                                                                 \
-        if (auto result = assertEqual(#expected_value,                                                \
-                                      #actual_value,                                                  \
-                                      (expected_value),                                               \
-                                      (actual_value),                                                 \
-                                      (expected_display),                                             \
-                                      (actual_display),                                               \
-                                      title);                                                         \
+        if (auto result = assertEqual(                                                                \
+                #expected_value,                                                                      \
+                #actual_value,                                                                        \
+                (expected_value),                                                                     \
+                (actual_value),                                                                       \
+                (expected_display),                                                                   \
+                (actual_display),                                                                     \
+                title);                                                                               \
             !result)                                                                                  \
             return result;                                                                            \
     } while (false)
 
-#define ASSERT_EQUAL(expected_value, actual_value, title) \
-    do                                                    \
-    {                                                     \
-        auto expected_v = (expected_value);               \
-        auto actual_v = (actual_value);                   \
-        if (auto result = assertEqual(#expected_value,    \
-                                      #actual_value,      \
-                                      expected_v,         \
-                                      actual_v,           \
-                                      expected_v,         \
-                                      actual_v,           \
-                                      title);             \
-            !result)                                      \
-            return result;                                \
+#define ASSERT_EQUAL(expected_value, actual_value, title)                                                     \
+    do                                                                                                        \
+    {                                                                                                         \
+        auto expected_v = (expected_value);                                                                   \
+        auto actual_v = (actual_value);                                                                       \
+        if (auto result                                                                                       \
+            = assertEqual(#expected_value, #actual_value, expected_v, actual_v, expected_v, actual_v, title); \
+            !result)                                                                                          \
+            return result;                                                                                    \
     } while (false)
 
-::testing::AssertionResult dataTypeEqual(
-    const DataTypePtr & expected,
-    const DataTypePtr & actual)
+::testing::AssertionResult dataTypeEqual(const DataTypePtr & expected, const DataTypePtr & actual)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "DataType name mismatch");
     return ::testing::AssertionSuccess();
@@ -109,8 +103,17 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         /// ColumnNothing compares size only
         const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
         const ColumnNothing * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
-        ASSERT_EQUAL(expected_nothing && actual_nothing, true, "One of columns is ColumnNothing, while the other is not");
-        ASSERT_EQUAL(expected_nothing->size(), actual_nothing->size(), fmt::format("Column size not match, expected {} actual {}", actual_nothing->size(), expected_nothing->size()));
+        ASSERT_EQUAL(
+            expected_nothing && actual_nothing,
+            true,
+            "One of columns is ColumnNothing, while the other is not");
+        ASSERT_EQUAL(
+            expected_nothing->size(),
+            actual_nothing->size(),
+            fmt::format(
+                "Column size not match, expected {} actual {}",
+                actual_nothing->size(),
+                expected_nothing->size()));
         return ::testing::AssertionSuccess();
     }
 
@@ -129,7 +132,12 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
                     continue;
                 /// if not equal, fallback to the original compare so we can reuse the code to get error message
             }
-            ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value at index {} mismatch", i), expected_field.toString(), actual_field.toString());
+            ASSERT_EQUAL_WITH_TEXT(
+                expected_field,
+                actual_field,
+                fmt::format("Value at index {} mismatch", i),
+                expected_field.toString(),
+                actual_field.toString());
         }
         else
         {
@@ -158,9 +166,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column, collator, expected.type->isFloatingPoint());
 }
 
-::testing::AssertionResult blockEqual(
-    const Block & expected,
-    const Block & actual)
+::testing::AssertionResult blockEqual(const Block & expected, const Block & actual)
 {
     size_t columns = actual.columns();
     size_t expected_columns = expected.columns();
@@ -168,7 +174,10 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     ASSERT_EQUAL(
         expected_columns,
         columns,
-        fmt::format("Block column size mismatch\nexpected_structure: {}\nstructure: {}", expected.dumpJsonStructure(), actual.dumpJsonStructure()));
+        fmt::format(
+            "Block column size mismatch\nexpected_structure: {}\nstructure: {}",
+            expected.dumpJsonStructure(),
+            actual.dumpJsonStructure()));
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -225,7 +234,10 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
     {
         auto const & expect_col = expected[i];
         auto const & actual_col = actual[i];
-        ASSERT_EQUAL(expect_col.column->getName(), actual_col.column->getName(), fmt::format("Column {} name mismatch", i));
+        ASSERT_EQUAL(
+            expect_col.column->getName(),
+            actual_col.column->getName(),
+            fmt::format("Column {} name mismatch", i));
         ASSERT_EQUAL(expect_col.column->size(), actual_col.column->size(), fmt::format("Column {} size mismatch", i));
         auto type_eq = dataTypeEqual(expected[i].type, actual[i].type);
         if (!type_eq)
@@ -334,7 +346,18 @@ ColumnWithTypeAndName executeFunction(
     std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
     const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
 
+<<<<<<< HEAD
     return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
+=======
+    return executeFunction(
+        context,
+        func_name,
+        argument_column_numbers,
+        columns_reordered,
+        collator,
+        val,
+        raw_function_test);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 ColumnWithTypeAndName executeFunction(
@@ -367,7 +390,12 @@ ColumnWithTypeAndName executeFunction(
     }
 
     auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+<<<<<<< HEAD
     auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+=======
+    auto [actions, result_name]
+        = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator, val);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 
     Block block(columns_with_unique_name);
     actions->execute(block);
@@ -403,7 +431,12 @@ DataTypePtr getReturnTypeForFunction(
         for (size_t i = 0; i < columns.size(); ++i)
             argument_column_numbers.push_back(i);
         auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+<<<<<<< HEAD
         auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+=======
+        auto [actions, result_name]
+            = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator, "");
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
         return actions->getSampleBlock().getByName(result_name).type;
     }
 }
@@ -526,14 +559,53 @@ void FunctionTest::initializeDAGContext()
     context->setDAGContext(dag_context_ptr.get());
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, TiDB::TiDBCollatorPtr const & collator, bool raw_function_test)
+ColumnWithTypeAndName FunctionTest::executeFunction(
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    TiDB::TiDBCollatorPtr const & collator,
+    bool raw_function_test)
 {
     return DB::tests::executeFunction(*context, func_name, columns, collator, raw_function_test);
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns, TiDB::TiDBCollatorPtr const & collator, bool raw_function_test)
+ColumnWithTypeAndName FunctionTest::executeFunction(
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    TiDB::TiDBCollatorPtr const & collator,
+    bool raw_function_test)
 {
+<<<<<<< HEAD
     return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, raw_function_test);
+=======
+    return DB::tests::executeFunction(
+        *context,
+        func_name,
+        argument_column_numbers,
+        columns,
+        collator,
+        "",
+        raw_function_test);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const FuncMetaData & meta,
+    const TiDB::TiDBCollatorPtr & collator)
+{
+    return DB::tests::executeFunction(*context, func_name, columns, collator, meta.val, false);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    const FuncMetaData & meta,
+    const TiDB::TiDBCollatorPtr & collator)
+{
+    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, meta.val, false);
+>>>>>>> 6638f2067b (Fix license and format coding style (#7962))
 }
 
 } // namespace tests
