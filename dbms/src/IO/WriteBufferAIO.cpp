@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,12 @@ extern const int CANNOT_FSYNC;
 
 /// Note: an additional page is allocated that will contain data that
 /// do not fit into the main buffer.
-WriteBufferAIO::WriteBufferAIO(const std::string & filename_, size_t buffer_size_, int flags_, mode_t mode_, char * existing_memory_)
+WriteBufferAIO::WriteBufferAIO(
+    const std::string & filename_,
+    size_t buffer_size_,
+    int flags_,
+    mode_t mode_,
+    char * existing_memory_)
     : WriteBufferFromFileBase(buffer_size_ + DEFAULT_AIO_FILE_BLOCK_SIZE, existing_memory_, DEFAULT_AIO_FILE_BLOCK_SIZE)
     , flush_buffer(BufferWithOwnMemory<WriteBuffer>(this->memory.size(), nullptr, DEFAULT_AIO_FILE_BLOCK_SIZE))
     , filename(filename_)
@@ -106,9 +111,7 @@ void WriteBufferAIO::sync()
     /// Ask OS to flush data to disk.
     ProfileEvents::increment(ProfileEvents::FileFSync);
     Stopwatch sw;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds()); });
     int res = ::fsync(fd);
     if (res == -1)
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);
@@ -147,7 +150,9 @@ void WriteBufferAIO::nextImpl()
         if (errno != EINTR)
         {
             aio_failed = true;
-            throw Exception("Cannot submit request for asynchronous IO on file " + filename, ErrorCodes::AIO_SUBMIT_ERROR);
+            throw Exception(
+                "Cannot submit request for asynchronous IO on file " + filename,
+                ErrorCodes::AIO_SUBMIT_ERROR);
         }
     }
 
@@ -176,7 +181,9 @@ off_t WriteBufferAIO::doSeek(off_t off, int whence)
         pos_in_file += off;
     }
     else
-        throw Exception("WriteBufferAIO::seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(
+            "WriteBufferAIO::seek expects SEEK_SET or SEEK_CUR as whence",
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (pos_in_file > max_pos_in_file)
         max_pos_in_file = pos_in_file;
@@ -210,7 +217,9 @@ bool WriteBufferAIO::waitForAIOCompletion()
         if (errno != EINTR)
         {
             aio_failed = true;
-            throw Exception("Failed to wait for asynchronous IO completion on file " + filename, ErrorCodes::AIO_COMPLETION_ERROR);
+            throw Exception(
+                "Failed to wait for asynchronous IO completion on file " + filename,
+                ErrorCodes::AIO_COMPLETION_ERROR);
         }
     }
 
@@ -285,7 +294,8 @@ void WriteBufferAIO::prepare()
     /// Region of the disk in which we want to write data.
     const off_t region_begin = pos_in_file;
 
-    if ((flush_buffer.offset() > std::numeric_limits<off_t>::max()) || (pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(flush_buffer.offset()))))
+    if ((flush_buffer.offset() > std::numeric_limits<off_t>::max())
+        || (pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(flush_buffer.offset()))))
         throw Exception("An overflow occurred during file operation", ErrorCodes::LOGICAL_ERROR);
 
     const off_t region_end = pos_in_file + flush_buffer.offset();
@@ -293,7 +303,8 @@ void WriteBufferAIO::prepare()
 
     /// The aligned region of the disk into which we want to write the data.
     const size_t region_left_padding = region_begin % DEFAULT_AIO_FILE_BLOCK_SIZE;
-    const size_t region_right_padding = (DEFAULT_AIO_FILE_BLOCK_SIZE - (region_end % DEFAULT_AIO_FILE_BLOCK_SIZE)) % DEFAULT_AIO_FILE_BLOCK_SIZE;
+    const size_t region_right_padding
+        = (DEFAULT_AIO_FILE_BLOCK_SIZE - (region_end % DEFAULT_AIO_FILE_BLOCK_SIZE)) % DEFAULT_AIO_FILE_BLOCK_SIZE;
 
     region_aligned_begin = region_begin - region_left_padding;
 
@@ -374,7 +385,10 @@ void WriteBufferAIO::prepare()
             buffer_size += region_left_padding;
             buffer_end = buffer_begin + buffer_size;
 
-            ::memmove(buffer_begin + region_left_padding, buffer_begin, (buffer_size - region_left_padding) * sizeof(*buffer_begin));
+            ::memmove(
+                buffer_begin + region_left_padding,
+                buffer_begin,
+                (buffer_size - region_left_padding) * sizeof(*buffer_begin));
 
             ssize_t read_count = ::pread(fd, memory_page, DEFAULT_AIO_FILE_BLOCK_SIZE, region_aligned_begin);
             if (read_count < 0)
@@ -388,7 +402,11 @@ void WriteBufferAIO::prepare()
         if (region_right_padding > 0)
         {
             /// Add the end of the buffer with data from the disk.
-            ssize_t read_count = ::pread(fd, memory_page, DEFAULT_AIO_FILE_BLOCK_SIZE, region_aligned_end - DEFAULT_AIO_FILE_BLOCK_SIZE);
+            ssize_t read_count = ::pread(
+                fd,
+                memory_page,
+                DEFAULT_AIO_FILE_BLOCK_SIZE,
+                region_aligned_end - DEFAULT_AIO_FILE_BLOCK_SIZE);
             if (read_count < 0)
                 throw Exception("Read error", ErrorCodes::AIO_READ_ERROR);
 

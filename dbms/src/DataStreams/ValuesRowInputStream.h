@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,11 @@ public:
       * If interpret_expressions is true, it will, in addition, try to use SQL parser and interpreter
       *  in case when streaming parser could not parse field (this is very slow).
       */
-    ValuesRowInputStream(ReadBuffer & istr_, const Block & header_, const Context & context_, bool interpret_expressions_);
+    ValuesRowInputStream(
+        ReadBuffer & istr_,
+        const Block & header_,
+        const Context & context_,
+        bool interpret_expressions_);
 
     bool read(MutableColumns & columns) override;
 
@@ -45,4 +49,4 @@ private:
     bool interpret_expressions;
 };
 
-}
+} // namespace DB

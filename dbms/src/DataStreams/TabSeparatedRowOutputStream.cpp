@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,13 +19,16 @@
 namespace DB
 {
 
-TabSeparatedRowOutputStream::TabSeparatedRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool with_names_, bool with_types_)
+TabSeparatedRowOutputStream::TabSeparatedRowOutputStream(
+    WriteBuffer & ostr_,
+    const Block & sample_,
+    bool with_names_,
+    bool with_types_)
     : ostr(ostr_)
     , sample(sample_)
     , with_names(with_names_)
     , with_types(with_types_)
-{
-}
+{}
 
 
 void TabSeparatedRowOutputStream::flush()

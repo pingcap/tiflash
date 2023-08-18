@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ public:
     InterpreterManageQuery(const ASTPtr & query_ptr_, Context & context_)
         : query_ptr(query_ptr_)
         , context(context_)
-    {
-    }
+    {}
 
     BlockIO execute() override;
 

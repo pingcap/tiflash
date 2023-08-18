@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,15 +101,9 @@ private:
 public:
     const char * getFamilyName() const override { return "String"; }
 
-    size_t size() const override
-    {
-        return offsets.size();
-    }
+    size_t size() const override { return offsets.size(); }
 
-    size_t byteSize() const override
-    {
-        return chars.size() + offsets.size() * sizeof(offsets[0]);
-    }
+    size_t byteSize() const override { return chars.size() + offsets.size() * sizeof(offsets[0]); }
 
     size_t byteSize(size_t offset, size_t limit) const override
     {
@@ -119,27 +113,15 @@ public:
         return char_size + limit * sizeof(offsets[0]);
     }
 
-    size_t allocatedBytes() const override
-    {
-        return chars.allocated_bytes() + offsets.allocated_bytes();
-    }
+    size_t allocatedBytes() const override { return chars.allocated_bytes() + offsets.allocated_bytes(); }
 
     MutableColumnPtr cloneResized(size_t to_size) const override;
 
-    Field operator[](size_t n) const override
-    {
-        return Field(&chars[offsetAt(n)], sizeAt(n) - 1);
-    }
+    Field operator[](size_t n) const override { return Field(&chars[offsetAt(n)], sizeAt(n) - 1); }
 
-    void get(size_t n, Field & res) const override
-    {
-        res.assignString(&chars[offsetAt(n)], sizeAt(n) - 1);
-    }
+    void get(size_t n, Field & res) const override { res.assignString(&chars[offsetAt(n)], sizeAt(n) - 1); }
 
-    StringRef getDataAt(size_t n) const override
-    {
-        return StringRef(&chars[offsetAt(n)], sizeAt(n) - 1);
-    }
+    StringRef getDataAt(size_t n) const override { return StringRef(&chars[offsetAt(n)], sizeAt(n) - 1); }
 
     StringRef getDataAtWithTerminatingZero(size_t n) const override
     {
@@ -199,10 +181,7 @@ public:
         offsets.push_back(new_size);
     }
 
-    void insertData(const char * pos, size_t length) override
-    {
-        return insertDataImpl<true>(pos, length);
-    }
+    void insertData(const char * pos, size_t length) override { return insertDataImpl<true>(pos, length); }
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
     {
@@ -222,7 +201,12 @@ public:
         offsets.resize_assume_reserved(offsets.size() - n);
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
+    StringRef serializeValueIntoArena(
+        size_t n,
+        Arena & arena,
+        char const *& begin,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
@@ -233,7 +217,8 @@ public:
         if (likely(collator != nullptr))
         {
             // Skip last zero byte.
-            auto sort_key = collator->sortKeyFastPath(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
+            auto sort_key
+                = collator->sortKeyFastPath(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             src = sort_key.data;
         }
@@ -256,14 +241,21 @@ public:
         return pos + string_size;
     }
 
-    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
+    void updateHashWithValue(
+        size_t n,
+        SipHash & hash,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
         if (likely(collator != nullptr))
         {
             // Skip last zero byte.
-            auto sort_key = collator->sortKeyFastPath(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
+            auto sort_key = collator->sortKeyFastPath(
+                reinterpret_cast<const char *>(&chars[offset]),
+                string_size - 1,
+                sort_key_container);
             string_size = sort_key.size;
             hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
             hash.update(sort_key.data, sort_key.size);
@@ -275,7 +267,10 @@ public:
         }
     }
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override;
+    void updateHashWithValues(
+        IColumn::HashValues & hash_values,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
@@ -322,9 +317,11 @@ public:
     }
 
     /// Sorting with respect of collation.
-    void getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const;
+    void getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res)
+        const;
 
-    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets)
+        const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
@@ -345,29 +342,14 @@ public:
     void getExtremes(Field & min, Field & max) const override;
 
 
-    bool canBeInsideNullable() const override
-    {
-        return true;
-    }
+    bool canBeInsideNullable() const override { return true; }
 
 
-    Chars_t & getChars()
-    {
-        return chars;
-    }
-    const Chars_t & getChars() const
-    {
-        return chars;
-    }
+    Chars_t & getChars() { return chars; }
+    const Chars_t & getChars() const { return chars; }
 
-    Offsets & getOffsets()
-    {
-        return offsets;
-    }
-    const Offsets & getOffsets() const
-    {
-        return offsets;
-    }
+    Offsets & getOffsets() { return offsets; }
+    const Offsets & getOffsets() const { return offsets; }
 };
 
 

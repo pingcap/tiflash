@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,11 @@ SpilledFile::~SpilledFile()
     }
     catch (...)
     {
-        LOG_WARNING(getSpilledFileLogger(), "Failed to clean spilled file {}, error message: {}", path(), getCurrentExceptionMessage(false, false));
+        LOG_WARNING(
+            getSpilledFileLogger(),
+            "Failed to clean spilled file {}, error message: {}",
+            path(),
+            getCurrentExceptionMessage(false, false));
     }
 }
 
@@ -79,7 +83,14 @@ void SpilledFiles::makeAllSpilledFilesImmutable()
     mutable_spilled_files.clear();
 }
 
-Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 partition_num_, const Block & input_schema_, const LoggerPtr & logger_, Int64 spill_version_, bool release_spilled_file_on_restore_)
+Spiller::Spiller(
+    const SpillConfig & config_,
+    bool is_input_sorted_,
+    UInt64 partition_num_,
+    const Block & input_schema_,
+    const LoggerPtr & logger_,
+    Int64 spill_version_,
+    bool release_spilled_file_on_restore_)
     : config(config_)
     , is_input_sorted(is_input_sorted_)
     , partition_num(partition_num_)
@@ -93,7 +104,8 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
         spilled_files.push_back(std::make_unique<SpilledFiles>());
     }
     /// if is_input_sorted is true, can not append write because it will break the sort property
-    enable_append_write = !is_input_sorted && (config.max_spilled_bytes_per_file != 0 || config.max_spilled_rows_per_file != 0);
+    enable_append_write
+        = !is_input_sorted && (config.max_spilled_bytes_per_file != 0 || config.max_spilled_rows_per_file != 0);
     Poco::File spill_dir(config.spill_dir);
     if (!spill_dir.exists())
     {
@@ -113,7 +125,10 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     removeConstantColumns(header_without_constants);
     if (0 == header_without_constants.columns())
     {
-        LOG_WARNING(logger, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+        LOG_WARNING(
+            logger,
+            "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only "
+            "constant columns");
         for (UInt64 i = 0; i < partition_num; ++i)
         {
             all_constant_block_rows.push_back(0);
@@ -127,7 +142,10 @@ void Spiller::removeConstantColumns(Block & block) const
     /// the original Block, if the column before the index is removed, the index has to be updated or it becomes invalid index
     for (auto it = const_column_indexes.rbegin(); it != const_column_indexes.rend(); ++it) // NOLINT
     {
-        RUNTIME_CHECK_MSG(block.getByPosition(*it).column->isColumnConst(), "The {}-th column in block must be constant column", *it);
+        RUNTIME_CHECK_MSG(
+            block.getByPosition(*it).column->isColumnConst(),
+            "The {}-th column in block must be constant column",
+            *it);
         block.erase(*it);
     }
 }
@@ -145,7 +163,10 @@ CachedSpillHandlerPtr Spiller::createCachedSpillHandler(
         is_cancelled);
 }
 
-void Spiller::spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled)
+void Spiller::spillBlocksUsingBlockInputStream(
+    const BlockInputStreamPtr & block_in,
+    UInt64 partition_id,
+    const std::function<bool()> & is_cancelled)
 {
     assert(block_in);
     auto cached_handler = createCachedSpillHandler(block_in, partition_id, is_cancelled);
@@ -171,7 +192,10 @@ std::pair<std::unique_ptr<SpilledFile>, bool> Spiller::getOrCreateSpilledFile(UI
     {
         auto spilled_file_name = nextSpillFileName(partition_id);
         spilled_file = std::make_unique<SpilledFile>(spilled_file_name, config.file_provider);
-        RUNTIME_CHECK_MSG(!spilled_file->exists(), "Duplicated spilled file: {}, should not happens", spilled_file_name);
+        RUNTIME_CHECK_MSG(
+            !spilled_file->exists(),
+            "Duplicated spilled file: {}, should not happens",
+            spilled_file_name);
         return std::make_pair(std::move(spilled_file), false);
     }
     else
@@ -183,7 +207,12 @@ std::pair<std::unique_ptr<SpilledFile>, bool> Spiller::getOrCreateSpilledFile(UI
 
 SpillHandler Spiller::createSpillHandler(UInt64 partition_id)
 {
-    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
+    RUNTIME_CHECK_MSG(
+        partition_id < partition_num,
+        "{}: partition id {} exceeds partition num {}.",
+        config.spill_id,
+        partition_id,
+        partition_num);
     RUNTIME_CHECK_MSG(isSpillFinished() == false, "{}: spill after the spiller is finished.", config.spill_id);
     return SpillHandler(this, partition_id);
 }
@@ -200,7 +229,12 @@ void Spiller::spillBlocks(Blocks && blocks, UInt64 partition_id)
 
 BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_size, bool append_dummy_read_stream)
 {
-    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
+    RUNTIME_CHECK_MSG(
+        partition_id < partition_num,
+        "{}: partition id {} exceeds partition num {}.",
+        config.spill_id,
+        partition_id,
+        partition_num);
     RUNTIME_CHECK_MSG(isSpillFinished(), "{}: restore before the spiller is finished.", config.spill_id);
 
     BlockInputStreams ret;
@@ -231,14 +265,20 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
             for (auto stream_row : stream_rows)
             {
                 if (stream_row > 0)
-                    ret.push_back(std::make_shared<ConstantsBlockInputStream>(input_schema, stream_row, config.for_all_constant_block_size));
+                    ret.push_back(std::make_shared<ConstantsBlockInputStream>(
+                        input_schema,
+                        stream_row,
+                        config.for_all_constant_block_size));
             }
         }
     }
     else
     {
         std::lock_guard partition_lock(spilled_files[partition_id]->spilled_files_mutex);
-        RUNTIME_CHECK_MSG(spilled_files[partition_id]->mutable_spilled_files.empty(), "{}: the mutable spilled files must be empty when restore.", config.spill_id);
+        RUNTIME_CHECK_MSG(
+            spilled_files[partition_id]->mutable_spilled_files.empty(),
+            "{}: the mutable spilled files must be empty when restore.",
+            config.spill_id);
         auto & partition_spilled_files = spilled_files[partition_id]->immutable_spilled_files;
 
         if (max_stream_size == 0)
@@ -249,7 +289,8 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
         }
 
         SpillDetails details{0, 0, 0};
-        UInt64 spill_file_read_stream_num = is_input_sorted ? partition_spilled_files.size() : std::min(max_stream_size, partition_spilled_files.size());
+        UInt64 spill_file_read_stream_num = is_input_sorted ? partition_spilled_files.size()
+                                                            : std::min(max_stream_size, partition_spilled_files.size());
         std::vector<UInt64> restore_stream_read_rows;
 
         if (is_input_sorted)
@@ -263,7 +304,13 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
                 restore_stream_read_rows.push_back(file->getSpillDetails().rows);
                 if (release_spilled_file_on_restore)
                     file_infos.back().file = std::move(file);
-                ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, header_without_constants, const_column_indexes, config.file_provider, spill_version));
+                ret.push_back(std::make_shared<SpilledFilesInputStream>(
+                    std::move(file_infos),
+                    input_schema,
+                    header_without_constants,
+                    const_column_indexes,
+                    config.file_provider,
+                    spill_version));
             }
         }
         else
@@ -284,12 +331,26 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
             for (UInt64 i = 0; i < spill_file_read_stream_num; ++i)
             {
                 if (likely(!file_infos[i].empty()))
-                    ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, header_without_constants, const_column_indexes, config.file_provider, spill_version));
+                    ret.push_back(std::make_shared<SpilledFilesInputStream>(
+                        std::move(file_infos[i]),
+                        input_schema,
+                        header_without_constants,
+                        const_column_indexes,
+                        config.file_provider,
+                        spill_version));
             }
         }
         for (size_t i = 0; i < spill_file_read_stream_num; ++i)
             LOG_TRACE(logger, "Restore {} rows from {}-th stream", restore_stream_read_rows[i], i);
-        LOG_INFO(logger, "Will restore {} rows from {} files of size {:.3f} MiB compressed, {:.3f} MiB uncompressed using {} streams.", details.rows, spilled_files[partition_id]->immutable_spilled_files.size(), (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0), ret.size());
+        LOG_INFO(
+            logger,
+            "Will restore {} rows from {} files of size {:.3f} MiB compressed, {:.3f} MiB uncompressed using {} "
+            "streams.",
+            details.rows,
+            spilled_files[partition_id]->immutable_spilled_files.size(),
+            (details.data_bytes_compressed / 1048576.0),
+            (details.data_bytes_uncompressed / 1048576.0),
+            ret.size());
         if (release_spilled_file_on_restore)
         {
             /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
@@ -322,8 +383,16 @@ void Spiller::finishSpill()
 
 UInt64 Spiller::spilledRows(UInt64 partition_id)
 {
-    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
-    RUNTIME_CHECK_MSG(isSpillFinished(), "{}: spilledBlockDataSize must be called when the spiller is finished.", config.spill_id);
+    RUNTIME_CHECK_MSG(
+        partition_id < partition_num,
+        "{}: partition id {} exceeds partition num {}.",
+        config.spill_id,
+        partition_id,
+        partition_num);
+    RUNTIME_CHECK_MSG(
+        isSpillFinished(),
+        "{}: spilledBlockDataSize must be called when the spiller is finished.",
+        config.spill_id);
     UInt64 ret = 0;
 
     std::lock_guard partition_lock(spilled_files[partition_id]->spilled_files_mutex);
@@ -335,7 +404,12 @@ UInt64 Spiller::spilledRows(UInt64 partition_id)
 String Spiller::nextSpillFileName(UInt64 partition_id)
 {
     Int64 index = tmp_file_index.fetch_add(1);
-    return fmt::format("{}tmp_{}_partition_{}_{}", config.spill_dir, config.spill_id_as_file_name_prefix, partition_id, index);
+    return fmt::format(
+        "{}tmp_{}_partition_{}_{}",
+        config.spill_dir,
+        config.spill_id_as_file_name_prefix,
+        partition_id,
+        index);
 }
 
 std::atomic<Int64> Spiller::tmp_file_index = 0;

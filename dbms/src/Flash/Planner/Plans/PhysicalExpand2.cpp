@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,9 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     if (unlikely(expand.proj_exprs().empty()))
     {
         // should not reach here
-        throw TiFlashException("Expand executor without projections indicated by grouping sets", Errors::Planner::BadRequest);
+        throw TiFlashException(
+            "Expand executor without projections indicated by grouping sets",
+            Errors::Planner::BadRequest);
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
@@ -121,7 +123,8 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     for (auto i = 0; i < expand.proj_exprs().size(); i++)
     {
         // For every level, it's an individual actions.
-        ExpressionActionsPtr one_level_expand_actions = PhysicalPlanHelper::newActions(header_actions->getSampleBlock());
+        ExpressionActionsPtr one_level_expand_actions
+            = PhysicalPlanHelper::newActions(header_actions->getSampleBlock());
         const auto & level_exprs = expand.proj_exprs().Get(i);
         NamesWithAliases project_cols;
         for (auto j = 0; j < level_exprs.exprs().size(); j++)
@@ -132,7 +135,9 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
             const auto & col = one_level_expand_actions->getSampleBlock().getByName(expr_name);
 
             // link the current projected block column name with unified output column name.
-            auto output_name = static_cast<size_t>(j) < input_col_size ? analyzer.getCurrentInputColumns()[j].name : expand.generated_output_names().Get(j - input_col_size);
+            auto output_name = static_cast<size_t>(j) < input_col_size
+                ? analyzer.getCurrentInputColumns()[j].name
+                : expand.generated_output_names().Get(j - input_col_size);
             project_cols.emplace_back(col.name, output_name);
             // for N level projection, collecting the first level's projected col's type is enough.
             if (i == 0)
@@ -172,7 +177,10 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
 // Block input stream transform.
 void PhysicalExpand2::expandTransform(DAGPipeline & child_pipeline)
 {
-    String expand_extra_info = fmt::format("expand2, expand_executor_id = {}: leveled projections: {}", execId(), shared_expand->getLevelProjectionDes());
+    String expand_extra_info = fmt::format(
+        "expand2, expand_executor_id = {}: leveled projections: {}",
+        execId(),
+        shared_expand->getLevelProjectionDes());
     child_pipeline.transform([&](auto & stream) {
         // make the header ahead for every stream.
         auto input_header = stream->getHeader();
@@ -194,7 +202,8 @@ void PhysicalExpand2::buildPipelineExecGroupImpl(
     // make the header ahead
     shared_expand->getBeforeExpandActions()->execute(input_header);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<Expand2TransformOp>(exec_context, log->identifier(), input_header, shared_expand));
+        builder.appendTransformOp(
+            std::make_unique<Expand2TransformOp>(exec_context, log->identifier(), input_header, shared_expand));
     });
 }
 
@@ -208,7 +217,9 @@ void PhysicalExpand2::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     child->finalize(shared_expand->getBeforeExpandActions()->getRequiredColumns());
-    FinalizeHelper::prependProjectInputIfNeed(shared_expand->getBeforeExpandActions(), child->getSampleBlock().columns());
+    FinalizeHelper::prependProjectInputIfNeed(
+        shared_expand->getBeforeExpandActions(),
+        child->getSampleBlock().columns());
     FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 }
 

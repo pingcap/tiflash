@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,7 +111,9 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
             break;
         }
         default:
-            throw Exception(fmt::format("Type {} does not support literal in function unit test", getDataTypeByColumnInfo(ci)->getName()));
+            throw Exception(fmt::format(
+                "Type {} does not support literal in function unit test",
+                getDataTypeByColumnInfo(ci)->getName()));
         }
         expr->set_val(ss.releaseStr());
     }
@@ -163,7 +165,8 @@ void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & contex
             DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
             DataTypePtr target_type = inferDataType4Literal(c);
             ColumnWithTypeAndName column;
-            column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
+            column.column
+                = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
             column.name = exprToString(c, {}) + "_" + target_type->getName();
             column.type = target_type;
             arguments_types.emplace_back(target_type);
@@ -218,7 +221,12 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
     }
 }
 
-void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
+void functionToPB(
+    const DAGSchema & input,
+    ASTFunction * func,
+    tipb::Expr * expr,
+    int32_t collator_id,
+    const Context & context)
 {
     /// aggregation function is handled in AggregationBinder, so just treated as a column
     auto ft = checkSchema(input, func->getColumnName());

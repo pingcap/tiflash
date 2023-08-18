@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,9 +32,7 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
     }
     join_ptr->insertFromBlock(block, op_index);
     block.clear();
-    return join_ptr->hasBuildSideMarkedSpillData(op_index)
-        ? OperatorStatus::IO_OUT
-        : OperatorStatus::NEED_INPUT;
+    return join_ptr->hasBuildSideMarkedSpillData(op_index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus HashJoinBuildSink::executeIOImpl()

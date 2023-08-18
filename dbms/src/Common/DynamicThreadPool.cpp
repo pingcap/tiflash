@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,8 @@ void DynamicThreadPool::init(size_t initial_size)
     {
         fixed_queues.emplace_back(std::make_unique<Queue>(1)); // each Queue will only contain at most 1 task.
         idle_fixed_queues.push(fixed_queues.back().get());
-        fixed_threads.emplace_back(ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
+        fixed_threads.emplace_back(
+            ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
     }
 }
 

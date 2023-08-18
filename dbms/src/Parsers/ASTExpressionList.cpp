@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,10 @@ void ASTExpressionList::formatImpl(const FormatSettings & settings, FormatState 
     }
 }
 
-void ASTExpressionList::formatImplMultiline(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTExpressionList::formatImplMultiline(
+    const FormatSettings & settings,
+    FormatState & state,
+    FormatStateStacked frame) const
 {
     std::string indent_str = "\n" + std::string(4 * (frame.indent + 1), ' ');
 
@@ -57,4 +60,4 @@ void ASTExpressionList::formatImplMultiline(const FormatSettings & settings, For
     }
 }
 
-}
+} // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,8 +48,16 @@ public:
     void regSchemafulFunc(const std::string & name, SchemafulDBGFunc func) { schemaful_funcs[name] = func; }
 
     BlockInputStreamPtr invoke(Context & context, const std::string & ori_name, const ASTs & args);
-    static BlockInputStreamPtr invokeSchemaless(Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args);
-    static BlockInputStreamPtr invokeSchemaful(Context & context, const std::string & name, const SchemafulDBGFunc & func, const ASTs & args);
+    static BlockInputStreamPtr invokeSchemaless(
+        Context & context,
+        const std::string & name,
+        const SchemalessDBGFunc & func,
+        const ASTs & args);
+    static BlockInputStreamPtr invokeSchemaful(
+        Context & context,
+        const std::string & name,
+        const SchemafulDBGFunc & func,
+        const ASTs & args);
 
 private:
     std::unordered_map<std::string, SchemalessDBGFunc> schemaless_funcs;

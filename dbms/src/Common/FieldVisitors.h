@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -447,8 +447,9 @@ private:
     {
         if constexpr (std::is_same_v<U, Null>)
             return false;
-        throw Exception("Cannot compare " + demangle(typeid(T).name()) + " with " + demangle(typeid(U).name()),
-                        ErrorCodes::BAD_TYPE_OF_FIELD);
+        throw Exception(
+            "Cannot compare " + demangle(typeid(T).name()) + " with " + demangle(typeid(U).name()),
+            ErrorCodes::BAD_TYPE_OF_FIELD);
     }
 };
 
@@ -579,8 +580,9 @@ private:
     template <typename T, typename U>
     bool cantCompare(const T &, const U &) const
     {
-        throw Exception("Cannot compare " + demangle(typeid(T).name()) + " with " + demangle(typeid(U).name()),
-                        ErrorCodes::BAD_TYPE_OF_FIELD);
+        throw Exception(
+            "Cannot compare " + demangle(typeid(T).name()) + " with " + demangle(typeid(U).name()),
+            ErrorCodes::BAD_TYPE_OF_FIELD);
     }
 };
 

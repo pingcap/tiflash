@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,20 +41,14 @@ XMLRowOutputStream::XMLRowOutputStream(WriteBuffer & ostr_, const Block & sample
         for (const char * pos = begin; pos != end; ++pos)
         {
             char c = *pos;
-            if (!(isAlphaASCII(c)
-                  || (pos != begin && isNumericASCII(c))
-                  || c == '_'
-                  || c == '-'
-                  || c == '.'))
+            if (!(isAlphaASCII(c) || (pos != begin && isNumericASCII(c)) || c == '_' || c == '-' || c == '.'))
             {
                 is_column_name_suitable = false;
                 break;
             }
         }
 
-        field_tag_names[i] = is_column_name_suitable
-            ? fields[i].name
-            : "field";
+        field_tag_names[i] = is_column_name_suitable ? fields[i].name : "field";
     }
 
     if (need_validate_utf8)
@@ -150,7 +144,12 @@ void XMLRowOutputStream::writeRowsBeforeLimitAtLeast()
     }
 }
 
-static void writeExtremesElement(const char * title, const Block & extremes, size_t row_num, const Names & field_tag_names, WriteBuffer & ostr)
+static void writeExtremesElement(
+    const char * title,
+    const Block & extremes,
+    size_t row_num,
+    const Names & field_tag_names,
+    WriteBuffer & ostr)
 {
     writeCString("\t\t<", ostr);
     writeCString(title, ostr);

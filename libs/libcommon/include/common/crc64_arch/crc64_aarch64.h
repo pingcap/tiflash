@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ class SIMD
 public:
     using Poly64Pair = std::pair<poly64_t, poly64_t>;
 
-    SIMD(uint64_t high, uint64_t low)
-    noexcept;
+    SIMD(uint64_t high, uint64_t low) noexcept;
 
     [[nodiscard]] SIMD fold16(SIMD coeff) const noexcept;
 

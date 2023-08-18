@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,16 +97,10 @@ public:
     inline size_t offset() const { return pos - working_buffer.begin(); }
 
     /** How many bytes have been read/written, counting those that are still in the buffer. */
-    size_t count() const
-    {
-        return bytes + offset();
-    }
+    size_t count() const { return bytes + offset(); }
 
     /** Check that there is more bytes in buffer after cursor. */
-    bool ALWAYS_INLINE hasPendingData() const
-    {
-        return pos != working_buffer.end();
-    }
+    bool ALWAYS_INLINE hasPendingData() const { return pos != working_buffer.end(); }
 
 protected:
     /// Read/write position.

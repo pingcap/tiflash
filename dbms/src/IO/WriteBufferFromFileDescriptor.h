@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,17 +41,11 @@ public:
     /** Could be used before initialization if needed 'fd' was not passed to constructor.
       * It's not possible to change 'fd' during work.
       */
-    void setFD(int fd_)
-    {
-        fd = fd_;
-    }
+    void setFD(int fd_) { fd = fd_; }
 
     ~WriteBufferFromFileDescriptor() override;
 
-    int getFD() const override
-    {
-        return fd;
-    }
+    int getFD() const override { return fd; }
 
     off_t getPositionInFile() override;
 

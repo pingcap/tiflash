@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,12 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     const tipb::ExchangeReceiver & exchange_receiver,
     const FineGrainedShuffle & fine_grained_shuffle)
 {
-    auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(context, executor_id, log, exchange_receiver, fine_grained_shuffle.stream_count);
+    auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(
+        context,
+        executor_id,
+        log,
+        exchange_receiver,
+        fine_grained_shuffle.stream_count);
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,
@@ -59,7 +64,10 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     return physical_mock_exchange_receiver;
 }
 
-void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
+void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(
+    DAGPipeline & pipeline,
+    Context & /*context*/,
+    size_t /*max_streams*/)
 {
     RUNTIME_CHECK(pipeline.streams.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
@@ -72,7 +80,8 @@ void PhysicalMockExchangeReceiver::buildPipelineExecGroupImpl(
     size_t /*concurrency*/)
 {
     for (auto & mock_stream : mock_streams)
-        group_builder.addConcurrency(std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), mock_stream));
+        group_builder.addConcurrency(
+            std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), mock_stream));
 }
 
 void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)

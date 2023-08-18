@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,11 +90,20 @@ Block makeBlock(int row_num, bool skew)
     }
 
     auto int64_data_type = makeDataType<Nullable<Int64>>();
-    ColumnWithTypeAndName int64_column(makeColumn<Nullable<Int64>>(int64_data_type, int64_vec), int64_data_type, "int64_1");
-    ColumnWithTypeAndName int64_column2(makeColumn<Nullable<Int64>>(int64_data_type, int64_vec2), int64_data_type, "int64_2");
+    ColumnWithTypeAndName int64_column(
+        makeColumn<Nullable<Int64>>(int64_data_type, int64_vec),
+        int64_data_type,
+        "int64_1");
+    ColumnWithTypeAndName int64_column2(
+        makeColumn<Nullable<Int64>>(int64_data_type, int64_vec2),
+        int64_data_type,
+        "int64_2");
 
     auto string_data_type = makeDataType<Nullable<String>>();
-    ColumnWithTypeAndName string_column(makeColumn<Nullable<String>>(string_data_type, string_vec), string_data_type, "string");
+    ColumnWithTypeAndName string_column(
+        makeColumn<Nullable<String>>(string_data_type, string_vec),
+        string_data_type,
+        "string");
 
     return Block({int64_column, string_column, int64_column2});
 }
@@ -149,11 +158,9 @@ void printException(const Exception & e)
     std::string text = e.displayText();
 
     auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl
-              << std::endl;
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
     if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl
-                  << e.getStackTrace().toString() << std::endl;
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
 }
 
 ReceiverHelper::ReceiverHelper(int concurrency_, int source_num_, uint32_t fine_grained_shuffle_stream_count_)
@@ -207,10 +214,11 @@ std::vector<BlockInputStreamPtr> ReceiverHelper::buildExchangeReceiverStream()
     // NOTE: check if need fine_grained_shuffle_stream_count
     for (int i = 0; i < concurrency; ++i)
     {
-        streams[i] = std::make_shared<MockExchangeReceiverInputStream>(receiver,
-                                                                       "mock_req_id",
-                                                                       "mock_executor_id" + std::to_string(i),
-                                                                       /*stream_id=*/enableFineGrainedShuffle(fine_grained_shuffle_stream_count) ? i : 0);
+        streams[i] = std::make_shared<MockExchangeReceiverInputStream>(
+            receiver,
+            "mock_req_id",
+            "mock_executor_id" + std::to_string(i),
+            /*stream_id=*/enableFineGrainedShuffle(fine_grained_shuffle_stream_count) ? i : 0);
     }
     return streams;
 }
@@ -276,9 +284,7 @@ SenderHelper::SenderHelper(
     dag_context->result_field_types = fields;
 }
 
-BlockInputStreamPtr SenderHelper::buildUnionStream(
-    StopFlag & stop_flag,
-    const std::vector<Block> & blocks)
+BlockInputStreamPtr SenderHelper::buildUnionStream(StopFlag & stop_flag, const std::vector<Block> & blocks)
 {
     std::vector<BlockInputStreamPtr> send_streams;
     for (int i = 0; i < concurrency; ++i)
@@ -286,28 +292,28 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(
         BlockInputStreamPtr stream = std::make_shared<MockBlockInputStream>(blocks, stop_flag);
         if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
         {
-            std::unique_ptr<DAGResponseWriter> response_writer(
-                new FineGrainedShuffleWriter<MockTunnelSetPtr>(
-                    tunnel_set,
-                    {0, 1, 2},
-                    TiDB::TiDBCollators(3),
-                    true,
-                    *dag_context,
-                    fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size));
-            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+            std::unique_ptr<DAGResponseWriter> response_writer(new FineGrainedShuffleWriter<MockTunnelSetPtr>(
+                tunnel_set,
+                {0, 1, 2},
+                TiDB::TiDBCollators(3),
+                true,
+                *dag_context,
+                fine_grained_shuffle_stream_count,
+                fine_grained_shuffle_batch_size));
+            send_streams.push_back(
+                std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
         else
         {
-            std::unique_ptr<DAGResponseWriter> response_writer(
-                new HashParitionWriter<MockTunnelSetPtr>(
-                    tunnel_set,
-                    {0, 1, 2},
-                    TiDB::TiDBCollators(3),
-                    -1,
-                    true,
-                    *dag_context));
-            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+            std::unique_ptr<DAGResponseWriter> response_writer(new HashParitionWriter<MockTunnelSetPtr>(
+                tunnel_set,
+                {0, 1, 2},
+                TiDB::TiDBCollators(3),
+                -1,
+                true,
+                *dag_context));
+            send_streams.push_back(
+                std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
     }
 
@@ -322,28 +328,28 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
         BlockInputStreamPtr stream = std::make_shared<MockFixedRowsBlockInputStream>(total_rows / concurrency, blocks);
         if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
         {
-            std::unique_ptr<DAGResponseWriter> response_writer(
-                new FineGrainedShuffleWriter<MockTunnelSetPtr>(
-                    tunnel_set,
-                    {0, 1, 2},
-                    TiDB::TiDBCollators(3),
-                    true,
-                    *dag_context,
-                    fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size));
-            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+            std::unique_ptr<DAGResponseWriter> response_writer(new FineGrainedShuffleWriter<MockTunnelSetPtr>(
+                tunnel_set,
+                {0, 1, 2},
+                TiDB::TiDBCollators(3),
+                true,
+                *dag_context,
+                fine_grained_shuffle_stream_count,
+                fine_grained_shuffle_batch_size));
+            send_streams.push_back(
+                std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
         else
         {
-            std::unique_ptr<DAGResponseWriter> response_writer(
-                new HashParitionWriter<MockTunnelSetPtr>(
-                    tunnel_set,
-                    {0, 1, 2},
-                    TiDB::TiDBCollators(3),
-                    -1,
-                    true,
-                    *dag_context));
-            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+            std::unique_ptr<DAGResponseWriter> response_writer(new HashParitionWriter<MockTunnelSetPtr>(
+                tunnel_set,
+                {0, 1, 2},
+                TiDB::TiDBCollators(3),
+                -1,
+                true,
+                *dag_context));
+            send_streams.push_back(
+                std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
     }
 
@@ -388,25 +394,26 @@ void ExchangeBench::TearDown(const benchmark::State &)
     DynamicThreadPool::global_instance.reset();
 }
 
-void ExchangeBench::runAndWait(std::shared_ptr<ReceiverHelper> receiver_helper,
-                               BlockInputStreamPtr receiver_stream,
-                               std::shared_ptr<SenderHelper> & sender_helper,
-                               BlockInputStreamPtr sender_stream)
+void ExchangeBench::runAndWait(
+    std::shared_ptr<ReceiverHelper> receiver_helper,
+    BlockInputStreamPtr receiver_stream,
+    std::shared_ptr<SenderHelper> & sender_helper,
+    BlockInputStreamPtr sender_stream)
 {
-    std::future<void> sender_future = DynamicThreadPool::global_instance->schedule(/*memory_tracker=*/false,
-                                                                                   [sender_stream, sender_helper] {
-                                                                                       sender_stream->readPrefix();
-                                                                                       while (const auto & block = sender_stream->read()) {}
-                                                                                       sender_stream->readSuffix();
-                                                                                       sender_helper->finish();
-                                                                                   });
-    std::future<void> receiver_future = DynamicThreadPool::global_instance->schedule(/*memory_tracker=*/false,
-                                                                                     [receiver_stream, receiver_helper] {
-                                                                                         receiver_stream->readPrefix();
-                                                                                         while (const auto & block = receiver_stream->read()) {}
-                                                                                         receiver_stream->readSuffix();
-                                                                                         receiver_helper->finish();
-                                                                                     });
+    std::future<void> sender_future
+        = DynamicThreadPool::global_instance->schedule(/*memory_tracker=*/false, [sender_stream, sender_helper] {
+              sender_stream->readPrefix();
+              while (const auto & block = sender_stream->read()) {}
+              sender_stream->readSuffix();
+              sender_helper->finish();
+          });
+    std::future<void> receiver_future
+        = DynamicThreadPool::global_instance->schedule(/*memory_tracker=*/false, [receiver_stream, receiver_helper] {
+              receiver_stream->readPrefix();
+              while (const auto & block = receiver_stream->read()) {}
+              receiver_stream->readSuffix();
+              receiver_helper->finish();
+          });
     sender_future.get();
     receiver_future.get();
 }
@@ -424,15 +431,17 @@ try
 
     for (auto _ : state)
     {
-        std::shared_ptr<ReceiverHelper> receiver_helper = std::make_shared<ReceiverHelper>(concurrency, source_num, fine_grained_shuffle_stream_count);
+        std::shared_ptr<ReceiverHelper> receiver_helper
+            = std::make_shared<ReceiverHelper>(concurrency, source_num, fine_grained_shuffle_stream_count);
         BlockInputStreamPtr receiver_stream = receiver_helper->buildUnionStream();
 
-        std::shared_ptr<SenderHelper> sender_helper = std::make_shared<SenderHelper>(source_num,
-                                                                                     concurrency,
-                                                                                     fine_grained_shuffle_stream_count,
-                                                                                     fine_grained_shuffle_batch_size,
-                                                                                     receiver_helper->queues,
-                                                                                     receiver_helper->fields);
+        std::shared_ptr<SenderHelper> sender_helper = std::make_shared<SenderHelper>(
+            source_num,
+            concurrency,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            receiver_helper->queues,
+            receiver_helper->fields);
         BlockInputStreamPtr sender_stream = sender_helper->buildUnionStream(total_rows, uniform_blocks);
 
         runAndWait(receiver_helper, receiver_stream, sender_helper, sender_stream);

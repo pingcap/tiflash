@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,8 @@ bool columnEqual(const ColumnPtr & expected, const ColumnPtr & actual, String & 
         auto actual_field = (*actual)[i];
         if (expected_field != actual_field)
         {
-            unequal_msg = fmt::format("Value {} mismatch {} vs {} ", i, expected_field.toString(), actual_field.toString());
+            unequal_msg
+                = fmt::format("Value {} mismatch {} vs {} ", i, expected_field.toString(), actual_field.toString());
             return false;
         }
     }

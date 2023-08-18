@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,11 +31,7 @@ public:
       * If always_read_till_end = true - reads all the data to the end, but ignores them. This is necessary in rare cases:
       *  when otherwise, due to the cancellation of the request, we would not have received the data for GROUP BY WITH TOTALS from the remote server.
       */
-    LimitBlockInputStream(
-        const BlockInputStreamPtr & input,
-        size_t limit_,
-        size_t offset_,
-        const String & req_id);
+    LimitBlockInputStream(const BlockInputStreamPtr & input, size_t limit_, size_t offset_, const String & req_id);
 
     String getName() const override { return NAME; }
 

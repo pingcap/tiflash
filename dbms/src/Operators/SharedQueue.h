@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,18 +54,11 @@ public:
         const SharedQueuePtr & shared_queue_)
         : SinkOp(exec_context_, req_id)
         , shared_queue(shared_queue_)
-    {
-    }
+    {}
 
-    ~SharedQueueSinkOp() override
-    {
-        shared_queue->producerFinish();
-    }
+    ~SharedQueueSinkOp() override { shared_queue->producerFinish(); }
 
-    String getName() const override
-    {
-        return "SharedQueueSinkOp";
-    }
+    String getName() const override { return "SharedQueueSinkOp"; }
 
     OperatorStatus prepareImpl() override;
 
@@ -92,10 +85,7 @@ public:
         setHeader(header_);
     }
 
-    String getName() const override
-    {
-        return "SharedQueueSourceOp";
-    }
+    String getName() const override { return "SharedQueueSourceOp"; }
 
     OperatorStatus readImpl(Block & block) override;
 

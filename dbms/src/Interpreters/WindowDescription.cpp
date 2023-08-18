@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,9 +46,7 @@ WindowFrame::FrameType getFrameTypeFromTipb(const tipb::WindowFrameType & type)
     case tipb::WindowFrameType::Groups:
         return WindowFrame::FrameType::Groups;
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknown frame type {}",
-                        type);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", type);
     }
 }
 
@@ -90,9 +88,7 @@ String frameTypeToString(const WindowFrame::FrameType & type)
     case WindowFrame::FrameType::Ranges:
         return "Ranges";
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknown frame type {}",
-                        static_cast<Int32>(type));
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", static_cast<Int32>(type));
     }
 }
 
@@ -107,9 +103,7 @@ String boundaryTypeToString(const WindowFrame::BoundaryType & type)
     case WindowFrame::BoundaryType::Offset:
         return "Offset";
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknown boundary type {}",
-                        magic_enum::enum_name(type));
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown boundary type {}", magic_enum::enum_name(type));
     }
 }
 } // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteBufferValidUTF8.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferValidUTF8.h>
 #include <IO/WriteHelpers.h>
-#include <string>
-#include <streambuf>
-#include <iostream>
+
 #include <cstdio>
+#include <iostream>
+#include <streambuf>
+#include <string>
 
 int main(int, char **)
 {
