@@ -35,5 +35,7 @@ header:
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'
+    - '**/OWNERS'
+    - '**/*.sql'
 
   comment: on-failure
