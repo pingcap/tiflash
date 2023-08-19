@@ -39,5 +39,6 @@ header:
     - 'rust-toolchain'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'    
+    - '**/*.sql'
 
   comment: on-failure
