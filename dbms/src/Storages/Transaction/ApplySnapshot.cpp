@@ -553,12 +553,12 @@ void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
     auto task = prehandling_trace.deregisterTask(region_id);
     if (task)
     {
-        LOG_INFO(log, "Try cancel pre-handling from upper layer [region_id={}] but not found", region_id);
+        LOG_INFO(log, "Start cancel pre-handling from upper layer, region_id={}", region_id);
         task->store(true, std::memory_order_seq_cst);
     }
     else
     {
-        LOG_INFO(log, "Start cancel pre-handling from upper layer [region_id={}]", region_id);
+        LOG_INFO(log, "Try cancel pre-handling from upper layer but not found, region_id={}", region_id);
     }
 }
 
