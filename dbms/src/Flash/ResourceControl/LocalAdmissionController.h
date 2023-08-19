@@ -78,7 +78,7 @@ private:
         const double init_fill_rate = 0.0;
         const double init_tokens = user_ru_per_sec;
         const double init_cap = capacity;
-        bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, init_cap);
+        bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, log->identifier(), init_cap);
         assert(
             user_priority == LowPriorityValue || user_priority == MediumPriorityValue
             || user_priority == HighPriorityValue);

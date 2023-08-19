@@ -263,6 +263,7 @@ public:
     MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id)
     {
         auto query_id_iter = resource_group_query_ids.find(query_id);
+        // gjt todo: what if task not dispatched yet?
         if (query_id_iter == resource_group_query_ids.end())
             return scheduler;
         auto scheduler_iter = resource_group_schedulers.find(query_id_iter->second);
@@ -271,6 +272,7 @@ public:
     MPPTaskSchedulerPtr getScheduler(const String & resource_group_name)
     {
         auto iter = resource_group_schedulers.find(resource_group_name);
+        // gjt todo: what if task not dispatched yet?
         if (iter == resource_group_schedulers.end())
             return scheduler;
         return iter->second;

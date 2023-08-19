@@ -32,6 +32,7 @@ bool TokenBucket::consume(double n)
     auto now = std::chrono::steady_clock::now();
     compact(now);
 
+    LOG_TRACE(log, "consume ori token: {}, will consume: {}", tokens, n);
     tokens -= n;
     return tokens >= 0.0;
 }
@@ -73,6 +74,8 @@ double TokenBucket::getAvgSpeedPerSec()
         last_get_avg_speed_tokens = tokens;
         last_get_avg_speed_timepoint = now;
     }
+    LOG_TRACE(log, "getAvgSpeedPerSec dura: {}, last_get_avg_speed_tokens: {}, cur tokens: {}, avg_speed_per_sec: {}",
+            dura.count(), last_get_avg_speed_tokens, tokens, avg_speed_per_sec);
     return avg_speed_per_sec;
 }
 

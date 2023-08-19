@@ -14,10 +14,11 @@
 
 #pragma once
 
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
+
 #include <chrono>
 #include <memory>
-
-#include "Operators/Operator.h"
 
 namespace DB
 {
@@ -32,7 +33,7 @@ class TokenBucket final
 public:
     using TimePoint = std::chrono::steady_clock::time_point;
 
-    TokenBucket(double fill_rate_, double init_tokens_, double capacity_ = std::numeric_limits<double>::max())
+    TokenBucket(double fill_rate_, double init_tokens_, const std::string & log_id, double capacity_ = std::numeric_limits<double>::max())
         : fill_rate(fill_rate_)
         , tokens(init_tokens_)
         , capacity(capacity_)
@@ -41,6 +42,7 @@ public:
         , last_get_avg_speed_tokens(init_tokens_)
         , avg_speed_per_sec(0.0)
         , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
+        , log(Logger::get(log_id))
     {}
 
     ~TokenBucket() = default;
@@ -95,6 +97,8 @@ private:
     double avg_speed_per_sec;
 
     double low_token_threshold;
+
+    LoggerPtr log;
 };
 
 using TokenBucketPtr = std::unique_ptr<TokenBucket>;
