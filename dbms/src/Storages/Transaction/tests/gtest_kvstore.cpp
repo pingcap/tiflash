@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include <Debug/dbgTools.h>
-
-#include "kvstore_helper.h"
+#include <Storages/Transaction/tests/kvstore_helper.h>
 
 namespace DB
 {
@@ -998,7 +997,8 @@ try
             },
         };
         {
-            kvs.handleApplySnapshot(
+            RegionBench::handleApplySnapshot(
+                kvs,
                 region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
@@ -1037,7 +1037,8 @@ try
             },
         };
         {
-            kvs.handleApplySnapshot(
+            RegionBench::handleApplySnapshot(
+                kvs,
                 region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
@@ -1112,7 +1113,8 @@ try
         // Will reject a snapshot with smaller index.
         {
             // Pre-handle snapshot to DTFiles is ignored because the table is dropped.
-            kvs.handleApplySnapshot(
+            RegionBench::handleApplySnapshot(
+                kvs,
                 region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
@@ -1123,7 +1125,8 @@ try
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
             try
             {
-                kvs.handleApplySnapshot(
+                RegionBench::handleApplySnapshot(
+                    kvs,
                     region->cloneMetaRegion(),
                     2,
                     {}, // empty snap files

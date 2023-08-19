@@ -596,20 +596,6 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
-void KVStore::handleApplySnapshot(
-    metapb::Region && region,
-    uint64_t peer_id,
-    const SSTViewVec snaps,
-    uint64_t index,
-    uint64_t term,
-    std::optional<uint64_t> deadline_index,
-    TMTContext & tmt)
-{
-    auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
-    applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
-}
-
 void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
 {
     applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
