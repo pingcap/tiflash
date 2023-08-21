@@ -183,8 +183,7 @@ public:
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
-    // Donot use this directly, use getScheduler(resource_group_name) instead.
-    MPPTaskSchedulerPtr scheduler;
+    const MinTSOSchedulerConfig min_tso_config;
 
     std::mutex mu;
 
@@ -203,14 +202,11 @@ class MPPTaskManager : private boost::noncopyable
     // If resource control is enabled, will use scheduler in resource_group_schedulers.
     // Otherwise use the global scheduler.
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
-    // key: MPPQueryID, value: MPPTaskSchedulerPtr
-    // This is to find corresponding scheduler by query_id so we can release query info of MinTSO.
-    std::unordered_map<MPPQueryId, String, MPPQueryIdHash> resource_group_query_ids;
     std::unordered_set<MPPTaskSchedulerPtr> resource_group_schedulers_ready_to_delete;
     UInt64 resource_control_mpp_task_hard_limit;
 
 public:
-    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler, UInt64 resource_control_mpp_task_hard_limit_);
+    MPPTaskManager(const MinTSOSchedulerConfig & min_tso_config_, UInt64 resource_control_mpp_task_hard_limit_);
 
     ~MPPTaskManager();
 
@@ -258,23 +254,17 @@ public:
     void tagResourceGroupSchedulerReadyToDelete(const String & name);
 
     // Really delete resource group scheduler whose running mpp tasks is empty.
-    void cleanResourceGroupScheduler();
+    void cleanTombstoneResourceGroupScheduler();
 
-    MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id)
-    {
-        auto query_id_iter = resource_group_query_ids.find(query_id);
-        // gjt todo: what if task not dispatched yet?
-        if (query_id_iter == resource_group_query_ids.end())
-            return scheduler;
-        auto scheduler_iter = resource_group_schedulers.find(query_id_iter->second);
-        return scheduler_iter->second;
-    }
+    // NOTE: return nullptr if MPPTask doesn't register to MPPTaskManager.
+    MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id) { return getScheduler(query_id.resource_group_name); }
+
     MPPTaskSchedulerPtr getScheduler(const String & resource_group_name)
     {
+        std::lock_guard lock(mu);
         auto iter = resource_group_schedulers.find(resource_group_name);
-        // gjt todo: what if task not dispatched yet?
         if (iter == resource_group_schedulers.end())
-            return scheduler;
+            return nullptr;
         return iter->second;
     }
 

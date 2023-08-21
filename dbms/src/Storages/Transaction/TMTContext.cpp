@@ -149,7 +149,7 @@ TMTContext::TMTContext(
           cluster,
           context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
-          std::make_shared<MinTSOScheduler>(
+          MinTSOSchedulerConfig(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
               context.getSettingsRef().task_scheduler_thread_hard_limit,
               context.getSettingsRef().task_scheduler_active_set_soft_limit),

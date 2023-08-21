@@ -27,12 +27,12 @@ extern const char random_min_tso_scheduler_failpoint[];
 
 constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
-MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit_)
+MinTSOScheduler::MinTSOScheduler(const MinTSOSchedulerConfig & config)
     : min_query_id(MPPTaskId::Max_Query_Id)
-    , thread_soft_limit(soft_limit)
-    , thread_hard_limit(hard_limit)
+    , thread_soft_limit(config.soft_limit)
+    , thread_hard_limit(config.hard_limit)
     , estimated_thread_usage(0)
-    , active_set_soft_limit(active_set_soft_limit_)
+    , active_set_soft_limit(config.active_set_soft_limit)
     , log(Logger::get())
 {
     auto cores = static_cast<size_t>(getNumberOfLogicalCPUCores() / 2);
@@ -57,8 +57,8 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
                 log,
                 "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by "
                 "default, and active_set_soft_limit is {}.",
-                hard_limit,
-                soft_limit,
+                config.hard_limit,
+                config.soft_limit,
                 OS_THREAD_SOFT_LIMIT,
                 thread_hard_limit,
                 thread_soft_limit,

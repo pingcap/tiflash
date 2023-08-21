@@ -28,6 +28,19 @@ using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 struct MPPGatherTaskSet;
 using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
+struct MinTSOSchedulerConfig
+{
+    MinTSOSchedulerConfig(UInt64 soft_limit_, UInt64 hard_limit_, UInt64 active_set_soft_limit_)
+        : soft_limit(soft_limit_)
+        , hard_limit(hard_limit_)
+        , active_set_soft_limit(active_set_soft_limit_)
+    {}
+
+    UInt64 soft_limit;
+    UInt64 hard_limit;
+    UInt64 active_set_soft_limit;
+};
+
 /// scheduling tasks in the set according to the tso order under the soft limit of threads, but allow the min_query_id query to preempt threads under the hard limit of threads.
 /// The min_query_id query avoids the deadlock resulted from threads competition among nodes.
 /// schedule tasks under the lock protection of the task manager.
@@ -35,7 +48,7 @@ using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
-    MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit_);
+    explicit MinTSOScheduler(const MinTSOSchedulerConfig & config);
     ~MinTSOScheduler() = default;
     /// try to schedule this task if it is the min_query_id query or there are enough threads, otherwise put it into the waiting set.
     /// NOTE: call tryToSchedule under the lock protection of MPPTaskManager
@@ -51,11 +64,6 @@ public:
 
     /// all scheduled tasks should finally call this function to release threads and schedule new tasks
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
-
-    std::tuple<UInt64, UInt64, UInt64> getLimitConfig() const
-    {
-        return {thread_soft_limit, thread_hard_limit, active_set_soft_limit};
-    }
 
     size_t getActiveSetSize() const { return active_set.size(); }
 

@@ -222,10 +222,10 @@ void ResourceControlQueue<NestedTaskQueueType>::mustEraseResourceGroupInfoWithou
 {
     size_t erase_num = resource_group_task_queues.erase(name);
     RUNTIME_CHECK_MSG(
-            erase_num == 1,
-            "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
-            name,
-            erase_num);
+        erase_num == 1,
+        "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",
+        name,
+        erase_num);
     resource_group_infos.pop();
 }
 

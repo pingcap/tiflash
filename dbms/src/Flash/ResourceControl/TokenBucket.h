@@ -33,7 +33,11 @@ class TokenBucket final
 public:
     using TimePoint = std::chrono::steady_clock::time_point;
 
-    TokenBucket(double fill_rate_, double init_tokens_, const std::string & log_id, double capacity_ = std::numeric_limits<double>::max())
+    TokenBucket(
+        double fill_rate_,
+        double init_tokens_,
+        const std::string & log_id,
+        double capacity_ = std::numeric_limits<double>::max())
         : fill_rate(fill_rate_)
         , tokens(init_tokens_)
         , capacity(capacity_)

@@ -27,6 +27,9 @@ struct MPPQueryId
     UInt64 local_query_id;
     UInt64 server_id;
     UInt64 start_ts;
+    String resource_group_name;
+
+    // gjt todo ?
     MPPQueryId(UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts)
         : query_ts(query_ts)
         , local_query_id(local_query_id)
@@ -38,6 +41,7 @@ struct MPPQueryId
         , local_query_id(task_meta.local_query_id())
         , server_id(task_meta.server_id())
         , start_ts(task_meta.start_ts())
+        , resource_group_name(task_meta.resource_group_name())
     {}
     bool operator<(const MPPQueryId & mpp_query_id) const;
     bool operator==(const MPPQueryId & rid) const;
@@ -47,11 +51,12 @@ struct MPPQueryId
     String toString() const
     {
         return fmt::format(
-            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
+            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group: {}>",
             query_ts,
             local_query_id,
             server_id,
-            start_ts);
+            start_ts,
+            resource_group_name);
     }
 };
 
@@ -121,12 +126,10 @@ struct MPPTaskId
     explicit MPPTaskId(const mpp::TaskMeta & task_meta)
         : task_id(task_meta.task_id())
         , gather_id(task_meta)
-        , resource_group_name(task_meta.resource_group_name())
     {}
 
     Int64 task_id;
     MPPGatherId gather_id;
-    const String resource_group_name;
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 

@@ -1561,7 +1561,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             mpp_task_manager->tagResourceGroupSchedulerReadyToDelete(del_rg_name);
         });
     LocalAdmissionController::global_instance->registerCleanTombstoneResourceGroupCallback(
-        [mpp_task_manager]() { mpp_task_manager->cleanResourceGroupScheduler(); });
+        [mpp_task_manager]() { mpp_task_manager->cleanTombstoneResourceGroupScheduler(); });
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
