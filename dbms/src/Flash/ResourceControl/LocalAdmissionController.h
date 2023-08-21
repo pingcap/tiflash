@@ -400,7 +400,6 @@ public:
 
 #ifdef DBMS_PUBLIC_GTEST
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
-<<<<<<< HEAD
 #else
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
@@ -546,11 +545,5 @@ private:
     std::vector<std::string> low_token_resource_groups;
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
-=======
-
-    LocalAdmissionController();
-
-    ~LocalAdmissionController();
->>>>>>> 27882f7d83adc7e564760467ce2f1eff5f4aae8b
 };
 } // namespace DB
