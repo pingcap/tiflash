@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,13 +106,15 @@ public:
         }
         else
         {
-            static_cast<ColumnFloat64 &>(to).getData().push_back(static_cast<Float64>(this->data(place).sum) / this->data(place).count);
+            static_cast<ColumnFloat64 &>(to).getData().push_back(
+                static_cast<Float64>(this->data(place).sum) / this->data(place).count);
         }
     }
 
     void create(AggregateDataPtr __restrict place) const override
     {
-        using Data = AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>;
+        using Data
+            = AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>;
         new (place) Data;
     }
 

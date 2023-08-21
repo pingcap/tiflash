@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
 
 #pragma once
 
-#include <vector>
-#include <common/types.h>
 #include <Columns/IColumn.h>
+#include <common/types.h>
+
+#include <vector>
 
 
 namespace DB
@@ -33,7 +34,10 @@ struct DictionaryStructure;
 void formatIDs(BlockOutputStreamPtr & out, const std::vector<UInt64> & ids);
 
 /// For composite key
-void formatKeys(const DictionaryStructure & dict_struct, BlockOutputStreamPtr & out,
-    const Columns & key_columns, const std::vector<size_t> & requested_rows);
+void formatKeys(
+    const DictionaryStructure & dict_struct,
+    BlockOutputStreamPtr & out,
+    const Columns & key_columns,
+    const std::vector<size_t> & requested_rows);
 
-}
+} // namespace DB

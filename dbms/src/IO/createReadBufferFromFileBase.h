@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ namespace DB
   * If aio_threshold = 0 or estimated_size < aio_threshold, read operations are executed synchronously.
   * Otherwise, the read operations are performed asynchronously.
   */
-std::unique_ptr<ReadBufferFromFileBase>
-createReadBufferFromFileBase(
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
     const std::string & filename_,
     size_t estimated_size,
     size_t aio_threshold,

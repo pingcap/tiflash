@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,7 @@
 #include <DataStreams/MockExchangeSenderInputStream.h>
 namespace DB
 {
-MockExchangeSenderInputStream::MockExchangeSenderInputStream(
-    const BlockInputStreamPtr & input,
-    const String & req_id)
+MockExchangeSenderInputStream::MockExchangeSenderInputStream(const BlockInputStreamPtr & input, const String & req_id)
     : log(Logger::get(req_id))
 {
     children.push_back(input);

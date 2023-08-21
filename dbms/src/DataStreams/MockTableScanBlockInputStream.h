@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,10 +22,7 @@ class MockTableScanBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size, bool is_infinite_ = false);
-    Block getHeader() const override
-    {
-        return Block(columns).cloneEmpty();
-    }
+    Block getHeader() const override { return Block(columns).cloneEmpty(); }
     String getName() const override { return "MockTableScan"; }
 
 protected:

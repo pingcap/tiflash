@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,7 +79,13 @@ void UnorderedSourceOp::operatePrefixImpl()
             else
             {
                 // Poll and check if the RuntimeFilters is ready in the WaitReactor.
-                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(exec_context, log->identifier(), task_pool, max_wait_time_ms, std::move(waiting_rf_list), std::move(ready_rf_list)));
+                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(
+                    exec_context,
+                    log->identifier(),
+                    task_pool,
+                    max_wait_time_ms,
+                    std::move(waiting_rf_list),
+                    std::move(ready_rf_list)));
             }
         }
     });

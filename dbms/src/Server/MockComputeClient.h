@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,11 +40,17 @@ public:
         Status status = stub->DispatchMPPTask(&context, *request, &response);
         if (!status.ok())
         {
-            throw Exception(fmt::format("Meet error while dispatch mpp task, error code = {}, message = {}", status.error_code(), status.error_message()));
+            throw Exception(fmt::format(
+                "Meet error while dispatch mpp task, error code = {}, message = {}",
+                status.error_code(),
+                status.error_message()));
         }
         if (response.has_error())
         {
-            throw Exception(fmt::format("Meet error while dispatch mpp task, error code = {}, message = {}", 0, response.error().msg()));
+            throw Exception(fmt::format(
+                "Meet error while dispatch mpp task, error code = {}, message = {}",
+                0,
+                response.error().msg()));
         }
     }
 
@@ -55,7 +61,10 @@ public:
         Status status = stub->Coprocessor(&context, *request, &response);
         if (!status.ok())
         {
-            throw Exception(fmt::format("Meet error while run coprocessor task, error code = {}, message = {}", status.error_code(), status.error_message()));
+            throw Exception(fmt::format(
+                "Meet error while run coprocessor task, error code = {}, message = {}",
+                status.error_code(),
+                status.error_message()));
         }
 
         return response;

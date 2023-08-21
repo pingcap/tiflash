@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,35 +31,36 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-        context.addMockTable({"test_db", "test_table"},
-                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                             {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                              toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addMockTable(
+            {"test_db", "test_table"},
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+             toNullableVec<String>("s2", {"apple", {}, "banana"})});
 
-        context.addMockTable({"test_db", "r_table"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                             {toVec<String>("s", {"banana", "banana"}),
-                              toVec<String>("join_c", {"apple", "banana"})});
+        context.addMockTable(
+            {"test_db", "r_table"},
+            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {toVec<String>("s", {"banana", "banana"}), toVec<String>("join_c", {"apple", "banana"})});
 
-        context.addMockTable({"test_db", "r_table_2"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                             {toVec<String>("s", {"banana", "banana", "banana"}),
-                              toVec<String>("join_c", {"apple", "apple", "apple"})});
+        context.addMockTable(
+            {"test_db", "r_table_2"},
+            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {toVec<String>("s", {"banana", "banana", "banana"}), toVec<String>("join_c", {"apple", "apple", "apple"})});
 
-        context.addMockTable({"test_db", "l_table"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                             {toVec<String>("s", {"banana", "banana"}),
-                              toVec<String>("join_c", {"apple", "banana"})});
+        context.addMockTable(
+            {"test_db", "l_table"},
+            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {toVec<String>("s", {"banana", "banana"}), toVec<String>("join_c", {"apple", "banana"})});
 
-        context.addExchangeReceiver("exchange_r_table",
-                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s", {"banana", "banana"}),
-                                     toNullableVec<String>("join_c", {"apple", "banana"})});
+        context.addExchangeReceiver(
+            "exchange_r_table",
+            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s", {"banana", "banana"}), toNullableVec<String>("join_c", {"apple", "banana"})});
 
-        context.addExchangeReceiver("exchange_l_table",
-                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s", {"banana", "banana"}),
-                                     toNullableVec<String>("join_c", {"apple", "banana"})});
+        context.addExchangeReceiver(
+            "exchange_l_table",
+            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {toNullableVec<String>("s", {"banana", "banana"}), toNullableVec<String>("join_c", {"apple", "banana"})});
 
         /// for ScanHashMapData test
         DB::MockColumnInfoVec left_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
@@ -72,26 +73,41 @@ public:
         size_t common_rows = 12288;
         for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
         {
-            ColumnGeneratorOpts opts{common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+            ColumnGeneratorOpts opts{
+                common_rows,
+                getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+                RANDOM,
+                column_info.name};
             common_column_data.push_back(ColumnGenerator::instance().generate(opts));
         }
 
         for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
         {
-            ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+            ColumnGeneratorOpts opts{
+                table_rows - common_rows,
+                getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+                RANDOM,
+                column_info.name};
             left_column_data.push_back(ColumnGenerator::instance().generate(opts));
         }
 
         for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(right_column_infos))
         {
-            ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+            ColumnGeneratorOpts opts{
+                table_rows - common_rows,
+                getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+                RANDOM,
+                column_info.name};
             right_column_data.push_back(ColumnGenerator::instance().generate(opts));
         }
 
         for (size_t i = 0; i < common_column_data.size(); ++i)
         {
             left_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
-            right_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
+            right_column_data[i].column->assumeMutable()->insertRangeFrom(
+                *common_column_data[i].column,
+                0,
+                common_rows);
         }
 
         ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
@@ -113,11 +129,32 @@ public:
         context.addMockTable("outer_join_test", "right_table_1_concurrency", right_column_infos, right_column_data, 1);
         context.addMockTable("outer_join_test", "right_table_3_concurrency", right_column_infos, right_column_data, 3);
         context.addMockTable("outer_join_test", "right_table_5_concurrency", right_column_infos, right_column_data, 5);
-        context.addMockTable("outer_join_test", "right_table_10_concurrency", right_column_infos, right_column_data, 10);
-        context.addExchangeReceiver("right_exchange_receiver_1_concurrency", right_column_infos, right_column_data, 1, right_partition_column_infos);
-        context.addExchangeReceiver("right_exchange_receiver_3_concurrency", right_column_infos, right_column_data, 3, right_partition_column_infos);
-        context.addExchangeReceiver("right_exchange_receiver_5_concurrency", right_column_infos, right_column_data, 5, right_partition_column_infos);
-        context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
+        context
+            .addMockTable("outer_join_test", "right_table_10_concurrency", right_column_infos, right_column_data, 10);
+        context.addExchangeReceiver(
+            "right_exchange_receiver_1_concurrency",
+            right_column_infos,
+            right_column_data,
+            1,
+            right_partition_column_infos);
+        context.addExchangeReceiver(
+            "right_exchange_receiver_3_concurrency",
+            right_column_infos,
+            right_column_data,
+            3,
+            right_partition_column_infos);
+        context.addExchangeReceiver(
+            "right_exchange_receiver_5_concurrency",
+            right_column_infos,
+            right_column_data,
+            5,
+            right_partition_column_infos);
+        context.addExchangeReceiver(
+            "right_exchange_receiver_10_concurrency",
+            right_column_infos,
+            right_column_data,
+            10,
+            right_partition_column_infos);
     }
 
     static constexpr size_t join_type_num = 7;

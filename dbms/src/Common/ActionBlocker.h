@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,10 +49,7 @@ public:
                 ++var->counter;
         }
 
-        LockHolder(LockHolder && other) noexcept
-        {
-            *this = std::move(other);
-        }
+        LockHolder(LockHolder && other) noexcept { *this = std::move(other); }
 
         LockHolder & operator=(LockHolder && other) noexcept
         {

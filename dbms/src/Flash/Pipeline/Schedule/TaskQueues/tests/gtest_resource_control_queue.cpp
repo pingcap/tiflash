@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -534,6 +534,8 @@ TEST_F(TestResourceControlQueue, TestBurstableDynamicTokenBucket)
 // Test priority queue of ResourceControlQueue: Less priority value means higher priority.
 TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
 {
+    setupNopLAC();
+
     std::random_device dev;
     std::mt19937 gen(dev());
     std::uniform_int_distribution dist;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -239,26 +239,17 @@ struct TestSet
 
 struct Generator1
 {
-    static UInt8 execute(size_t, size_t width)
-    {
-        return (1 << width) - 1;
-    }
+    static UInt8 execute(size_t, size_t width) { return (1 << width) - 1; }
 };
 
 struct Generator2
 {
-    static UInt8 execute(size_t i, size_t width)
-    {
-        return (i >> 1) & ((1 << width) - 1);
-    }
+    static UInt8 execute(size_t i, size_t width) { return (i >> 1) & ((1 << width) - 1); }
 };
 
 struct Generator3
 {
-    static UInt8 execute(size_t i, size_t width)
-    {
-        return (i * 17 + 31) % (1ULL << width);
-    }
+    static UInt8 execute(size_t i, size_t width) { return (i * 17 + 31) % (1ULL << width); }
 };
 
 void runTests()

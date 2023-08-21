@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -464,7 +464,7 @@ std::string LocalAdmissionController::isGACRespValid(const resource_manager::Res
 }
 
 #ifdef DBMS_PUBLIC_GTEST
-auto LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+auto LocalAdmissionController::global_instance = nullptr;
 #else
 std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
 #endif
@@ -473,4 +473,5 @@ std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_insta
 // gjt todo add test to ensure not change.
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
 const std::string LocalAdmissionController::WATCH_GAC_ERR_PREFIX = "watch resource group event failed: ";
+
 } // namespace DB

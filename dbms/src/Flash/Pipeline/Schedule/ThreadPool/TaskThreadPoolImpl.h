@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,15 +27,9 @@ struct CPUImpl
 
     static constexpr bool is_cpu = true;
 
-    static bool isTargetStatus(ExecTaskStatus status)
-    {
-        return status == ExecTaskStatus::RUNNING;
-    }
+    static bool isTargetStatus(ExecTaskStatus status) { return status == ExecTaskStatus::RUNNING; }
 
-    static ExecTaskStatus exec(TaskPtr & task)
-    {
-        return task->execute();
-    }
+    static ExecTaskStatus exec(TaskPtr & task) { return task->execute(); }
 
     static TaskQueuePtr newTaskQueue(TaskQueueType type);
 };
@@ -51,10 +45,7 @@ struct IOImpl
         return status == ExecTaskStatus::IO_IN || status == ExecTaskStatus::IO_OUT;
     }
 
-    static ExecTaskStatus exec(TaskPtr & task)
-    {
-        return task->executeIO();
-    }
+    static ExecTaskStatus exec(TaskPtr & task) { return task->executeIO(); }
 
     static TaskQueuePtr newTaskQueue(TaskQueueType type);
 };

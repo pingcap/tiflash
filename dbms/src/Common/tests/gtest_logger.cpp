@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,21 +54,29 @@ protected:
 TEST_F(LogMacroTest, Poco)
 {
     auto * log = &Poco::Logger::get("LoggerTest");
-    LOG_INFO(log, "float-number: {0:.4f}, {0:.5f}, size: {1}", 3.1415926, formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
+    LOG_INFO(
+        log,
+        "float-number: {0:.4f}, {0:.5f}, size: {1}",
+        3.1415926,
+        formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
-        R"raw( [INFO] [gtest_logger.cpp:57] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source=LoggerTest] [thread_id=1])raw");
+        R"raw( [INFO] [gtest_logger.cpp:61] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source=LoggerTest] [thread_id=1])raw");
 }
 
 TEST_F(LogMacroTest, PropsLogger)
 {
     auto log = Logger::get("props=foo");
-    LOG_INFO(log, "float-number: {0:.4f}, {0:.5f}, size: {1}", 3.1415926, formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
+    LOG_INFO(
+        log,
+        "float-number: {0:.4f}, {0:.5f}, size: {1}",
+        3.1415926,
+        formatReadableSizeWithBinarySuffix(9ULL * 1024 * 1024 * 1024 + 8 * 1024 * 1024 + 7 * 1024));
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
-        R"raw( [INFO] [gtest_logger.cpp:67] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source="props=foo"] [thread_id=1])raw");
+        R"raw( [INFO] [gtest_logger.cpp:75] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source="props=foo"] [thread_id=1])raw");
 }
 
 TEST_F(LogMacroTest, PureMessage)
@@ -78,7 +86,7 @@ TEST_F(LogMacroTest, PureMessage)
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
-        R"raw( [INFO] [gtest_logger.cpp:77] ["some arbitrary message {"] [thread_id=1])raw");
+        R"raw( [INFO] [gtest_logger.cpp:85] ["some arbitrary message {"] [thread_id=1])raw");
 }
 
 TEST(LogIdTest, Basic)
@@ -118,14 +126,15 @@ TEST(LogIdTest, GetChild)
 TEST(LogFormatTest, SourceSection)
 {
     std::pair<int, int> beg{90, 0}, end{1024, 3}, min{1000, 0};
-    auto text = fmt::format("GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}",
-                            1.2,
-                            beg.first,
-                            beg.second,
-                            end.first,
-                            end.second,
-                            min.first,
-                            min.second);
+    auto text = fmt::format(
+        "GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}",
+        1.2,
+        beg.first,
+        beg.second,
+        end.first,
+        end.second,
+        min.first,
+        min.second);
     Poco::Message msg(
         /*source*/ "log_name",
         /*text*/ text,

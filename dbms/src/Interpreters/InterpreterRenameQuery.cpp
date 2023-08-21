@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@
 
 namespace DB
 {
-InterpreterRenameQuery::InterpreterRenameQuery(const ASTPtr & query_ptr_, Context & context_, const String executor_name_)
+InterpreterRenameQuery::InterpreterRenameQuery(
+    const ASTPtr & query_ptr_,
+    Context & context_,
+    const String executor_name_)
     : query_ptr(query_ptr_)
     , context(context_)
     , executor_name(std::move(executor_name_))
@@ -39,8 +42,10 @@ struct RenameDescription
         , from_table_name(elem.from.table)
         , to_database_name(elem.to.database.empty() ? current_database : elem.to.database)
         , to_table_name(elem.to.table)
-        , tidb_display_database_name(elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->database) : std::nullopt)
-        , tidb_display_table_name(elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->table) : std::nullopt)
+        , tidb_display_database_name(
+              elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->database) : std::nullopt)
+        , tidb_display_table_name(
+              elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->table) : std::nullopt)
     {
         if (tidb_display_database_name.has_value() && tidb_display_database_name->empty())
             throw Exception("Display database name is empty, should not happed. " + toString());
@@ -55,9 +60,15 @@ struct RenameDescription
     String to_database_name;
     String to_table_name;
 
-    String toString() const { return from_database_name + "." + from_table_name + " -> " + to_database_name + "." + to_table_name; }
+    String toString() const
+    {
+        return from_database_name + "." + from_table_name + " -> " + to_database_name + "." + to_table_name;
+    }
 
-    bool hasTidbDisplayName() const { return tidb_display_database_name.has_value() && tidb_display_table_name.has_value(); }
+    bool hasTidbDisplayName() const
+    {
+        return tidb_display_database_name.has_value() && tidb_display_table_name.has_value();
+    }
 
     std::optional<String> tidb_display_database_name;
     std::optional<String> tidb_display_table_name;
@@ -109,9 +120,11 @@ BlockIO InterpreterRenameQuery::execute()
         unique_tables_from.emplace(from);
 
         if (!table_guards.count(to))
-            table_guards.emplace(to,
-                                 context.getDDLGuard(to.table_name,
-                                                     fmt::format("Some table right now is being renamed to {}.{}", to.database_name, to.table_name)));
+            table_guards.emplace(
+                to,
+                context.getDDLGuard(
+                    to.table_name,
+                    fmt::format("Some table right now is being renamed to {}.{}", to.database_name, to.table_name)));
 
         // Don't need any lock on "tidb_display" names, because we don't identify any table by that name in TiFlash
     }
@@ -148,24 +161,32 @@ BlockIO InterpreterRenameQuery::execute()
             if (likely(from_database_concrete))
             {
                 // Keep for rename actions executed through ch-client.
-                const String & display_db = elem.hasTidbDisplayName() ? *elem.tidb_display_database_name : elem.to_database_name;
-                const String & display_tbl = elem.hasTidbDisplayName() ? *elem.tidb_display_table_name : elem.to_table_name;
-                from_database_concrete->renameTable(context,
-                                                    elem.from_table_name,
-                                                    *context.getDatabase(elem.to_database_name),
-                                                    elem.to_table_name,
-                                                    display_db,
-                                                    display_tbl);
+                const String & display_db
+                    = elem.hasTidbDisplayName() ? *elem.tidb_display_database_name : elem.to_database_name;
+                const String & display_tbl
+                    = elem.hasTidbDisplayName() ? *elem.tidb_display_table_name : elem.to_table_name;
+                from_database_concrete->renameTable(
+                    context,
+                    elem.from_table_name,
+                    *context.getDatabase(elem.to_database_name),
+                    elem.to_table_name,
+                    display_db,
+                    display_tbl);
             }
             else
                 throw Exception(
-                    "Failed to cast from database: " + elem.from_database_name + " as DatabaseTiFlash in renaming: " + elem.toString(),
+                    "Failed to cast from database: " + elem.from_database_name
+                        + " as DatabaseTiFlash in renaming: " + elem.toString(),
                     ErrorCodes::LOGICAL_ERROR);
         }
         else
         {
             // Keep for DatabaseOrdinary and others engines.
-            database->renameTable(context, elem.from_table_name, *context.getDatabase(elem.to_database_name), elem.to_table_name);
+            database->renameTable(
+                context,
+                elem.from_table_name,
+                *context.getDatabase(elem.to_database_name),
+                elem.to_table_name);
         }
     }
 

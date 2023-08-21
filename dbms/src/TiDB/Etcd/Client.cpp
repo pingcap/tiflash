@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,9 +41,6 @@
 
 namespace DB::Etcd
 {
-
-const String Client::TIDB_SERVER_ID_ETCD_PATH = "/tidb/server_id";
-
 ClientPtr Client::create(
     const pingcap::pd::ClientPtr & pd_client,
     const pingcap::ClusterConfig & config,
@@ -380,4 +377,5 @@ bool Session::keepAliveOne()
     return true;
 }
 
+const String Client::TIDB_SERVER_ID_ETCD_PATH = "/tidb/server_id";
 } // namespace DB::Etcd

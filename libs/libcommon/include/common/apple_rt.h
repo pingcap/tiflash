@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@
 #define CLOCK_THREAD_CPUTIME_ID 3
 
 typedef int clockid_t;
-int clock_gettime(int clk_id, struct timespec* t);
+int clock_gettime(int clk_id, struct timespec * t);
 #else
 #define CLOCK_MONOTONIC_COARSE CLOCK_MONOTONIC
 #endif

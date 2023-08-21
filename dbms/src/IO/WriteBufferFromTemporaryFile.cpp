@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +57,10 @@ public:
         return std::make_shared<ReadBufferFromTemporaryWriteBuffer>(fd, file_name, std::move(origin->tmp_file));
     }
 
-    ReadBufferFromTemporaryWriteBuffer(int fd, const std::string & file_name, std::unique_ptr<Poco::TemporaryFile> && tmp_file_)
+    ReadBufferFromTemporaryWriteBuffer(
+        int fd,
+        const std::string & file_name,
+        std::unique_ptr<Poco::TemporaryFile> && tmp_file_)
         : ReadBufferFromFile(fd, file_name)
         , tmp_file(std::move(tmp_file_))
     {}

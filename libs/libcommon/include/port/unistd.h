@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 // https://stackoverflow.com/questions/341817/is-there-a-replacement-for-unistd-h-for-windows-visual-c
 
 #ifdef _MSC_VER
-    #include <io.h>
+#include <io.h>
 #else
-    #include <unistd.h>
+#include <unistd.h>
 #endif
 
 #include "ssize_t.h"

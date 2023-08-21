@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,16 +51,12 @@ cert_allowed_cn="tidb"
     {
         auto main_config_reloader = std::make_unique<ConfigReloader>(
             path,
-            [&](ConfigurationPtr config [[maybe_unused]]) {
-                ++call_times;
-            },
+            [&](ConfigurationPtr config [[maybe_unused]]) { ++call_times; },
             /* already_loaded = */ false);
 
         auto other_config_reloader = std::make_unique<ConfigReloader>(
             path,
-            [&](ConfigurationPtr config [[maybe_unused]]) {
-                ++call_times;
-            },
+            [&](ConfigurationPtr config [[maybe_unused]]) { ++call_times; },
             /* already_loaded = */ false,
             "otherCfgLoader");
 
@@ -106,9 +102,7 @@ max_memory_usage = 0
     {
         auto main_config_reloader = std::make_unique<ConfigReloader>(
             path,
-            [&](ConfigurationPtr config [[maybe_unused]]) {
-                ++call_times;
-            },
+            [&](ConfigurationPtr config [[maybe_unused]]) { ++call_times; },
             /* already_loaded = */ false);
         main_config_reloader->addConfigObject(std::make_shared<TestConfigObject>());
         main_config_reloader->start();

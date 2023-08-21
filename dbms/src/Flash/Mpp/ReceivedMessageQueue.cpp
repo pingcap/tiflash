@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
               : std::function<void(const ReceivedMessagePtr &)>([this](const ReceivedMessagePtr & element) {
                     for (size_t i = 0; i < fine_grained_channel_size; ++i)
                     {
-                        auto result = msg_channels_for_fine_grained_shuffle[i].forcePush(element);
+                        auto result = msg_channels_for_fine_grained_shuffle[i]->forcePush(element);
                         RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
                     }
                 }))
@@ -115,7 +115,8 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         msg_channels_for_fine_grained_shuffle.reserve(fine_grained_channel_size);
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
             /// these are unbounded queues
-            msg_channels_for_fine_grained_shuffle.emplace_back(std::numeric_limits<size_t>::max());
+            msg_channels_for_fine_grained_shuffle.push_back(
+                std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
     }
 }
 
@@ -126,9 +127,9 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
     if (fine_grained_channel_size > 0)
     {
         if constexpr (need_wait)
-            res = msg_channels_for_fine_grained_shuffle[stream_id].pop(recv_msg);
+            res = msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg);
         else
-            res = msg_channels_for_fine_grained_shuffle[stream_id].tryPop(recv_msg);
+            res = msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg);
 
         if (res == MPMCQueueResult::OK)
         {

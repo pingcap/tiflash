@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,10 +35,7 @@ struct OperatorProfileInfo
     // execution time is the total time spent on current Operator
     UInt64 execution_time = 0;
 
-    ALWAYS_INLINE void anchor()
-    {
-        total_stopwatch.start();
-    }
+    ALWAYS_INLINE void anchor() { total_stopwatch.start(); }
 
     ALWAYS_INLINE void updateInfoFromBlock(const Block & block)
     {
@@ -57,10 +54,7 @@ struct OperatorProfileInfo
         anchor();
     }
 
-    ALWAYS_INLINE void update()
-    {
-        execution_time += total_stopwatch.elapsedFromLastTime();
-    }
+    ALWAYS_INLINE void update() { execution_time += total_stopwatch.elapsedFromLastTime(); }
 
     ALWAYS_INLINE void update(const Block & block)
     {

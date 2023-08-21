@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -328,6 +328,7 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
+#ifndef DBMS_PUBLIC_GTEST
     explicit LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
@@ -340,6 +341,19 @@ public:
     }
 
     ~LocalAdmissionController() { stop(); }
+#else
+    // gjt todo: refine
+    LocalAdmissionController()
+    {
+        if (!global_instance)
+            global_instance = std::make_unique<MockLocalAdmissionController>();
+    }
+
+    ~LocalAdmissionController()
+    {
+        global_instance.reset();
+    }
+#endif
 
     // NOTE: getOrFetchResourceGroup may throw if resource group has been deleted.
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
@@ -386,6 +400,7 @@ public:
 
 #ifdef DBMS_PUBLIC_GTEST
     static std::unique_ptr<MockLocalAdmissionController> global_instance;
+<<<<<<< HEAD
 #else
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
@@ -531,5 +546,11 @@ private:
     std::vector<std::string> low_token_resource_groups;
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
+=======
+
+    LocalAdmissionController();
+
+    ~LocalAdmissionController();
+>>>>>>> 27882f7d83adc7e564760467ce2f1eff5f4aae8b
 };
 } // namespace DB

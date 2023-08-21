@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,9 +64,7 @@ NamesAndTypes addSchemaProjectAction(
     return after_schema;
 }
 
-void addParentRequireProjectAction(
-    const ExpressionActionsPtr & expr_actions,
-    const Names & parent_require)
+void addParentRequireProjectAction(const ExpressionActionsPtr & expr_actions, const Names & parent_require)
 {
     RUNTIME_CHECK(expr_actions);
     NamesWithAliases project_aliases;

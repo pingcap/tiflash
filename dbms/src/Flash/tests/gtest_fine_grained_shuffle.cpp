@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,11 @@ class FineGrainedShuffleTestRunner : public DB::tests::ExecutorTest
         size_t table_rows = 1024;
         for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
         {
-            ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+            ColumnGeneratorOpts opts{
+                table_rows,
+                getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+                RANDOM,
+                column_info.name};
             column_data.push_back(ColumnGenerator::instance().generate(opts));
         }
         ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
@@ -41,10 +45,30 @@ class FineGrainedShuffleTestRunner : public DB::tests::ExecutorTest
             column.column = column.column->permute(perm, 0);
         }
 
-        context.addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_data, 1, partition_column_infos);
-        context.addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_data, 3, partition_column_infos);
-        context.addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_data, 5, partition_column_infos);
-        context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_data, 10, partition_column_infos);
+        context.addExchangeReceiver(
+            "exchange_receiver_1_concurrency",
+            column_infos,
+            column_data,
+            1,
+            partition_column_infos);
+        context.addExchangeReceiver(
+            "exchange_receiver_3_concurrency",
+            column_infos,
+            column_data,
+            3,
+            partition_column_infos);
+        context.addExchangeReceiver(
+            "exchange_receiver_5_concurrency",
+            column_infos,
+            column_data,
+            5,
+            partition_column_infos);
+        context.addExchangeReceiver(
+            "exchange_receiver_10_concurrency",
+            column_infos,
+            column_data,
+            10,
+            partition_column_infos);
     }
 };
 
