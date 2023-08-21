@@ -223,12 +223,12 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
         log,
-        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.num_tables={}",
+        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.tables={}",
         resp.has_error(),
         resp.store_id(),
         snapshot_id,
         batch_cop_task.store_addr,
-        resp.tables_size());
+        resp.tables());
 
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
     watch.restart();
