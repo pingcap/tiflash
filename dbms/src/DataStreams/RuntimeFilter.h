@@ -1,10 +1,10 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -38,10 +38,12 @@ public:
     {
         if (rf_pb.source_expr_list().size() != 1 || rf_pb.target_expr_list().size() != 1)
         {
-            throw TiFlashException(Errors::Coprocessor::BadRequest,
-                                   "for Runtime Filter, the size of source_expr_list and target_expr_list should both be 1 while source_expr_list size:{} target_expr_list size:{}",
-                                   rf_pb.source_expr_list().size(),
-                                   rf_pb.target_expr_list().size());
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "for Runtime Filter, the size of source_expr_list and target_expr_list should both be 1 while "
+                "source_expr_list size:{} target_expr_list size:{}",
+                rf_pb.source_expr_list().size(),
+                rf_pb.target_expr_list().size());
         }
         source_expr = rf_pb.source_expr_list().Get(0);
         target_expr = rf_pb.target_expr_list().Get(0);

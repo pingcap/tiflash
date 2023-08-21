@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,21 +40,12 @@ public:
         assert(result_queue);
     }
 
-    void finalize(const Names &) override
-    {
-        throw Exception("Unsupport");
-    }
+    void finalize(const Names &) override { throw Exception("Unsupport"); }
 
-    const Block & getSampleBlock() const override
-    {
-        throw Exception("Unsupport");
-    }
+    const Block & getSampleBlock() const override { throw Exception("Unsupport"); }
 
 private:
-    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
-    {
-        throw Exception("Unsupport");
-    }
+    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override { throw Exception("Unsupport"); }
 
     void buildPipelineExecGroupImpl(
         PipelineExecutorContext & exec_context,

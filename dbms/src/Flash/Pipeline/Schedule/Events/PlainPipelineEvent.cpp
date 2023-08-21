@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,11 @@ void PlainPipelineEvent::scheduleImpl()
     auto pipeline_exec_group = pipeline->buildExecGroup(exec_context, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     for (auto & pipeline_exec : pipeline_exec_group)
-        addTask(std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
+        addTask(std::make_unique<PipelineTask>(
+            exec_context,
+            log->identifier(),
+            shared_from_this(),
+            std::move(pipeline_exec)));
 }
 
 void PlainPipelineEvent::finishImpl()

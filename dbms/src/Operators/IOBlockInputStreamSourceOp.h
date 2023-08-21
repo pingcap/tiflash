@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,21 +35,12 @@ public:
         setHeader(impl->getHeader());
     }
 
-    String getName() const override
-    {
-        return "IOBlockInputStreamSourceOp";
-    }
+    String getName() const override { return "IOBlockInputStreamSourceOp"; }
 
 protected:
-    void operatePrefixImpl() override
-    {
-        impl->readPrefix();
-    }
+    void operatePrefixImpl() override { impl->readPrefix(); }
 
-    void operateSuffixImpl() override
-    {
-        impl->readSuffix();
-    }
+    void operateSuffixImpl() override { impl->readSuffix(); }
 
     OperatorStatus readImpl(Block & block) override
     {

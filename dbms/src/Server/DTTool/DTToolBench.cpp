@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,13 +77,17 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
     auto str_num = column_number - int_num;
     for (size_t i = 0; i < int_num; ++i)
     {
-        primitive->emplace_back(
-            ColumnDefine{static_cast<ColId>(3 + i), fmt::format("int_{}", i), DB::DataTypeFactory::instance().get("Int64")});
+        primitive->emplace_back(ColumnDefine{
+            static_cast<ColId>(3 + i),
+            fmt::format("int_{}", i),
+            DB::DataTypeFactory::instance().get("Int64")});
     }
     for (size_t i = 0; i < str_num; ++i)
     {
-        primitive->emplace_back(
-            ColumnDefine{static_cast<ColId>(3 + int_num + i), fmt::format("str_{}", i), DB::DataTypeFactory::instance().get("String")});
+        primitive->emplace_back(ColumnDefine{
+            static_cast<ColId>(3 + int_num + i),
+            fmt::format("str_{}", i),
+            DB::DataTypeFactory::instance().get("String")});
     }
     return primitive;
 }
@@ -103,7 +107,13 @@ String createRandomString(std::size_t limit, std::mt19937_64 & eng, size_t & acc
     return buffer;
 }
 
-DB::Block createBlock(size_t column_number, size_t start, size_t row_number, std::size_t limit, std::mt19937_64 & eng, size_t & acc)
+DB::Block createBlock(
+    size_t column_number,
+    size_t start,
+    size_t row_number,
+    std::size_t limit,
+    std::mt19937_64 & eng,
+    size_t & acc)
 {
     using namespace DB;
     auto int_num = column_number / 2;
@@ -213,11 +223,12 @@ int benchEntry(const std::vector<std::string> & opts)
         ("workdir", bpo::value<String>()->default_value("/tmp"));
     // clang-format on
 
-    bpo::store(bpo::command_line_parser(opts)
-                   .options(options)
-                   .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
-                   .run(),
-               vm);
+    bpo::store(
+        bpo::command_line_parser(opts)
+            .options(options)
+            .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
+            .run(),
+        vm);
 
     bpo::notify(vm);
 
@@ -311,7 +322,18 @@ int benchEntry(const std::vector<std::string> & opts)
         }
         else
         {
-            LOG_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_config);
+            LOG_INFO(
+                logger,
+                SUMMARY_TEMPLATE_V2,
+                version,
+                column,
+                size,
+                field,
+                random,
+                workdir,
+                frame,
+                encryption,
+                algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
         }
@@ -338,8 +360,10 @@ int benchEntry(const std::vector<std::string> & opts)
         size_t write_records = 0;
         auto settings = DB::Settings();
         auto db_context = env.getContext();
-        auto path_pool = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
+        auto path_pool
+            = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        auto storage_pool
+            = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
@@ -374,11 +398,15 @@ int benchEntry(const std::vector<std::string> & opts)
             LOG_INFO(logger, "attemp {} finished in {} ns", i, duration);
         }
 
-        LOG_INFO(logger, "average write time: {} ns", (static_cast<double>(write_records) / static_cast<double>(repeat)));
+        LOG_INFO(
+            logger,
+            "average write time: {} ns",
+            (static_cast<double>(write_records) / static_cast<double>(repeat)));
         LOG_INFO(
             logger,
             "throughput (MB/s): {}",
-            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(write_records) / 1024 / 1024));
+            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat)
+             / static_cast<double>(write_records) / 1024 / 1024));
 
         // Read
         LOG_INFO(logger, "start reading");
@@ -390,7 +418,12 @@ int benchEntry(const std::vector<std::string> & opts)
             auto start = high_resolution_clock::now();
             {
                 auto builder = DB::DM::DMFileBlockInputStreamBuilder(*db_context);
-                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>())
+                                  .build(
+                                      dmfile,
+                                      *defines,
+                                      {DB::DM::RowKeyRange::newAll(false, 1)},
+                                      std::make_shared<ScanContext>());
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
                     TIFLASH_NO_OPTIMIZE(stream->read());
@@ -407,7 +440,8 @@ int benchEntry(const std::vector<std::string> & opts)
         LOG_INFO(
             logger,
             "throughput (MB/s): {}",
-            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(read_records) / 1024 / 1024));
+            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat)
+             / static_cast<double>(read_records) / 1024 / 1024));
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {

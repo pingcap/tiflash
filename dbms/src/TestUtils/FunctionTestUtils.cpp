@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,8 +101,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     if unlikely (typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
     {
         /// ColumnNothing compares size only
-        const auto * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
-        const auto * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
+        const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
+        const ColumnNothing * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
         ASSERT_EQUAL(
             expected_nothing && actual_nothing,
             true,

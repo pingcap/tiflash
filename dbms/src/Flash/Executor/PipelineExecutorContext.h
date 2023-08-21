@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@ public:
     PipelineExecutorContext()
         : log(Logger::get())
         , mem_tracker(nullptr)
+        , auto_spill_trigger(nullptr)
+        , register_operator_spill_context(nullptr)
     {}
 
     PipelineExecutorContext(
@@ -46,12 +48,14 @@ public:
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
-        const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr)
+        const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
+        const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
+        , resource_group_name(resource_group_name_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -167,6 +171,8 @@ public:
         return register_operator_spill_context;
     }
 
+    const String & getResourceGroupName() const { return resource_group_name; }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -199,5 +205,7 @@ private:
     AutoSpillTrigger * auto_spill_trigger;
 
     RegisterOperatorSpillContext register_operator_spill_context;
+
+    const String resource_group_name;
 };
 } // namespace DB

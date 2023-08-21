@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,10 @@ namespace DB
 class LocalLimitTransformAction
 {
 public:
-    LocalLimitTransformAction(
-        const Block & header_,
-        size_t limit_)
+    LocalLimitTransformAction(const Block & header_, size_t limit_)
         : header(header_)
         , limit(limit_)
-    {
-    }
+    {}
 
     bool transform(Block & block);
 
@@ -46,13 +43,10 @@ using LocalLimitPtr = std::shared_ptr<LocalLimitTransformAction>;
 class GlobalLimitTransformAction
 {
 public:
-    GlobalLimitTransformAction(
-        const Block & header_,
-        size_t limit_)
+    GlobalLimitTransformAction(const Block & header_, size_t limit_)
         : header(header_)
         , limit(limit_)
-    {
-    }
+    {}
 
     bool transform(Block & block);
 

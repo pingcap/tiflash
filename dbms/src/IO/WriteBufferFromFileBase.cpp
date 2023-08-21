@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,12 +18,9 @@ namespace DB
 {
 WriteBufferFromFileBase::WriteBufferFromFileBase(size_t buf_size, char * existing_memory, size_t alignment)
     : BufferWithOwnMemory<WriteBuffer>(buf_size, existing_memory, alignment)
-{
-}
+{}
 
-WriteBufferFromFileBase::~WriteBufferFromFileBase()
-{
-}
+WriteBufferFromFileBase::~WriteBufferFromFileBase() {}
 
 off_t WriteBufferFromFileBase::seek(off_t off, int whence)
 {

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,7 @@
 
 namespace DB
 {
-DAGResponseWriter::DAGResponseWriter(
-    Int64 records_per_chunk_,
-    DAGContext & dag_context_)
+DAGResponseWriter::DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_context_)
     : records_per_chunk(records_per_chunk_)
     , dag_context(dag_context_)
 {

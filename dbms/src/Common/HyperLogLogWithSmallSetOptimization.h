@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,10 +43,7 @@ private:
     Small small;
     Large * large = nullptr;
 
-    bool isLarge() const
-    {
-        return large != nullptr;
-    }
+    bool isLarge() const { return large != nullptr; }
 
     void toLarge()
     {
@@ -91,10 +88,7 @@ public:
             large->insert(value);
     }
 
-    UInt64 size() const
-    {
-        return !isLarge() ? small.size() : large->size();
-    }
+    UInt64 size() const { return !isLarge() ? small.size() : large->size(); }
 
     void merge(const HyperLogLogWithSmallSetOptimization & rhs)
     {

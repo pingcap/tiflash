@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,7 @@ namespace tests
 class SpillAggregationTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 };
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
@@ -36,14 +33,18 @@ public:
     {                                              \
         enablePipeline(enable_pipeline);
 
-#define WRAP_FOR_SPILL_TEST_END \
-    }
+#define WRAP_FOR_SPILL_TEST_END }
 
 /// todo add more tests
 TEST_F(SpillAggregationTestRunner, SimpleCase)
 try
 {
-    DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}, {"c", TiDB::TP::TypeLongLong}, {"d", TiDB::TP::TypeLongLong}, {"e", TiDB::TP::TypeLongLong}};
+    DB::MockColumnInfoVec column_infos{
+        {"a", TiDB::TP::TypeLongLong},
+        {"b", TiDB::TP::TypeLongLong},
+        {"c", TiDB::TP::TypeLongLong},
+        {"d", TiDB::TP::TypeLongLong},
+        {"e", TiDB::TP::TypeLongLong}};
     ColumnsWithTypeAndName column_datas;
     size_t table_rows = 102400;
     size_t duplicated_rows = 51200;
@@ -52,7 +53,11 @@ try
     size_t total_data_size = 0;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
-        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        ColumnGeneratorOpts opts{
+            table_rows,
+            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+            RANDOM,
+            column_info.name};
         column_datas.push_back(ColumnGenerator::instance().generate(opts));
         total_data_size += column_datas.back().column->byteSize();
     }
@@ -60,8 +65,7 @@ try
         column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_datas, 8);
 
-    auto request = context
-                       .scan("spill_sort_test", "simple_table")
+    auto request = context.scan("spill_sort_test", "simple_table")
                        .aggregation({Min(col("c")), Max(col("d")), Count(col("e"))}, {col("a"), col("b")})
                        .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
@@ -71,7 +75,9 @@ try
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
     WRAP_FOR_SPILL_TEST_BEGIN
-    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting(
+        "max_bytes_before_external_group_by",
+        Field(static_cast<UInt64>(total_data_size / 200)));
     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
@@ -111,11 +117,22 @@ try
 {
     /// prepare data
     size_t unique_rows = 3000;
-    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny, false}, {"key_16", TiDB::TP::TypeShort, false}, {"key_32", TiDB::TP::TypeLong, false}, {"key_64", TiDB::TP::TypeLongLong, false}, {"key_string_1", TiDB::TP::TypeString, false}, {"key_string_2", TiDB::TP::TypeString, false}, {"value", TiDB::TP::TypeLong, false}};
+    DB::MockColumnInfoVec table_column_infos{
+        {"key_8", TiDB::TP::TypeTiny, false},
+        {"key_16", TiDB::TP::TypeShort, false},
+        {"key_32", TiDB::TP::TypeLong, false},
+        {"key_64", TiDB::TP::TypeLongLong, false},
+        {"key_string_1", TiDB::TP::TypeString, false},
+        {"key_string_2", TiDB::TP::TypeString, false},
+        {"value", TiDB::TP::TypeLong, false}};
     ColumnsWithTypeAndName table_column_data;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
     {
-        ColumnGeneratorOpts opts{unique_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        ColumnGeneratorOpts opts{
+            unique_rows,
+            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+            RANDOM,
+            column_info.name};
         table_column_data.push_back(ColumnGenerator::instance().generate(opts));
     }
     for (auto & table_column : table_column_data)
@@ -129,7 +146,8 @@ try
             table_column.column->assumeMutable()->insertRangeFrom(*column.column, 0, unique_rows / 2);
         }
     }
-    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
+    ColumnWithTypeAndName shuffle_column
+        = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
     IColumn::Permutation perm;
     shuffle_column.column->getPermutation(false, 0, -1, perm);
     for (auto & column : table_column_data)
@@ -167,8 +185,7 @@ try
                 MockAstVec key_vec;
                 for (const auto & key : keys)
                     key_vec.push_back(col(key));
-                auto request = context
-                                   .scan("test_db", "agg_table_with_special_key")
+                auto request = context.scan("test_db", "agg_table_with_special_key")
                                    .aggregation(agg_func, key_vec)
                                    .build(context);
                 /// use one level, no block split, no spill as the reference
@@ -204,7 +221,9 @@ try
                 {
                     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
-                    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
+                    context.context->setSetting(
+                        "max_bytes_before_external_group_by",
+                        Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
@@ -219,11 +238,17 @@ try
                         sortBlock(merged_block, sd);
                         auto merged_columns = merged_block.getColumnsWithTypeAndName();
                         for (size_t col_index = 0; col_index < reference.size(); col_index++)
-                            ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
+                            ASSERT_TRUE(columnEqual(
+                                reference[col_index].column,
+                                merged_columns[col_index].column,
+                                sd[col_index].collator));
                     }
                     else
                     {
-                        ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                        ASSERT_TRUE(columnsEqual(
+                            reference,
+                            vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
+                            false));
                     }
                     WRAP_FOR_SPILL_TEST_END
                 }
@@ -252,7 +277,11 @@ try
     ColumnsWithTypeAndName table_column_data;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
     {
-        ColumnGeneratorOpts opts{unique_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        ColumnGeneratorOpts opts{
+            unique_rows,
+            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+            RANDOM,
+            column_info.name};
         table_column_data.push_back(ColumnGenerator::instance().generate(opts));
     }
     for (size_t i = 0; i < key_column; i++)
@@ -265,7 +294,8 @@ try
         table_column.column->assumeMutable()->insertRangeFrom(*column.column, 0, unique_rows / 2);
     }
 
-    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
+    ColumnWithTypeAndName shuffle_column
+        = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
     IColumn::Permutation perm;
     shuffle_column.column->getPermutation(false, 0, -1, perm);
     for (auto & column : table_column_data)
@@ -289,7 +319,10 @@ try
         /// keys need to be shuffled
         {"key_8", "key_16", "key_32", "key_64"},
     };
-    std::vector<std::vector<ASTPtr>> agg_funcs{{Max(col("value_1")), CountDistinct(col("value_2"))}, {CountDistinct(col("value_1")), CountDistinct(col("value_2"))}, {CountDistinct(col("value_1"))}};
+    std::vector<std::vector<ASTPtr>> agg_funcs{
+        {Max(col("value_1")), CountDistinct(col("value_2"))},
+        {CountDistinct(col("value_1")), CountDistinct(col("value_2"))},
+        {CountDistinct(col("value_1"))}};
     for (auto collator_id : collators)
     {
         for (const auto & keys : group_by_keys)
@@ -303,8 +336,7 @@ try
                 MockAstVec key_vec;
                 for (const auto & key : keys)
                     key_vec.push_back(col(key));
-                auto request = context
-                                   .scan("test_db", "agg_table_with_special_key")
+                auto request = context.scan("test_db", "agg_table_with_special_key")
                                    .aggregation(agg_func, key_vec)
                                    .build(context);
                 /// use one level, no block split, no spill as the reference
@@ -340,7 +372,9 @@ try
                 {
                     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
-                    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
+                    context.context->setSetting(
+                        "max_bytes_before_external_group_by",
+                        Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
@@ -355,11 +389,17 @@ try
                         sortBlock(merged_block, sd);
                         auto merged_columns = merged_block.getColumnsWithTypeAndName();
                         for (size_t col_index = 0; col_index < reference.size(); col_index++)
-                            ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
+                            ASSERT_TRUE(columnEqual(
+                                reference[col_index].column,
+                                merged_columns[col_index].column,
+                                sd[col_index].collator));
                     }
                     else
                     {
-                        ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                        ASSERT_TRUE(columnsEqual(
+                            reference,
+                            vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
+                            false));
                     }
                     WRAP_FOR_SPILL_TEST_END
                 }
@@ -372,7 +412,12 @@ CATCH
 TEST_F(SpillAggregationTestRunner, FineGrainedShuffle)
 try
 {
-    DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}, {"c", TiDB::TP::TypeLongLong}, {"d", TiDB::TP::TypeLongLong}, {"e", TiDB::TP::TypeLongLong}};
+    DB::MockColumnInfoVec column_infos{
+        {"a", TiDB::TP::TypeLongLong},
+        {"b", TiDB::TP::TypeLongLong},
+        {"c", TiDB::TP::TypeLongLong},
+        {"d", TiDB::TP::TypeLongLong},
+        {"e", TiDB::TP::TypeLongLong}};
     DB::MockColumnInfoVec partition_column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}};
     ColumnsWithTypeAndName column_datas;
     size_t table_rows = 5120;
@@ -381,16 +426,28 @@ try
     size_t total_data_size = 0;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
-        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        ColumnGeneratorOpts opts{
+            table_rows,
+            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+            RANDOM,
+            column_info.name};
         column_datas.push_back(ColumnGenerator::instance().generate(opts));
         total_data_size += column_datas.back().column->byteSize();
     }
     for (auto & column_data : column_datas)
         column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
-    context.addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_datas, 1, partition_column_infos);
-    context.addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_datas, 3, partition_column_infos);
-    context.addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_datas, 5, partition_column_infos);
-    context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_datas, 10, partition_column_infos);
+    context
+        .addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_datas, 1, partition_column_infos);
+    context
+        .addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_datas, 3, partition_column_infos);
+    context
+        .addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_datas, 5, partition_column_infos);
+    context.addExchangeReceiver(
+        "exchange_receiver_10_concurrency",
+        column_infos,
+        column_datas,
+        10,
+        partition_column_infos);
     std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
 
     auto gen_request = [&](size_t exchange_concurrency) {
@@ -407,7 +464,9 @@ try
     auto baseline = executeStreams(gen_request(1), 1);
 
     /// enable spill
-    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting(
+        "max_bytes_before_external_group_by",
+        Field(static_cast<UInt64>(total_data_size / 200)));
     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     for (size_t exchange_concurrency : exchange_receiver_concurrency)

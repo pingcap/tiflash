@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -942,7 +942,8 @@ private:
                     getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        const auto * date_data_type = checkAndGetDataType<DataTypeDate>(interval_arg == 0 ? type1.get() : type0.get());
+        const DataTypeDate * date_data_type
+            = checkAndGetDataType<DataTypeDate>(interval_arg == 0 ? type1.get() : type0.get());
         const DataTypeDateTime * date_time_data_type = nullptr;
         if (!date_data_type)
         {

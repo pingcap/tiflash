@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,19 +30,13 @@ struct MoveOrCopyIfThrow;
 template <typename T>
 struct MoveOrCopyIfThrow<T, true>
 {
-    void operator()(T && src, T & dst) const
-    {
-        dst = std::forward<T>(src);
-    }
+    void operator()(T && src, T & dst) const { dst = std::forward<T>(src); }
 };
 
 template <typename T>
 struct MoveOrCopyIfThrow<T, false>
 {
-    void operator()(T && src, T & dst) const
-    {
-        dst = src;
-    }
+    void operator()(T && src, T & dst) const { dst = src; }
 };
 
 template <typename T>

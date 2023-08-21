@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <string>
-
-#include <iostream>
-
 #include <Core/Types.h>
-#include <IO/WriteHelpers.h>
+#include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/WriteHelpers.h>
+
+#include <iostream>
+#include <string>
 
 int main(int, char **)
 {

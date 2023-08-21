@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,4 +26,6 @@ UInt16 getNumberOfPhysicalCPUCores();
 // set cpu cores any more.
 void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_);
 
-void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores, UInt16 number_of_hardware_physical_cores);
+void computeAndSetNumberOfPhysicalCPUCores(
+    UInt16 number_of_logical_cpu_cores,
+    UInt16 number_of_hardware_physical_cores);

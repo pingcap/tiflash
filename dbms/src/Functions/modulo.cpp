@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -146,7 +146,9 @@ struct ModuloByConstantImpl : BinaryOperationImplBase<A, B, ModuloImpl<A, B>>
         /// Here we failed to make the SSE variant from libdivide give an advantage.
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
-            c[i] = a[i] - (a[i] / divider) * b; /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
+            c[i] = a[i]
+                - (a[i] / divider)
+                    * b; /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
     }
 };
 

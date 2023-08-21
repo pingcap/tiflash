@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,11 +174,9 @@ int main(int argc, char ** argv)
             }
         }
 
-        std::cerr << std::fixed << std::setprecision(2)
-                  << "Vector:    Elapsed: " << watch.elapsedSeconds()
-                  << " (" << map_size / watch.elapsedSeconds() << " rows/sec., "
-                  << "sizeof(Map::value_type) = " << sizeof(Map::value_type)
-                  << std::endl;
+        std::cerr << std::fixed << std::setprecision(2) << "Vector:    Elapsed: " << watch.elapsedSeconds() << " ("
+                  << map_size / watch.elapsedSeconds() << " rows/sec., "
+                  << "sizeof(Map::value_type) = " << sizeof(Map::value_type) << std::endl;
     }
 
     {
@@ -196,10 +194,9 @@ int main(int argc, char ** argv)
         arr2 = std::move(arr1);
         arr1.resize(n);
 
-        std::cerr
-            << "arr1.size(): " << arr1.size() << ", arr2.size(): " << arr2.size() << std::endl
-            << "&arr1[0]: " << &arr1[0] << ", &arr2[0]: " << &arr2[0] << std::endl
-            << "arr1[0]: " << arr1[0] << ", arr2[0]: " << arr2[0] << std::endl;
+        std::cerr << "arr1.size(): " << arr1.size() << ", arr2.size(): " << arr2.size() << std::endl
+                  << "&arr1[0]: " << &arr1[0] << ", &arr2[0]: " << &arr2[0] << std::endl
+                  << "arr1[0]: " << arr1[0] << ", arr2[0]: " << arr2[0] << std::endl;
     }
 
     return 0;

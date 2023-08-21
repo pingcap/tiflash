@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,24 +27,20 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 
-void FunctionFactory::registerFunction(const std::string & name,
-                                       Creator creator,
-                                       CaseSensitiveness case_sensitiveness)
+void FunctionFactory::registerFunction(const std::string & name, Creator creator, CaseSensitiveness case_sensitiveness)
 {
     if (!functions.emplace(name, creator).second)
-        throw Exception("FunctionFactory: the function name '" + name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception("FunctionFactory: the function name '" + name + "' is not unique", ErrorCodes::LOGICAL_ERROR);
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_functions.emplace(Poco::toLower(name), creator).second)
-        throw Exception("FunctionFactory: the case insensitive function name '" + name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "FunctionFactory: the case insensitive function name '" + name + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 
-FunctionBuilderPtr FunctionFactory::get(
-    const std::string & name,
-    const Context & context) const
+FunctionBuilderPtr FunctionFactory::get(const std::string & name, const Context & context) const
 {
     auto res = tryGet(name, context);
     if (!res)
@@ -53,9 +49,7 @@ FunctionBuilderPtr FunctionFactory::get(
 }
 
 
-FunctionBuilderPtr FunctionFactory::tryGet(
-    const std::string & name,
-    const Context & context) const
+FunctionBuilderPtr FunctionFactory::tryGet(const std::string & name, const Context & context) const
 {
     auto it = functions.find(name);
     if (functions.end() != it)

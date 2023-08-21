@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,8 +81,10 @@ struct IsOperation
     static constexpr bool minus = IsSameOperation<Op, MinusImpl_t>::value;
     static constexpr bool multiply = IsSameOperation<Op, MultiplyImpl_t>::value;
     static constexpr bool modulo = IsSameOperation<Op, ModuloImpl_t>::value;
-    static constexpr bool div_floating = IsSameOperation<Op, DivideFloatingImpl_t>::value || IsSameOperation<Op, TiDBDivideFloatingImpl_t>::value;
-    static constexpr bool div_int = IsSameOperation<Op, DivideIntegralImpl_t>::value || IsSameOperation<Op, DivideIntegralOrZeroImpl_t>::value;
+    static constexpr bool div_floating
+        = IsSameOperation<Op, DivideFloatingImpl_t>::value || IsSameOperation<Op, TiDBDivideFloatingImpl_t>::value;
+    static constexpr bool div_int
+        = IsSameOperation<Op, DivideIntegralImpl_t>::value || IsSameOperation<Op, DivideIntegralOrZeroImpl_t>::value;
     static constexpr bool least = IsSameOperation<Op, BinaryLeastBaseImpl_t>::value;
     static constexpr bool greatest = IsSameOperation<Op, BinaryGreatestBaseImpl_t>::value;
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,7 @@
 
 namespace DB
 {
-std::unique_ptr<WriteBufferFromFileBase>
-createWriteBufferFromFileBaseByWriterBuffer(
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByWriterBuffer(
     std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size);
@@ -39,8 +38,7 @@ createWriteBufferFromFileBaseByWriterBuffer(
   * If aio_threshold = 0 or estimated_size < aio_threshold, the write operations are executed synchronously.
   * Otherwise, write operations are performed asynchronously.
   */
-std::unique_ptr<WriteBufferFromFileBase>
-createWriteBufferFromFileBaseByFileProvider(
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -54,8 +52,7 @@ createWriteBufferFromFileBaseByFileProvider(
     char * existing_memory_ = nullptr,
     size_t alignment = 0);
 
-std::unique_ptr<WriteBufferFromFileBase>
-createWriteBufferFromFileBaseByFileProvider(
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -106,8 +103,7 @@ public:
 
     DISALLOW_COPY(WriteBufferByFileProviderBuilder);
 
-    std::unique_ptr<WriteBufferFromFileBase>
-    build()
+    std::unique_ptr<WriteBufferFromFileBase> build()
     {
         if (has_checksum)
         {

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,11 @@ class DistinctSortedBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// Empty columns_ means all collumns.
-    DistinctSortedBlockInputStream(const BlockInputStreamPtr & input, const SizeLimits & set_size_limits, size_t limit_hint_, const Names & columns);
+    DistinctSortedBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const SizeLimits & set_size_limits,
+        size_t limit_hint_,
+        const Names & columns);
 
     String getName() const override { return "DistinctSorted"; }
 
@@ -79,4 +83,4 @@ private:
     SizeLimits set_size_limits;
 };
 
-}
+} // namespace DB

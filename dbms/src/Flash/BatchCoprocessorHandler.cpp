@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,12 +75,15 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
+            const String & resource_group_name
+                = cop_request->context().resource_control_context().resource_group_name();
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 DAGRequestKind::BatchCop,
+                resource_group_name,
                 Logger::get("BatchCoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 

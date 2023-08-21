@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,10 +34,7 @@ public:
         , physical_table_id(physical_table_id_)
     {}
 
-    String getName() const override
-    {
-        return "AddExtraTableIDColumnTransformOp";
-    }
+    String getName() const override { return "AddExtraTableIDColumnTransformOp"; }
 
     // `AddExtraTableIDColumnTransformOp` will be appended to `DMSegmentThreadSourceOp` and returned to the computing layer.
     // [`AddExtraTableIDColumnTransformOp` --> `DMSegmentThreadSourceOp`]

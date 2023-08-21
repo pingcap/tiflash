@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,17 +32,13 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
     agg_context->buildOnBlock(index, block);
     total_rows += block.rows();
     block.clear();
-    return agg_context->needSpill(index)
-        ? OperatorStatus::IO_OUT
-        : OperatorStatus::NEED_INPUT;
+    return agg_context->needSpill(index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus AggregateBuildSinkOp::executeIOImpl()
 {
     agg_context->spillData(index);
-    return is_final_spill
-        ? OperatorStatus::FINISHED
-        : OperatorStatus::NEED_INPUT;
+    return is_final_spill ? OperatorStatus::FINISHED : OperatorStatus::NEED_INPUT;
 }
 
 void AggregateBuildSinkOp::operateSuffixImpl()

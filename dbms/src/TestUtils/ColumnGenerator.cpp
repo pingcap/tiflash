@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,12 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         nested_column_generator_opts.type_name = removeNullable(type)->getName();
         auto null_map_column_generator_opts = opts;
         null_map_column_generator_opts.type_name = "UInt8";
-        return {ColumnNullable::create(generate(nested_column_generator_opts).column, generateNullMapColumn(null_map_column_generator_opts).column), type, opts.name};
+        return {
+            ColumnNullable::create(
+                generate(nested_column_generator_opts).column,
+                generateNullMapColumn(null_map_column_generator_opts).column),
+            type,
+            opts.name};
     }
 
     auto col = type->createColumn();
@@ -183,7 +188,14 @@ String ColumnGenerator::randomDuration()
 String ColumnGenerator::randomDateTime()
 {
     auto res = randomLocalTime();
-    return fmt::format("{}-{}-{} {}:{}:{}", res.tm_year + 1900, res.tm_mon + 1, res.tm_mday, res.tm_hour, res.tm_min, res.tm_sec);
+    return fmt::format(
+        "{}-{}-{} {}:{}:{}",
+        res.tm_year + 1900,
+        res.tm_mon + 1,
+        res.tm_mday,
+        res.tm_hour,
+        res.tm_min,
+        res.tm_sec);
 }
 
 String ColumnGenerator::randomDecimal(uint64_t prec, uint64_t scale)
@@ -221,7 +233,8 @@ void ColumnGenerator::genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_ty
     else
         value_count = enum16_type->getValues().size();
     auto value_index = static_cast<Int64>(static_cast<Int64>(rand_gen()) % value_count);
-    Int64 enum_value = enum8_type == nullptr ? enum16_type->getValues()[value_index].second : enum8_type->getValues()[value_index].second;
+    Int64 enum_value = enum8_type == nullptr ? enum16_type->getValues()[value_index].second
+                                             : enum8_type->getValues()[value_index].second;
     col->insert(enum_value);
 }
 
@@ -288,7 +301,8 @@ void ColumnGenerator::genDecimal(MutableColumnPtr & col, DataTypePtr & data_type
     }
     else
     {
-        throw std::invalid_argument(fmt::format("RandomColumnGenerator parseDecimal({}, {}) prec {} scale {} fail", s, negative, prec, scale));
+        throw std::invalid_argument(
+            fmt::format("RandomColumnGenerator parseDecimal({}, {}) prec {} scale {} fail", s, negative, prec, scale));
     }
 }
 } // namespace DB::tests

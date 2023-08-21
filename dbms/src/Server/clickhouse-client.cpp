@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,4 +13,7 @@
 // limitations under the License.
 
 int mainEntryClickHouseClient(int argc, char ** argv);
-int main(int argc_, char ** argv_) { return mainEntryClickHouseClient(argc_, argv_); }
+int main(int argc_, char ** argv_)
+{
+    return mainEntryClickHouseClient(argc_, argv_);
+}

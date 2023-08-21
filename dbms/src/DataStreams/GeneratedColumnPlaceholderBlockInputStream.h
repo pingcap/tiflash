@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,21 +41,12 @@ public:
 
     String getName() const override { return NAME; }
 
-    Block getHeader() const override
-    {
-        return action.getHeader();
-    }
+    Block getHeader() const override { return action.getHeader(); }
 
-    static String getColumnName(UInt64 col_index)
-    {
-        return "generated_column_" + std::to_string(col_index);
-    }
+    static String getColumnName(UInt64 col_index) { return "generated_column_" + std::to_string(col_index); }
 
 protected:
-    void readPrefix() override
-    {
-        action.checkColumn();
-    }
+    void readPrefix() override { action.checkColumn(); }
 
     Block readImpl() override
     {

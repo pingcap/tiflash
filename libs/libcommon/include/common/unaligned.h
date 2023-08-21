@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,14 @@
 #pragma once
 
 #include <string.h>
+
 #include <type_traits>
 
 
 template <typename T>
 inline T unalignedLoad(const void * address)
 {
-    T res {};
+    T res{};
     memcpy(&res, address, sizeof(res));
     return res;
 }
@@ -31,8 +32,7 @@ inline T unalignedLoad(const void * address)
 /// To prevent this, make the caller specify the stored type explicitly.
 /// To disable deduction of T, wrap the argument type with std::enable_if.
 template <typename T>
-inline void unalignedStore(void * address,
-                           const typename std::enable_if<true, T>::type & src)
+inline void unalignedStore(void * address, const typename std::enable_if<true, T>::type & src)
 {
     static_assert(std::is_trivially_copyable_v<T>);
     memcpy(address, &src, sizeof(src));

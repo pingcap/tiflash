@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,8 @@ NamesWithAliases buildTableScanProjectionCols(
     if (unlikely(schema.size() != storage_header.columns()))
         throw TiFlashException(
             fmt::format(
-                "The tidb table scan schema size {} is different from the tiflash storage schema size {}, table id is {}",
+                "The tidb table scan schema size {} is different from the tiflash storage schema size {}, table id is "
+                "{}",
                 schema.size(),
                 storage_header.columns(),
                 logical_table_id),
@@ -89,12 +90,8 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
     const TiDBTableScan & table_scan)
 {
     auto schema = genNamesAndTypesForTableScan(table_scan);
-    auto physical_table_scan = std::make_shared<PhysicalTableScan>(
-        executor_id,
-        schema,
-        log->identifier(),
-        table_scan,
-        Block(schema));
+    auto physical_table_scan
+        = std::make_shared<PhysicalTableScan>(executor_id, schema, log->identifier(), table_scan, Block(schema));
     return physical_table_scan;
 }
 
@@ -104,7 +101,11 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
 
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(
+            context,
+            tidb_table_scan,
+            filter_conditions,
+            max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
     }
     else
@@ -123,7 +124,11 @@ void PhysicalTableScan::buildPipeline(
     // For building PipelineExec in compile time.
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(
+            context,
+            tidb_table_scan,
+            filter_conditions,
+            context.getMaxStreams());
         disaggregated_tiflash_interpreter.execute(exec_context, pipeline_exec_builder);
     }
     else
@@ -148,17 +153,23 @@ void PhysicalTableScan::buildPipelineExecGroupImpl(
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, pipeline.firstStream()->getHeader());
+    const auto & schema_project_cols = buildTableScanProjectionCols(
+        tidb_table_scan.getLogicalTableID(),
+        schema,
+        pipeline.firstStream()->getHeader());
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
 }
 
-void PhysicalTableScan::buildProjection(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
+void PhysicalTableScan::buildProjection(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder)
 {
     auto header = group_builder.getCurrentHeader();
-    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, header);
+    const auto & schema_project_cols
+        = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, header);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.

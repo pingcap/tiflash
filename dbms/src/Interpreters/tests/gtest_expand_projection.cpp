@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,8 @@ try
     // Project literal(null) as nullable<DataTypeMyDateTime>>
     // scenario: expand project: "null" for a nullable datetime column
     columns.clear();
-    columns.push_back(createColumn<Nullable<DataTypeMyDateTime::FieldType>>({MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt()}));
+    columns.push_back(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt()}));
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, {}),
         executeProjection(std::vector<String>{"null"}, columns)[0]);
@@ -77,9 +78,7 @@ try
     // scenario: expand project: "1" for a grouping id column default as Uint64
     columns.clear();
     columns.push_back(createColumn<UInt64>({0, 0, 0, 0, 0}));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<UInt64>(5, 1),
-        executeProjection(std::vector<String>{"1"}, columns)[0]);
+    ASSERT_COLUMN_EQ(createConstColumn<UInt64>(5, 1), executeProjection(std::vector<String>{"1"}, columns)[0]);
 }
 CATCH
 } // namespace tests

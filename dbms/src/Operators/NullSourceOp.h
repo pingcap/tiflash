@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,19 +21,13 @@ namespace DB
 class NullSourceOp : public SourceOp
 {
 public:
-    NullSourceOp(
-        PipelineExecutorContext & exec_context_,
-        const Block & header_,
-        const String & req_id)
+    NullSourceOp(PipelineExecutorContext & exec_context_, const Block & header_, const String & req_id)
         : SourceOp(exec_context_, req_id)
     {
         setHeader(header_);
     }
 
-    String getName() const override
-    {
-        return "NullSourceOp";
-    }
+    String getName() const override { return "NullSourceOp"; }
 
     // When the storage layer data is empty, a NullSource will be filled, so override `getIOProfileInfo` is needed here.
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }

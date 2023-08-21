@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,9 +37,11 @@ int main(int, char **)
             {
                 if (auto lock = watch.compareAndRestartDeferred(1))
                 {
-                    std::cerr << "Thread " << i << ": begin iteration " << iteration << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
+                    std::cerr << "Thread " << i << ": begin iteration " << iteration
+                              << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    std::cerr << "Thread " << i << ": end iteration " << iteration << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
+                    std::cerr << "Thread " << i << ": end iteration " << iteration
+                              << ", elapsed: " << total_watch.elapsedMilliseconds() << " ms.\n";
                     ++iteration;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));

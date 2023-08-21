@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,8 @@
 
 namespace DB::GatherUtils
 {
-struct SliceDynamicOffsetUnboundedSelectArraySource : public ArraySinkSourceSelector<SliceDynamicOffsetUnboundedSelectArraySource>
+struct SliceDynamicOffsetUnboundedSelectArraySource
+    : public ArraySinkSourceSelector<SliceDynamicOffsetUnboundedSelectArraySource>
 {
     template <typename Source, typename Sink>
     static void selectSourceSink(Source && source, Sink && sink, const IColumn & offset_column)

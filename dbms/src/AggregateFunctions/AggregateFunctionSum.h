@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,10 +29,7 @@ namespace DB
 template <typename T>
 struct AggregateFunctionSumAddImpl
 {
-    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(T & lhs, const T & rhs)
-    {
-        lhs += rhs;
-    }
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(T & lhs, const T & rhs) { lhs += rhs; }
 };
 
 template <typename T>
@@ -98,7 +95,8 @@ struct AggregateFunctionSumData
     }
 
     template <typename Value>
-    void NO_SANITIZE_UNDEFINED NO_INLINE addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t count)
+    void NO_SANITIZE_UNDEFINED NO_INLINE
+    addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t count)
     {
         const auto * end = ptr + count;
 
@@ -137,25 +135,13 @@ struct AggregateFunctionSumData
         Impl::add(sum, local_sum);
     }
 
-    void merge(const AggregateFunctionSumData & rhs)
-    {
-        Impl::add(sum, rhs.sum);
-    }
+    void merge(const AggregateFunctionSumData & rhs) { Impl::add(sum, rhs.sum); }
 
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(sum, buf);
-    }
+    void write(WriteBuffer & buf) const { writeBinary(sum, buf); }
 
-    void read(ReadBuffer & buf)
-    {
-        readBinary(sum, buf);
-    }
+    void read(ReadBuffer & buf) { readBinary(sum, buf); }
 
-    T get() const
-    {
-        return sum;
-    }
+    T get() const { return sum; }
 };
 
 template <typename T>
@@ -177,10 +163,7 @@ struct AggregateFunctionSumKahanData
         out_sum = new_sum;
     }
 
-    void ALWAYS_INLINE add(T value)
-    {
-        addImpl(value, sum, compensation);
-    }
+    void ALWAYS_INLINE add(T value) { addImpl(value, sum, compensation); }
 
     /// Vectorized version
     template <typename Value>
@@ -249,15 +232,13 @@ struct AggregateFunctionSumKahanData
         auto rhs_compensated = raw_sum - to_sum;
         /// Kahan summation is tricky because it depends on non-associativity of float arithmetic.
         /// Do not simplify this expression if you are not sure.
-        auto compensations = ((from_sum - rhs_compensated) + (to_sum - (raw_sum - rhs_compensated))) + compensation + from_compensation;
+        auto compensations = ((from_sum - rhs_compensated) + (to_sum - (raw_sum - rhs_compensated))) + compensation
+            + from_compensation;
         to_sum = raw_sum + compensations;
         to_compensation = compensations - (to_sum - raw_sum);
     }
 
-    void merge(const AggregateFunctionSumKahanData & rhs)
-    {
-        mergeImpl(sum, compensation, rhs.sum, rhs.compensation);
-    }
+    void merge(const AggregateFunctionSumKahanData & rhs) { mergeImpl(sum, compensation, rhs.sum, rhs.compensation); }
 
     void write(WriteBuffer & buf) const
     {
@@ -271,10 +252,7 @@ struct AggregateFunctionSumKahanData
         readBinary(compensation, buf);
     }
 
-    T get() const
-    {
-        return sum;
-    }
+    T get() const { return sum; }
 };
 
 
@@ -294,10 +272,7 @@ struct NameSum
 struct NameSumWithOverFlow
 {
     static constexpr auto name = "sumWithOverflow";
-    static std::tuple<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
-    {
-        return {prec, scale};
-    }
+    static std::tuple<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale) { return {prec, scale}; }
 };
 
 using NameSumOnPartialResult = NameSumWithOverFlow;
@@ -316,7 +291,8 @@ struct NameSumKahan
 
 /// Counts the sum of the numbers.
 template <typename T, typename TResult, typename Data, typename Name = NameSum>
-class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Name>>
+class AggregateFunctionSum final
+    : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Name>>
 {
     static_assert(IsDecimal<T> == IsDecimal<TResult>);
 
@@ -390,8 +366,7 @@ public:
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
-        ssize_t if_argument_pos)
-        const override
+        ssize_t if_argument_pos) const override
     {
         if (if_argument_pos >= 0)
         {

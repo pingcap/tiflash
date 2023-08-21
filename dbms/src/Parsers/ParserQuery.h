@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,11 @@ private:
 
     const char * getName() const override { return "Query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
 public:
-    ParserQuery(const char * end) : end(end) {}
+    ParserQuery(const char * end)
+        : end(end)
+    {}
 };
 
-}
+} // namespace DB
