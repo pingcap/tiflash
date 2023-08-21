@@ -39,11 +39,10 @@ class ResourceGroup final : private boost::noncopyable
 public:
     explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
         : name(group_pb_.name())
-        , user_priority(group_pb_.priority())
-        , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
         , log(Logger::get("resource group:" + group_pb_.name()))
     {
+        resetResourceGroup(group_pb_);
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         initStaticTokenBucket(setting.burst_limit());
     }
@@ -72,12 +71,14 @@ private:
         trickle_mode,
     };
 
-    void initStaticTokenBucket(uint64_t capacity = std::numeric_limits<uint64_t>::max())
+    void initStaticTokenBucket(int64_t capacity = std::numeric_limits<int64_t>::max())
     {
         // If token bucket is normal mode, it's static, so fill_rate is zero.
         const double init_fill_rate = 0.0;
         const double init_tokens = user_ru_per_sec;
-        const double init_cap = capacity;
+        int64_t init_cap = capacity;
+        if (capacity < 0)
+            init_cap = std::numeric_limits<int64_t>::max();
         bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, log->identifier(), init_cap);
         assert(
             user_priority == LowPriorityValue || user_priority == MediumPriorityValue
@@ -143,11 +144,13 @@ private:
 
     // Called when user change config of resource group.
     // Only update meta, will not touch runtime state(like bucket remaining tokens).
-    void reConfig(const resource_manager::ResourceGroup & group_pb_)
+    void resetResourceGroup(const resource_manager::ResourceGroup & group_pb_)
     {
         group_pb = group_pb_;
         user_priority = group_pb_.priority();
-        user_ru_per_sec = group_pb_.r_u_settings().r_u().settings().fill_rate();
+        const auto & setting = group_pb.r_u_settings().r_u().settings();
+        user_ru_per_sec = setting.fill_rate();
+        burstable = (setting.burst_limit() < 0);
     }
 
     bool lowToken() const
@@ -179,26 +182,24 @@ private:
 
         // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
         // while user query speed is limited due to LAC requests too few RU.
-        double next_n_sec_need_num = avg_speed * n * amplification;
+        double acquire_num = avg_speed * n * amplification;
 
         // Prevent avg_speed from being 0 due to RU exhaustion.
-        if (next_n_sec_need_num == 0.0 && remaining_ru <= 0.0)
-            next_n_sec_need_num = base;
+        if (acquire_num == 0.0 && remaining_ru <= 0.0)
+            acquire_num = base;
 
-        double acquire_num = 0.0;
         if (acquire_num > remaining_ru)
             acquire_num -= remaining_ru;
 
         LOG_TRACE(
             log,
-            "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, next n sec need: {}, "
+            "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, "
             "acquire num: {}",
             name,
             avg_speed,
             remaining_ru,
             base,
             amplification,
-            next_n_sec_need_num,
             acquire_num);
         return acquire_num;
     }
@@ -289,8 +290,8 @@ private:
 
     const std::string name;
 
-    uint32_t user_priority;
-    uint64_t user_ru_per_sec;
+    uint32_t user_priority = 0;
+    uint64_t user_ru_per_sec = 0;
 
     bool burstable = false;
 
@@ -354,7 +355,8 @@ public:
         {
             {
                 std::lock_guard lock(mu);
-                low_token_resource_groups.push_back(name);
+                LOG_DEBUG(log, "sizeof low_token_resource_groups: {}", low_token_resource_groups.size());
+                low_token_resource_groups.insert(name);
             }
             cv.notify_one();
         }
@@ -553,7 +555,7 @@ private:
     std::function<void(const std::string & del_rg_name)> delete_resource_group_callback;
     std::function<void()> clean_tombstone_resource_group_callback;
 
-    std::vector<std::string> low_token_resource_groups;
+    std::unordered_set<std::string> low_token_resource_groups;
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };

@@ -69,12 +69,7 @@ MPPTaskManager::MPPTaskManager(const MinTSOSchedulerConfig & config, UInt64 reso
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
     , resource_control_mpp_task_hard_limit(resource_control_mpp_task_hard_limit_)
-{
-    LocalAdmissionController::global_instance->registerDeleteResourceGroupCallback(
-        [this](const std::string & del_rg_name) { this->tagResourceGroupSchedulerReadyToDelete(del_rg_name); });
-    LocalAdmissionController::global_instance->registerCleanTombstoneResourceGroupCallback(
-        [this]() { this->cleanTombstoneResourceGroupScheduler(); });
-}
+{}
 
 MPPTaskManager::~MPPTaskManager()
 {
@@ -111,7 +106,7 @@ void MPPTaskManager::removeMPPGatherTaskSet(MPPQueryPtr & query, const MPPGather
     if (query->mpp_gathers.empty())
     {
         const auto & query_id = gather_id.query_id;
-        auto scheduler = getScheduler(query_id);
+        auto scheduler = getSchedulerWithoutLock(query_id);
         // Maybe for some reason, task never register.
         if likely (scheduler != nullptr)
             scheduler->deleteQuery(query_id, *this, on_abort, -1);
@@ -283,7 +278,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
             cv.notify_all();
             return;
         }
-        auto scheduler = getScheduler(gather_id.query_id);
+        auto scheduler = getSchedulerWithoutLock(gather_id.query_id);
         if likely (scheduler != nullptr)
         {
             scheduler->deleteQuery(gather_id.query_id, *this, true, gather_id.gather_id);
@@ -529,7 +524,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads)
 {
     std::lock_guard lock(mu);
-    auto scheudler = getScheduler(resource_group_name);
+    auto scheudler = getSchedulerWithoutLock(resource_group_name);
     if unlikely (scheudler != nullptr)
         return;
     scheudler->releaseThreadsThenSchedule(needed_threads, *this);

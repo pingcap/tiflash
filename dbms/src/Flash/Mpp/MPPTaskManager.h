@@ -257,11 +257,10 @@ public:
     void cleanTombstoneResourceGroupScheduler();
 
     // NOTE: return nullptr if MPPTask doesn't register to MPPTaskManager.
-    MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id) { return getScheduler(query_id.resource_group_name); }
+    MPPTaskSchedulerPtr getSchedulerWithoutLock(const MPPQueryId & query_id) { return getSchedulerWithoutLock(query_id.resource_group_name); }
 
-    MPPTaskSchedulerPtr getScheduler(const String & resource_group_name)
+    MPPTaskSchedulerPtr getSchedulerWithoutLock(const String & resource_group_name)
     {
-        std::lock_guard lock(mu);
         auto iter = resource_group_schedulers.find(resource_group_name);
         if (iter == resource_group_schedulers.end())
             return nullptr;

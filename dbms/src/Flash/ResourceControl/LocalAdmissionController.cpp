@@ -417,7 +417,7 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
         }
         else
         {
-            iter->second->reConfig(group_pb);
+            iter->second->resetResourceGroup(group_pb);
         }
     }
     LOG_INFO(log, "modify resource group to: {}", group_pb.DebugString());
