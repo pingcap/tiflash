@@ -818,7 +818,7 @@ RowNumber WindowTransformAction::stepForRangeFrameImpl()
 }
 
 template <bool is_begin>
-RowNumber WindowTransformAction::findRangeFrameIfNull(RowNumber cursor) // TODO rename it
+RowNumber WindowTransformAction::findRangeFrameIfNull(RowNumber cursor)
 {
     if (!is_range_null_frame_initialized)
     {
@@ -841,28 +841,6 @@ RowNumber WindowTransformAction::findRangeFrameIfNull(RowNumber cursor) // TODO 
         return range_null_frame_start;
     else
         return range_null_frame_end;
-
-    // if constexpr (is_begin)
-    // {
-    //     while (cursor < partition_end)
-    //     {
-    //         const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
-    //         if (cursor_column->isNullAt(cursor.row))
-    //             return cursor;
-    //         advanceRowNumber(cursor);
-    //     }
-    // }
-    // else
-    // {
-    //     while (cursor < partition_end)
-    //     {
-    //         const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
-    //         if (!cursor_column->isNullAt(cursor.row))
-    //             return cursor;
-    //         advanceRowNumber(cursor);
-    //     }
-    // }
-    // return cursor;
 }
 
 template <typename AuxColType, bool is_begin, bool is_desc>
