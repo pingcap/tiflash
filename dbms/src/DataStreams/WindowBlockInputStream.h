@@ -132,17 +132,17 @@ private:
     std::tuple<RowNumber, bool> stepToEndForRangeFrameOrderCase();
 
     template <typename T, bool is_desc>
-    RowNumber stepToStartForRangeImpl();
+    RowNumber stepToStartForRangeFrameImpl();
 
     template <typename T, bool is_desc>
-    RowNumber stepToEndForRangeImpl();
+    RowNumber stepToEndForRangeFrameImpl();
 
     template <typename T, bool is_begin, bool is_desc>
-    RowNumber stepForRangeImpl();
+    RowNumber stepForRangeFrameImpl();
 
-    // We should use this function when the current auxiliary column row is null.
+    // We should use this function when the current order by column row is null.
     template <bool is_begin>
-    RowNumber moveCursorAndFindRangeFrameIfNull(RowNumber cursor);
+    RowNumber findRangeFrameIfNull(RowNumber cursor);
 
     template <typename AuxColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
@@ -231,6 +231,10 @@ public:
     RowNumber frame_end;
     bool frame_ended = false;
     bool frame_started = false;
+
+    RowNumber range_null_frame_start;
+    RowNumber range_null_frame_end;
+    bool is_range_null_frame_initialized = false;
 
     // The previous frame boundaries that correspond to the current state of the
     // aggregate function. We use them to determine how to update the aggregation
