@@ -464,7 +464,7 @@ std::string LocalAdmissionController::isGACRespValid(const resource_manager::Res
 }
 
 #ifdef DBMS_PUBLIC_GTEST
-auto LocalAdmissionController::global_instance = nullptr;
+std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_instance = nullptr;
 #else
 std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
 #endif

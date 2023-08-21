@@ -18,26 +18,26 @@
 namespace DB::tests
 {
 
-class TestTokenBucket : public ::testing::Test
-{
-};
-
-TEST_F(TestTokenBucket, TestTrickleMode)
-{
-    const uint64_t ru_per_sec = 1;
-    const bool burstable = false;
-    ResourceGroup rg("rg1", ResourceGroup::MediumPriorityValue, ru_per_sec, burstable);
-
-    // 1. consume many tokens and token should be negative.
-    const uint64_t consume_ru = 100;
-    const uint64_t consume_cpu = consume_ru * 3;
-    rg.consumeResource(consume_ru, consume_cpu);
-
-    const double add_tokens = 10;
-    const double new_capacity = 1;
-    const double trickle_ms = 5000;
-    rg.reConfigTokenBucketInTrickleMode(add_tokens, new_capacity, trickle_ms);
-
-    // EXPECT_EQ(rg.bucket->
-}
+// class TestTokenBucket : public ::testing::Test
+// {
+// };
+//
+// TEST_F(TestTokenBucket, TestTrickleMode)
+// {
+//     const uint64_t ru_per_sec = 1;
+//     const bool burstable = false;
+//     ResourceGroup rg("rg1", ResourceGroup::MediumPriorityValue, ru_per_sec, burstable);
+//
+//     // 1. consume many tokens and token should be negative.
+//     const uint64_t consume_ru = 100;
+//     const uint64_t consume_cpu = consume_ru * 3;
+//     rg.consumeResource(consume_ru, consume_cpu);
+//
+//     const double add_tokens = 10;
+//     const double new_capacity = 1;
+//     const double trickle_ms = 5000;
+//     // rg.reConfigTokenBucketInTrickleMode(add_tokens, new_capacity, trickle_ms);
+//
+//     // EXPECT_EQ(rg.bucket->
+// }
 } // namespace DB::tests

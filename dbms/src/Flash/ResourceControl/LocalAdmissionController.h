@@ -328,8 +328,7 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-#ifndef DBMS_PUBLIC_GTEST
-    explicit LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
+    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
         , thread_manager(newThreadManager())
@@ -341,19 +340,6 @@ public:
     }
 
     ~LocalAdmissionController() { stop(); }
-#else
-    // gjt todo: refine
-    LocalAdmissionController()
-    {
-        if (!global_instance)
-            global_instance = std::make_unique<MockLocalAdmissionController>();
-    }
-
-    ~LocalAdmissionController()
-    {
-        global_instance.reset();
-    }
-#endif
 
     // NOTE: getOrFetchResourceGroup may throw if resource group has been deleted.
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
@@ -425,14 +411,28 @@ public:
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
         std::lock_guard lock(mu);
+        RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
+    }
+    void unregisterRefillTokenCallback()
+    {
+        std::lock_guard lock(mu);
+        RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
+        refill_token_callback = nullptr;
     }
 
     // This callback will be called when Etcd watcher find resource group is deleted by GAC.
     void registerDeleteResourceGroupCallback(const std::function<void(const std::string & del_rg_name)> & cb)
     {
         std::lock_guard lock(mu);
+        RUNTIME_CHECK_MSG(delete_resource_group_callback == nullptr, "callback cannot be registered multiple times");
         delete_resource_group_callback = cb;
+    }
+    void unregisterDeleteResourceGroupCallback()
+    {
+        std::lock_guard lock(mu);
+        RUNTIME_CHECK_MSG(delete_resource_group_callback != nullptr, "callback cannot be nullptr before unregistering");
+        delete_resource_group_callback = nullptr;
     }
 
     // This callback will be called every DEFAULT_FETCH_GAC_INTERVAL, to cleanup tombstone resource group.
@@ -440,7 +440,18 @@ public:
     void registerCleanTombstoneResourceGroupCallback(const std::function<void()> & cb)
     {
         std::lock_guard lock(mu);
+        RUNTIME_CHECK_MSG(
+            clean_tombstone_resource_group_callback == nullptr,
+            "callback cannot be registered multiple times");
         clean_tombstone_resource_group_callback = cb;
+    }
+    void unregisterCleanTombstoneResourceGroupCallback()
+    {
+        std::lock_guard lock(mu);
+        RUNTIME_CHECK_MSG(
+            clean_tombstone_resource_group_callback != nullptr,
+            "callback cannot be nullptr before unregistering");
+        clean_tombstone_resource_group_callback = nullptr;
     }
 
     // LAC will call register of ResourceControlQueue, so if ResourceControlQueue should call LAC::stop()

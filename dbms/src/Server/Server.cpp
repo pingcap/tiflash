@@ -1554,14 +1554,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #else
     LocalAdmissionController::global_instance
         = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
-
-    auto mpp_task_manager = tmt_context.getMPPTaskManager();
-    LocalAdmissionController::global_instance->registerDeleteResourceGroupCallback(
-        [mpp_task_manager](const std::string & del_rg_name) {
-            mpp_task_manager->tagResourceGroupSchedulerReadyToDelete(del_rg_name);
-        });
-    LocalAdmissionController::global_instance->registerCleanTombstoneResourceGroupCallback(
-        [mpp_task_manager]() { mpp_task_manager->cleanTombstoneResourceGroupScheduler(); });
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
