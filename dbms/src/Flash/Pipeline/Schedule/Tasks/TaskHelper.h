@@ -32,6 +32,10 @@ namespace DB
     (task)->finalize();     \
     (task).reset();
 
+#define FINALIZE_TASK_WITH_EXCEPTION(task)             \
+    (task)->onErrorOccurred(std::current_exception()); \
+    FINALIZE_TASK((task));
+
 #define FINALIZE_TASKS(tasks)   \
     for (auto & task : (tasks)) \
     {                           \
