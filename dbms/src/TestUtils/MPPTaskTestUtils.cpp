@@ -79,7 +79,23 @@ std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMP
     return {properties.start_ts, res};
 }
 
+<<<<<<< HEAD
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+=======
+ColumnsWithTypeAndName MPPTaskTestUtils::executeProblematicMPPTasks(
+    QueryTasks & tasks,
+    const DAGProperties & properties,
+    BlockInputStreamPtr & stream)
+{
+    stream = executeMPPQueryWithMultipleContext(
+        properties,
+        tasks,
+        MockComputeServerManager::instance().getServerConfigMap());
+    return readBlock(stream);
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties)
+>>>>>>> bccc345b8a (Not call abortMPPGather when mpp task met error (#7969))
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);

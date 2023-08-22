@@ -448,11 +448,18 @@ void MPPTask::runImpl()
 
 void MPPTask::handleError(const String & error_msg)
 {
+<<<<<<< HEAD
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
     manager->abortMPPQuery(id.start_ts, updated_msg, AbortType::ONERROR);
     if (!registered)
         // if the task is not registered, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
+=======
+    /// Not call abortMPPGather to avoid issue https://github.com/pingcap/tiflash/issues/7177
+    // auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
+    //manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
+    abort(error_msg, AbortType::ONERROR);
+>>>>>>> bccc345b8a (Not call abortMPPGather when mpp task met error (#7969))
 }
 
 void MPPTask::abort(const String & message, AbortType abort_type)
