@@ -95,12 +95,15 @@ public:
         initMap();
         if (needRecordNotInsertRows(kind))
             rows_not_inserted_to_map = std::make_unique<RowsNotInsertToMap>(max_block_size);
-        memory_usage = getHashMapAndPoolByteCount();
+        hash_table_pool_memory_usage = getHashMapAndPoolByteCount();
+        block_data_memory_usage = 0;
     }
     void insertBlockForBuild(Block && block);
     void insertBlockForProbe(Block && block);
     size_t getRowCount();
     size_t getHashMapAndPoolByteCount();
+    void updateHashMapAndPoolMemoryUsage();
+    size_t getHashMapAndPoolMemoryUsage() const { return hash_table_pool_memory_usage; }
     RowsNotInsertToMap * getRowsNotInsertedToMap()
     {
         if (needRecordNotInsertRows(kind))
@@ -129,14 +132,7 @@ public:
     Blocks trySpillBuildPartition(std::unique_lock<std::mutex> & partition_lock);
     Blocks trySpillProbePartition(std::unique_lock<std::mutex> & partition_lock);
     bool hasBuildData() const { return !build_partition.original_blocks.empty(); }
-    void addMemoryUsage(size_t delta) { memory_usage += delta; }
-    void subMemoryUsage(size_t delta)
-    {
-        if likely (memory_usage >= delta)
-            memory_usage -= delta;
-        else
-            memory_usage = 0;
-    }
+    void addBlockDataMemoryUsage(size_t delta) { block_data_memory_usage += delta; }
     bool isSpill() const { return hash_join_spill_context->isPartitionSpilled(partition_index); }
     JoinMapMethod getJoinMapMethod() const { return join_map_method; }
     ASTTableJoin::Kind getJoinKind() const { return kind; }
@@ -146,11 +142,11 @@ public:
         assert(pool != nullptr);
         return pool;
     }
-    size_t getMemoryUsage() const { return memory_usage; }
+    size_t getMemoryUsage() const { return block_data_memory_usage + hash_table_pool_memory_usage; }
     size_t revocableBytes() const
     {
         if (build_partition.rows > 0 || probe_partition.rows > 0)
-            return memory_usage;
+            return getMemoryUsage();
         else
             return 0;
     }
@@ -246,7 +242,8 @@ private:
     bool has_other_condition;
     /// only update this field when spill is enabled. todo support this field in non-spill mode
     /// all writes to it is protected by lock
-    std::atomic<size_t> memory_usage{0};
+    std::atomic<size_t> block_data_memory_usage{0};
+    std::atomic<size_t> hash_table_pool_memory_usage{0};
     const LoggerPtr log;
 };
 } // namespace DB

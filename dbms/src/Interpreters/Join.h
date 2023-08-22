@@ -165,6 +165,7 @@ public:
         const SpillConfig & probe_spill_config_,
         Int64 join_restore_concurrency_,
         const Names & tidb_output_column_names_,
+        const RegisterOperatorSpillContext & register_operator_spill_context_,
         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
         const JoinNonEqualConditions & non_equal_conditions_ = {},
         size_t max_block_size = 0,
@@ -229,6 +230,8 @@ public:
     size_t getTotalByteCount();
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
+    /// Sum size in bytes of all hash table and pools
+    size_t getTotalHashTableAndPoolByteCount();
 
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
@@ -369,6 +372,8 @@ private:
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;
+
+    RegisterOperatorSpillContext register_operator_spill_context;
 
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;

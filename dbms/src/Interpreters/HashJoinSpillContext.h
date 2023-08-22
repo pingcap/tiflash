@@ -25,6 +25,7 @@ class HashJoinSpillContext final : public OperatorSpillContext
 private:
     std::unique_ptr<std::vector<std::atomic<bool>>> partition_is_spilled;
     std::unique_ptr<std::vector<std::atomic<Int64>>> partition_revocable_memories;
+    std::unique_ptr<std::vector<std::atomic<AutoSpillStatus>>> partition_spill_status;
     SpillConfig build_spill_config;
     SpillerPtr build_spiller;
     SpillConfig probe_spill_config;
@@ -46,10 +47,14 @@ public:
     void markPartitionSpilled(size_t partition_index);
     bool updatePartitionRevocableMemory(size_t partition_id, Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override;
+    bool supportFurtherSpill() const override;
     SpillConfig createBuildSpillConfig(const String & spill_id) const;
     SpillConfig createProbeSpillConfig(const String & spill_id) const;
     std::vector<size_t> getPartitionsToSpill();
     Int64 triggerSpill(Int64 expected_released_memories) override;
+    bool supportAutoTriggerSpill() const override { return true; }
+    void finishOneSpill(size_t partition_id);
+    bool needFinalSpill(size_t partition_id) const { return (*partition_spill_status)[partition_id] == AutoSpillStatus::NEED_AUTO_SPILL; }
 };
 
 using HashJoinSpillContextPtr = std::shared_ptr<HashJoinSpillContext>;

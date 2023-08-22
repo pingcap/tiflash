@@ -22,7 +22,7 @@ Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memor
     /// use mutex to avoid concurrent check
     if (lock.owns_lock())
     {
-        auto log_level = Poco::Message::PRIO_TRACE;
+        auto log_level = Poco::Message::PRIO_DEBUG;
         bool check_cooldown_time = true;
         if unlikely (!first_check_done)
         {
@@ -79,5 +79,10 @@ Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memor
         return ret;
     }
     return expected_released_memories;
+}
+void OperatorSpillContext::finishSpillableStage()
+{
+    LOG_INFO(log, "Operator finish spill stage");
+    in_spillable_stage = false;
 }
 } // namespace DB

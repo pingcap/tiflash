@@ -55,9 +55,11 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 
 Int64 SortSpillContext::triggerSpill(Int64 expected_released_memories)
 {
-    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
+    if unlikely(expected_released_memories <= 0)
+        return expected_released_memories;
     if (!in_spillable_stage || !enable_spill)
         return expected_released_memories;
+    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
     auto total_revocable_memory = getTotalRevocableMemory();
     if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
     {

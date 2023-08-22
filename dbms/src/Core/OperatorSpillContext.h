@@ -55,11 +55,11 @@ public:
     virtual ~OperatorSpillContext() = default;
     bool isSpillEnabled() const { return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0); }
     void disableSpill() { enable_spill = false; }
-    void finishSpillableStage() { in_spillable_stage = false; }
-    bool spillableStageFinished() const { return !in_spillable_stage; }
+    void finishSpillableStage();
+    virtual bool supportFurtherSpill() const { return in_spillable_stage; }
     Int64 getTotalRevocableMemory()
     {
-        if (in_spillable_stage)
+        if (supportAutoTriggerSpill())
             return getTotalRevocableMemoryImpl();
         else
             return 0;
