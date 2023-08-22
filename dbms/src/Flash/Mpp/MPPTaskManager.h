@@ -151,7 +151,10 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter != monitored_tasks.end())
         {
-            LOG_WARNING(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
+            LOG_WARNING(
+                log,
+                "task {} is repeatedly added to be monitored which is not an expected behavior!",
+                task_unique_id);
             return;
         }
 
@@ -164,7 +167,7 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter == monitored_tasks.end())
         {
-            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.");
+            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.", task_unique_id);
             return;
         }
 
