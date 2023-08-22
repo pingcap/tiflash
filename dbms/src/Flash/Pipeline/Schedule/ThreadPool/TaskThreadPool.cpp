@@ -74,8 +74,22 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
     LOG_INFO(thread_logger, "start loop");
 
     TaskPtr task;
-    while (likely(task_queue->take(task)))
+    while (true)
     {
+        try
+        {
+            if unlikely (!task_queue->take(task))
+                break;
+        }
+        catch (...)
+        {
+            auto exception_ptr = std::current_exception();
+            LOG_ERROR(thread_logger, "got error for take() for rg {}", task->getResourceGroupName());
+            task->onErrorOccurred(std::current_exception());
+            metrics.decPendingTask();
+            FINALIZE_TASK(task);
+            continue;
+        }
         metrics.decPendingTask();
         handleTask(task);
         assert(!task);

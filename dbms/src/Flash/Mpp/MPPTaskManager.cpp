@@ -348,6 +348,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
 
+    // gjt todo: check rg exists
     const auto & resource_group_name = task->getResourceGroupName();
     if (resource_group_schedulers.find(resource_group_name) == resource_group_schedulers.end())
     {
@@ -496,8 +497,17 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
         {
             // Will ignore the group whose tokens have been exhausted,
             // this can prevent tasks throllted by resource control from occupying too much hard limit proportion.
-            if (LocalAdmissionController::global_instance->isResourceGroupThrottled(ele.first))
-                continue;
+            bool is_throttled = false;
+            try
+            {
+                is_throttled = LocalAdmissionController::global_instance->isResourceGroupThrottled(ele.first);
+            }
+            catch (...)
+            {
+                LOG_ERROR(log, "rg got error {}", ele.first);
+                if (is_throttled)
+                    continue;
+            }
 
             non_throttled_rg_active_set_size += ele.second->getActiveSetSize();
         }
@@ -525,9 +535,8 @@ void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_n
 {
     std::lock_guard lock(mu);
     auto scheudler = getSchedulerWithoutLock(resource_group_name);
-    if unlikely (scheudler != nullptr)
-        return;
-    scheudler->releaseThreadsThenSchedule(needed_threads, *this);
+    if likely (scheudler)
+        scheudler->releaseThreadsThenSchedule(needed_threads, *this);
 }
 
 void MPPTaskManager::tagResourceGroupSchedulerReadyToDelete(const String & name)

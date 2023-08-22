@@ -69,7 +69,15 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
         auto task_queue = std::make_shared<NestedTaskQueueType>();
         // May throw if resource group has been deleted.
         // gjt todo ! handle throw
-        auto priority = LocalAdmissionController::global_instance->getPriority(name);
+        uint64_t priority = LocalAdmissionController::EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
+        try
+        {
+            priority = LocalAdmissionController::global_instance->getPriority(name);
+        }
+        catch (...)
+        {
+            LOG_ERROR(logger, "got exception when submitWithoutLock for rg {}", name);
+        }
         resource_group_infos.push({name, priority, task_queue});
         resource_group_task_queues.insert({name, task_queue});
         task_queue->submit(std::move(task));
@@ -93,7 +101,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if (popTask(cancel_task_queue, task))
             return true;
 
-        updateResourceGroupInfosWithoutLock();
+        auto error_resource_groups = updateResourceGroupInfosWithoutLock();
 
         while (!resource_group_infos.empty())
         {
@@ -115,19 +123,24 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             if (ru_exhausted)
                 break;
 
-            if (group_info.task_queue->empty())
+            // task_queue should not be empty, because related resource group should already been deleted
+            // in updateResourceGroupInfosWithoutLock().
+            assert(!group_info.task_queue->empty());
+
+            // Take task from nested task queue, and should always take succeed.
+            // Because this task queue should not be finished inside lock_guard.
+            RUNTIME_CHECK(group_info.task_queue->take(task));
+            assert(task != nullptr);
+
+            if unlikely (!error_resource_groups.empty())
             {
-                // Nested task queue is empty, continue and try next resource group.
-                mustEraseResourceGroupInfoWithoutLock(group_info.name);
+                auto iter = error_resource_groups.find(group_info.name);
+                if likely (iter != error_resource_groups.end())
+                {
+                    std::rethrow_exception(iter->second);
+                }
             }
-            else
-            {
-                // Take task from nested task queue, and should always take succeed.
-                // Because this task queue should not be finished inside lock_guard.
-                RUNTIME_CHECK(group_info.task_queue->take(task));
-                assert(task != nullptr);
-                return true;
-            }
+            return true;
         }
 
         assert(!task);
@@ -145,19 +158,36 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
+    try
+    {
+        LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
+    }
+    catch (...)
+    {
+        LOG_ERROR(logger, "got error when consumeResource for rg {}", name);
+    }
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
+typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfo ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
     std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
+    LACErrorInfo error_resource_groups;
     while (!resource_group_infos.empty())
     {
         const ResourceGroupInfo & group_info = resource_group_infos.top();
         if (!group_info.task_queue->empty())
         {
-            auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+            uint64_t new_priority = LocalAdmissionController::EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
+            try
+            {
+                new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+            }
+            catch (...)
+            {
+                LOG_INFO(logger, "got error for rg {}", group_info.name);
+                error_resource_groups.insert({group_info.name, std::current_exception()});
+            }
             new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
             resource_group_infos.pop();
         }
@@ -167,6 +197,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutL
         }
     }
     resource_group_infos = new_resource_group_infos;
+    return error_resource_groups;
 }
 
 template <typename NestedTaskQueueType>

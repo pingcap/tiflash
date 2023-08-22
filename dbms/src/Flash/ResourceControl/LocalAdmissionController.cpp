@@ -26,7 +26,18 @@ ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::st
 
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
-    auto resp = cluster->pd_client->getResourceGroup(req);
+    resource_manager::GetResourceGroupResponse resp;
+    try
+    {
+        resp = cluster->pd_client->getResourceGroup(req);
+    }
+    catch (...)
+    {
+        auto err_msg = getCurrentExceptionMessage(false);
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("got error when fetch resource group {} from GAC, err_msg: {}", name, err_msg);
+        throw ::DB::Exception(fmt_buf.toString());
+    }
     RUNTIME_CHECK_MSG(
         !resp.has_error(),
         "fetch resource group({}) info from GAC failed: {}",

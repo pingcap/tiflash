@@ -82,8 +82,10 @@ private:
         }
     };
 
+    using LACErrorInfo = std::unordered_map<String, std::exception_ptr>;
+
     // Update resource_group_infos, will reorder resource group by priority.
-    void updateResourceGroupInfosWithoutLock();
+    LACErrorInfo updateResourceGroupInfosWithoutLock();
 
     // Erase resource group info and task_queue.
     void mustEraseResourceGroupInfoWithoutLock(const String & name);
