@@ -27,7 +27,10 @@ HashJoinSpillContext::HashJoinSpillContext(
     , max_cached_bytes(std::max(
           build_spill_config.max_cached_data_bytes_in_spiller,
           probe_spill_config.max_cached_data_bytes_in_spiller))
-{}
+{
+    /// join does not support auto spill mode
+    auto_spill_mode = false;
+}
 
 void HashJoinSpillContext::init(size_t partition_num)
 {

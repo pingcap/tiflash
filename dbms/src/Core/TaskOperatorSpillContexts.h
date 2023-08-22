@@ -21,45 +21,9 @@ namespace DB
 class TaskOperatorSpillContexts
 {
 public:
-    Int64 triggerAutoSpill(Int64 expected_released_memories)
-    {
-        if (isFinished())
-            return expected_released_memories;
-        appendAdditionalOperatorSpillContexts();
-        bool has_finished_operator_spill_contexts = false;
-        for (auto & operator_spill_context : operator_spill_contexts)
-        {
-            assert(operator_spill_context->supportAutoTriggerSpill());
-            if (operator_spill_context->spillableStageFinished())
-            {
-                has_finished_operator_spill_contexts = true;
-                continue;
-            }
-            expected_released_memories = operator_spill_context->triggerSpill(expected_released_memories);
-            if (expected_released_memories <= 0)
-                break;
-        }
-        if (has_finished_operator_spill_contexts)
-        {
-            /// clean finished spill context
-            operator_spill_contexts.erase(
-                std::remove_if(
-                    operator_spill_contexts.begin(),
-                    operator_spill_contexts.end(),
-                    [](const auto & context) { return context->spillableStageFinished(); }),
-                operator_spill_contexts.end());
-        }
-        return expected_released_memories;
-    }
-    void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
-    {
-        if (operator_spill_context->supportAutoTriggerSpill())
-        {
-            std::unique_lock lock(mutex);
-            additional_operator_spill_contexts.push_back(operator_spill_context);
-            has_additional_operator_spill_contexts = true;
-        }
-    }
+    Int64 triggerAutoSpill(Int64 expected_released_memories);
+
+    void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context);
     /// for tests
     size_t operatorSpillContextCount()
     {
@@ -73,32 +37,14 @@ public:
         return additional_operator_spill_contexts.size();
     }
 
-    Int64 totalRevocableMemories()
-    {
-        if unlikely (isFinished())
-            return 0;
-        appendAdditionalOperatorSpillContexts();
-        Int64 ret = 0;
-        for (const auto & operator_spill_context : operator_spill_contexts)
-            ret += operator_spill_context->getTotalRevocableMemory();
-        return ret;
-    }
+    Int64 totalRevocableMemories();
 
     bool isFinished() const { return is_task_finished; }
 
     void finish() { is_task_finished = true; }
 
 private:
-    void appendAdditionalOperatorSpillContexts()
-    {
-        if (has_additional_operator_spill_contexts)
-        {
-            std::unique_lock lock(mutex);
-            operator_spill_contexts.splice(operator_spill_contexts.end(), additional_operator_spill_contexts);
-            has_additional_operator_spill_contexts = false;
-            additional_operator_spill_contexts.clear();
-        }
-    }
+    void appendAdditionalOperatorSpillContexts();
     /// access to operator_spill_contexts is thread safe
     std::list<OperatorSpillContextPtr> operator_spill_contexts;
     mutable std::mutex mutex;
