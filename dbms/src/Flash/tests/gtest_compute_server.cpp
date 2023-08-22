@@ -909,9 +909,9 @@ try
             catch (...)
             {
                 auto error_message = getCurrentExceptionMessage(false);
+                MockComputeServerManager::instance().cancelGather(gather_id);
                 ASSERT_TRUE(error_message.find(failpoint) != std::string::npos)
                     << " error message is " << error_message << " failpoint is " << failpoint;
-                MockComputeServerManager::instance().cancelGather(gather_id);
                 EXPECT_TRUE(assertQueryCancelled(gather_id.query_id)) << "fail in " << failpoint;
                 FailPointHelper::disableFailPoint(failpoint);
                 continue;
