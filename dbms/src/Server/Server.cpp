@@ -1413,6 +1413,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
     ///   controls the number of total bytes keep in the memory.
     /// - In disaggregated mode, its default value is memory_capacity_of_host * 0.02.
+    ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
