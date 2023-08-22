@@ -63,10 +63,14 @@ struct WindowFrame
     BoundaryType begin_type = BoundaryType::Unbounded;
     UInt64 begin_offset = 0;
     bool begin_preceding = true;
+    Int32 begin_range_auxiliary_column_index = -1;
+    tipb::RangeCmpDataType begin_cmp_data_type;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
     bool end_preceding = false;
+    Int32 end_range_auxiliary_column_index = -1;
+    tipb::RangeCmpDataType end_cmp_data_type;
 
     bool operator==(const WindowFrame & other) const
     {
@@ -104,6 +108,22 @@ struct WindowDescription
 
     // The window functions that are calculated for this window.
     WindowFunctionDescriptions window_functions_descriptions;
+
+    // Mark the order by column type to avoid type judge
+    // each time we update the start/end frame position.
+    TypeIndex order_by_col_type = TypeIndex::Nothing;
+
+    TypeIndex begin_aux_col_type = TypeIndex::Nothing;
+    TypeIndex end_aux_col_type = TypeIndex::Nothing;
+
+    // ascending or descending for order by column
+    // only used for range frame type
+    bool is_desc;
+
+    // only used for range frame type
+    bool is_order_by_col_nullable;
+    bool is_begin_aux_col_nullable;
+    bool is_end_aux_col_nullable;
 
     void setWindowFrame(const tipb::WindowFrame & frame_);
 
