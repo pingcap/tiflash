@@ -406,8 +406,31 @@ void MPPTask::writeErrToAllTunnels(const String & e)
 
 void MPPTask::cancel(const String & reason)
 {
+<<<<<<< HEAD
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     LOG_FMT_WARNING(log, "Begin cancel task: {}", id.toString());
+=======
+    /// Not call abortMPPGather to avoid issue https://github.com/pingcap/tiflash/issues/7177
+    // auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
+    //manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
+    abort(error_msg, AbortType::ONERROR);
+}
+
+void MPPTask::abort(const String & message, AbortType abort_type)
+{
+    auto abort_type_string = magic_enum::enum_name(abort_type);
+    TaskStatus next_task_status;
+    switch (abort_type)
+    {
+    case AbortType::ONCANCELLATION:
+        next_task_status = CANCELLED;
+        break;
+    case AbortType::ONERROR:
+        next_task_status = FAILED;
+        break;
+    }
+    LOG_WARNING(log, "Begin abort task: {}, abort type: {}", id.toString(), abort_type_string);
+>>>>>>> bccc345b8a (Not call abortMPPGather when mpp task met error (#7969))
     while (true)
     {
         auto previous_status = status.load();
