@@ -144,9 +144,9 @@ void KVStore::onSnapshot(
     TMTContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
-    auto keyspace_id = new_region_wrap->getKeyspaceID();
 
     {
+        auto keyspace_id = new_region_wrap->getKeyspaceID();
         auto table_id = new_region_wrap->getMappedTableID();
         if (auto storage = tmt.getStorages().get(keyspace_id, table_id);
             storage && storage->engineType() == TiDB::StorageEngine::DT)
@@ -173,10 +173,13 @@ void KVStore::onSnapshot(
                     {
                         LOG_INFO(
                             log,
-                            "clear old range before apply snapshot, region_id={} old_range={} new_range={}",
+                            "clear old range before apply snapshot, region_id={} old_range={} new_range={} "
+                            "keyspace_id={} table_id={}",
                             region_id,
                             old_key_range.toDebugString(),
-                            new_key_range.toDebugString());
+                            new_key_range.toDebugString(),
+                            keyspace_id,
+                            table_id);
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
                         // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
                         dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
@@ -251,6 +254,7 @@ void KVStore::onSnapshot(
         auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
 
+        // check that old_region is not changed and no new applied raft-log during applying snapshot.
         if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
         {
             throw Exception(
@@ -264,7 +268,7 @@ void KVStore::onSnapshot(
         {
             LOG_DEBUG(log, "previous {}, new {}", old_region->getDebugString(), new_region->getDebugString());
             {
-                // remove index first
+                // remove index for key_range -> region_id first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
                 {
                     auto manage_lock = genRegionMgrWriteLock(task_lock);
@@ -275,7 +279,7 @@ void KVStore::onSnapshot(
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
             {
-                // add index
+                // add index for new_region
                 auto manage_lock = genRegionMgrWriteLock(task_lock);
                 manage_lock.index.add(new_region);
             }
@@ -500,11 +504,8 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_INFO(
-        log,
-        "Finish apply snapshot, cost={:.3f}s new_region={}",
-        watch.elapsedSeconds(),
-        new_region->toString(true));
+    // `new_region` may change in the previous function, just log the region_id down
+    LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
 }
 
 template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(

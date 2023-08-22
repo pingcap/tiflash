@@ -1090,20 +1090,31 @@ try
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
+
     // In this test we only deal with meta though,
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+
+    TableID table_id = 1;
+    auto region_id = 19;
+    auto region = makeRegion(
+        region_id,
+        RecordKVFormat::genKey(table_id, 50),
+        RecordKVFormat::genKey(table_id, 60),
+        kvs.getProxyHelper());
+
     {
         // Prepare a region with some kvs
-        auto region_id = 19;
-        auto region
-            = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60), kvs.getProxyHelper());
         auto region_id_str = std::to_string(region_id);
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
         {
-            default_kv_list.emplace_back(RecordKVFormat::genKey(1, 55, 5).getStr(), TiKVValue("value1").getStr());
-            default_kv_list.emplace_back(RecordKVFormat::genKey(1, 58, 5).getStr(), TiKVValue("value2").getStr());
+            default_kv_list.emplace_back(
+                RecordKVFormat::genKey(table_id, 55, 5).getStr(),
+                TiKVValue("value1").getStr());
+            default_kv_list.emplace_back(
+                RecordKVFormat::genKey(table_id, 58, 5).getStr(),
+                TiKVValue("value2").getStr());
         }
         mmp[MockSSTReader::Key{region_id_str, ColumnFamilyType::Default}] = std::move(default_kv_list);
         std::vector<SSTView> sst_views;
@@ -1122,7 +1133,9 @@ try
             std::nullopt,
             ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
+    }
 
+    {
         // Will reject a snapshot with smaller index.
         try
         {
@@ -1150,8 +1163,31 @@ try
     }
 
     {
+        // With larger index, accept and replace the existing region
+        RegionBench::handleApplySnapshot(
+            kvs,
+            region->cloneMetaRegion(),
+            2,
+            {}, // empty snap files
+            1024, // larger index
+            5,
+            std::nullopt,
+            ctx.getTMTContext());
+        ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(1024), true);
+    }
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ApplySnapshotOverlap)
+try
+{
+    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore & kvs = getKVS();
+
+    const TableID table_id = 55;
+    {
         // Snapshot will be rejected if region overlaps with existing Region.
-        const TableID table_id = 55;
         {
             // create an empty region 22, range=[50,100)
             auto region = makeRegion(
@@ -1195,8 +1231,11 @@ try
 
         try
         {
-            auto region
-                = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100), kvs.getProxyHelper());
+            auto region = makeRegion(
+                20,
+                RecordKVFormat::genKey(table_id, 50),
+                RecordKVFormat::genKey(table_id, 100),
+                kvs.getProxyHelper());
             // preHandleSnapshotToFiles will assert proxy_ptr is not null.
             auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
             proxy_helper->proxy_ptr.inner = nullptr;
@@ -1218,11 +1257,14 @@ try
             s.set_state(::raft_serverpb::PeerState::Tombstone);
             s;
         }));
-        auto region
-            = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100), kvs.getProxyHelper());
-        auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
+        auto region = makeRegion(
+            20,
+            RecordKVFormat::genKey(table_id, 50),
+            RecordKVFormat::genKey(table_id, 100),
+            kvs.getProxyHelper());
+        auto ingest_files = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
         kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
-            RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)},
+            RegionPtrWithSnapshotFiles{region, std::move(ingest_files)},
             ctx.getTMTContext()); // overlap, tombstone, remove previous one
 
         auto state = proxy_helper->getRegionLocalState(22);
