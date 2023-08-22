@@ -24,7 +24,7 @@ enum class AutoSpillStatus
 {
     /// NO_NEED_AUTO_SPILL means auto spill is not needed or current auto spill already finished
     NO_NEED_AUTO_SPILL,
-    /// WAI_SPILL_FINISH means the operator is aware that it needs spill, but spill does not finish yet
+    /// WAIT_SPILL_FINISH means the operator is aware that it needs spill, but spill does not finish yet
     WAIT_SPILL_FINISH,
     /// NEED_AUTO_SPILL means to mark the operator to spill, the operator itself may not aware that it needs spill yet
     NEED_AUTO_SPILL,
