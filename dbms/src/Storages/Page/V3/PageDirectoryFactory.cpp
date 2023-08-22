@@ -346,6 +346,10 @@ void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WAL
 {
     DataFileIdSet data_file_ids;
     auto checkpoint_snap_seq = reader->getSnapSeqForCheckpoint();
+    // make sure the max sequence is larger than the checkpoint sequence
+    if (max_applied_ver.sequence < checkpoint_snap_seq)
+        max_applied_ver = PageVersion(checkpoint_snap_seq, 0);
+
     while (reader->remained())
     {
         auto [from_checkpoint, record] = reader->next();
