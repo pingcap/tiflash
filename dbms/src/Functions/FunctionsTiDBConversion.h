@@ -134,7 +134,7 @@ struct TiDBConvertToString
         {
             /// cast string as string
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * data_from = &col_from_string->getChars();
             const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
 
@@ -537,7 +537,7 @@ struct TiDBConvertToInteger
         {
             /// cast string as int
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
@@ -640,7 +640,7 @@ struct TiDBConvertToFloat
         Float64 max_f,
         const Context & context)
     {
-        Float64 float_value = static_cast<Float64>(value);
+        auto float_value = static_cast<Float64>(value);
         return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
     }
 
@@ -804,7 +804,7 @@ struct TiDBConvertToFloat
         {
             /// cast string as real
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
@@ -1278,7 +1278,7 @@ struct TiDBConvertToDecimal
         {
             /// cast string as decimal
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
@@ -1415,7 +1415,7 @@ public:
         {
             // cast string as time
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
-            const ColumnString * col_from = checkAndGetColumn<ColumnString>(col_with_type_and_name.column.get());
+            const auto * col_from = checkAndGetColumn<ColumnString>(col_with_type_and_name.column.get());
             const ColumnString::Chars_t * chars = &col_from->getChars();
             const ColumnString::Offsets * offsets = &col_from->getOffsets();
 
