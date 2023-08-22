@@ -36,7 +36,6 @@ DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
     {
         GET_METRIC(tiflash_rn_delta_index_cache, type_hit).Increment();
     }
-    CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, cache.weight());
     return value->delta_index;
 }
 
@@ -49,6 +48,7 @@ void RNDeltaIndexCache::setDeltaIndex(const DeltaIndexPtr & delta_index)
         if (auto value = cache.get(*key); value)
         {
             cache.set(*key, std::make_shared<CacheValue>(delta_index, delta_index->getBytes()));
+            CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, cache.weight());
         }
     }
 }
