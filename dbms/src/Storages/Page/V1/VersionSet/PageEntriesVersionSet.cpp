@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet:
     return listAllLiveFiles(lock);
 }
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
-PageEntriesVersionSet::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet::listAllLiveFiles(
+    const std::unique_lock<std::shared_mutex> & lock) const
 {
     (void)lock;
     std::set<PageFileIdAndLevel> live_files;

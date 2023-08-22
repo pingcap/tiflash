@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,19 +17,21 @@
 
 namespace DB::DM
 {
-DMFileBlockOutputStream::DMFileBlockOutputStream(const Context & context,
-                                                 const DMFilePtr & dmfile,
-                                                 const ColumnDefines & write_columns)
+DMFileBlockOutputStream::DMFileBlockOutputStream(
+    const Context & context,
+    const DMFilePtr & dmfile,
+    const ColumnDefines & write_columns)
     : writer(
         dmfile,
         write_columns,
         context.getFileProvider(),
         context.getWriteLimiter(),
         DMFileWriter::Options{
-            CompressionSettings(context.getSettingsRef().dt_compression_method, context.getSettingsRef().dt_compression_level),
+            CompressionSettings(
+                context.getSettingsRef().dt_compression_method,
+                context.getSettingsRef().dt_compression_level),
             context.getSettingsRef().min_compress_block_size,
             context.getSettingsRef().max_compress_block_size})
-{
-}
+{}
 
 } // namespace DB::DM

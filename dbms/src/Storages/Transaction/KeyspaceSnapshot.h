@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@ struct KeyspaceScanner : public pingcap::kv::Scanner
     KeyspaceScanner(Base scanner_, bool need_cut_)
         : Base(scanner_)
         , need_cut(need_cut_)
-    {
-    }
+    {}
 
     std::string key();
 

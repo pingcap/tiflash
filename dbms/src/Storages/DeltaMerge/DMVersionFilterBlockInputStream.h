@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,17 +44,17 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     constexpr static const char * COMPACT_FILTER_NAME = "mode=COMPACT";
 
 public:
-    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
-                                    const ColumnDefines & read_columns,
-                                    UInt64 version_limit_,
-                                    bool is_common_handle_,
-                                    const String & tracing_id = "")
+    DMVersionFilterBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const ColumnDefines & read_columns,
+        UInt64 version_limit_,
+        bool is_common_handle_,
+        const String & tracing_id = "")
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
         , select_by_colid_action(input->getHeader(), header)
-        , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME),
-                          tracing_id))
+        , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME), tracing_id))
     {
         children.push_back(input);
 
@@ -67,19 +67,20 @@ public:
 
     ~DMVersionFilterBlockInputStream() override
     {
-        LOG_DEBUG(log,
-                  "Total rows: {}, pass: {:.2f}%"
-                  ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
-                  ", not clean: {:.2f}%, is deleted: {:.2f}%, effective: {:.2f}%"
-                  ", start_ts: {}",
-                  total_rows,
-                  passed_rows * 100.0 / total_rows,
-                  complete_passed * 100.0 / total_blocks,
-                  complete_not_passed * 100.0 / total_blocks,
-                  not_clean_rows * 100.0 / passed_rows,
-                  deleted_rows * 100.0 / passed_rows,
-                  effective_num_rows * 100.0 / passed_rows,
-                  version_limit);
+        LOG_DEBUG(
+            log,
+            "Total rows: {}, pass: {:.2f}%"
+            ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
+            ", not clean: {:.2f}%, is deleted: {:.2f}%, effective: {:.2f}%"
+            ", start_ts: {}",
+            total_rows,
+            passed_rows * 100.0 / total_rows,
+            complete_passed * 100.0 / total_blocks,
+            complete_not_passed * 100.0 / total_blocks,
+            not_clean_rows * 100.0 / passed_rows,
+            deleted_rows * 100.0 / passed_rows,
+            effective_num_rows * 100.0 / passed_rows,
+            version_limit);
     }
 
     void readPrefix() override;
@@ -111,17 +112,20 @@ private:
 #define deleted (*delete_col_data)[i]
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
-            filter[i] = !deleted && cur_version <= version_limit && (compare(cur_handle, next_handle) != 0 || next_version > version_limit);
+            filter[i] = !deleted && cur_version <= version_limit
+                && (compare(cur_handle, next_handle) != 0 || next_version > version_limit);
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
-            filter[i]
-                = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
+            filter[i] = cur_version >= version_limit
+                || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
             is_deleted[i] = filter[i] && deleted;
             effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
             if (filter[i])
-                gc_hint_version = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
+                gc_hint_version = std::min(
+                    gc_hint_version,
+                    calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
         }
         else
         {
@@ -146,7 +150,9 @@ private:
         }
         else
         {
-            rowkey_column = std::make_unique<RowKeyColumnContainer>(raw_block.getByPosition(handle_col_pos).column, is_common_handle);
+            rowkey_column = std::make_unique<RowKeyColumnContainer>(
+                raw_block.getByPosition(handle_col_pos).column,
+                is_common_handle);
             version_col_data = getColumnVectorDataPtr<UInt64>(raw_block, version_col_pos);
             delete_col_data = getColumnVectorDataPtr<UInt8>(raw_block, delete_col_pos);
             return true;

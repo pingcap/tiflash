@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -446,7 +446,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     if (!result)
     {
         throw TiFlashException(
-            fmt::format("Failed to make MPP Task {} public, reason: {}", id.toString(), reason),
+            fmt::format("Failed to make MPP Task {} public: {}", id.toString(), reason),
             Errors::Coprocessor::BadRequest);
     }
 

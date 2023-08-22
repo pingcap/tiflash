@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,11 @@ public:
     /** with_names - output in the first line a header with column names
       * with_types - output the next line header with the names of the types
       */
-    TabSeparatedRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool with_names_ = false, bool with_types_ = false);
+    TabSeparatedRowOutputStream(
+        WriteBuffer & ostr_,
+        const Block & sample_,
+        bool with_names_ = false,
+        bool with_types_ = false);
 
     void writeField(const IColumn & column, const IDataType & type, size_t row_num) override;
     void writeFieldDelimiter() override;

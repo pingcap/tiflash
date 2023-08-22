@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,20 +33,23 @@ public:
     {
         if (!mock_getter and !mock_mapper)
         {
-            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false, false>>(cluster, keyspace_id));
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(
+                std::make_shared<TiDBSchemaSyncer<false, false>>(cluster, keyspace_id));
             schema_syncers[keyspace_id] = schema_syncer;
             return schema_syncer;
         }
         else if (mock_getter and mock_mapper)
         {
             // for mock test
-            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(
+                std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
             schema_syncers[keyspace_id] = schema_syncer;
             return schema_syncer;
         }
 
         // for unit test
-        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, false>>(cluster, keyspace_id));
+        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(
+            std::make_shared<TiDBSchemaSyncer<true, false>>(cluster, keyspace_id));
         schema_syncers[keyspace_id] = schema_syncer;
         return schema_syncer;
     }

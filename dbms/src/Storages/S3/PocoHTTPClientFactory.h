@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,12 +31,16 @@ public:
     explicit PocoHTTPClientFactory(const PocoHTTPClientConfiguration & http_cfg);
 
     ~PocoHTTPClientFactory() override = default;
-    [[nodiscard]] std::shared_ptr<Aws::Http::HttpClient>
-    CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const override;
-    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest>
-    CreateHttpRequest(const Aws::String & uri, Aws::Http::HttpMethod method, const Aws::IOStreamFactory & streamFactory) const override;
-    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest>
-    CreateHttpRequest(const Aws::Http::URI & uri, Aws::Http::HttpMethod method, const Aws::IOStreamFactory & streamFactory) const override;
+    [[nodiscard]] std::shared_ptr<Aws::Http::HttpClient> CreateHttpClient(
+        const Aws::Client::ClientConfiguration & clientConfiguration) const override;
+    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest> CreateHttpRequest(
+        const Aws::String & uri,
+        Aws::Http::HttpMethod method,
+        const Aws::IOStreamFactory & streamFactory) const override;
+    [[nodiscard]] std::shared_ptr<Aws::Http::HttpRequest> CreateHttpRequest(
+        const Aws::Http::URI & uri,
+        Aws::Http::HttpMethod method,
+        const Aws::IOStreamFactory & streamFactory) const override;
 
 private:
     const Aws::IOStreamFactory null_factory = []() {

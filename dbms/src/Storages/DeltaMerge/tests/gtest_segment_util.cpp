@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,13 +133,13 @@ template <typename E, typename A>
     {
         if (expected[i] != actual[i])
         {
-            return ::testing::AssertionFailure()
-                << fmt::format("Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
-                               i,
-                               expected[i],
-                               actual[i],
-                               std::vector<E>(expected, expected + size),
-                               std::vector<A>(actual, actual + size));
+            return ::testing::AssertionFailure() << fmt::format(
+                       "Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
+                       i,
+                       expected[i],
+                       actual[i],
+                       std::vector<E>(expected, expected + size),
+                       std::vector<A>(actual, actual + size));
         }
     }
     return ::testing::AssertionSuccess();

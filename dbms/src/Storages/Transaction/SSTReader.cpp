@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,12 @@ bool MonoSSTReader::remained() const
         {
             if (!tail_checked)
             {
-                LOG_INFO(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), magic_enum::enum_name(type));
+                LOG_INFO(
+                    log,
+                    "Observed extra data in tablet snapshot {} beyond {}, cf {}",
+                    Redact::keyToDebugString(key.data(), key.size()),
+                    r.second.key.toDebugString(),
+                    magic_enum::enum_name(type));
                 tail_checked = true;
             }
             return false;
@@ -70,10 +75,15 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     {
         auto && r = range->comparableKeys();
         auto start = r.first.key.toString();
-        LOG_INFO(log, "Seek cf {} to {}", magic_enum::enum_name(type), Redact::keyToDebugString(start.data(), start.size()));
+        LOG_INFO(
+            log,
+            "Seek cf {} to {}",
+            magic_enum::enum_name(type),
+            Redact::keyToDebugString(start.data(), start.size()));
         if (!start.empty())
         {
-            proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
+            proxy_helper->sst_reader_interfaces
+                .fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
         }
     }
 }

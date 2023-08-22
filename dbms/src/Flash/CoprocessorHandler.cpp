@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,12 +151,16 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             else
                 kind = DAGRequestKind::Cop;
 
+            const String & resource_group_name
+                = cop_request->context().resource_control_context().resource_group_name();
+
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 kind,
+                resource_group_name,
                 Logger::get(msg));
             cop_context.db_context.setDAGContext(&dag_context);
 

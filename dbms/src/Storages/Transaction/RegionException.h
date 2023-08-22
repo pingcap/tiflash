@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,9 +41,7 @@ public:
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)
-        : Exception(fmt::format(
-            "Region error {}",
-            magic_enum::enum_name(status_)))
+        : Exception(fmt::format("Region error {}", magic_enum::enum_name(status_)))
         , unavailable_region(std::move(unavailable_region_))
         , status(status_)
     {}

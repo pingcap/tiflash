@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,8 @@ using ColId = DB::ColumnID;
 using PackId = size_t;
 using PackRange = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
-class ColumnCache : public std::enable_shared_from_this<ColumnCache>
+class ColumnCache
+    : public std::enable_shared_from_this<ColumnCache>
     , private boost::noncopyable
 {
 public:

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,8 +43,7 @@ namespace DM
 {
 namespace tests
 {
-class ColumnFileTest
-    : public DB::base::TiFlashStorageTestBasic
+class ColumnFileTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     ColumnFileTest() = default;
@@ -56,7 +55,8 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
-        path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
+        path_pool
+            = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
         column_cache = std::make_shared<ColumnCache>();
         dm_context = std::make_unique<DMContext>( //
@@ -100,7 +100,11 @@ try
         stream->writePrefix();
         for (size_t i = 0; i < batch_num; i += 1)
         {
-            Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write_per_batch * i, num_rows_write_per_batch * (i + 1), false, 100);
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_rows_write_per_batch * i,
+                num_rows_write_per_batch * (i + 1),
+                false,
+                100);
             stream->write(block, {});
         }
         stream->writeSuffix();
@@ -192,10 +196,15 @@ try
 
     {
         auto read_buff = buff.tryGetReadBuffer();
-        auto column_file_persisteds = deserializeSavedColumnFilesInV3Format(dmContext(), RowKeyRange::newAll(false, 1), *read_buff);
+        auto column_file_persisteds
+            = deserializeSavedColumnFilesInV3Format(dmContext(), RowKeyRange::newAll(false, 1), *read_buff);
         ASSERT_EQ(column_file_persisteds.size(), 5);
-        ASSERT_EQ(column_file_persisteds[0]->tryToTinyFile()->getSchema(), column_file_persisteds[2]->tryToTinyFile()->getSchema());
-        ASSERT_EQ(column_file_persisteds[2]->tryToTinyFile()->getSchema(), column_file_persisteds[4]->tryToTinyFile()->getSchema());
+        ASSERT_EQ(
+            column_file_persisteds[0]->tryToTinyFile()->getSchema(),
+            column_file_persisteds[2]->tryToTinyFile()->getSchema());
+        ASSERT_EQ(
+            column_file_persisteds[2]->tryToTinyFile()->getSchema(),
+            column_file_persisteds[4]->tryToTinyFile()->getSchema());
     }
 }
 CATCH
@@ -236,7 +245,8 @@ try
         // Only read with a column that is not exist in ColumnFileTiny
         ColumnID added_colid = 100;
         String added_colname = "added_col";
-        auto columns_to_read = std::make_shared<ColumnDefines>(ColumnDefines{ColumnDefine(added_colid, added_colname, typeFromString("Int64"))});
+        auto columns_to_read = std::make_shared<ColumnDefines>(
+            ColumnDefines{ColumnDefine(added_colid, added_colname, typeFromString("Int64"))});
         auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
         auto block_read = reader->readNextBlock();
         ASSERT_COLUMNS_EQ_R(

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -198,6 +199,14 @@ public:
         BG_GC,
     };
 
+    enum class InputType
+    {
+        // We are not handling data from raft, maybe it's from a scheduled background service or a replicated dm snapshot.
+        NotRaft,
+        RaftLog,
+        RaftSSTAndSnap,
+    };
+
     enum TaskType
     {
         Split,
@@ -205,6 +214,7 @@ public:
         Compact,
         Flush,
         PlaceIndex,
+        FlushDTAndKVStore,
     };
 
     struct BackgroundTask
@@ -240,36 +250,35 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, const LoggerPtr & log_);
+        std::pair<bool, bool> tryAddTask(
+            const BackgroundTask & task,
+            const ThreadType & whom,
+            size_t max_task_num,
+            const LoggerPtr & log_);
 
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
-    DeltaMergeStore(Context & db_context, //
-                    bool data_path_contains_database_name,
-                    const String & db_name,
-                    const String & table_name_,
-                    KeyspaceID keyspace_id_,
-                    TableID physical_table_id_,
-                    bool has_replica,
-                    const ColumnDefines & columns,
-                    const ColumnDefine & handle,
-                    bool is_common_handle_,
-                    size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS,
-                    ThreadPool * thread_pool = nullptr);
+    DeltaMergeStore(
+        Context & db_context, //
+        bool data_path_contains_database_name,
+        const String & db_name,
+        const String & table_name_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool has_replica,
+        const ColumnDefines & columns,
+        const ColumnDefine & handle,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const Settings & settings_ = EMPTY_SETTINGS,
+        ThreadPool * thread_pool = nullptr);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const
-    {
-        return db_name;
-    }
-    const String & getTableName() const
-    {
-        return table_name;
-    }
+    const String & getDatabaseName() const { return db_name; }
+    const String & getTableName() const { return table_name; }
 
     void rename(String new_path, String new_database_name, String new_table_name);
 
@@ -282,7 +291,7 @@ public:
 
     static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
-    void write(const Context & db_context, const DB::Settings & db_settings, Block & block);
+    DM::WriteResult write(const Context & db_context, const DB::Settings & db_settings, Block & block);
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
@@ -291,26 +300,29 @@ public:
     void preIngestFile(const String & parent_path, PageIdU64 file_id, size_t file_size);
     void removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist);
 
-    void cleanPreIngestFiles(const Context & db_context,
-                             const DB::Settings & db_settings,
-                             const std::vector<DM::ExternalDTFileInfo> & external_files);
+    void cleanPreIngestFiles(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const std::vector<DM::ExternalDTFileInfo> & external_files);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     /// Return the 'ingested bytes'.
-    UInt64 ingestFiles(const DMContextPtr & dm_context, //
-                       const RowKeyRange & range,
-                       const std::vector<DM::ExternalDTFileInfo> & external_files,
-                       bool clear_data_in_range);
+    UInt64 ingestFiles(
+        const DMContextPtr & dm_context, //
+        const RowKeyRange & range,
+        const std::vector<DM::ExternalDTFileInfo> & external_files,
+        bool clear_data_in_range);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
     /// Return the 'ingtested bytes'.
-    UInt64 ingestFiles(const Context & db_context, //
-                       const DB::Settings & db_settings,
-                       const RowKeyRange & range,
-                       const std::vector<DM::ExternalDTFileInfo> & external_files,
-                       bool clear_data_in_range)
+    UInt64 ingestFiles(
+        const Context & db_context, //
+        const DB::Settings & db_settings,
+        const RowKeyRange & range,
+        const std::vector<DM::ExternalDTFileInfo> & external_files,
+        bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestFiles(dm_context, range, external_files, clear_data_in_range);
@@ -327,27 +339,30 @@ public:
         const RowKeyRange & ingest_range,
         const SegmentPtr & segment_to_ingest);
 
-    void ingestSegmentsFromCheckpointInfo(const DMContextPtr & dm_context,
-                                          const DM::RowKeyRange & range,
-                                          CheckpointInfoPtr checkpoint_info);
+    void ingestSegmentsFromCheckpointInfo(
+        const DMContextPtr & dm_context,
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info);
 
-    void ingestSegmentsFromCheckpointInfo(const Context & db_context,
-                                          const DB::Settings & db_settings,
-                                          const DM::RowKeyRange & range,
-                                          CheckpointInfoPtr checkpoint_info)
+    void ingestSegmentsFromCheckpointInfo(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
     /// Read all rows without MVCC filtering
-    BlockInputStreams readRaw(const Context & db_context,
-                              const DB::Settings & db_settings,
-                              const ColumnDefines & columns_to_read,
-                              size_t num_streams,
-                              bool keep_order,
-                              const SegmentIdSet & read_segments = {},
-                              size_t extra_table_id_index = InvalidColumnID);
+    BlockInputStreams readRaw(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const ColumnDefines & columns_to_read,
+        size_t num_streams,
+        bool keep_order,
+        const SegmentIdSet & read_segments = {},
+        size_t extra_table_id_index = InvalidColumnID);
 
     /// Read all rows without MVCC filtering
     void readRaw(
@@ -365,22 +380,23 @@ public:
     ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
     ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
     /// `sorted_ranges` should be already sorted and merged.
-    BlockInputStreams read(const Context & db_context,
-                           const DB::Settings & db_settings,
-                           const ColumnDefines & columns_to_read,
-                           const RowKeyRanges & sorted_ranges,
-                           size_t num_streams,
-                           UInt64 max_version,
-                           const PushDownFilterPtr & filter,
-                           const RuntimeFilteList & runtime_filter_list,
-                           const int rf_max_wait_time_ms,
-                           const String & tracing_id,
-                           bool keep_order,
-                           bool is_fast_scan = false,
-                           size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet & read_segments = {},
-                           size_t extra_table_id_index = InvalidColumnID,
-                           ScanContextPtr scan_context = nullptr);
+    BlockInputStreams read(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & sorted_ranges,
+        size_t num_streams,
+        UInt64 max_version,
+        const PushDownFilterPtr & filter,
+        const RuntimeFilteList & runtime_filter_list,
+        const int rf_max_wait_time_ms,
+        const String & tracing_id,
+        bool keep_order,
+        bool is_fast_scan = false,
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
+        const SegmentIdSet & read_segments = {},
+        size_t extra_table_id_index = InvalidColumnID,
+        ScanContextPtr scan_context = nullptr);
 
 
     /// Read rows in two modes:
@@ -407,8 +423,7 @@ public:
         size_t extra_table_id_index = InvalidColumnID,
         ScanContextPtr scan_context = nullptr);
 
-    Remote::DisaggPhysicalTableReadSnapshotPtr
-    writeNodeBuildRemoteReadSnapshot(
+    Remote::DisaggPhysicalTableReadSnapshotPtr writeNodeBuildRemoteReadSnapshot(
         const Context & db_context,
         const DB::Settings & db_settings,
         const RowKeyRanges & sorted_ranges,
@@ -452,7 +467,12 @@ public:
      * Try to merge delta in the current thread as the GC operation.
      * This function may be blocking, and should be called in the GC background thread.
      */
-    SegmentPtr gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point);
+    SegmentPtr gcTrySegmentMergeDelta(
+        const DMContextPtr & dm_context,
+        const SegmentPtr & segment,
+        const SegmentPtr & prev_segment,
+        const SegmentPtr & next_segment,
+        DB::Timestamp gc_safe_point);
 
     /**
      * Starting from the given base segment, find continuous segments that could be merged.
@@ -471,23 +491,11 @@ public:
         std::shared_lock lock(read_write_mutex);
         return store_columns;
     }
-    const ColumnDefines & getTableColumns() const
-    {
-        return original_table_columns;
-    }
-    const ColumnDefine & getHandle() const
-    {
-        return original_table_handle_define;
-    }
+    const ColumnDefines & getTableColumns() const { return original_table_columns; }
+    const ColumnDefine & getHandle() const { return original_table_handle_define; }
     BlockPtr getHeader() const;
-    const Settings & getSettings() const
-    {
-        return settings;
-    }
-    DataTypePtr getPKDataType() const
-    {
-        return original_table_handle_define.type;
-    }
+    const Settings & getSettings() const { return settings; }
+    DataTypePtr getPKDataType() const { return original_table_handle_define.type; }
     SortDescription getPrimarySortDescription() const;
 
     void check(const Context & db_context);
@@ -495,16 +503,14 @@ public:
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
 
-    bool isCommonHandle() const
-    {
-        return is_common_handle;
-    }
-    size_t getRowKeyColumnSize() const
-    {
-        return rowkey_column_size;
-    }
+    bool isCommonHandle() const { return is_common_handle; }
+    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
 
-    static ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter);
+    static ReadMode getReadMode(
+        const Context & db_context,
+        bool is_fast_scan,
+        bool keep_order,
+        const PushDownFilterPtr & filter);
 
 public:
     /// Methods mainly used by region split.
@@ -516,12 +522,13 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", ScanContextPtr scan_context = nullptr);
+    DMContextPtr newDMContext(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const String & tracing_id = "",
+        ScanContextPtr scan_context = nullptr);
 
-    static bool pkIsHandle(const ColumnDefine & handle_define)
-    {
-        return handle_define.id != EXTRA_HANDLE_COLUMN_ID;
-    }
+    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     /// Try to stall the writing. It will suspend the current thread if flow control is necessary.
     /// There are roughly two flow control mechanisms:
@@ -531,16 +538,36 @@ private:
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
-    /**
-     * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
-     * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
-     * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
-     *
-     * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
-     * A `thread_type` should be specified indicating the type of the thread calling this function.
-     * Depend on the thread type, the "update" to do may be varied.
-     */
-    void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
+    /// Should be called after every write into DeltaMergeStore.
+    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of releated regions,
+    /// by returning a non-empty DM::WriteResult.
+    // Deferencing `Iter` can get a pointer to a Segment.
+    template <typename Iter>
+    DM::WriteResult checkSegmentsUpdateForKVStore(
+        const DMContextPtr & context,
+        Iter begin,
+        Iter end,
+        ThreadType thread_type,
+        InputType input_type)
+    {
+        DM::WriteResult result = std::nullopt;
+        std::vector<RowKeyRange> ranges;
+        if (thread_type != ThreadType::Write)
+            return result;
+        for (auto it = begin; it != end; ++it)
+        {
+            if (checkSegmentUpdate(context, *it, thread_type, input_type))
+            {
+                ranges.push_back((*it)->getRowKeyRange());
+            }
+        }
+        // TODO We can try merge ranges here.
+        if (!ranges.empty())
+        {
+            result = RaftWriteResult{std::move(ranges), keyspace_id, physical_table_id};
+        }
+        return result;
+    }
 
     enum class SegmentSplitReason
     {
@@ -580,7 +607,12 @@ private:
      *
      * When `opt_split_at` is not specified, this function will try to find a mid point for splitting, and may lead to failures.
      */
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
+    SegmentPair segmentSplit(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        SegmentSplitReason reason,
+        std::optional<RowKeyValue> opt_split_at = std::nullopt,
+        SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
 
     enum class SegmentMergeReason
     {
@@ -593,7 +625,10 @@ private:
      * Fail if given segments are not continuous or not valid.
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
-    SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason);
+    SegmentPtr segmentMerge(
+        DMContext & dm_context,
+        const std::vector<SegmentPtr> & ordered_segments,
+        SegmentMergeReason reason);
 
     enum class MergeDeltaReason
     {
@@ -697,12 +732,30 @@ private:
     void restoreStableFilesFromLocal() const;
     void removeLocalStableFilesIfDisagg() const;
 
-    SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
-                                          const RowKeyRanges & sorted_ranges,
-                                          size_t expected_tasks_count = 1,
-                                          const SegmentIdSet & read_segments = {},
-                                          bool try_split_task = true);
+    SegmentReadTasks getReadTasksByRanges(
+        DMContext & dm_context,
+        const RowKeyRanges & sorted_ranges,
+        size_t expected_tasks_count = 1,
+        const SegmentIdSet & read_segments = {},
+        bool try_split_task = true);
 
+private:
+    /**
+     * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
+     * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
+     * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
+     *
+     * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
+     * A `thread_type` should be specified indicating the type of the thread calling this function.
+     * Depend on the thread type, the "update" to do may be varied.
+     * 
+     * It returns a bool which indicates whether a flush of KVStore is recommended.
+     */
+    bool checkSegmentUpdate(
+        const DMContextPtr & context,
+        const SegmentPtr & segment,
+        ThreadType thread_type,
+        InputType input_type);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -712,7 +765,10 @@ public:
     String getLogTracingId(const DMContext & dm_ctx);
     // Returns segment that contains start_key and whether 'segments' is empty.
     std::pair<SegmentPtr, bool> getSegmentByStartKeyInner(const RowKeyValueRef & start_key);
-    std::pair<SegmentPtr, bool> getSegmentByStartKey(const RowKeyValueRef & start_key, bool create_if_empty, bool throw_if_notfound);
+    std::pair<SegmentPtr, bool> getSegmentByStartKey(
+        const RowKeyValueRef & start_key,
+        bool create_if_empty,
+        bool throw_if_notfound);
     void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
 
     Context & global_context;

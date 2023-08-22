@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,11 @@ public:
     }
 
     static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr, bool enable_colors = true);
-    static void setUpTestContext(Context & context, DAGContext * dag_context, MockStorage * mock_storage, const TestType & test_type);
+    static void setUpTestContext(
+        Context & context,
+        DAGContext * dag_context,
+        MockStorage * mock_storage,
+        const TestType & test_type);
 
     // If you want to run these tests, you should set this envrionment variablle
     // For example:
@@ -96,8 +100,15 @@ public:
 
     static FileProviderPtr getDefaultFileProvider();
 
-    static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
-    static void addGlobalContext(const DB::Settings & settings, Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
+    static void initializeGlobalContext(
+        Strings testdata_path = {},
+        PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3,
+        uint64_t bg_thread_count = 2);
+    static void addGlobalContext(
+        const DB::Settings & settings,
+        Strings testdata_path = {},
+        PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3,
+        uint64_t bg_thread_count = 2);
     static Context & getGlobalContext() { return *global_contexts[0]; }
     static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
     static int globalContextSize() { return global_contexts.size(); }

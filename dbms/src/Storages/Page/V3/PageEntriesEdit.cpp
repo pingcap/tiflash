@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,9 +81,8 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
         auto sz = proto_edit.entry_fields_offset_size();
         for (int i = 0; i < sz; ++i)
         {
-            rec.entry.field_offsets.emplace_back(std::make_pair(
-                proto_edit.entry_fields_offset(i),
-                proto_edit.entry_fields_checksum(i)));
+            rec.entry.field_offsets.emplace_back(
+                std::make_pair(proto_edit.entry_fields_offset(i), proto_edit.entry_fields_checksum(i)));
         }
         // Note: rec.entry.* is untouched, leaving zero value.
         // We need to take care when restoring the PS instance.

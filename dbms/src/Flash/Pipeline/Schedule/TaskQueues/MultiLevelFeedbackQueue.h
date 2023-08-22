@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,9 +114,11 @@ public:
 
     const UnitQueueInfo & getUnitQueueInfo(size_t level);
 
-    void cancel(const String & query_id) override;
+    void cancel(const String & query_id, const String & resource_group_name) override;
 
 public:
+    void collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id);
+
     static constexpr size_t QUEUE_SIZE = 8;
 
     // The time slice of the i-th level is (i+1)*LEVEL_TIME_SLICE_BASE ns,

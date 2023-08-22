@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,21 +68,31 @@ struct AlterCommand
     static bool namesEqual(const String & name_without_dot, const DB::NameAndTypePair & name_type)
     {
         String name_with_dot = name_without_dot + ".";
-        return (name_with_dot == name_type.name.substr(0, name_without_dot.length() + 1) || name_without_dot == name_type.name);
+        return (
+            name_with_dot == name_type.name.substr(0, name_without_dot.length() + 1)
+            || name_without_dot == name_type.name);
     }
 
     /// For MODIFY_COLUMN
     /// find column from `columns` or throw exception
-    NamesAndTypesList::Iterator findColumn(NamesAndTypesList &columns) const;
+    NamesAndTypesList::Iterator findColumn(NamesAndTypesList & columns) const;
 
     void apply(ColumnsDescription & columns_description) const;
 
     AlterCommand() = default;
-    AlterCommand(const Type type, const String & column_name, const DataTypePtr & data_type,
-                 const ColumnDefaultKind default_kind, const ASTPtr & default_expression,
-                 const String & after_column = String{})
-        : type{type}, column_name{column_name}, data_type{data_type}, default_kind{default_kind},
-        default_expression{default_expression}, after_column{after_column}
+    AlterCommand(
+        const Type type,
+        const String & column_name,
+        const DataTypePtr & data_type,
+        const ColumnDefaultKind default_kind,
+        const ASTPtr & default_expression,
+        const String & after_column = String{})
+        : type{type}
+        , column_name{column_name}
+        , data_type{data_type}
+        , default_kind{default_kind}
+        , default_expression{default_expression}
+        , after_column{after_column}
     {}
 };
 
@@ -97,4 +107,4 @@ public:
     void validate(IStorage * table, const Context & context);
 };
 
-}
+} // namespace DB

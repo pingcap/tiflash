@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,8 @@ using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
 
-struct DecodedTiKVKey : std::string
+struct DecodedTiKVKey
+    : std::string
     , private boost::noncopyable
 {
     using Base = std::string;
@@ -156,9 +157,6 @@ namespace std
 template <bool is_key>
 struct hash<DB::StringObject<is_key>>
 {
-    size_t operator()(const DB::StringObject<is_key> & k) const
-    {
-        return std::hash<std::string>()(k);
-    }
+    size_t operator()(const DB::StringObject<is_key> & k) const { return std::hash<std::string>()(k); }
 };
 } // namespace std

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,22 +42,13 @@ public:
         current_version->copyEntries(*old_version);
     }
 
-    ~PageEntriesBuilder()
-    {
-        old_version->release();
-    }
+    ~PageEntriesBuilder() { old_version->release(); }
 
     void apply(const PageEntriesEdit & edit);
 
-    void gcApply(PageEntriesEdit & edit)
-    {
-        gcApplyTemplate(current_version, edit, current_version);
-    }
+    void gcApply(PageEntriesEdit & edit) { gcApplyTemplate(current_version, edit, current_version); }
 
-    PageEntries * build()
-    {
-        return current_version;
-    }
+    PageEntries * build() { return current_version; }
 
 public:
     template <typename OldVersionType, typename VersionType>

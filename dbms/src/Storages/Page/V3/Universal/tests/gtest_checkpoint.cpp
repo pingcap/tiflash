@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,11 @@ public:
         createIfNotExist(path);
         auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        page_storage = UniversalPageStorage::create("test.t", delegator, PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0}, file_provider);
+        page_storage = UniversalPageStorage::create(
+            "test.t",
+            delegator,
+            PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0},
+            file_provider);
         page_storage->restore();
 
         dir = getTemporaryPath() + "/checkpoint_output/";
@@ -652,9 +656,7 @@ try
     }
     {
         auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
-        auto th_cp = std::async([&]() {
-            dumpCheckpoint();
-        });
+        auto th_cp = std::async([&]() { dumpCheckpoint(); });
         sp_before_apply.waitAndPause();
 
         page_storage->gc(/* not_skip */ true);
@@ -725,9 +727,7 @@ try
     }
     {
         auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
-        auto th_cp = std::async([&]() {
-            dumpCheckpoint();
-        });
+        auto th_cp = std::async([&]() { dumpCheckpoint(); });
         sp_before_apply.waitAndPause();
 
         page_storage->gc(/* not_skip */ true);
@@ -882,7 +882,11 @@ try
         batch.putRemoteExternal("9", data_location);
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint(/*upload_success*/ true, /*file_ids_to_compact*/ {}, /*max_data_file_size*/ 1, /*max_edit_records_per_part*/ 1);
+    dumpCheckpoint(
+        /*upload_success*/ true,
+        /*file_ids_to_compact*/ {},
+        /*max_data_file_size*/ 1,
+        /*max_edit_records_per_part*/ 1);
 
     ASSERT_TRUE(Poco::File(dir + "9.manifest").exists());
     auto manifest_file = PosixRandomAccessFile::create(dir + "9.manifest");
@@ -1061,7 +1065,9 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("10", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ(
+            "lock/s2/dat_1_0.lock_s2_1",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
@@ -1071,7 +1077,9 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ(
+            "lock/s2/dat_1_0.lock_s2_1",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
 
@@ -1083,11 +1091,14 @@ try
     }
     StoreID another_store_id = 99;
     const auto ingest_from_data_file = S3::S3Filename::newCheckpointData(another_store_id, 100, 1);
-    const auto ingest_from_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
+    const auto ingest_from_dtfile
+        = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
     {
         // create object on s3 for locking
         S3::uploadEmptyFile(*s3_client, ingest_from_data_file.toFullKey());
-        S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", ingest_from_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
+        S3::uploadEmptyFile(
+            *s3_client,
+            fmt::format("{}/{}", ingest_from_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
 
         UniversalWriteBatch batch;
 
@@ -1127,7 +1138,9 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("10", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ(
+            "lock/s2/dat_1_0.lock_s2_1",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
@@ -1137,21 +1150,29 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("20", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_2_0.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to second CPDataFile
+        ASSERT_EQ(
+            "lock/s2/dat_2_0.lock_s2_2",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to second CPDataFile
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("21", iter->page_id);
-        ASSERT_EQ("lock/s99/dat_100_1.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ(
+            "lock/s99/dat_100_1.lock_s2_2",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
         ASSERT_EQ("22", iter->page_id);
-        ASSERT_EQ("lock/s99/t_50/dmf_999.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to DMFile
+        ASSERT_EQ(
+            "lock/s99/t_50/dmf_999.lock_s2_2",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to DMFile
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ(
+            "lock/s2/dat_1_0.lock_s2_1",
+            *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the second manifest
 
@@ -1196,14 +1217,17 @@ try
         auto & restored_page_directory = new_service->uni_page_storage->page_directory;
         auto snap = restored_page_directory->createSnapshot("");
         // page_id "2" is deleted
-        EXPECT_EQ(restored_page_directory->numPages(), 8) << fmt::format("{}", restored_page_directory->getAllPageIds());
+        EXPECT_EQ(restored_page_directory->numPages(), 8)
+            << fmt::format("{}", restored_page_directory->getAllPageIds());
 
         auto restored_entry = restored_page_directory->getByID("10", snap);
         ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value()); // new version is not persisted to S3
 
         restored_entry = restored_page_directory->getByID("20", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
-        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s2/dat_2_0.lock_s2_2"); // second checkpoint
+        EXPECT_EQ(
+            *restored_entry.second.checkpoint_info.data_location.data_file_id,
+            "lock/s2/dat_2_0.lock_s2_2"); // second checkpoint
         EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
 
         restored_entry = restored_page_directory->getByID("21", snap);
@@ -1228,12 +1252,16 @@ try
 
         restored_entry = restored_page_directory->getByID("31", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
-        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/t_50/dmf_999.lock_s2_3"); // restored from local WAL
+        EXPECT_EQ(
+            *restored_entry.second.checkpoint_info.data_location.data_file_id,
+            "lock/s99/t_50/dmf_999.lock_s2_3"); // restored from local WAL
         EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
 
         restored_entry = restored_page_directory->getByID("32", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
-        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_3"); // restored from local WAL
+        EXPECT_EQ(
+            *restored_entry.second.checkpoint_info.data_location.data_file_id,
+            "lock/s99/dat_100_1.lock_s2_3"); // restored from local WAL
         EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
     }
 }

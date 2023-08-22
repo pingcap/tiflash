@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,11 @@ try
                 if (nullable)
                     actual_test_type = "Nullable(" + actual_test_type + ")";
 
-                column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString(actual_test_type)}, 1, default_field, true);
+                column_info = reverseGetColumnInfo(
+                    NameAndTypePair{name, typeFromString(actual_test_type)},
+                    1,
+                    default_field,
+                    true);
                 ASSERT_EQ(!sign, column_info.hasUnsignedFlag()) << actual_test_type;
                 ASSERT_EQ(!nullable, column_info.hasNotNullFlag()) << actual_test_type;
 

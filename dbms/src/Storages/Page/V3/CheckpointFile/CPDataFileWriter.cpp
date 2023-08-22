@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,10 @@ namespace DB::PS::V3
 
 void CPDataFileWriter::writePrefix(const CheckpointProto::DataFilePrefix & prefix)
 {
-    RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingPrefix, "unexpected write stage {}", magic_enum::enum_name(write_stage));
+    RUNTIME_CHECK_MSG(
+        write_stage == WriteStage::WritingPrefix,
+        "unexpected write stage {}",
+        magic_enum::enum_name(write_stage));
 
     std::string json;
     google::protobuf::util::MessageToJsonString(prefix, &json);
@@ -30,7 +33,10 @@ void CPDataFileWriter::writePrefix(const CheckpointProto::DataFilePrefix & prefi
 
 CheckpointLocation CPDataFileWriter::write(UniversalPageId page_id, PageVersion version, const char * data, size_t n)
 {
-    RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingRecords, "unexpected write stage {}", magic_enum::enum_name(write_stage));
+    RUNTIME_CHECK_MSG(
+        write_stage == WriteStage::WritingRecords,
+        "unexpected write stage {}",
+        magic_enum::enum_name(write_stage));
 
     // Every record is prefixed with the length, so that this data file can be parsed standalone.
     writeIntBinary(n, *file_writer);

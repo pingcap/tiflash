@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,10 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
             [this] { return tmt.getGCManager().work(); },
             false,
             /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
-        LOG_INFO(log, "Start background storage gc worker with interval {} seconds.", global_settings.dt_bg_gc_check_interval);
+        LOG_INFO(
+            log,
+            "Start background storage gc worker with interval {} seconds.",
+            global_settings.dt_bg_gc_check_interval);
     }
 }
 

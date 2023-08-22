@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,10 +48,7 @@ struct UnavailableRegions
         doAdd(id);
     }
 
-    size_t size() const
-    {
-        return ids.size();
-    }
+    size_t size() const { return ids.size(); }
 
     bool empty() const { return size() == 0; }
 
@@ -77,10 +74,7 @@ struct UnavailableRegions
             throw RegionException(std::move(ids), status);
     }
 
-    bool contains(RegionID region_id) const
-    {
-        return ids.count(region_id);
-    }
+    bool contains(RegionID region_id) const { return ids.count(region_id); }
 
 private:
     inline void doAdd(RegionID id) { ids.emplace(id); }
@@ -90,8 +84,7 @@ private:
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND}; // NOLINT
 };
 
-class MvccQueryInfoWrap
-    : boost::noncopyable
+class MvccQueryInfoWrap : boost::noncopyable
 {
     using Base = MvccQueryInfo;
     Base & inner;
@@ -119,18 +112,20 @@ public:
             {
                 if (region == nullptr)
                     continue;
-                regions_query_info_ptr->emplace_back(
-                    RegionQueryInfo{id, region->version(), region->confVer(), logical_table_id, region->getRange()->rawKeys(), {}});
+                regions_query_info_ptr->emplace_back(RegionQueryInfo{
+                    id,
+                    region->version(),
+                    region->confVer(),
+                    logical_table_id,
+                    region->getRange()->rawKeys(),
+                    {}});
             }
         }
     }
     Base * operator->() { return &inner; }
 
     const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_query_info_ptr; }
-    void addReadIndexRes(RegionID region_id, UInt64 read_index)
-    {
-        inner.read_index_res[region_id] = read_index;
-    }
+    void addReadIndexRes(RegionID region_id, UInt64 read_index) { inner.read_index_res[region_id] = read_index; }
     UInt64 getReadIndexRes(RegionID region_id) const
     {
         if (auto it = inner.read_index_res.find(region_id); it != inner.read_index_res.end())
@@ -155,7 +150,9 @@ LearnerReadSnapshot doLearnerRead(
     const LoggerPtr & log)
 {
     assert(log != nullptr);
-    RUNTIME_ASSERT(!(context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler));
+    RUNTIME_ASSERT(
+        !(context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+          && context.getSharedContextDisagg()->use_autoscaler));
 
     auto & tmt = context.getTMTContext();
 
@@ -200,14 +197,16 @@ LearnerReadSnapshot doLearnerRead(
 
         {
             // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
-            auto read_index_tso = mvcc_query_info->read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info->read_tso;
+            auto read_index_tso
+                = mvcc_query_info->read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info->read_tso;
             RegionTable & region_table = tmt.getRegionTable();
             for (size_t region_idx = region_begin_idx; region_idx < num_regions; ++region_idx)
             {
                 const auto & region_to_query = regions_info[region_idx];
                 const RegionID region_id = region_to_query.region_id;
                 // don't stale read in test scenarios.
-                bool can_stale_read = mvcc_query_info->read_tso != std::numeric_limits<uint64_t>::max() && read_index_tso <= region_table.getSelfSafeTS(region_id);
+                bool can_stale_read = mvcc_query_info->read_tso != std::numeric_limits<uint64_t>::max()
+                    && read_index_tso <= region_table.getSelfSafeTS(region_id);
                 if (!can_stale_read)
                 {
                     if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
@@ -319,18 +318,24 @@ LearnerReadSnapshot doLearnerRead(
             }
         }
 
-        auto handle_wait_timeout_region = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id, UInt64 index) {
-            if (!for_batch_cop)
-            {
-                // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
-                unavailable_regions.add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
-                return;
-            }
-            // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
-            throw TiFlashException(Errors::Coprocessor::RegionError, "Region unavailable, region_id={} index={}", region_id, index);
-        };
+        auto handle_wait_timeout_region
+            = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id, UInt64 index) {
+                  if (!for_batch_cop)
+                  {
+                      // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
+                      unavailable_regions.add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
+                      return;
+                  }
+                  // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
+                  throw TiFlashException(
+                      Errors::Coprocessor::RegionError,
+                      "Region unavailable, region_id={} index={}",
+                      region_id,
+                      index);
+              };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
-        for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < num_regions; ++region_idx, ++read_index_res_idx)
+        for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < num_regions;
+             ++region_idx, ++read_index_res_idx)
         {
             const auto & region_to_query = regions_info[region_idx];
 
@@ -346,7 +351,8 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
+                auto [wait_res, time_cost]
+                    = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
                 if (wait_res != WaitIndexResult::Finished)
                 {
                     handle_wait_timeout_region(region_to_query.region_id, index_to_wait);

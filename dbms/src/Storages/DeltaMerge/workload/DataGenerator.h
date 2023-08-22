@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ class TimestampGenerator;
 class DataGenerator
 {
 public:
-    static std::unique_ptr<DataGenerator> create(const WorkloadOptions & opts, const TableInfo & table_info, TimestampGenerator & ts_gen);
+    static std::unique_ptr<DataGenerator> create(
+        const WorkloadOptions & opts,
+        const TableInfo & table_info,
+        TimestampGenerator & ts_gen);
     virtual std::tuple<Block, uint64_t> get(uint64_t key) = 0;
     virtual ~DataGenerator() = default;
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,11 @@ protected:
     std::string getFileName() const override;
 
 public:
-    explicit ReadBufferFromFileDescriptor(int fd_, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
+    explicit ReadBufferFromFileDescriptor(
+        int fd_,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        char * existing_memory = nullptr,
+        size_t alignment = 0)
         : ReadBufferFromFileBase(buf_size, existing_memory, alignment)
         , fd(fd_)
         , pos_in_file(0)
@@ -43,15 +47,9 @@ public:
 
     ReadBufferFromFileDescriptor(ReadBufferFromFileDescriptor &&) = default;
 
-    int getFD() const override
-    {
-        return fd;
-    }
+    int getFD() const override { return fd; }
 
-    off_t getPositionInFile() override
-    {
-        return pos_in_file - (working_buffer.end() - pos);
-    }
+    off_t getPositionInFile() override { return pos_in_file - (working_buffer.end() - pos); }
 
 private:
     /// If 'offset' is small enough to stay in buffer after seek, then true seek in file does not happen.

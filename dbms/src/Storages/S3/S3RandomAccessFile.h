@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,9 +46,7 @@ class S3RandomAccessFile final : public RandomAccessFile
 public:
     static RandomAccessFilePtr create(const String & remote_fname);
 
-    S3RandomAccessFile(
-        std::shared_ptr<TiFlashS3Client> client_ptr_,
-        const String & remote_fname_);
+    S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_);
 
     // Can only seek forward.
     off_t seek(off_t offset, int whence) override;
@@ -62,20 +60,11 @@ public:
         throw Exception("S3RandomAccessFile not support pread", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    int getFd() const override
-    {
-        return -1;
-    }
+    int getFd() const override { return -1; }
 
-    bool isClosed() const override
-    {
-        return is_close;
-    }
+    bool isClosed() const override { return is_close; }
 
-    void close() override
-    {
-        is_close = true;
-    }
+    void close() override { is_close = true; }
 
     struct ReadFileInfo
     {
@@ -86,9 +75,7 @@ public:
     [[nodiscard]] static auto setReadFileInfo(ReadFileInfo && read_file_info_)
     {
         read_file_info = std::move(read_file_info_);
-        return ext::make_scope_guard([]() {
-            read_file_info.reset();
-        });
+        return ext::make_scope_guard([]() { read_file_info.reset(); });
     }
 
 private:

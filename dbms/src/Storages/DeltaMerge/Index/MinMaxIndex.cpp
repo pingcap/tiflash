@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,11 @@ static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
 
 namespace details
 {
-inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
+inline std::pair<size_t, size_t> minmax(
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark,
+    size_t offset,
+    size_t limit)
 {
     const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
 
@@ -60,7 +64,12 @@ inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVect
 }
 
 // Calculate the min max value only for the not null values and not deleted values in the nullable column.
-inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> * del_mark, const PaddedPODArray<UInt8> & null_mark, size_t offset, size_t limit)
+inline std::pair<size_t, size_t> minmax(
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark,
+    const PaddedPODArray<UInt8> & null_mark,
+    size_t offset,
+    size_t limit)
 {
     const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
 
@@ -141,12 +150,13 @@ void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
     DB::writeIntBinary(size, buf);
     buf.write(reinterpret_cast<const char *>(has_null_marks->data()), sizeof(UInt8) * size);
     buf.write(reinterpret_cast<const char *>(has_value_marks->data()), sizeof(UInt8) * size);
-    type.serializeBinaryBulkWithMultipleStreams(*minmaxes, //
-                                                [&](const IDataType::SubstreamPath &) { return &buf; },
-                                                0,
-                                                size * 2,
-                                                true,
-                                                {});
+    type.serializeBinaryBulkWithMultipleStreams(
+        *minmaxes, //
+        [&](const IDataType::SubstreamPath &) { return &buf; },
+        0,
+        size * 2,
+        true,
+        {});
 }
 
 MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_t bytes_limit)
@@ -162,18 +172,20 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     auto minmaxes = type.createColumn();
     buf.read(reinterpret_cast<char *>(has_null_marks->data()), sizeof(UInt8) * size);
     buf.read(reinterpret_cast<char *>(has_value_marks->data()), sizeof(UInt8) * size);
-    type.deserializeBinaryBulkWithMultipleStreams(*minmaxes, //
-                                                  [&](const IDataType::SubstreamPath &) { return &buf; },
-                                                  size * 2,
-                                                  0,
-                                                  true,
-                                                  {});
+    type.deserializeBinaryBulkWithMultipleStreams(
+        *minmaxes, //
+        [&](const IDataType::SubstreamPath &) { return &buf; },
+        size * 2,
+        0,
+        true,
+        {});
     size_t bytes_read = buf.count() - buf_pos;
     if (unlikely(bytes_read != bytes_limit))
     {
-        throw DB::TiFlashException("Bad file format: expected read index content size: " + std::to_string(bytes_limit)
-                                       + " vs. actual: " + std::to_string(bytes_read),
-                                   Errors::DeltaTree::Internal);
+        throw DB::TiFlashException(
+            "Bad file format: expected read index content size: " + std::to_string(bytes_limit)
+                + " vs. actual: " + std::to_string(bytes_read),
+            Errors::DeltaTree::Internal);
     }
     // NOLINTNEXTLINE (call private constructor of MinMaxIndex to build shared_ptr)
     return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
@@ -205,7 +217,11 @@ std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index)
     return {minmaxes->get64(pack_index * 2), minmaxes->get64(pack_index * 2 + 1)};
 }
 
-RSResults MinMaxIndex::checkNullableEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
+RSResults MinMaxIndex::checkNullableEqual(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type)
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
@@ -246,7 +262,8 @@ RSResults MinMaxIndex::checkNullableEqual(size_t start_pack, size_t pack_count, 
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             bool min_is_null = null_map.getElement(i * 2);
@@ -262,7 +279,8 @@ RSResults MinMaxIndex::checkNullableEqual(size_t start_pack, size_t pack_count, 
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             bool min_is_null = null_map.getElement(i * 2);
@@ -298,7 +316,11 @@ RSResults MinMaxIndex::checkNullableEqual(size_t start_pack, size_t pack_count, 
     return results;
 }
 
-RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, const std::vector<Field> & values, const DataTypePtr & type)
+RSResults MinMaxIndex::checkNullableIn(
+    size_t start_pack,
+    size_t pack_count,
+    const std::vector<Field> & values,
+    const DataTypePtr & type)
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
@@ -339,7 +361,8 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             bool min_is_null = null_map.getElement(i * 2);
@@ -355,7 +378,8 @@ RSResults MinMaxIndex::checkNullableIn(size_t start_pack, size_t pack_count, con
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             bool min_is_null = null_map.getElement(i * 2);
@@ -482,7 +506,11 @@ RSResults MinMaxIndex::checkEqual(size_t start_pack, size_t pack_count, const Fi
     return RSResults(pack_count, RSResult::Some);
 }
 
-RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::vector<Field> & values, const DataTypePtr & type)
+RSResults MinMaxIndex::checkIn(
+    size_t start_pack,
+    size_t pack_count,
+    const std::vector<Field> & values,
+    const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
 
@@ -571,7 +599,11 @@ RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::
     return RSResults(pack_count, RSResult::Some);
 }
 
-RSResults MinMaxIndex::checkNullableGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
+RSResults MinMaxIndex::checkNullableGreater(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type)
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
@@ -610,7 +642,8 @@ RSResults MinMaxIndex::checkNullableGreater(size_t start_pack, size_t pack_count
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (null_map.getElement(i * 2))
@@ -625,7 +658,8 @@ RSResults MinMaxIndex::checkNullableGreater(size_t start_pack, size_t pack_count
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (null_map.getElement(i * 2))
@@ -659,7 +693,12 @@ RSResults MinMaxIndex::checkNullableGreater(size_t start_pack, size_t pack_count
     return results;
 }
 
-RSResults MinMaxIndex::checkGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
+RSResults MinMaxIndex::checkGreater(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type,
+    int /*nan_direction_hint*/)
 {
     RSResults results(pack_count, RSResult::None);
     if (value.isNull())
@@ -750,7 +789,11 @@ RSResults MinMaxIndex::checkGreater(size_t start_pack, size_t pack_count, const 
     return RSResults(pack_count, RSResult::Some);
 }
 
-RSResults MinMaxIndex::checkNullableGreaterEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
+RSResults MinMaxIndex::checkNullableGreaterEqual(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type)
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
@@ -789,7 +832,8 @@ RSResults MinMaxIndex::checkNullableGreaterEqual(size_t start_pack, size_t pack_
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (null_map.getElement(i * 2))
@@ -804,14 +848,16 @@ RSResults MinMaxIndex::checkNullableGreaterEqual(size_t start_pack, size_t pack_
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data
+            = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
             if (null_map.getElement(i * 2))
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
+            results[i - start_pack]
+                = RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
         }
         return results;
     }
@@ -838,7 +884,12 @@ RSResults MinMaxIndex::checkNullableGreaterEqual(size_t start_pack, size_t pack_
     return results;
 }
 
-RSResults MinMaxIndex::checkGreaterEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
+RSResults MinMaxIndex::checkGreaterEqual(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type,
+    int /*nan_direction_hint*/)
 {
     RSResults results(pack_count, RSResult::None);
     if (value.isNull())
@@ -902,7 +953,8 @@ RSResults MinMaxIndex::checkGreaterEqual(size_t start_pack, size_t pack_count, c
                 continue;
             auto min = minmaxes_data[i * 2];
             auto max = minmaxes_data[i * 2 + 1];
-            results[i - start_pack] = RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
+            results[i - start_pack]
+                = RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
         }
         return results;
     }

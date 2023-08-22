@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,13 +40,17 @@ public:
     template <size_t ELEMENT_SIZE>
     const char * getRawDataBegin() const
     {
-        return reinterpret_cast<const PODArrayBase<ELEMENT_SIZE, 4096, Allocator<false>, 15, 16> *>(reinterpret_cast<const char *>(this) + sizeof(*this))->raw_data();
+        return reinterpret_cast<const PODArrayBase<ELEMENT_SIZE, 4096, Allocator<false>, 15, 16> *>(
+                   reinterpret_cast<const char *>(this) + sizeof(*this))
+            ->raw_data();
     }
 
     template <size_t ELEMENT_SIZE>
     void insertRawData(const char * ptr)
     {
-        return reinterpret_cast<PODArrayBase<ELEMENT_SIZE, 4096, Allocator<false>, 15, 16> *>(reinterpret_cast<char *>(this) + sizeof(*this))->push_back_raw(ptr);
+        return reinterpret_cast<PODArrayBase<ELEMENT_SIZE, 4096, Allocator<false>, 15, 16> *>(
+                   reinterpret_cast<char *>(this) + sizeof(*this))
+            ->push_back_raw(ptr);
     }
 };
 

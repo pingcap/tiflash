@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,7 +129,8 @@ public:
                 switch (match_types[p_idx])
                 {
                 case Match:
-                    if (s_offset < length && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                    if (s_offset < length
+                        && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
                     {
                         p_idx++;
                         s_offset = tmp_s_offset;
@@ -217,10 +218,7 @@ private:
 
     static inline WeightType weight(CharType c) { return c; }
 
-    static inline bool regexEq(CharType a, CharType b)
-    {
-        return weight(a) == weight(b);
-    }
+    static inline bool regexEq(CharType a, CharType b) { return weight(a) == weight(b); }
 
     friend class Pattern<BinCollator>;
 };
@@ -288,10 +286,7 @@ private:
     using WeightType = GeneralCI::WeightType;
     using CharType = Rune;
 
-    static inline CharType decodeChar(const char * s, size_t & offset)
-    {
-        return decodeUtf8Char(s, offset);
-    }
+    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
 
     static inline WeightType weight(CharType c)
     {
@@ -301,10 +296,7 @@ private:
         //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF];
     }
 
-    static inline bool regexEq(CharType a, CharType b)
-    {
-        return weight(a) == weight(b);
-    }
+    static inline bool regexEq(CharType a, CharType b) { return weight(a) == weight(b); }
 
     friend class Pattern<GeneralCICollator>;
 };
@@ -319,31 +311,31 @@ using long_weight = struct
 extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
 const uint64_t long_weight_rune = 0xFFFD;
 
-const std::array<long_weight, 23> weight_lut_long = {
-    long_weight{0x1D6E1DC61D6D0288, 0x000002891E031DC2},
-    long_weight{0x1D741DC61D6D0288, 0x0000000002891DCB},
-    long_weight{0x1D621E0F1DBE1D70, 0x0000000000001DC6},
-    long_weight{0x0E0B1E591E5E1E55, 0x0000000000001E65},
-    long_weight{0x1E781E591E7C1E58, 0x0000000000001E72},
-    long_weight{0x0E0B1E731E7C1E58, 0x000000001E7A1E65},
-    long_weight{0x1E631E7D1E7C1E58, 0x0000000000001E65},
-    long_weight{0x1E651E721E781E59, 0x0000000000001E81},
-    long_weight{0x1E531E5F1E7A1E59, 0x0000000000001E7C},
-    long_weight{0x0E0B1E621E811E5C, 0x0000000000001E72},
-    long_weight{0x1E811E5F0E0B1E6B, 0x0000000000001E65},
-    long_weight{0x1E651E5E1E521E6C, 0x0000000000001E7A},
-    long_weight{0x1E631E781E521E6D, 0x0000000000001E65},
-    long_weight{0x1E551E5D1E631E6D, 0x0000000000001E7A},
-    long_weight{0x0E0B1E611E591E6E, 0x0000000000001E7A},
-    long_weight{0x1E771E5D1E811E70, 0x0000000000001E81},
-    long_weight{0x0E0B1E6B1E791E71, 0x0000000000001E7A},
-    long_weight{0x1E5A1E651E811E7B, 0x0000000000001E81},
-    long_weight{0xDF0FFB40E82AFB40, 0xF93EFB40CF1AFB40},
-    long_weight{0x04370E6D0E330FC0, 0x0000000000000FEA},
-    long_weight{0x04370E6D0E330FC0, 0x000000000E2B0FEA},
-    long_weight{0x135E020913AB135E, 0x13B713AB135013AB},
-    // for default use
-    long_weight{0x0, 0x0}};
+const std::array<long_weight, 23> weight_lut_long
+    = {long_weight{0x1D6E1DC61D6D0288, 0x000002891E031DC2},
+       long_weight{0x1D741DC61D6D0288, 0x0000000002891DCB},
+       long_weight{0x1D621E0F1DBE1D70, 0x0000000000001DC6},
+       long_weight{0x0E0B1E591E5E1E55, 0x0000000000001E65},
+       long_weight{0x1E781E591E7C1E58, 0x0000000000001E72},
+       long_weight{0x0E0B1E731E7C1E58, 0x000000001E7A1E65},
+       long_weight{0x1E631E7D1E7C1E58, 0x0000000000001E65},
+       long_weight{0x1E651E721E781E59, 0x0000000000001E81},
+       long_weight{0x1E531E5F1E7A1E59, 0x0000000000001E7C},
+       long_weight{0x0E0B1E621E811E5C, 0x0000000000001E72},
+       long_weight{0x1E811E5F0E0B1E6B, 0x0000000000001E65},
+       long_weight{0x1E651E5E1E521E6C, 0x0000000000001E7A},
+       long_weight{0x1E631E781E521E6D, 0x0000000000001E65},
+       long_weight{0x1E551E5D1E631E6D, 0x0000000000001E7A},
+       long_weight{0x0E0B1E611E591E6E, 0x0000000000001E7A},
+       long_weight{0x1E771E5D1E811E70, 0x0000000000001E81},
+       long_weight{0x0E0B1E6B1E791E71, 0x0000000000001E7A},
+       long_weight{0x1E5A1E651E811E7B, 0x0000000000001E81},
+       long_weight{0xDF0FFB40E82AFB40, 0xF93EFB40CF1AFB40},
+       long_weight{0x04370E6D0E330FC0, 0x0000000000000FEA},
+       long_weight{0x04370E6D0E330FC0, 0x000000000E2B0FEA},
+       long_weight{0x135E020913AB135E, 0x13B713AB135013AB},
+       // for default use
+       long_weight{0x0, 0x0}};
 
 } // namespace UnicodeCI
 
@@ -440,10 +432,7 @@ private:
 private:
     using CharType = Rune;
 
-    static inline CharType decodeChar(const char * s, size_t & offset)
-    {
-        return decodeUtf8Char(s, offset);
-    }
+    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
 
     static inline void writeResult(uint64_t & w, std::string & container, size_t & total_size)
     {
@@ -590,10 +579,7 @@ struct TiDBCollatorTypeIDMap
         id_to_type[ITiDBCollator::UTF8_BIN] = ITiDBCollator::CollatorType::UTF8_BIN;
     }
 
-    const ITiDBCollator::CollatorType & operator[](int32_t n) const
-    {
-        return id_to_type.at(n);
-    }
+    const ITiDBCollator::CollatorType & operator[](int32_t n) const { return id_to_type.at(n); }
 
 private:
     std::unordered_map<int32_t, ITiDBCollator::CollatorType> id_to_type;
@@ -604,8 +590,7 @@ static const TiDBCollatorTypeIDMap tidb_collator_type_id_map;
 ITiDBCollator::ITiDBCollator(int32_t collator_id_)
     : collator_id(collator_id_)
     , collator_type(tidb_collator_type_id_map[collator_id_])
-{
-}
+{}
 
 using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
 

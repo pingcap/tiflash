@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,10 +75,7 @@ public:
 
     const DictionaryStructure & getStructure() const override { return dict_struct; }
 
-    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override
-    {
-        return creation_time;
-    }
+    std::chrono::time_point<std::chrono::system_clock> getCreationTime() const override { return creation_time; }
 
     bool isInjective(const std::string & attribute_name) const override
     {
@@ -177,19 +174,7 @@ private:
     struct Attribute final
     {
         AttributeUnderlyingType type;
-        std::tuple<
-            UInt8,
-            UInt16,
-            UInt32,
-            UInt64,
-            UInt128,
-            Int8,
-            Int16,
-            Int32,
-            Int64,
-            Float32,
-            Float64,
-            String>
+        std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String>
             null_values;
         std::tuple<
             ContainerPtrType<UInt8>,

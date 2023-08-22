@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,10 @@
 
 namespace DB
 {
-CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
-    const Block & header,
-    size_t rows_limit_)
+CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_)
     : codec(header)
     , rows_limit(rows_limit_)
-{
-}
+{}
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
 {

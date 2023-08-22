@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,10 +110,7 @@ public:
      * Sanity check for correctness
      */
     using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;
-    virtual bool check(CheckerFunc /*checker*/, size_t /*size*/)
-    {
-        return true;
-    }
+    virtual bool check(CheckerFunc /*checker*/, size_t /*size*/) { return true; }
 
     /**
      * Log the status of space map
@@ -125,10 +122,7 @@ public:
      */
     virtual String toDebugString() = 0;
 
-    SpaceMapType getType() const
-    {
-        return type;
-    }
+    SpaceMapType getType() const { return type; }
 
     static String typeToString(SpaceMapType type)
     {

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@ class Context;
 
 /** Implements system table 'columns', that allows to get information about columns for every table.
   */
-class StorageSystemColumns : public ext::SharedPtrHelper<StorageSystemColumns>
+class StorageSystemColumns
+    : public ext::SharedPtrHelper<StorageSystemColumns>
     , public IStorage
 {
 public:

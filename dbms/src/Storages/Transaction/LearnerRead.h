@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,12 +34,14 @@ struct RegionLearnerReadSnapshot : RegionPtr
         : RegionPtr(region)
         , snapshot_event_flag(region->getSnapshotEventFlag())
     {}
-    bool operator!=(const RegionPtr & rhs) const { return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag()); }
+    bool operator!=(const RegionPtr & rhs) const
+    {
+        return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag());
+    }
 };
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 
-[[nodiscard]] LearnerReadSnapshot
-doLearnerRead(
+[[nodiscard]] LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     bool for_batch_cop,

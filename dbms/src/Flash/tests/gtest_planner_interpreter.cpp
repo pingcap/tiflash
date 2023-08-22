@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,12 +36,24 @@ public:
         // setRecord();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
-        context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
-        context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeReceiver("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
-        context.addExchangeReceiver("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeReceiver("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addMockTable(
+            {"test_db", "test_table_1"},
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addMockTable(
+            {"test_db", "r_table"},
+            {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addMockTable(
+            {"test_db", "l_table"},
+            {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeReceiver(
+            "sender_1",
+            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addExchangeReceiver(
+            "sender_l",
+            {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeReceiver(
+            "sender_r",
+            {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
     }
 };
 
@@ -55,11 +67,7 @@ try
                        .build(context);
     runAndAssert(request, 10);
 
-    request = context.scan("test_db", "test_table_1")
-                  .limit(10)
-                  .limit(9)
-                  .limit(8)
-                  .build(context);
+    request = context.scan("test_db", "test_table_1").limit(10).limit(9).limit(8).build(context);
     runAndAssert(request, 10);
 
     request = context.scan("test_db", "test_table_1")
@@ -96,33 +104,24 @@ TEST_F(PlannerInterpreterExecuteTest, ParallelQuery)
 try
 {
     /// executor with table scan
-    auto request = context.scan("test_db", "test_table_1")
-                       .limit(10)
-                       .build(context);
+    auto request = context.scan("test_db", "test_table_1").limit(10).build(context);
     runAndAssert(request, 1);
     runAndAssert(request, 5);
 
-    request = context.scan("test_db", "test_table_1")
-                  .project({"s1", "s2", "s3"})
-                  .build(context);
+    request = context.scan("test_db", "test_table_1").project({"s1", "s2", "s3"}).build(context);
     runAndAssert(request, 1);
     runAndAssert(request, 5);
 
-    request = context.scan("test_db", "test_table_1")
-                  .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                  .build(context);
+    request
+        = context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}).build(context);
     runAndAssert(request, 1);
     runAndAssert(request, 5);
 
-    request = context.scan("test_db", "test_table_1")
-                  .topN("s2", false, 10)
-                  .build(context);
+    request = context.scan("test_db", "test_table_1").topN("s2", false, 10).build(context);
     runAndAssert(request, 1);
     runAndAssert(request, 5);
 
-    request = context.scan("test_db", "test_table_1")
-                  .filter(eq(col("s2"), col("s3")))
-                  .build(context);
+    request = context.scan("test_db", "test_table_1").filter(eq(col("s2"), col("s3"))).build(context);
     runAndAssert(request, 1);
     runAndAssert(request, 5);
 
@@ -165,10 +164,7 @@ try
     runAndAssert(request, 10);
     runAndAssert(request, 1);
 
-    request = context.scan("test_db", "test_table_1")
-                  .limit(10)
-                  .exchangeSender(tipb::PassThrough)
-                  .build(context);
+    request = context.scan("test_db", "test_table_1").limit(10).exchangeSender(tipb::PassThrough).build(context);
     runAndAssert(request, 10);
     runAndAssert(request, 1);
 
@@ -217,11 +213,8 @@ try
                   .build(context);
     runAndAssert(request, 10);
 
-    request = context.receive("sender_1")
-                  .project({"s1", "s2", "s3"})
-                  .project({"s1", "s2"})
-                  .project({"s1"})
-                  .build(context);
+    request
+        = context.receive("sender_1").project({"s1", "s2", "s3"}).project({"s1", "s2"}).project({"s1"}).build(context);
     runAndAssert(request, 10);
 
     request = context.receive("sender_1")
@@ -237,8 +230,7 @@ CATCH
 TEST_F(PlannerInterpreterExecuteTest, Window)
 try
 {
-    auto request = context
-                       .scan("test_db", "test_table")
+    auto request = context.scan("test_db", "test_table")
                        .sort({{"s1", true}, {"s2", false}}, true)
                        .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
                        .build(context);
@@ -267,31 +259,23 @@ try
     // fine-grained shuffle is enabled.
     const uint64_t enable = 8;
     const uint64_t disable = 0;
-    auto request = context
-                       .receive("sender_1", enable)
+    auto request = context.receive("sender_1", enable)
                        .sort({{"s1", true}, {"s2", false}}, true, enable)
                        .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), enable)
                        .build(context);
     runAndAssert(request, 10);
 
-    auto topn_request = context
-                            .receive("sender_1")
-                            .topN("s2", false, 10)
-                            .build(context);
+    auto topn_request = context.receive("sender_1").topN("s2", false, 10).build(context);
     runAndAssert(topn_request, 10);
 
     // fine-grained shuffle is disabled.
-    request = context
-                  .receive("sender_1", disable)
+    request = context.receive("sender_1", disable)
                   .sort({{"s1", true}, {"s2", false}}, true, disable)
                   .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), disable)
                   .build(context);
     runAndAssert(request, 10);
 
-    topn_request = context
-                       .receive("sender_1")
-                       .topN("s2", false, 10)
-                       .build(context);
+    topn_request = context.receive("sender_1").topN("s2", false, 10).build(context);
     runAndAssert(topn_request, 10);
 }
 CATCH
@@ -307,12 +291,8 @@ try
         DAGRequestBuilder receiver1 = context.receive("sender_l");
         DAGRequestBuilder receiver2 = context.receive("sender_r", enable);
 
-        auto request = receiver1.join(
-                                    receiver2,
-                                    tipb::JoinType::TypeLeftOuterJoin,
-                                    {col("join_c")},
-                                    enable)
-                           .build(context);
+        auto request
+            = receiver1.join(receiver2, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}, enable).build(context);
         runAndAssert(request, 10);
     }
     {
@@ -320,12 +300,8 @@ try
         DAGRequestBuilder receiver1 = context.receive("sender_l");
         DAGRequestBuilder receiver2 = context.receive("sender_r", disable);
 
-        auto request = receiver1.join(
-                                    receiver2,
-                                    tipb::JoinType::TypeLeftOuterJoin,
-                                    {col("join_c")},
-                                    disable)
-                           .build(context);
+        auto request
+            = receiver1.join(receiver2, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}, disable).build(context);
         runAndAssert(request, 10);
     }
 }
@@ -339,17 +315,13 @@ try
     const uint64_t disable = 0;
     {
         DAGRequestBuilder receiver1 = context.receive("sender_1", enable);
-        auto request = receiver1
-                           .aggregation({Max(col("s1"))}, {col("s2")}, enable)
-                           .build(context);
+        auto request = receiver1.aggregation({Max(col("s1"))}, {col("s2")}, enable).build(context);
         runAndAssert(request, 10);
     }
 
     {
         DAGRequestBuilder receiver1 = context.receive("sender_1", disable);
-        auto request = receiver1
-                           .aggregation({Max(col("s1"))}, {col("s2")}, disable)
-                           .build(context);
+        auto request = receiver1.aggregation({Max(col("s1"))}, {col("s2")}, disable).build(context);
         runAndAssert(request, 10);
     }
 }
@@ -366,15 +338,14 @@ try
         DAGRequestBuilder table3 = context.scan("test_db", "r_table");
         DAGRequestBuilder table4 = context.scan("test_db", "l_table");
 
-        auto request = table1.join(
-                                 table2.join(
-                                     table3.join(table4,
-                                                 tipb::JoinType::TypeLeftOuterJoin,
-                                                 {col("join_c")}),
-                                     tipb::JoinType::TypeLeftOuterJoin,
-                                     {col("join_c")}),
-                                 tipb::JoinType::TypeLeftOuterJoin,
-                                 {col("join_c")})
+        auto request = table1
+                           .join(
+                               table2.join(
+                                   table3.join(table4, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                   tipb::JoinType::TypeLeftOuterJoin,
+                                   {col("join_c")}),
+                               tipb::JoinType::TypeLeftOuterJoin,
+                               {col("join_c")})
                            .build(context);
 
         runAndAssert(request, 10);
@@ -387,15 +358,14 @@ try
         DAGRequestBuilder receiver3 = context.receive("sender_l");
         DAGRequestBuilder receiver4 = context.receive("sender_r");
 
-        auto request = receiver1.join(
-                                    receiver2.join(
-                                        receiver3.join(receiver4,
-                                                       tipb::JoinType::TypeLeftOuterJoin,
-                                                       {col("join_c")}),
-                                        tipb::JoinType::TypeLeftOuterJoin,
-                                        {col("join_c")}),
-                                    tipb::JoinType::TypeLeftOuterJoin,
-                                    {col("join_c")})
+        auto request = receiver1
+                           .join(
+                               receiver2.join(
+                                   receiver3.join(receiver4, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                   tipb::JoinType::TypeLeftOuterJoin,
+                                   {col("join_c")}),
+                               tipb::JoinType::TypeLeftOuterJoin,
+                               {col("join_c")})
                            .build(context);
         runAndAssert(request, 10);
     }
@@ -407,15 +377,14 @@ try
         DAGRequestBuilder receiver3 = context.receive("sender_l");
         DAGRequestBuilder receiver4 = context.receive("sender_r");
 
-        auto request = receiver1.join(
-                                    receiver2.join(
-                                        receiver3.join(receiver4,
-                                                       tipb::JoinType::TypeLeftOuterJoin,
-                                                       {col("join_c")}),
-                                        tipb::JoinType::TypeLeftOuterJoin,
-                                        {col("join_c")}),
-                                    tipb::JoinType::TypeLeftOuterJoin,
-                                    {col("join_c")})
+        auto request = receiver1
+                           .join(
+                               receiver2.join(
+                                   receiver3.join(receiver4, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                   tipb::JoinType::TypeLeftOuterJoin,
+                                   {col("join_c")}),
+                               tipb::JoinType::TypeLeftOuterJoin,
+                               {col("join_c")})
                            .exchangeSender(tipb::PassThrough)
                            .build(context);
         runAndAssert(request, 10);
@@ -431,10 +400,7 @@ try
         DAGRequestBuilder table1 = context.scan("test_db", "r_table");
         DAGRequestBuilder table2 = context.scan("test_db", "l_table");
 
-        auto request = table1.join(
-                                 table2,
-                                 tipb::JoinType::TypeLeftOuterJoin,
-                                 {col("join_c")})
+        auto request = table1.join(table2, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         runAndAssert(request, 10);
@@ -445,10 +411,7 @@ try
         DAGRequestBuilder table1 = context.scan("test_db", "r_table");
         DAGRequestBuilder table2 = context.scan("test_db", "l_table");
 
-        auto request = table1.join(
-                                 table2,
-                                 tipb::JoinType::TypeRightOuterJoin,
-                                 {col("join_c")})
+        auto request = table1.join(table2, tipb::JoinType::TypeRightOuterJoin, {col("join_c")})
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         runAndAssert(request, 10);
@@ -459,10 +422,7 @@ try
         DAGRequestBuilder receiver1 = context.receive("sender_l");
         DAGRequestBuilder receiver2 = context.receive("sender_r");
 
-        auto request = receiver1.join(
-                                    receiver2,
-                                    tipb::JoinType::TypeRightOuterJoin,
-                                    {col("join_c")})
+        auto request = receiver1.join(receiver2, tipb::JoinType::TypeRightOuterJoin, {col("join_c")})
                            .aggregation({Sum(col("r_a"))}, {col("join_c")})
                            .limit(10)
                            .exchangeSender(tipb::PassThrough)
@@ -476,8 +436,7 @@ TEST_F(PlannerInterpreterExecuteTest, ListBase)
 try
 {
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .filter(eq(col("s1"), col("s2")))
                            .aggregation(Max(col("s1")), col("s2"))
                            .filter(eq(col("s2"), lit(Field("1", 1))))
@@ -487,8 +446,7 @@ try
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
+        auto request = context.scan("test_db", "test_table")
                            .filter(eq(col("s1"), col("s2")))
                            .aggregation(Max(col("s1")), col("s2"))
                            .filter(eq(col("s2"), lit(Field("1", 1))))
@@ -504,8 +462,7 @@ TEST_F(PlannerInterpreterExecuteTest, ExpandPlan)
 try
 {
     {
-        auto request = context
-                           .receive("sender_1")
+        auto request = context.receive("sender_1")
                            .aggregation({Count(col("s1"))}, {col("s2")})
                            .expand(MockVVecColumnNameVec{
                                MockVecColumnNameVec{
@@ -515,7 +472,10 @@ try
                                    MockColumnNameVec{"s2"},
                                },
                            })
-                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .join(
+                               context.scan("test_db", "test_table").project({"s2"}),
+                               tipb::JoinType::TypeInnerJoin,
+                               {col("s2")})
                            .project({"count(s1)", "groupingID"})
                            .topN({{"groupingID", true}}, 2)
                            .build(context);
@@ -533,15 +493,18 @@ try
     fields[2].set_tp(TiDB::TypeLongLong);
     fields[2].set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
     {
-        auto request = context
-                           .receive("sender_1")
+        auto request = context.receive("sender_1")
                            .aggregation({Count(col("s1"))}, {col("s2")})
-                           .expand2(std::vector<MockAstVec>{
-                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
-                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
-                                    std::vector<String>{"grouping_id"},
-                                    fields)
-                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .expand2(
+                               std::vector<MockAstVec>{
+                                   {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                   {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                               std::vector<String>{"grouping_id"},
+                               fields)
+                           .join(
+                               context.scan("test_db", "test_table").project({"s2"}),
+                               tipb::JoinType::TypeInnerJoin,
+                               {col("s2")})
                            .project({"count(s1)", "grouping_id"})
                            .topN({{"grouping_id", true}}, 2)
                            .build(context);

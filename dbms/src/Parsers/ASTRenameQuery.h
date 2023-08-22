@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,16 +62,19 @@ public:
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "RENAME TABLE " << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "RENAME TABLE "
+                      << (settings.hilite ? hilite_none : "");
 
         for (auto it = elements.cbegin(); it != elements.cend(); ++it)
         {
             if (it != elements.cbegin())
                 settings.ostr << ", ";
 
-            settings.ostr << (!it->from.database.empty() ? backQuoteIfNeed(it->from.database) + "." : "") << backQuoteIfNeed(it->from.table)
-                          << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
-                          << (!it->to.database.empty() ? backQuoteIfNeed(it->to.database) + "." : "") << backQuoteIfNeed(it->to.table);
+            settings.ostr << (!it->from.database.empty() ? backQuoteIfNeed(it->from.database) + "." : "")
+                          << backQuoteIfNeed(it->from.table) << (settings.hilite ? hilite_keyword : "") << " TO "
+                          << (settings.hilite ? hilite_none : "")
+                          << (!it->to.database.empty() ? backQuoteIfNeed(it->to.database) + "." : "")
+                          << backQuoteIfNeed(it->to.table);
         }
     }
 };

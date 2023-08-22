@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,11 +52,8 @@ int main(int, char **)
         }
 
         double seconds = watch.elapsedSeconds();
-        std::cerr << "Read "
-                  << data.size() << " rows, "
-                  << (in.count() / 1048576.0) << " MiB "
-                  << " in " << seconds << " sec., "
-                  << (data.size() / seconds) << " rows/sec., "
+        std::cerr << "Read " << data.size() << " rows, " << (in.count() / 1048576.0) << " MiB "
+                  << " in " << seconds << " sec., " << (data.size() / seconds) << " rows/sec., "
                   << (in.count() / 1048576.0 / seconds) << " MiB/sec.\n";
     }
 
@@ -72,11 +69,8 @@ int main(int, char **)
         }
 
         double seconds = watch.elapsedSeconds();
-        std::cerr << "Processed "
-                  << data.size() << " rows, "
-                  << (in.count() / 1048576.0) << " MiB "
-                  << " in " << seconds << " sec., "
-                  << (data.size() / seconds) << " rows/sec., "
+        std::cerr << "Processed " << data.size() << " rows, " << (in.count() / 1048576.0) << " MiB "
+                  << " in " << seconds << " sec., " << (data.size() / seconds) << " rows/sec., "
                   << (in.count() / 1048576.0 / seconds) << " MiB/sec. "
                   << "(res = " << res << ")\n";
     }

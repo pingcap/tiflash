@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,17 +174,29 @@ try
         memset(c_buff, 0x1, buff_size);
 
         // write blob 1
-        write_batch.putPage(page_id, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        write_batch.putPage(
+            page_id,
+            /* tag */ 0,
+            std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
+            buff_size);
         blob_store.write(std::move(write_batch));
         write_batch.clear();
 
         // write blob 2
-        write_batch.putPage(page_id + 1, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        write_batch.putPage(
+            page_id + 1,
+            /* tag */ 0,
+            std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
+            buff_size);
         blob_store.write(std::move(write_batch));
         write_batch.clear();
 
         // write blob 3
-        write_batch.putPage(page_id + 2, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        write_batch.putPage(
+            page_id + 2,
+            /* tag */ 0,
+            std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
+            buff_size);
         blob_store.write(std::move(write_batch));
         write_batch.clear();
     };
@@ -343,7 +355,8 @@ TEST_F(BlobStoreTest, testWriteRead)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -362,12 +375,13 @@ TEST_F(BlobStoreTest, testWriteRead)
         ASSERT_EQ(record.entry.file_id, 10);
 
         // Read directly from the file
-        blob_store.read(buildV3Id(TEST_NAMESPACE_ID, page_id),
-                        record.entry.file_id,
-                        record.entry.offset,
-                        c_buff_read + index * buff_size,
-                        record.entry.size,
-                        /* ReadLimiterPtr */ nullptr);
+        blob_store.read(
+            buildV3Id(TEST_NAMESPACE_ID, page_id),
+            record.entry.file_id,
+            record.entry.offset,
+            c_buff_read + index * buff_size,
+            record.entry.size,
+            /* ReadLimiterPtr */ nullptr);
 
         ASSERT_EQ(strncmp(c_buff + index * buff_size, c_buff_read + index * buff_size, record.entry.size), 0);
         index++;
@@ -432,7 +446,8 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wbs[i].putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -457,21 +472,20 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
 
     char c_buff_read[wb_nums * buff_size];
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat, rate_target, LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
         for (size_t i = 0; i < wb_nums; ++i)
         {
             for (const auto & record : edits[i].getRecords())
             {
-                blob_store.read(buildV3Id(TEST_NAMESPACE_ID, page_id),
-                                record.entry.file_id,
-                                record.entry.offset,
-                                c_buff_read + i * buff_size,
-                                record.entry.size,
-                                read_limiter);
+                blob_store.read(
+                    buildV3Id(TEST_NAMESPACE_ID, page_id),
+                    record.entry.file_id,
+                    record.entry.offset,
+                    c_buff_read + i * buff_size,
+                    record.entry.size,
+                    read_limiter);
             }
         }
 
@@ -490,9 +504,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat, rate_target, LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
 
@@ -504,9 +516,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat, rate_target, LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
 
@@ -548,7 +558,10 @@ try
     PageEntriesEdit edit = blob_store.write(std::move(wb));
     ASSERT_EQ(edit.size(), 3);
 
-    BlobStore::FieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
+    BlobStore::FieldReadInfo read_info1(
+        buildV3Id(TEST_NAMESPACE_ID, page_id1),
+        edit.getRecords()[0].entry,
+        {0, 1, 2, 3});
     BlobStore::FieldReadInfo read_info2(buildV3Id(TEST_NAMESPACE_ID, page_id2), edit.getRecords()[1].entry, {2, 4});
     BlobStore::FieldReadInfo read_info3(buildV3Id(TEST_NAMESPACE_ID, page_id3), edit.getRecords()[2].entry, {1, 3});
 
@@ -615,7 +628,8 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size, field_sizes);
     }
 
@@ -643,12 +657,13 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         ASSERT_EQ(check_field_sizes, offsets);
 
         // Read
-        blob_store.read(buildV3Id(TEST_NAMESPACE_ID, page_id),
-                        record.entry.file_id,
-                        record.entry.offset,
-                        c_buff_read + index * buff_size,
-                        record.entry.size,
-                        /* ReadLimiterPtr */ nullptr);
+        blob_store.read(
+            buildV3Id(TEST_NAMESPACE_ID, page_id),
+            record.entry.file_id,
+            record.entry.offset,
+            c_buff_read + index * buff_size,
+            record.entry.size,
+            /* ReadLimiterPtr */ nullptr);
 
         ASSERT_EQ(strncmp(c_buff + index * buff_size, c_buff_read + index * buff_size, record.entry.size), 0);
         index++;
@@ -851,7 +866,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             {
                 c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            ReadBufferPtr buff
+                = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -946,7 +962,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
             {
                 c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            ReadBufferPtr buff
+                = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -1007,7 +1024,8 @@ TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
             {
                 c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
-            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            ReadBufferPtr buff
+                = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -1065,7 +1083,8 @@ TEST_F(BlobStoreTest, GC)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -1124,7 +1143,12 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+    auto blob_store = BlobStore(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        config_with_small_file_limit_size,
+        page_type_and_config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -1138,7 +1162,8 @@ try
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         PageEntriesEdit edit = blob_store.write(std::move(wb));
 
@@ -1178,7 +1203,12 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+    auto blob_store = BlobStore(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        config_with_small_file_limit_size,
+        page_type_and_config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -1191,14 +1221,16 @@ try
             c_buff[j + i * buff_size] = static_cast<char>(buildV3Id(TEST_NAMESPACE_ID, page_id + j));
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
         wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
         PageEntriesEdit edit = blob_store.write(std::move(wb));
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
+        read_infos.emplace_back(
+            BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
 
         page_id++;
         wb.clear();
@@ -1460,7 +1492,8 @@ try
 
         // Verify read
         {
-            Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
+            Page page
+                = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
             ASSERT_TRUE(page.isValid());
             ASSERT_EQ(page.data.size(), serialized_size);
         }
@@ -1468,7 +1501,10 @@ try
         // Verify read with fields
         {
             BlobStore::FieldReadInfos to_read{
-                BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4, 5, 6, 7, 8}),
+                BlobStore::FieldReadInfo(
+                    buildV3Id(TEST_NAMESPACE_ID, page_id),
+                    records[0].entry,
+                    {0, 1, 2, 3, 4, 5, 6, 7, 8}),
             };
             BlobStore::PageMap page_map = blob_store.read(to_read, nullptr);
             ASSERT_NE(page_map.find(page_id), page_map.end());
@@ -1478,7 +1514,10 @@ try
         // Verify read with fields
         {
             BlobStore::FieldReadInfos to_read{
-                BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4, 5, 6}),
+                BlobStore::FieldReadInfo(
+                    buildV3Id(TEST_NAMESPACE_ID, page_id),
+                    records[0].entry,
+                    {0, 1, 2, 3, 4, 5, 6}),
             };
             BlobStore::PageMap page_map = blob_store.read(to_read, nullptr);
             ASSERT_NE(page_map.find(page_id), page_map.end());
@@ -1562,7 +1601,9 @@ try
         wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
 
         // throw an exception after write exceed `test_config.file_limit_size`
-        FailPointHelper::enableFailPoint(FailPoints::exception_after_large_write_exceed, static_cast<size_t>(test_config.file_limit_size));
+        FailPointHelper::enableFailPoint(
+            FailPoints::exception_after_large_write_exceed,
+            static_cast<size_t>(test_config.file_limit_size));
         try
         {
             blob_store.write(std::move(wb));
@@ -1589,7 +1630,12 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 400;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+    auto blob_store = BlobStore(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        config_with_small_file_limit_size,
+        page_type_and_config);
 
     {
         size_t size_500 = 500;
@@ -1624,7 +1670,12 @@ try
 
     PageEntryV3 entry_from_write;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+        auto blob_store = BlobStore(
+            getCurrentTestName(),
+            file_provider,
+            delegator,
+            config_with_small_file_limit_size,
+            page_type_and_config);
         size_t size_500 = 500;
         char c_buff[size_500];
 
@@ -1638,7 +1689,12 @@ try
     }
 
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+        auto blob_store = BlobStore(
+            getCurrentTestName(),
+            file_provider,
+            delegator,
+            config_with_small_file_limit_size,
+            page_type_and_config);
         blob_store.registerPaths();
 
         blob_store.blob_stats.restoreByEntry(entry_from_write);
@@ -1664,7 +1720,12 @@ try
     PageEntryV3 entry_from_write1;
     PageEntryV3 entry_from_write2;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+        auto blob_store = BlobStore(
+            getCurrentTestName(),
+            file_provider,
+            delegator,
+            config_with_small_file_limit_size,
+            page_type_and_config);
         size_t size_500 = 500;
         size_t size_200 = 200;
         char c_buff1[size_500];
@@ -1688,7 +1749,12 @@ try
 
     config_with_small_file_limit_size.file_limit_size = 400;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+        auto blob_store = BlobStore(
+            getCurrentTestName(),
+            file_provider,
+            delegator,
+            config_with_small_file_limit_size,
+            page_type_and_config);
         blob_store.registerPaths();
         blob_store.blob_stats.restoreByEntry(entry_from_write1);
         blob_store.blob_stats.restoreByEntry(entry_from_write2);
@@ -1736,7 +1802,12 @@ try
     PageEntryV3 entry_from_write1;
     PageEntryV3 entry_from_write2;
     PageEntryV3 entry_from_write3;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size, page_type_and_config);
+    auto blob_store = BlobStore(
+        getCurrentTestName(),
+        file_provider,
+        delegator,
+        config_with_small_file_limit_size,
+        page_type_and_config);
     {
         size_t size_100 = 100;
         size_t size_500 = 500;

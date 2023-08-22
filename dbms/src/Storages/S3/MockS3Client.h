@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,9 +34,11 @@ public:
     Model::GetObjectOutcome GetObject(const Model::GetObjectRequest & request) const override;
     Model::PutObjectOutcome PutObject(const Model::PutObjectRequest & request) const override;
     Model::ListObjectsV2Outcome ListObjectsV2(const Model::ListObjectsV2Request & request) const override;
-    Model::CreateMultipartUploadOutcome CreateMultipartUpload(const Model::CreateMultipartUploadRequest & request) const override;
+    Model::CreateMultipartUploadOutcome CreateMultipartUpload(
+        const Model::CreateMultipartUploadRequest & request) const override;
     Model::UploadPartOutcome UploadPart(const Model::UploadPartRequest & request) const override;
-    Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(const Model::CompleteMultipartUploadRequest & request) const override;
+    Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(
+        const Model::CompleteMultipartUploadRequest & request) const override;
     Model::CreateBucketOutcome CreateBucket(const Model::CreateBucketRequest & request) const override;
     Model::DeleteBucketOutcome DeleteBucket(const Model::DeleteBucketRequest & request) const override;
     Model::DeleteObjectOutcome DeleteObject(const Model::DeleteObjectRequest & request) const override;
@@ -44,18 +46,17 @@ public:
     Model::CopyObjectOutcome CopyObject(const Model::CopyObjectRequest & request) const override;
     Model::GetObjectTaggingOutcome GetObjectTagging(const Model::GetObjectTaggingRequest & request) const override;
 
-    Model::GetBucketLifecycleConfigurationOutcome GetBucketLifecycleConfiguration(const Model::GetBucketLifecycleConfigurationRequest & request) const override;
-    Model::PutBucketLifecycleConfigurationOutcome PutBucketLifecycleConfiguration(const Model::PutBucketLifecycleConfigurationRequest & request) const override;
+    Model::GetBucketLifecycleConfigurationOutcome GetBucketLifecycleConfiguration(
+        const Model::GetBucketLifecycleConfigurationRequest & request) const override;
+    Model::PutBucketLifecycleConfigurationOutcome PutBucketLifecycleConfiguration(
+        const Model::PutBucketLifecycleConfigurationRequest & request) const override;
 
     enum class S3Status
     {
         NORMAL,
         FAILED,
     };
-    static void setPutObjectStatus(S3Status status)
-    {
-        put_object_status = status;
-    }
+    static void setPutObjectStatus(S3Status status) { put_object_status = status; }
 
 private:
     inline static S3Status put_object_status = S3Status::NORMAL;

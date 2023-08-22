@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,9 @@ public:
     static void initialize(size_t max_threads, size_t max_free_threads, size_t queue_size)
     {
         RUNTIME_CHECK_MSG(!instance, "IO thread pool is initialized twice");
-        instance = std::make_unique<ThreadPool>(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/);
-        GlobalThreadPool::instance().registerFinalizer([] {
-            instance.reset();
-        });
+        instance
+            = std::make_unique<ThreadPool>(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/);
+        GlobalThreadPool::instance().registerFinalizer([] { instance.reset(); });
     }
 
     static ThreadPool & get()

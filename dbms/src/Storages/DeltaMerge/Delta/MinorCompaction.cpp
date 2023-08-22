@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,7 +72,11 @@ bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, Wri
 
 String MinorCompaction::info() const
 {
-    return fmt::format("Compact end, total_compact_files={} result_compact_files={} total_compact_rows={}", total_compact_files, result_compact_files, total_compact_rows);
+    return fmt::format(
+        "Compact end, total_compact_files={} result_compact_files={} total_compact_rows={}",
+        total_compact_files,
+        result_compact_files,
+        total_compact_rows);
 }
 } // namespace DM
 } // namespace DB

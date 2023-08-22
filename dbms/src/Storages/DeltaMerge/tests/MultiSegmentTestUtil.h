@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,10 +67,7 @@ public:
         FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
     }
 
-    ~MultiSegmentTestUtil()
-    {
-        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
-    }
+    ~MultiSegmentTestUtil() { FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update); }
 
     void resetExpectedRows()
     {
@@ -169,8 +166,10 @@ public:
         for (auto & [_key, seg] : store->segments)
         {
             (void)_key;
-            ASSERT_EQ(seg->getDelta()->getRows(), expected_delta_rows[segment_idx]) << "Assert failed for segment #" << segment_idx;
-            ASSERT_EQ(seg->getStable()->getRows(), expected_stable_rows[segment_idx]) << "Assert failed for segment #" << segment_idx;
+            ASSERT_EQ(seg->getDelta()->getRows(), expected_delta_rows[segment_idx])
+                << "Assert failed for segment #" << segment_idx;
+            ASSERT_EQ(seg->getStable()->getRows(), expected_stable_rows[segment_idx])
+                << "Assert failed for segment #" << segment_idx;
             segment_idx++;
         }
     }

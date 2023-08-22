@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,21 +51,33 @@ UInt64 EndToSegmentId::getSegmentIdContainingKey(std::unique_lock<std::mutex> & 
 {
     UNUSED(lock);
     RUNTIME_CHECK(is_ready);
-    auto iter = std::upper_bound(end_to_segment_id.begin(), end_to_segment_id.end(), key, [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
-        return compare(key1.toRowKeyValueRef(), element2.first.toRowKeyValueRef()) < 0;
-    });
-    RUNTIME_CHECK(iter != end_to_segment_id.end(), key.toDebugString(), end_to_segment_id.rbegin()->first.toDebugString());
+    auto iter = std::upper_bound(
+        end_to_segment_id.begin(),
+        end_to_segment_id.end(),
+        key,
+        [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
+            return compare(key1.toRowKeyValueRef(), element2.first.toRowKeyValueRef()) < 0;
+        });
+    RUNTIME_CHECK(
+        iter != end_to_segment_id.end(),
+        key.toDebugString(),
+        end_to_segment_id.rbegin()->first.toDebugString());
     return iter->second;
 }
 
-void EndToSegmentId::build(std::unique_lock<std::mutex> & lock, std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids)
+void EndToSegmentId::build(
+    std::unique_lock<std::mutex> & lock,
+    std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids)
 {
     UNUSED(lock);
     end_to_segment_id = std::move(end_key_and_segment_ids);
     is_ready = true;
 }
 
-ParsedCheckpointDataHolder::ParsedCheckpointDataHolder(Context & context, const PageStorageConfig & config, UInt64 dir_seq)
+ParsedCheckpointDataHolder::ParsedCheckpointDataHolder(
+    Context & context,
+    const PageStorageConfig & config,
+    UInt64 dir_seq)
 {
     const auto dir_prefix = fmt::format("local_{}", dir_seq);
     auto delegator = context.getPathPool().getPSDiskDelegatorGlobalMulti(dir_prefix);
@@ -136,7 +148,12 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         {
             if (record.type == PS::V3::EditRecordType::VAR_ENTRY)
             {
-                wb.putRemotePage(record.page_id, record.entry.tag, record.entry.size, record.entry.checkpoint_info.data_location, std::move(record.entry.field_offsets));
+                wb.putRemotePage(
+                    record.page_id,
+                    record.entry.tag,
+                    record.entry.size,
+                    record.entry.checkpoint_info.data_location,
+                    std::move(record.entry.field_offsets));
             }
             else if (record.type == PS::V3::EditRecordType::VAR_REF)
             {

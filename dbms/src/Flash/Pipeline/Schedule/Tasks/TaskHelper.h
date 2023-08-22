@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 
 namespace DB
 {
-#define FINISH_STATUS \
-    ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
+#define FINISH_STATUS ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
 
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));

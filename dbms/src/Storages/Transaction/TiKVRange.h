@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,10 @@ inline Handle getRangeHandle(const DecodedTiKVKey & key, const TableID table_id)
     else if (key.size() < RecordKVFormat::RAW_KEY_SIZE)
     {
         UInt64 tmp = 0;
-        memcpy(&tmp, key.data() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, key.size() - RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE);
+        memcpy(
+            &tmp,
+            key.data() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE,
+            key.size() - RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE);
         HandleID res = RecordKVFormat::decodeInt64(tmp);
         // the actual res is like `res - 0.x`
         return res;
@@ -84,7 +87,10 @@ inline Handle getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
 }
 
 template <typename KeyType>
-inline HandleRange<HandleID> getHandleRangeByTable(const KeyType & start_key, const KeyType & end_key, const TableID table_id)
+inline HandleRange<HandleID> getHandleRangeByTable(
+    const KeyType & start_key,
+    const KeyType & end_key,
+    const TableID table_id)
 {
     static_assert(std::is_same_v<KeyType, DecodedTiKVKey> || std::is_same_v<KeyType, TiKVKey>);
 

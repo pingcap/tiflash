@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
 namespace DB
 {
 
-Expand2::Expand2(ExpressionActionsPtrVec projections_actions_, ExpressionActionsPtr before_expand_actions_, NamesWithAliasesVec projections_)
+Expand2::Expand2(
+    ExpressionActionsPtrVec projections_actions_,
+    ExpressionActionsPtr before_expand_actions_,
+    NamesWithAliasesVec projections_)
     : leveled_projections_actions(projections_actions_)
     , before_expand_actions(before_expand_actions_)
     , leveled_alias_projections(projections_)
-{
-}
+{}
 
 Block Expand2::next(const Block & block_cache, size_t i_th_project)
 {
@@ -38,7 +40,12 @@ Block Expand2::next(const Block & block_cache, size_t i_th_project)
     auto origin_column_and_types = block_cache.getColumnsWithTypeAndName();
     for (size_t i = 0; i < num_columns; ++i)
     {
-        cloned_columns_and_type.emplace_back(std::move(res[i]), origin_column_and_types[i].type, origin_column_and_types[i].name, origin_column_and_types[i].column_id, origin_column_and_types[i].default_value);
+        cloned_columns_and_type.emplace_back(
+            std::move(res[i]),
+            origin_column_and_types[i].type,
+            origin_column_and_types[i].name,
+            origin_column_and_types[i].column_id,
+            origin_column_and_types[i].default_value);
     }
     Block cloned_block(cloned_columns_and_type);
 

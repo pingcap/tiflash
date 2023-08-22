@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,17 +26,13 @@ class IsNull : public RSOperator
 public:
     explicit IsNull(const Attr & attr_)
         : attr(attr_)
-    {
-    }
+    {}
 
     String name() override { return "isnull"; }
 
     Attrs getAttrs() override { return {attr}; }
 
-    String toDebugString() override
-    {
-        return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name);
-    }
+    String toDebugString() override { return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name); }
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {

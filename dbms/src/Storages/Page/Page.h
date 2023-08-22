@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,8 +79,13 @@ public:
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [valid={}] [field_index={}]", page_id, is_valid, index),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format(
+                    "Try to getFieldData with invalid field index [page_id={}] [valid={}] [field_index={}]",
+                    page_id,
+                    is_valid,
+                    index),
+                ErrorCodes::LOGICAL_ERROR);
 
         PageFieldOffset beg = iter->offset;
         ++iter;
@@ -105,10 +110,7 @@ public:
         return field_size;
     }
 
-    size_t fieldSize() const
-    {
-        return field_offsets.size();
-    }
+    size_t fieldSize() const { return field_offsets.size(); }
 };
 
 using Pages = std::vector<Page>;
@@ -134,29 +136,29 @@ public:
     inline bool isValid() const { return file_id != 0; }
     inline bool isTombstone() const { return ref == 0; }
 
-    PageFileIdAndLevel fileIdLevel() const
-    {
-        return std::make_pair(file_id, level);
-    }
+    PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
 
     String toDebugString() const
     {
-        return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, ref: {}, field_offsets_size: {}}}",
-                           file_id,
-                           offset,
-                           size,
-                           checksum,
-                           tag,
-                           ref,
-                           field_offsets.size());
+        return fmt::format(
+            "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, ref: {}, field_offsets_size: "
+            "{}}}",
+            file_id,
+            offset,
+            size,
+            checksum,
+            tag,
+            ref,
+            field_offsets.size());
     }
 
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
-            throw Exception("Try to getFieldData of PageEntry" + DB::toString(file_id) + " with invalid index: " + DB::toString(index)
-                                + ", fields size: " + DB::toString(field_offsets.size()),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Try to getFieldData of PageEntry" + DB::toString(file_id) + " with invalid index: "
+                    + DB::toString(index) + ", fields size: " + DB::toString(field_offsets.size()),
+                ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
             return size - field_offsets.back().first;
         else
@@ -168,7 +170,10 @@ public:
     {
         if (unlikely(index >= field_offsets.size()))
             throw Exception(
-                fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
+                fmt::format(
+                    "Try to getFieldOffsets with invalid index [index={}] [fields_size={}]",
+                    index,
+                    field_offsets.size()),
                 ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
             return {field_offsets.back().first, size};
@@ -178,8 +183,9 @@ public:
 
     bool operator==(const PageEntry & rhs) const
     {
-        bool is_ok = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag && checksum == rhs.checksum
-            && level == rhs.level && ref == rhs.ref && field_offsets.size() == rhs.field_offsets.size();
+        bool is_ok = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag
+            && checksum == rhs.checksum && level == rhs.level && ref == rhs.ref
+            && field_offsets.size() == rhs.field_offsets.size();
         if (!is_ok)
             return is_ok;
         // compare the fields offsets

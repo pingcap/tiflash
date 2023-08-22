@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
+#include <Storages/Transaction/HashCheckHelper.h>
 #include <fcntl.h>
 
-#include <Storages/Transaction/HashCheckHelper.h>
-#include <Common/TiFlashException.h>
-
+// NOLINTBEGIN
 namespace DB
 {
 
@@ -36,7 +36,6 @@ namespace FileHashCheck
 {
 void readFileFully(const std::string & path, int fd, off_t file_offset, size_t read_size, char * data)
 {
-
     if (-1 == ::lseek(fd, file_offset, SEEK_SET))
         throwFromErrno("Cannot seek through file " + path, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
@@ -55,8 +54,12 @@ void readFileFully(const std::string & path, int fd, off_t file_offset, size_t r
     }
 }
 
-void checkObjectHashInFile(const std::string & path, const std::vector<size_t> & object_bytes, const BoolVec & use,
-    const std::vector<uint128> & expected_hash_codes, size_t block_size)
+void checkObjectHashInFile(
+    const std::string & path,
+    const std::vector<size_t> & object_bytes,
+    const BoolVec & use,
+    const std::vector<uint128> & expected_hash_codes,
+    size_t block_size)
 {
     Poco::File file(path);
     size_t file_size = file.getSize();
@@ -68,14 +71,18 @@ void checkObjectHashInFile(const std::string & path, const std::vector<size_t> &
         max_size = std::max(max_size, b);
     }
     if (total_size != file_size)
-            throw DB::TiFlashException("File size not match! Expected: " + DB::toString(total_size) + ", got: " + DB::toString(file_size), Errors::PageStorage::FileSizeNotMatch);
+        throw DB::TiFlashException(
+            "File size not match! Expected: " + DB::toString(total_size) + ", got: " + DB::toString(file_size),
+            Errors::PageStorage::FileSizeNotMatch);
 
-    char * object_data_buf = (char *)malloc(max_size);
-    SCOPE_EXIT({ free(object_data_buf); });
+    std::vector<char> object_data_buf_holder(max_size);
+    auto * object_data_buf = object_data_buf_holder.data();
 
     auto fd = open(path.c_str(), O_RDONLY);
     if (-1 == fd)
-        throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        throwFromErrno(
+            "Cannot open file " + path,
+            errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     SCOPE_EXIT({ ::close(fd); });
 
     off_t file_offset = 0;
@@ -99,7 +106,8 @@ void checkObjectHashInFile(const std::string & path, const std::vector<size_t> &
 
             if (hashcode != expected_hash_codes[index])
                 throw Exception(
-                    "File " + path + " hash code not match at object index: " + DB::toString(index), ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                    "File " + path + " hash code not match at object index: " + DB::toString(index),
+                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
 
         file_offset += object_bytes[index];
@@ -108,3 +116,4 @@ void checkObjectHashInFile(const std::string & path, const std::vector<size_t> &
 } // namespace FileHashCheck
 
 } // namespace DB
+// NOLINTEND

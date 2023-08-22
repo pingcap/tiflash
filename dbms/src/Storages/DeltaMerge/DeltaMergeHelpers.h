@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -159,12 +159,13 @@ inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, siz
     return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
-inline void addColumnToBlock(Block & block,
-                             ColId col_id,
-                             const String & col_name,
-                             const DataTypePtr & col_type,
-                             const ColumnPtr & col,
-                             const Field & default_value = Field())
+inline void addColumnToBlock(
+    Block & block,
+    ColId col_id,
+    const String & col_name,
+    const DataTypePtr & col_type,
+    const ColumnPtr & col,
+    const Field & default_value = Field())
 {
     ColumnWithTypeAndName column(col, col_type, col_name, col_id, default_value);
     block.insert(std::move(column));
@@ -187,8 +188,9 @@ inline Block toEmptyBlock(const ColumnDefines & column_defines)
 inline Block genBlock(const ColumnDefines & column_defines, const Columns & columns)
 {
     if (unlikely(column_defines.size() != columns.size()))
-        throw Exception("column_defines and columns have different size: " + DB::toString(column_defines.size()) + ", "
-                        + DB::toString(columns.size()));
+        throw Exception(
+            "column_defines and columns have different size: " + DB::toString(column_defines.size()) + ", "
+            + DB::toString(columns.size()));
 
     Block block;
     for (size_t i = 0; i < column_defines.size(); ++i)
@@ -265,7 +267,10 @@ inline Block readNextBlock(const BlockInputStreamPtr & in)
 }
 
 void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context);
-void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, const DataTypePtr & type, const ColumnPtr & data);
+void appendIntoHandleColumn(
+    ColumnVector<Handle>::Container & handle_column,
+    const DataTypePtr & type,
+    const ColumnPtr & data);
 
 inline void concat(Block & base, const Block & next)
 {

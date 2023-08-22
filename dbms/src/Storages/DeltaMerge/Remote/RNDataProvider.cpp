@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,9 +36,7 @@ Page ColumnFileDataProviderRNLocalPageCache::readTinyData(
 
 size_t ColumnFileDataProviderRNLocalPageCache::getTinyDataSize(PageId) const
 {
-    RUNTIME_CHECK_MSG(
-        false,
-        "ColumnFileDataProviderRNLocalPageCache currently does not support getTinyDataSize");
+    RUNTIME_CHECK_MSG(false, "ColumnFileDataProviderRNLocalPageCache currently does not support getTinyDataSize");
 }
 
 } // namespace DB::DM::Remote

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,8 @@ public:
 
     const OrderedNameSet & hiddenColumns(const String & table_type_name)
     {
-        if (mmt_storage_name == table_type_name || txn_storage_name == table_type_name || delta_tree_storage_name == table_type_name)
+        if (mmt_storage_name == table_type_name || txn_storage_name == table_type_name
+            || delta_tree_storage_name == table_type_name)
             return mutable_hidden;
         return empty;
     }
@@ -81,7 +82,10 @@ public:
             return (internal_del ? INTERNAL_DEL : NONE) | (definite_del ? DEFINITE_DEL : NONE) | getData(src_data);
         }
 
-        static UInt8 genDelMark(bool internal_del, bool definite_del = false) { return genDelMark(internal_del, definite_del, 0); }
+        static UInt8 genDelMark(bool internal_del, bool definite_del = false)
+        {
+            return genDelMark(internal_del, definite_del, 0);
+        }
     };
 
 private:

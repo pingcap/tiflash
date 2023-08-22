@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ namespace DB
     M(exception_before_dmfile_remove_encryption)                  \
     M(exception_before_dmfile_remove_from_disk)                   \
     M(force_triggle_background_merge_delta)                       \
-    M(force_triggle_foreground_flush)                             \
     M(exception_before_mpp_make_non_root_mpp_task_active)         \
     M(exception_before_mpp_register_non_root_mpp_task)            \
     M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
@@ -100,6 +99,7 @@ namespace DB
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
+    M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -120,7 +120,8 @@ namespace DB
     M(pause_when_ingesting_to_dt_store)   \
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
-    M(pause_query_init)
+    M(pause_query_init)                   \
+    M(pause_passive_flush_before_persist_region)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
@@ -268,8 +269,7 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optio
     throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
 }
 
-std::optional<std::any>
-FailPointHelper::getFailPointVal(const String & fail_point_name)
+std::optional<std::any> FailPointHelper::getFailPointVal(const String & fail_point_name)
 {
     if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
     {
@@ -312,7 +312,10 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
     for (const auto & string_token : string_tokens)
     {
         Poco::StringTokenizer pair_tokens(string_token, "-");
-        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        RUNTIME_ASSERT(
+            (pair_tokens.count() == 2),
+            log,
+            "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
         double rate = atof(pair_tokens[1].c_str()); //NOLINT(cert-err34-c): check conversion error manually
         RUNTIME_ASSERT((0 <= rate && rate <= 1.0), log, "RandomFailPoint trigger rate should in [0,1], while {}", rate);
         enableRandomFailPoint(pair_tokens[0], rate);
@@ -330,7 +333,10 @@ void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration &
     for (const auto & string_token : string_tokens)
     {
         Poco::StringTokenizer pair_tokens(string_token, "-");
-        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        RUNTIME_ASSERT(
+            (pair_tokens.count() == 2),
+            log,
+            "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
         disableFailPoint(pair_tokens[0]);
     }
     LOG_INFO(log, "Disable RandomFailPoints: {}", random_fail_point_cfg);

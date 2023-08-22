@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,11 +73,13 @@ public:
 
     grpc::Status leaseRevoke(LeaseID lease_id);
 
-    std::tuple<v3electionpb::LeaderKey, grpc::Status>
-    campaign(const String & name, const String & value, LeaseID lease_id);
+    std::tuple<v3electionpb::LeaderKey, grpc::Status> campaign(
+        const String & name,
+        const String & value,
+        LeaseID lease_id);
 
-    std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>>
-    watch(grpc::ClientContext * grpc_context);
+    std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>> watch(
+        grpc::ClientContext * grpc_context);
 
     std::tuple<mvccpb::KeyValue, grpc::Status> leader(const String & name);
 
@@ -106,10 +108,7 @@ private:
 class Session
 {
 public:
-    LeaseID leaseID() const
-    {
-        return lease_id;
-    }
+    LeaseID leaseID() const { return lease_id; }
 
     // Send one rpc LeaseKeepAliveRequest to etcd for
     // keeping the lease valid. Note that it could be blocked
@@ -122,7 +121,8 @@ public:
     bool isValid() const;
 
 private:
-    using KeepAliveWriter = std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
+    using KeepAliveWriter = std::unique_ptr<
+        grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
     using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
 
     Session(LeaseID l, TimePoint first_deadline, KeepAliveWriter && w)
@@ -131,8 +131,7 @@ private:
         , writer(std::move(w))
         , finished(false)
         , log(Logger::get(fmt::format("lease={:x}", lease_id)))
-    {
-    }
+    {}
 
     friend class Client;
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,10 @@ public:
     explicit FastAddPeerContext(uint64_t thread_count = 0);
 
     // Return parsed checkpoint data and its corresponding seq which is newer than `required_seq` if exists, otherwise return pair<required_seq, nullptr>
-    std::pair<UInt64, ParsedCheckpointDataHolderPtr> getNewerCheckpointData(Context & context, UInt64 store_id, UInt64 required_seq);
+    std::pair<UInt64, ParsedCheckpointDataHolderPtr> getNewerCheckpointData(
+        Context & context,
+        UInt64 store_id,
+        UInt64 required_seq);
 
 public:
     std::shared_ptr<AsyncTasks> tasks_trace;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -150,7 +150,10 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter != monitored_tasks.end())
         {
-            LOG_WARNING(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
+            LOG_WARNING(
+                log,
+                "task {} is repeatedly added to be monitored which is not an expected behavior!",
+                task_unique_id);
             return;
         }
 
@@ -163,7 +166,7 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter == monitored_tasks.end())
         {
-            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.");
+            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.", task_unique_id);
             return;
         }
 

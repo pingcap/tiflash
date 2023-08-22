@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,7 @@ using simd_t = __m128i;
 class SIMD
 {
 public:
-    SIMD(uint64_t high, uint64_t low)
-    noexcept;
+    SIMD(uint64_t high, uint64_t low) noexcept;
 
     [[nodiscard]] SIMD fold16(SIMD coeff) const noexcept;
 

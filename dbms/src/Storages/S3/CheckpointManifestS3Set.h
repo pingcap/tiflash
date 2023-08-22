@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,10 @@ public:
     Strings preservedManifests(size_t max_preserved, Int64 expired_hour, const Aws::Utils::DateTime & timepoint) const;
 
     // The manifest objects that should be removed from S3
-    std::vector<CheckpointManifestS3Object> outdatedObjects(size_t max_preserved, Int64 expired_hour, const Aws::Utils::DateTime & timepoint) const;
+    std::vector<CheckpointManifestS3Object> outdatedObjects(
+        size_t max_preserved,
+        Int64 expired_hour,
+        const Aws::Utils::DateTime & timepoint) const;
 
     const std::map<UInt64, CheckpointManifestS3Object> & objects() const { return manifests; }
 

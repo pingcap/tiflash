@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,10 +94,7 @@ public:
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
 
-    bool isAbort() const
-    {
-        return abort_flag->load(std::memory_order_seq_cst);
-    }
+    bool isAbort() const { return abort_flag->load(std::memory_order_seq_cst); }
 
 private:
     /**
@@ -154,35 +151,17 @@ public:
         , mock_region(mock_region_)
     {}
 
-    void readPrefix()
-    {
-        mock_data->readPrefix();
-    }
+    void readPrefix() { mock_data->readPrefix(); }
 
-    void readSuffix()
-    {
-        mock_data->readSuffix();
-    }
+    void readSuffix() { mock_data->readSuffix(); }
 
-    RegionPtr getRegion() const
-    {
-        return mock_region;
-    }
+    RegionPtr getRegion() const { return mock_region; }
 
-    Block read()
-    {
-        return mock_data->read();
-    }
+    Block read() { return mock_data->read(); }
 
-    static std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics()
-    {
-        return {};
-    }
+    static std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() { return {}; }
 
-    static SSTFilesToBlockInputStream::ProcessKeys getProcessKeys()
-    {
-        return {};
-    }
+    static SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() { return {}; }
 
 protected:
     BlockInputStreamPtr mock_data;

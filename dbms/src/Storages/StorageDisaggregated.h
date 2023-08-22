@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,15 +59,9 @@ public:
         const TiDBTableScan & table_scan_,
         const FilterConditions & filter_conditions_);
 
-    std::string getName() const override
-    {
-        return "StorageDisaggregated";
-    }
+    std::string getName() const override { return "StorageDisaggregated"; }
 
-    std::string getTableName() const override
-    {
-        return "StorageDisaggregated_" + table_scan.getTableScanExecutorID();
-    }
+    std::string getTableName() const override { return "StorageDisaggregated_" + table_scan.getTableScanExecutorID(); }
 
     BlockInputStreams read(
         const Names & column_names,
@@ -93,21 +87,16 @@ public:
 
 private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
-    BlockInputStreams readThroughS3(
-        const Context & db_context,
-        unsigned num_streams);
+    BlockInputStreams readThroughS3(const Context & db_context, unsigned num_streams);
     void readThroughS3(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         unsigned num_streams);
 
-    DM::Remote::RNReadTaskPtr buildReadTaskWithBackoff(
-        const Context & db_context);
+    DM::Remote::RNReadTaskPtr buildReadTaskWithBackoff(const Context & db_context);
 
-    DM::Remote::RNReadTaskPtr buildReadTask(
-        const Context & db_context,
-        const DM::ScanContextPtr & scan_context);
+    DM::Remote::RNReadTaskPtr buildReadTask(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
     void buildReadTaskForWriteNode(
         const Context & db_context,
@@ -129,9 +118,7 @@ private:
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    DM::RSOperatorPtr buildRSOperator(
-        const Context & db_context,
-        const DM::ColumnDefinesPtr & columns_to_read);
+    DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
     DM::Remote::RNWorkersPtr buildRNWorkers(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
@@ -158,16 +145,32 @@ private:
 
     /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
     BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
+    void readThroughExchange(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        unsigned num_streams);
     std::vector<RequestAndRegionIDs> buildDispatchRequests();
     void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
-    void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void buildReceiverSources(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
+    void buildReceiverStreams(
+        const std::vector<RequestAndRegionIDs> & dispatch_reqs,
+        unsigned num_streams,
+        DAGPipeline & pipeline);
+    void buildReceiverSources(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const std::vector<RequestAndRegionIDs> & dispatch_reqs,
+        unsigned num_streams);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void filterConditions(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void filterConditions(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        DAGExpressionAnalyzer & analyzer);
     ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void extraCast(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

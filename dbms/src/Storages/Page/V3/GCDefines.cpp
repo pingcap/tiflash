@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,22 +75,23 @@ String GCTimeStatistics::toLogging() const
             external_page_get_alive_ns / SCALE_NS_TO_MS,
             external_page_remove_ns / SCALE_NS_TO_MS);
     };
-    return fmt::format("GC finished{}."
-                       " [total time={}ms]"
-                       " [compact wal={}ms] [compact directory={}ms] [compact spacemap={}ms]"
-                       " [gc status={}ms] [gc entries={}ms] [gc data={}ms]"
-                       " [gc apply={}ms]"
-                       "{}", // a placeholder for external page gc at last
-                       stage_suffix,
-                       total_cost_ms,
-                       compact_wal_ms,
-                       compact_directory_ms,
-                       compact_spacemap_ms,
-                       full_gc_prepare_ms,
-                       full_gc_get_entries_ms,
-                       full_gc_blobstore_copy_ms,
-                       full_gc_apply_ms,
-                       get_external_msg());
+    return fmt::format(
+        "GC finished{}."
+        " [total time={}ms]"
+        " [compact wal={}ms] [compact directory={}ms] [compact spacemap={}ms]"
+        " [gc status={}ms] [gc entries={}ms] [gc data={}ms]"
+        " [gc apply={}ms]"
+        "{}", // a placeholder for external page gc at last
+        stage_suffix,
+        total_cost_ms,
+        compact_wal_ms,
+        compact_directory_ms,
+        compact_spacemap_ms,
+        full_gc_prepare_ms,
+        full_gc_get_entries_ms,
+        full_gc_blobstore_copy_ms,
+        full_gc_apply_ms,
+        get_external_msg());
 }
 
 void GCTimeStatistics::finishCleanExternalPage(UInt64 clean_cost_ms)
@@ -143,7 +144,8 @@ bool ExternalPageCallbacksManager<Trait>::gc(
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
-    const GCTimeStatistics statistics = doGC(blob_store, page_directory, write_limiter, read_limiter, remote_valid_sizes);
+    const GCTimeStatistics statistics
+        = doGC(blob_store, page_directory, write_limiter, read_limiter, remote_valid_sizes);
     assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
     LOG_IMPL(log, statistics.getLoggingLevel(), statistics.toLogging());
 
@@ -153,7 +155,10 @@ bool ExternalPageCallbacksManager<Trait>::gc(
 // Remove external pages for all tables
 // TODO: `clean_external_page` for all tables may slow down the whole gc process when there are lots of table.
 template <typename Trait>
-void ExternalPageCallbacksManager<Trait>::cleanExternalPage(PageDirectory & page_directory, Stopwatch & gc_watch, GCTimeStatistics & statistics)
+void ExternalPageCallbacksManager<Trait>::cleanExternalPage(
+    PageDirectory & page_directory,
+    Stopwatch & gc_watch,
+    GCTimeStatistics & statistics)
 {
     // Fine grained lock on `callbacks_mutex`.
     // So that adding/removing a storage will not be blocked for the whole
@@ -245,7 +250,8 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     }
     const auto & del_entries = page_directory.gcInMemEntries(options);
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory)
+        .Observe(statistics.compact_directory_ms / 1000.0);
 
     // Compact WAL after in-memory GC in PageDirectory in order to reduce the overhead of dumping useless entries
     statistics.compact_wal_happen = page_directory.tryDumpSnapshot(write_limiter, force_wal_compact);
@@ -263,7 +269,8 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     // It will only update the SpaceMap which in memory.
     blob_store.remove(del_entries);
     statistics.compact_spacemap_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap).Observe(statistics.compact_spacemap_ms / 1000.0);
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap)
+        .Observe(statistics.compact_spacemap_ms / 1000.0);
 
     // Note that if full GC is not executed, below metrics won't be shown on grafana but it should
     // only take few ms to finish these in-memory operations. Check them out by the logs if
@@ -282,17 +289,24 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     }
 
     // Execute full gc
-    GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(std::accumulate(blob_ids_need_gc.begin(), blob_ids_need_gc.end(), 0, [&](Int64 acc, const auto & page_type_and_blob_ids) {
-        return acc + page_type_and_blob_ids.second.size();
-    }));
+    GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc)
+        .Increment(std::accumulate(
+            blob_ids_need_gc.begin(),
+            blob_ids_need_gc.end(),
+            0,
+            [&](Int64 acc, const auto & page_type_and_blob_ids) {
+                return acc + page_type_and_blob_ids.second.size();
+            }));
     // 4. Filter out entries in MVCC by BlobId.
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
     auto page_type_gc_infos = page_directory.getEntriesByBlobIdsForDifferentPageTypes(blob_ids_need_gc);
     statistics.full_gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    auto entries_size_to_move = std::accumulate(page_type_gc_infos.begin(), page_type_gc_infos.end(), 0, [&](UInt64 acc, const auto & page_type_and_gc_info) {
-        return acc + std::get<2>(page_type_and_gc_info);
-    });
+    auto entries_size_to_move = std::accumulate(
+        page_type_gc_infos.begin(),
+        page_type_gc_infos.end(),
+        0,
+        [&](UInt64 acc, const auto & page_type_and_gc_info) { return acc + std::get<2>(page_type_and_gc_info); });
     if (entries_size_to_move == 0)
     {
         cleanExternalPage(page_directory, gc_watch, statistics);
@@ -308,8 +322,10 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(page_type_gc_infos, write_limiter, read_limiter);
     statistics.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_rewrite).Observe( //
-        (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms) / 1000.0);
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_rewrite)
+        .Observe( //
+            (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms)
+            / 1000.0);
     RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
     // 6. MVCC gc apply
@@ -321,7 +337,8 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     // Those BlobFiles should be cleaned during next restore.
     page_directory.gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_commit).Observe(statistics.full_gc_apply_ms / 1000.0);
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_commit)
+        .Observe(statistics.full_gc_apply_ms / 1000.0);
 
     SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 

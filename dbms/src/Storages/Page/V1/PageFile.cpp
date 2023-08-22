@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,8 @@ using IsPut = std::underlying_type<WriteBatch::WriteType>::type;
 using PageOffset = UInt64;
 using Checksum = UInt64;
 
-static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
+static const size_t PAGE_META_SIZE
+    = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<std::span<char>, std::span<char>> genWriteData( //
@@ -202,9 +203,10 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         {
             std::stringstream ss;
             ss << "expected: " << std::hex << wb_checksum << ", but: " << checksum_calc;
-            throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data)
-                                + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
-                            ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            throw Exception(
+                "Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data)
+                    + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
+                ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
 
         // recover WriteBatch
@@ -266,8 +268,12 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
     : page_file(page_file_)
     , sync_on_write(sync_on_write_)
-    , data_file(page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file))
-    , meta_file(page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file))
+    , data_file(
+          page_file.file_provider
+              ->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file))
+    , meta_file(
+          page_file.file_provider
+              ->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file))
 {}
 
 PageFile::Writer::~Writer()
@@ -311,8 +317,7 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 PageFile::Reader::Reader(PageFile & page_file)
     : data_file_path(page_file.dataPath())
     , data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
-{
-}
+{}
 
 PageFile::Reader::~Reader()
 {
@@ -353,8 +358,9 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
             auto checksum = CityHash_v1_0_2::CityHash64(pos, page_cache.size);
             if (checksum != page_cache.checksum)
             {
-                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
-                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                throw Exception(
+                    "Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
+                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
@@ -402,8 +408,9 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
             auto checksum = CityHash_v1_0_2::CityHash64(data_buf, page_cache.size);
             if (checksum != page_cache.checksum)
             {
-                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
-                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                throw Exception(
+                    "Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
+                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
@@ -432,7 +439,14 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
 const PageFile::Version PageFile::CURRENT_VERSION = 1;
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Poco::Logger * log_)
+PageFile::PageFile(
+    PageFileId file_id_,
+    UInt32 level_,
+    const std::string & parent_path,
+    const FileProviderPtr & file_provider_,
+    PageFile::Type type_,
+    bool is_create,
+    Poco::Logger * log_)
     : file_id(file_id_)
     , level(level_)
     , type(type_)
@@ -454,8 +468,11 @@ PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & paren
     }
 }
 
-std::pair<PageFile, PageFile::Type>
-PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log)
+std::pair<PageFile, PageFile::Type> PageFile::recover(
+    const String & parent_path,
+    const FileProviderPtr & file_provider_,
+    const String & page_file_name,
+    Poco::Logger * log)
 {
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
@@ -525,12 +542,24 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Poco::Logger * log)
+PageFile PageFile::newPageFile(
+    PageFileId file_id,
+    UInt32 level,
+    const std::string & parent_path,
+    const FileProviderPtr & file_provider,
+    PageFile::Type type,
+    Poco::Logger * log)
 {
     return PageFile(file_id, level, parent_path, file_provider, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Poco::Logger * log)
+PageFile PageFile::openPageFileForRead(
+    PageFileId file_id,
+    UInt32 level,
+    const std::string & parent_path,
+    const FileProviderPtr & file_provider,
+    PageFile::Type type,
+    Poco::Logger * log)
 {
     return PageFile(file_id, level, parent_path, file_provider, type, false, log);
 }
@@ -540,9 +569,10 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
     const auto path = metaPath();
     Poco::File file(path);
     if (unlikely(!file.exists()))
-        throw Exception("Try to read meta of PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
-                            + ", but not exists. Path: " + path,
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Try to read meta of PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
+                + ", but not exists. Path: " + path,
+            ErrorCodes::LOGICAL_ERROR);
 
     const size_t file_size = file.getSize();
     auto meta_file = file_provider->newRandomAccessFile(path, EncryptionPath(path, ""));

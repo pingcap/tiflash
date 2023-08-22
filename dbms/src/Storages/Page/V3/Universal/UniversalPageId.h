@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,22 +41,10 @@ public:
         id.swap(id_);
         return *this;
     }
-    bool operator==(const UniversalPageId & rhs) const noexcept
-    {
-        return id == rhs.id;
-    }
-    bool operator!=(const UniversalPageId & rhs) const noexcept
-    {
-        return id != rhs.id;
-    }
-    bool operator>=(const UniversalPageId & rhs) const noexcept
-    {
-        return id >= rhs.id;
-    }
-    size_t rfind(const String & str, size_t pos) const noexcept
-    {
-        return id.rfind(str, pos);
-    }
+    bool operator==(const UniversalPageId & rhs) const noexcept { return id == rhs.id; }
+    bool operator!=(const UniversalPageId & rhs) const noexcept { return id != rhs.id; }
+    bool operator>=(const UniversalPageId & rhs) const noexcept { return id >= rhs.id; }
+    size_t rfind(const String & str, size_t pos) const noexcept { return id.rfind(str, pos); }
 
     const char * data() const { return id.data(); }
     size_t size() const { return id.size(); }
@@ -95,10 +83,7 @@ public:
 template <>
 struct fmt::formatter<DB::UniversalPageId>
 {
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        return ctx.begin();
-    }
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const DB::UniversalPageId & value, FormatContext & ctx) const
@@ -113,10 +98,7 @@ namespace std
 template <>
 struct hash<DB::UniversalPageId>
 {
-    std::size_t operator()(const DB::UniversalPageId & k) const
-    {
-        return hash<std::string>()(k.asStr());
-    }
+    std::size_t operator()(const DB::UniversalPageId & k) const { return hash<std::string>()(k.asStr()); }
 };
 
 } // namespace std

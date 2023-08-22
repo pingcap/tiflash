@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,7 +136,12 @@ public:
     /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
-    virtual bool append(const DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
+    virtual bool append(
+        const DMContext & /*dm_context*/,
+        const Block & /*data*/,
+        size_t /*offset*/,
+        size_t /*limit*/,
+        size_t /*data_bytes*/)
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }
@@ -155,7 +160,11 @@ public:
     /// Read data from this reader and store the result into output_cols.
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.
     /// Returns <actual_offset, actual_limit>
-    virtual std::pair<size_t, size_t> readRows(MutableColumns & /*output_cols*/, size_t /*rows_offset*/, size_t /*rows_limit*/, const RowKeyRange * /*range*/)
+    virtual std::pair<size_t, size_t> readRows(
+        MutableColumns & /*output_cols*/,
+        size_t /*rows_offset*/,
+        size_t /*rows_limit*/,
+        const RowKeyRange * /*range*/)
     {
         throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
     }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,24 +38,37 @@ public:
         };
         size_t executor_index = 0;
         DAGRequestBuilder builder(executor_index);
-        builder
-            .mockTable("test", "t1", 0 /*table_id=*/, columns)
+        builder.mockTable("test", "t1", 0 /*table_id=*/, columns)
             .sort({{"c1", false}, {"c2", false}, {"c3", false}}, true, fine_grained_shuffle_stream_count)
-            .window(RowNumber(),
-                    {{"c1", false}, {"c2", false}, {"c3", false}},
-                    {{"c1", false}, {"c2", false}, {"c3", false}},
-                    buildDefaultRowsFrame(),
-                    fine_grained_shuffle_stream_count);
+            .window(
+                RowNumber(),
+                {{"c1", false}, {"c2", false}, {"c3", false}},
+                {{"c1", false}, {"c2", false}, {"c3", false}},
+                buildDefaultRowsFrame(),
+                fine_grained_shuffle_stream_count);
         tipb::DAGRequest req;
         MPPInfo mpp_info(0, 0, 0, 0, -1, -1, {}, std::unordered_map<String, std::vector<Int64>>{});
-        builder.getRoot()->toTiPBExecutor(req.mutable_root_executor(), /*collator_id=*/0, mpp_info, TiFlashTestEnv::getContext());
+        builder.getRoot()
+            ->toTiPBExecutor(req.mutable_root_executor(), /*collator_id=*/0, mpp_info, TiFlashTestEnv::getContext());
         assert(req.root_executor().tp() == tipb::TypeWindow);
         window = req.root_executor().window();
         assert(window.child().tp() == tipb::TypeSort);
         sort = window.child().sort();
     }
 
-    static void prepareWindowStream(Context & context, int concurrency, int source_num, int total_rows, uint32_t fine_grained_shuffle_stream_count, uint64_t fine_grained_shuffle_batch_size, const std::vector<Block> & blocks, BlockInputStreamPtr & sender_stream, BlockInputStreamPtr & receiver_stream, std::shared_ptr<SenderHelper> & sender_helper, std::shared_ptr<ReceiverHelper> & receiver_helper, bool build_window = true)
+    static void prepareWindowStream(
+        Context & context,
+        int concurrency,
+        int source_num,
+        int total_rows,
+        uint32_t fine_grained_shuffle_stream_count,
+        uint64_t fine_grained_shuffle_batch_size,
+        const std::vector<Block> & blocks,
+        BlockInputStreamPtr & sender_stream,
+        BlockInputStreamPtr & receiver_stream,
+        std::shared_ptr<SenderHelper> & sender_helper,
+        std::shared_ptr<ReceiverHelper> & receiver_helper,
+        bool build_window = true)
     {
         tipb::Window window;
         tipb::Sort sort;
@@ -65,7 +78,13 @@ public:
         receiver_helper = std::make_shared<ReceiverHelper>(concurrency, source_num, fine_grained_shuffle_stream_count);
         pipeline.streams = receiver_helper->buildExchangeReceiverStream();
 
-        sender_helper = std::make_shared<SenderHelper>(source_num, concurrency, fine_grained_shuffle_stream_count, fine_grained_shuffle_batch_size, receiver_helper->queues, receiver_helper->fields);
+        sender_helper = std::make_shared<SenderHelper>(
+            source_num,
+            concurrency,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            receiver_helper->queues,
+            receiver_helper->fields);
         sender_stream = sender_helper->buildUnionStream(total_rows, blocks);
 
         context.setDAGContext(sender_helper->dag_context.get());
@@ -83,7 +102,11 @@ public:
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, "mock_executor_id_squashing");
         });
-        receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
+        receiver_stream = std::make_shared<UnionBlockInputStream<>>(
+            pipeline.streams,
+            BlockInputStreams{},
+            concurrency,
+            /*req_id=*/"");
     }
 };
 
@@ -110,7 +133,18 @@ try
         BlockInputStreamPtr sender_stream;
         BlockInputStreamPtr receiver_stream;
 
-        prepareWindowStream(context, concurrency, source_num, total_rows, fine_grained_shuffle_stream_count, fine_grained_shuffle_batch_size, *blocks, sender_stream, receiver_stream, sender_helper, receiver_helper);
+        prepareWindowStream(
+            context,
+            concurrency,
+            source_num,
+            total_rows,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            *blocks,
+            sender_stream,
+            receiver_stream,
+            sender_helper,
+            receiver_helper);
 
         runAndWait(receiver_helper, receiver_stream, sender_helper, sender_stream);
     }
@@ -152,7 +186,19 @@ try
         BlockInputStreamPtr receiver_stream;
 
         // Only build partial sort.
-        prepareWindowStream(context, concurrency, source_num, total_rows, fine_grained_shuffle_stream_count, fine_grained_shuffle_batch_size, *blocks, sender_stream, receiver_stream, sender_helper, receiver_helper, /*build_window=*/false);
+        prepareWindowStream(
+            context,
+            concurrency,
+            source_num,
+            total_rows,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            *blocks,
+            sender_stream,
+            receiver_stream,
+            sender_helper,
+            receiver_helper,
+            /*build_window=*/false);
 
         runAndWait(receiver_helper, receiver_stream, sender_helper, sender_stream);
     }

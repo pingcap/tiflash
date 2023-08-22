@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,11 @@ public:
         Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
+        [[nodiscard]] size_t write(
+            DB::WriteBatch & wb,
+            PageEntriesEdit & edit,
+            const WriteLimiterPtr & write_limiter = nullptr,
+            bool background = false);
         void tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String & parentPath() const;
@@ -72,7 +76,8 @@ public:
     };
 
     /// Reader is safe to used by multi threads.
-    class Reader : private boost::noncopyable
+    class Reader
+        : private boost::noncopyable
         , private Allocator<false>
     {
         friend class PageFile;
@@ -83,7 +88,10 @@ public:
 
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
-        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
+        PageMap read(
+            PageIdAndEntries & to_read,
+            const ReadLimiterPtr & read_limiter = nullptr,
+            bool background = false);
 
         struct FieldReadInfo
         {
@@ -136,14 +144,16 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        static MetaMergingReaderPtr createFrom(PageFile & page_file,
-                                               size_t max_meta_offset,
-                                               const ReadLimiterPtr & read_limiter = nullptr,
-                                               const bool background = false);
+        static MetaMergingReaderPtr createFrom(
+            PageFile & page_file,
+            size_t max_meta_offset,
+            const ReadLimiterPtr & read_limiter = nullptr,
+            const bool background = false);
 
-        static MetaMergingReaderPtr createFrom(PageFile & page_file,
-                                               const ReadLimiterPtr & read_limiter = nullptr,
-                                               const bool background = false);
+        static MetaMergingReaderPtr createFrom(
+            PageFile & page_file,
+            const ReadLimiterPtr & read_limiter = nullptr,
+            const bool background = false);
 
         MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
@@ -167,8 +177,9 @@ public:
 
         String toString() const
         {
-            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_write_batch_sequence)
-                + ", meta offset: " + DB::toString(meta_file_offset) + ", data offset: " + DB::toString(data_file_offset);
+            return "MergingReader of " + page_file.toString() + ", sequence no: "
+                + DB::toString(curr_write_batch_sequence) + ", meta offset: " + DB::toString(meta_file_offset)
+                + ", data offset: " + DB::toString(data_file_offset);
         }
 
         WriteBatch::SequenceID writeBatchSequence() const { return curr_write_batch_sequence; }
@@ -192,7 +203,10 @@ public:
         }
 
     private:
-        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background = false);
+        void initialize(
+            std::optional<size_t> max_meta_offset,
+            const ReadLimiterPtr & read_limiter,
+            const bool background = false);
 
     private:
         PageFile & page_file;
@@ -285,22 +299,27 @@ public:
     /// Create an empty page file.
     PageFile() = default;
     /// Recover a page file from disk.
-    static std::pair<PageFile, Type>
-    recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log);
+    static std::pair<PageFile, Type> recover(
+        const String & parent_path,
+        const FileProviderPtr & file_provider_,
+        const String & page_file_name,
+        Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId file_id,
-                                UInt32 level,
-                                const String & parent_path,
-                                const FileProviderPtr & file_provider_,
-                                Type type,
-                                Poco::Logger * log);
+    static PageFile newPageFile(
+        PageFileId file_id,
+        UInt32 level,
+        const String & parent_path,
+        const FileProviderPtr & file_provider_,
+        Type type,
+        Poco::Logger * log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId file_id,
-                                        UInt32 level,
-                                        const String & parent_path,
-                                        const FileProviderPtr & file_provider_,
-                                        Type type,
-                                        Poco::Logger * log);
+    static PageFile openPageFileForRead(
+        PageFileId file_id,
+        UInt32 level,
+        const String & parent_path,
+        const FileProviderPtr & file_provider_,
+        Type type,
+        Poco::Logger * log);
     /// If page file is exist.
     static bool isPageFileExist(
         PageFileIdAndLevel file_id,
@@ -330,9 +349,10 @@ public:
     std::shared_ptr<Reader> createReader()
     {
         if (unlikely(type != Type::Formal))
-            throw Exception("Try to create reader for PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
-                                + " of illegal type: " + typeToString(type),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Try to create reader for PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
+                    + " of illegal type: " + typeToString(type),
+                ErrorCodes::LOGICAL_ERROR);
 
         return std::make_shared<Reader>(*this);
     }
@@ -384,17 +404,21 @@ public:
         return (file_encrypted && encryption_enabled) || (!file_encrypted && !encryption_enabled);
     }
 
-    String toString() const { return "PageFile_" + DB::toString(file_id) + "_" + DB::toString(level) + ", type: " + typeToString(type); }
+    String toString() const
+    {
+        return "PageFile_" + DB::toString(file_id) + "_" + DB::toString(level) + ", type: " + typeToString(type);
+    }
 
 private:
     /// Create a new page file.
-    PageFile(PageFileId file_id_,
-             UInt32 level_,
-             const String & parent_path,
-             const FileProviderPtr & file_provider_,
-             Type type_,
-             bool is_create,
-             Poco::Logger * log);
+    PageFile(
+        PageFileId file_id_,
+        UInt32 level_,
+        const String & parent_path,
+        const FileProviderPtr & file_provider_,
+        Type type_,
+        bool is_create,
+        Poco::Logger * log);
 
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,14 +37,10 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     ASTPtr query;
 
-    bool parsed = select_p.parse(pos, query, expected)
-        || show_tables_p.parse(pos, query, expected)
-        || describe_table_p.parse(pos, query, expected)
-        || show_processlist_p.parse(pos, query, expected)
-        || create_p.parse(pos, query, expected)
-        || alter_p.parse(pos, query, expected)
-        || rename_p.parse(pos, query, expected)
-        || drop_p.parse(pos, query, expected);
+    bool parsed = select_p.parse(pos, query, expected) || show_tables_p.parse(pos, query, expected)
+        || describe_table_p.parse(pos, query, expected) || show_processlist_p.parse(pos, query, expected)
+        || create_p.parse(pos, query, expected) || alter_p.parse(pos, query, expected)
+        || rename_p.parse(pos, query, expected) || drop_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

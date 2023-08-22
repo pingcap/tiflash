@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,8 +47,7 @@ extern const int ILLEGAL_COLUMN;
 InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, const Context & context_)
     : query_ptr(query_ptr_)
     , context(context_)
-{
-}
+{}
 
 BlockIO InterpreterAlterQuery::execute()
 {
@@ -118,8 +117,11 @@ void InterpreterAlterQuery::parseAlter(
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
 
-            if (ast_col_decl.name == MutableSupport::version_column_name || ast_col_decl.name == MutableSupport::delmark_column_name)
-                throw Exception("Internal column name can not be used: " + ast_col_decl.name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            if (ast_col_decl.name == MutableSupport::version_column_name
+                || ast_col_decl.name == MutableSupport::delmark_column_name)
+                throw Exception(
+                    "Internal column name can not be used: " + ast_col_decl.name,
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
             command.column_name = ast_col_decl.name;
             if (ast_col_decl.type)
@@ -142,11 +144,14 @@ void InterpreterAlterQuery::parseAlter(
             if (params.partition)
             {
                 if (!params.clear_column)
-                    throw Exception("Can't DROP COLUMN from partition. It is possible only CLEAR COLUMN in partition", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(
+                        "Can't DROP COLUMN from partition. It is possible only CLEAR COLUMN in partition",
+                        ErrorCodes::BAD_ARGUMENTS);
 
                 const Field & column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
-                if (column_name == MutableSupport::version_column_name || column_name == MutableSupport::delmark_column_name)
+                if (column_name == MutableSupport::version_column_name
+                    || column_name == MutableSupport::delmark_column_name)
                 {
                     FieldVisitorToString to_string;
                     auto err_msg = "Internal column name can not be dropped: " + applyVisitor(to_string, column_name);
@@ -157,14 +162,19 @@ void InterpreterAlterQuery::parseAlter(
             else
             {
                 if (params.clear_column)
-                    throw Exception(R"("ALTER TABLE table CLEAR COLUMN column" queries are not supported yet. Use "CLEAR COLUMN column IN PARTITION".)", ErrorCodes::NOT_IMPLEMENTED);
+                    throw Exception(
+                        R"("ALTER TABLE table CLEAR COLUMN column" queries are not supported yet. Use "CLEAR COLUMN column IN PARTITION".)",
+                        ErrorCodes::NOT_IMPLEMENTED);
 
                 AlterCommand command;
                 command.type = AlterCommand::DROP_COLUMN;
                 command.column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
-                if (command.column_name == MutableSupport::version_column_name || command.column_name == MutableSupport::delmark_column_name)
-                    throw Exception("Internal column name can not be dropped: " + command.column_name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                if (command.column_name == MutableSupport::version_column_name
+                    || command.column_name == MutableSupport::delmark_column_name)
+                    throw Exception(
+                        "Internal column name can not be dropped: " + command.column_name,
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
                 out_alter_commands.emplace_back(std::move(command));
             }
@@ -176,8 +186,11 @@ void InterpreterAlterQuery::parseAlter(
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
 
-            if (ast_col_decl.name == MutableSupport::version_column_name || ast_col_decl.name == MutableSupport::delmark_column_name)
-                throw Exception("Internal column name can not be modified: " + ast_col_decl.name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            if (ast_col_decl.name == MutableSupport::version_column_name
+                || ast_col_decl.name == MutableSupport::delmark_column_name)
+                throw Exception(
+                    "Internal column name can not be modified: " + ast_col_decl.name,
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
             command.column_name = ast_col_decl.name;
             if (ast_col_decl.type)
@@ -232,8 +245,9 @@ void InterpreterAlterQuery::PartitionCommands::validate(const IStorage * table)
 
             if (!table->getColumns().hasPhysical(column_name))
             {
-                throw Exception("Wrong column name. Cannot find column " + column_name + " to clear it from partition",
-                                DB::ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    "Wrong column name. Cannot find column " + column_name + " to clear it from partition",
+                    DB::ErrorCodes::ILLEGAL_COLUMN);
             }
         }
     }

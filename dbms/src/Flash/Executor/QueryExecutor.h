@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,7 @@ class DAGContext;
 class QueryExecutor
 {
 public:
-    QueryExecutor(
-        const MemoryTrackerPtr & memory_tracker_,
-        Context & context_,
-        const String & req_id)
+    QueryExecutor(const MemoryTrackerPtr & memory_tracker_, Context & context_, const String & req_id)
         : memory_tracker(memory_tracker_)
         , context(context_)
         , log(Logger::get(req_id))

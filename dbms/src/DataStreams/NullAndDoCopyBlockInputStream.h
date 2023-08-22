@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,8 @@ class NullAndDoCopyBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     NullAndDoCopyBlockInputStream(const BlockInputStreamPtr & input_, BlockOutputStreamPtr output_)
-        : input(input_), output(output_)
+        : input(input_)
+        , output(output_)
     {
         children.push_back(input_);
     }
@@ -56,4 +57,4 @@ private:
     BlockOutputStreamPtr output;
 };
 
-}
+} // namespace DB

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,26 +42,21 @@ public:
     // Read stream for single column
     struct Stream
     {
-        Stream(DMFileReader & reader,
-               ColId col_id,
-               const String & file_name_base,
-               size_t aio_threshold,
-               size_t max_read_buffer_size,
-               const LoggerPtr & log,
-               const ReadLimiterPtr & read_limiter);
+        Stream(
+            DMFileReader & reader,
+            ColId col_id,
+            const String & file_name_base,
+            size_t aio_threshold,
+            size_t max_read_buffer_size,
+            const LoggerPtr & log,
+            const ReadLimiterPtr & read_limiter);
 
         double avg_size_hint;
         MarksInCompressedFilePtr marks;
 
-        size_t getOffsetInFile(size_t i) const
-        {
-            return (*marks)[i].offset_in_compressed_file;
-        }
+        size_t getOffsetInFile(size_t i) const { return (*marks)[i].offset_in_compressed_file; }
 
-        size_t getOffsetInDecompressedBlock(size_t i) const
-        {
-            return (*marks)[i].offset_in_decompressed_block;
-        }
+        size_t getOffsetInDecompressedBlock(size_t i) const { return (*marks)[i].offset_in_decompressed_block; }
 
         std::unique_ptr<CompressedSeekableReaderBuffer> buf;
     };
@@ -123,18 +118,20 @@ public:
 private:
     bool shouldSeek(size_t pack_id) const;
 
-    void readFromDisk(ColumnDefine & column_define,
-                      MutableColumnPtr & column,
-                      size_t start_pack_id,
-                      size_t read_rows,
-                      size_t skip_packs,
-                      bool force_seek);
-    void readColumn(ColumnDefine & column_define,
-                    ColumnPtr & column,
-                    size_t start_pack_id,
-                    size_t pack_count,
-                    size_t read_rows,
-                    size_t skip_packs);
+    void readFromDisk(
+        ColumnDefine & column_define,
+        MutableColumnPtr & column,
+        size_t start_pack_id,
+        size_t read_rows,
+        size_t skip_packs,
+        bool force_seek);
+    void readColumn(
+        ColumnDefine & column_define,
+        ColumnPtr & column,
+        size_t start_pack_id,
+        size_t pack_count,
+        size_t read_rows,
+        size_t skip_packs);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
     DMFilePtr dmfile;
