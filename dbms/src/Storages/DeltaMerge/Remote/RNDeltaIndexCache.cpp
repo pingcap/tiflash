@@ -30,11 +30,11 @@ DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
         = cache.getOrSet(key, [&key] { return std::make_shared<CacheValue>(std::make_shared<DeltaIndex>(key), 0); });
     if (miss)
     {
-        GET_METRIC(tiflash_rn_delta_index_cache, type_miss).Increment();
+        GET_METRIC(tiflash_storage_delta_index_cache, type_miss).Increment();
     }
     else
     {
-        GET_METRIC(tiflash_rn_delta_index_cache, type_hit).Increment();
+        GET_METRIC(tiflash_storage_delta_index_cache, type_hit).Increment();
     }
     return value->delta_index;
 }

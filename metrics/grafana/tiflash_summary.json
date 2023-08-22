@@ -13247,7 +13247,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_rn_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, instance)",
+              "expr": "sum(rate(tiflash_storage_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, instance)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -13257,7 +13257,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_rn_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m])) by (instance) /sum(rate(tiflash_rn_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_storage_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m])) by (instance) /sum(rate(tiflash_storage_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "hide": false,
               "interval": "",
               "legendFormat": "hit_ratio-{{instance}}",
