@@ -134,21 +134,17 @@ bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
 {
     if constexpr (is_begin)
     {
-        if constexpr ((is_preceding && is_desc) || (!is_preceding && is_desc))
+        if constexpr (is_desc)
             return lessEqual(cursor_value, current_row_aux_value);
-        else if constexpr ((is_preceding && !is_desc) || (!is_preceding && !is_desc))
-            return greaterEqual(cursor_value, current_row_aux_value);
         else
-            throw Exception("Unhandled case happens");
+            return greaterEqual(cursor_value, current_row_aux_value);
     }
     else
     {
-        if constexpr ((!is_preceding && !is_desc) || (is_preceding && !is_desc))
+        if constexpr (!is_desc)
             return lessEqual(cursor_value, current_row_aux_value);
-        else if constexpr ((!is_preceding && is_desc) || (is_preceding && is_desc))
-            return greaterEqual(cursor_value, current_row_aux_value);
         else
-            throw Exception("Unhandled case happens");
+            return greaterEqual(cursor_value, current_row_aux_value);
     }
 }
 
