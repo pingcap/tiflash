@@ -141,6 +141,7 @@ public:
             properties.start_ts);
         gather_ids.push_back(gather_id);
         running_queries.emplace_back([&, properties, gather_id]() {
+            BlockInputStreamPtr stream;
             try
             {
                 auto tasks = prepareMPPTasks(
@@ -148,7 +149,7 @@ public:
                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                         .project({col("max(l_table.s)"), col("l_table.s")}),
                     properties);
-                executeMPPTasks(tasks, properties);
+                executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
             {
@@ -895,6 +896,7 @@ try
                 properties.start_ts);
             /// currently all the failpoints are automatically disabled after triggered once, so have to enable it before every run
             FailPointHelper::enableFailPoint(failpoint);
+            BlockInputStreamPtr stream;
             try
             {
                 auto tasks = prepareMPPTasks(
@@ -902,7 +904,7 @@ try
                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                         .project({col("max(l_table.s)"), col("l_table.s")}),
                     properties);
-                executeMPPTasks(tasks, properties);
+                executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
             {
