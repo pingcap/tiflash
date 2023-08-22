@@ -168,6 +168,32 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         }
     }
 }
+
+void updateSettingsForAutoSpill(ContextPtr & context, const LoggerPtr & log)
+{
+    if (context->getSettingsRef().max_memory_usage.getActualBytes(1024 * 1024 * 1024ULL) > 0)
+    {
+        /// auto spill is set, disable operator spill threshold
+        bool need_log_warning = false;
+        if (context->getSettingsRef().max_bytes_before_external_sort > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_external_sort", "0");
+        }
+        if (context->getSettingsRef().max_bytes_before_external_group_by > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_external_group_by", "0");
+        }
+        if (context->getSettingsRef().max_bytes_before_external_join > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_external_join", "0");
+        }
+        if (need_log_warning)
+            LOG_WARNING(log, "auto spill is enabled, so per operator's memory threshold is disabled");
+    }
+}
 } // namespace
 
 grpc::Status FlashService::Coprocessor(
@@ -683,7 +709,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
     LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
-    auto [context, status] = createDBContextForTest();
+    auto [test_context, status] = createDBContextForTest();
     if (!status.ok())
     {
         auto err = std::make_unique<mpp::Error>();
@@ -692,7 +718,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
         response->set_allocated_error(err.release());
         return status;
     }
-    auto & tmt_context = context->getTMTContext();
+    auto & tmt_context = test_context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->abortMPPGather(
         MPPGatherId(request->meta()),
@@ -756,6 +782,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         }
 
         updateSettingsFromTiDB(grpc_context, tmp_context, log);
+        updateSettingsForAutoSpill(tmp_context, log);
 
         tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
         tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
