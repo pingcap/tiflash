@@ -280,9 +280,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
         }
         auto scheduler = getSchedulerWithoutLock(gather_id.query_id);
         if likely (scheduler != nullptr)
-        {
             scheduler->deleteQuery(gather_id.query_id, *this, true, gather_id.gather_id);
-        }
         cv.notify_all();
     }
 
@@ -348,10 +346,14 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
 
-    // gjt todo: check rg exists
     const auto & resource_group_name = task->getResourceGroupName();
     if (resource_group_schedulers.find(resource_group_name) == resource_group_schedulers.end())
     {
+        String err_msg = LocalAdmissionController::global_instance->isResourceGroupValid(resource_group_name);
+        if (!err_msg.empty())
+        {
+            throw Exception(err_msg);
+        }
         LOG_DEBUG(log, "new min tso scheduler added {}", resource_group_name);
         auto resource_group_scheduler = std::make_shared<MinTSOScheduler>(min_tso_config);
         resource_group_schedulers.insert({task->getResourceGroupName(), resource_group_scheduler});
@@ -505,9 +507,11 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
             catch (...)
             {
                 LOG_ERROR(log, "rg got error {}", ele.first);
-                if (is_throttled)
-                    continue;
+                is_throttled = false;
             }
+
+            if (is_throttled)
+                continue;
 
             non_throttled_rg_active_set_size += ele.second->getActiveSetSize();
         }
@@ -542,24 +546,31 @@ void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_n
 void MPPTaskManager::tagResourceGroupSchedulerReadyToDelete(const String & name)
 {
     std::lock_guard lock(mu);
-    auto scheduler_iter = resource_group_schedulers.find(name);
-    if (scheduler_iter == resource_group_schedulers.end())
-        return;
-
-    resource_group_schedulers_ready_to_delete.insert(scheduler_iter->second);
-    resource_group_schedulers.erase(scheduler_iter);
+    resource_group_schedulers_ready_to_delete.insert(name);
 }
 
 void MPPTaskManager::cleanTombstoneResourceGroupScheduler()
 {
     std::lock_guard lock(mu);
-    for (auto iter = resource_group_schedulers_ready_to_delete.begin();
-         iter != resource_group_schedulers_ready_to_delete.end();)
+    for (auto delete_iter = resource_group_schedulers_ready_to_delete.begin();
+         delete_iter != resource_group_schedulers_ready_to_delete.end();)
     {
-        if ((*iter)->getActiveSetSize() + (*iter)->getWaitingSetSize() == 0)
-            iter = resource_group_schedulers_ready_to_delete.erase(iter);
+        const String & resource_group_name = *delete_iter;
+        auto schduler_iter = resource_group_schedulers.find(resource_group_name);
+        if (schduler_iter != resource_group_schedulers.end())
+        {
+            if (schduler_iter->second->getActiveSetSize() == 0 && schduler_iter->second->getWaitingSetSize() == 0)
+            {
+                resource_group_schedulers.erase(schduler_iter);
+                delete_iter = resource_group_schedulers_ready_to_delete.erase(delete_iter);
+            }
+            else
+                ++delete_iter;
+        }
         else
-            ++iter;
+        {
+            delete_iter = resource_group_schedulers_ready_to_delete.erase(delete_iter);
+        }
     }
 }
 } // namespace DB

@@ -88,7 +88,7 @@ void LocalAdmissionController::startBackgroudJob()
             }
             else
             {
-                LOG_DEBUG(log, "skip cv wait because will fetch tokens for low token resource group");
+                LOG_DEBUG(log, "skip cv wait because need to fetch tokens for low token resource group");
             }
         }
 

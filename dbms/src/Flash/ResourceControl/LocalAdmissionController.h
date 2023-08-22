@@ -384,6 +384,20 @@ public:
         return group->getRU() <= 0.0;
     }
 
+    std::string isResourceGroupValid(const std::string & name)
+    {
+        try
+        {
+            getOrFetchResourceGroup(name);
+        }
+        catch (...)
+        {
+            auto err_msg = getCurrentExceptionMessage(false);
+            return err_msg;
+        }
+        return "";
+    }
+
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
 #ifdef DBMS_PUBLIC_GTEST

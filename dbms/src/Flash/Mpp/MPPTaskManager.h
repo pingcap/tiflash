@@ -202,7 +202,7 @@ class MPPTaskManager : private boost::noncopyable
     // If resource control is enabled, will use scheduler in resource_group_schedulers.
     // Otherwise use the global scheduler.
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
-    std::unordered_set<MPPTaskSchedulerPtr> resource_group_schedulers_ready_to_delete;
+    std::unordered_set<String> resource_group_schedulers_ready_to_delete;
     UInt64 resource_control_mpp_task_hard_limit;
 
 public:
