@@ -550,15 +550,18 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(
 void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
 {
     UNUSED(tmt);
-    auto task = prehandling_trace.deregisterTask(region_id);
-    if (task)
+    auto cancel_flag = prehandling_trace.deregisterTask(region_id);
+    if (cancel_flag)
     {
-        LOG_INFO(log, "Start cancel pre-handling from upper layer, region_id={}", region_id);
-        task->store(true, std::memory_order_seq_cst);
+        // The task is registered, set the cancel flag to true and the generated files
+        // will be clear later by `releasePreHandleSnapshot`
+        LOG_INFO(log, "Try cancel pre-handling from upper layer, region_id={}", region_id);
+        cancel_flag->store(true, std::memory_order_seq_cst);
     }
     else
     {
-        LOG_INFO(log, "Try cancel pre-handling from upper layer but not found, region_id={}", region_id);
+        // the task is not registered, continue
+        LOG_INFO(log, "Start cancel pre-handling from upper layer, region_id={}", region_id);
     }
 }
 
