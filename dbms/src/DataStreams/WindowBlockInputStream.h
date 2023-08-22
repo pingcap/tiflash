@@ -157,7 +157,7 @@ private:
         bool is_begin,
         bool is_desc,
         bool is_order_by_col_nullable>
-    RowNumber moveCursorAndFindFrameImpl(RowNumber cursor, AuxColType current_row_aux_value);
+    RowNumber moveCursorAndFindRangeFrameImpl(RowNumber cursor, AuxColType current_row_aux_value);
 
     RowNumber stepInPreceding(const RowNumber & moved_row, size_t step_num);
     std::tuple<RowNumber, bool> stepInFollowing(const RowNumber & moved_row, size_t step_num);

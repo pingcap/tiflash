@@ -494,7 +494,7 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
 
 // When finding frame start with Following attribute, partition end
 // may haven't appeared and we can't find frame start in this case.
-// Returning false in the tuple's second parameter means the failuer
+// Returning false in the tuple's second parameter means the failure
 // of finding frame start.
 std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRowsFrame(
     const RowNumber & current_row,
@@ -571,8 +571,8 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepInFollowing(const RowNumb
 {
     if (!partition_ended)
         // If we find the frame end and the partition_ended is false.
-        // Some previous blocks may be dropped, this is an unexpected behaviour.
-        // So, we shouldn't do anything before the partition_ended is true.
+        // The prev_frame_start may be equal to partition_end which
+        // will cause the assert fail in advancePartitionEnd function.
         return std::make_tuple(RowNumber(), false);
 
     auto dist = distance(partition_end, moved_row);
@@ -660,8 +660,8 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRangeFrame()
 {
     if (!window_description.frame.begin_preceding && !partition_ended)
         // If we find the frame end and the partition_ended is false.
-        // Some previous blocks may be dropped, this is an unexpected behaviour.
-        // So, we shouldn't do anything before the partition_ended is true.
+        // The prev_frame_start may be equal to partition_end which
+        // will cause the assert fail in advancePartitionEnd function.
         return std::make_tuple(RowNumber(), false);
 
     if (window_description.is_desc)
@@ -894,7 +894,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
         switch (cmp_data_type)
         {
         case tipb::RangeCmpDataType::Int:
-            return moveCursorAndFindFrameImpl<
+            return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Int,
@@ -902,7 +902,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
                 is_desc,
                 true>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Float:
-            return moveCursorAndFindFrameImpl<
+            return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Float,
@@ -910,7 +910,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
                 is_desc,
                 true>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Decimal:
-            return moveCursorAndFindFrameImpl<
+            return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Decimal,
@@ -926,7 +926,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
         switch (cmp_data_type)
         {
         case tipb::RangeCmpDataType::Int:
-            return moveCursorAndFindFrameImpl<
+            return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Int,
@@ -934,7 +934,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
                 is_desc,
                 false>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Float:
-            return moveCursorAndFindFrameImpl<
+            return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Float,
@@ -942,7 +942,7 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
                 is_desc,
                 false>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Decimal:
-            return moveCursorAndFindFrameImpl<
+            return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Decimal,
@@ -962,7 +962,7 @@ template <
     bool is_begin,
     bool is_desc,
     bool is_order_by_col_nullable>
-RowNumber WindowTransformAction::moveCursorAndFindFrameImpl(RowNumber cursor, AuxColType current_row_aux_value)
+RowNumber WindowTransformAction::moveCursorAndFindRangeFrameImpl(RowNumber cursor, AuxColType current_row_aux_value)
 {
     using ActualOrderByColType = typename ActualCmpDataType<OrderByColType>::Type;
 
