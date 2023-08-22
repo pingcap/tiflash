@@ -83,7 +83,10 @@ public:
     static void setCancelTest();
 
     /// Keep stream not deconstructed until cancelGather invoked outside, so that the deconstruction progress won't block
-    static ColumnsWithTypeAndName executeProblematicMPPTasks(QueryTasks & tasks, const DAGProperties & properties, BlockInputStreamPtr & stream);
+    static ColumnsWithTypeAndName executeProblematicMPPTasks(
+        QueryTasks & tasks,
+        const DAGProperties & properties,
+        BlockInputStreamPtr & stream);
     static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties);
     ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
 

@@ -115,7 +115,10 @@ std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder build
     return tasks;
 }
 
-ColumnsWithTypeAndName MPPTaskTestUtils::executeProblematicMPPTasks(QueryTasks & tasks, const DAGProperties & properties, BlockInputStreamPtr & stream)
+ColumnsWithTypeAndName MPPTaskTestUtils::executeProblematicMPPTasks(
+    QueryTasks & tasks,
+    const DAGProperties & properties,
+    BlockInputStreamPtr & stream)
 {
     stream = executeMPPQueryWithMultipleContext(
         properties,

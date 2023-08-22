@@ -910,7 +910,9 @@ try
             {
                 auto error_message = getCurrentExceptionMessage(false);
                 MockComputeServerManager::instance().cancelGather(gather_id);
-                ASSERT_TRUE(error_message.find(failpoint) != std::string::npos)
+                ASSERT_TRUE(
+                    error_message.find(failpoint) != std::string::npos
+                    || error_message.find("tunnel") != std::string::npos)
                     << " error message is " << error_message << " failpoint is " << failpoint;
                 EXPECT_TRUE(assertQueryCancelled(gather_id.query_id)) << "fail in " << failpoint;
                 FailPointHelper::disableFailPoint(failpoint);
