@@ -257,10 +257,7 @@ public:
     void cleanTombstoneResourceGroupScheduler();
 
     // NOTE: return nullptr if MPPTask doesn't register to MPPTaskManager.
-    MPPTaskSchedulerPtr getSchedulerWithoutLock(const MPPQueryId & query_id)
-    {
-        return getSchedulerWithoutLock(query_id.resource_group_name);
-    }
+    MPPTaskSchedulerPtr getSchedulerWithoutLock(const MPPQueryId & query_id) { return getSchedulerWithoutLock(query_id.resource_group_name); }
 
     MPPTaskSchedulerPtr getSchedulerWithoutLock(const String & resource_group_name)
     {

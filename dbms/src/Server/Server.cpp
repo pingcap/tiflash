@@ -1556,9 +1556,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LocalAdmissionController::global_instance
         = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
     LocalAdmissionController::global_instance->registerDeleteResourceGroupCallback(
-        [&mpp_task_manager](const std::string & del_rg_name) {
-            mpp_task_manager->tagResourceGroupSchedulerReadyToDelete(del_rg_name);
-        });
+        [&mpp_task_manager](const std::string & del_rg_name) { mpp_task_manager->tagResourceGroupSchedulerReadyToDelete(del_rg_name); });
     LocalAdmissionController::global_instance->registerCleanTombstoneResourceGroupCallback(
         [&mpp_task_manager]() { mpp_task_manager->cleanTombstoneResourceGroupScheduler(); });
 #endif

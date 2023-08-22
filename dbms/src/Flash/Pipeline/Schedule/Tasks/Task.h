@@ -17,7 +17,6 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <memory.h>
 
 namespace DB
@@ -43,6 +42,8 @@ enum class ExecTaskStatus
     ERROR,
     CANCELLED,
 };
+
+class PipelineExecutorContext;
 
 class Task
 {
@@ -87,10 +88,6 @@ public:
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 
-    void onErrorOccurred(const std::exception_ptr & exception_ptr)
-    {
-        return exec_context.onErrorOccurred(exception_ptr);
-    }
 public:
     LoggerPtr log;
 

@@ -24,27 +24,24 @@ namespace DB
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
-    try
     {
-        {
-            std::lock_guard lock(mu);
-            submitWithoutLock(std::move(task));
-        }
-        cv.notify_one();
+        std::lock_guard lock(mu);
+        submitWithoutLock(std::move(task));
     }
-    catch (...)
-    {
-        // NOTE: put this outside lock_guard, because will call ResourceControlQueue::cancel().
-        FINALIZE_TASK_WITH_EXCEPTION(task);
-    }
-
+    cv.notify_one();
 }
 
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
-    for (auto & task : tasks)
-        submit(std::move(task));
+    {
+        std::lock_guard lock(mu);
+        for (auto & task : tasks)
+        {
+            submitWithoutLock(std::move(task));
+            cv.notify_one();
+        }
+    }
 }
 
 template <typename NestedTaskQueueType>
@@ -69,9 +66,10 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     auto iter = resource_group_task_queues.find(name);
     if (iter == resource_group_task_queues.end())
     {
-        // May throw if resource group has been deleted.
-        uint64_t priority = priority = LocalAdmissionController::global_instance->getPriority(name);
         auto task_queue = std::make_shared<NestedTaskQueueType>();
+        // May throw if resource group has been deleted.
+        // gjt todo ! handle throw
+        auto priority = LocalAdmissionController::global_instance->getPriority(name);
         resource_group_infos.push({name, priority, task_queue});
         resource_group_task_queues.insert({name, task_queue});
         task_queue->submit(std::move(task));
@@ -95,7 +93,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if (popTask(cancel_task_queue, task))
             return true;
 
-        LACErrorInfos lac_err_infos = updateResourceGroupInfosWithoutLock();
+        updateResourceGroupInfosWithoutLock();
 
         while (!resource_group_infos.empty())
         {
@@ -112,29 +110,24 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 is_finished,
                 group_info.task_queue->empty());
 
+            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
+            // Should not take any task from nested task queue for this situation.
             if (ru_exhausted)
                 break;
 
-            // task_queue cannot be empty, because related resource group info should already be deleted in updateResourceGroupInfosWithoutLock().
-            assert(!group_info.task_queue->empty());
-
-            // Take task from nested task queue, and should always take succeed.
-            // Because this task queue should not be finished inside lock_guard.
-            RUNTIME_CHECK(group_info.task_queue->take(task));
-            assert(task);
-
-            // take() should always return a valid task.
-            // And it will be finalized in TaskThreadPool::doLoop() when exception is thrown.
-            if unlikely (!lac_err_infos.empty())
+            if (group_info.task_queue->empty())
             {
-                auto iter = lac_err_infos.find(group_info.name);
-                if likely (iter != lac_err_infos.end())
-                {
-                    assert(iter->second);
-                    std::rethrow_exception(iter->second);
-                }
+                // Nested task queue is empty, continue and try next resource group.
+                mustEraseResourceGroupInfoWithoutLock(group_info.name);
             }
-            return true;
+            else
+            {
+                // Take task from nested task queue, and should always take succeed.
+                // Because this task queue should not be finished inside lock_guard.
+                RUNTIME_CHECK(group_info.task_queue->take(task));
+                assert(task != nullptr);
+                return true;
+            }
         }
 
         assert(!task);
@@ -156,25 +149,15 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
 }
 
 template <typename NestedTaskQueueType>
-typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfos ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
+void ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
     std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
-    LACErrorInfos lac_error_infos;
     while (!resource_group_infos.empty())
     {
         const ResourceGroupInfo & group_info = resource_group_infos.top();
         if (!group_info.task_queue->empty())
         {
-            UInt64 new_priority = 0;
-            try
-            {
-                new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
-            }
-            catch (...)
-            {
-                new_priority = LocalAdmissionController::HIGHEST_RESOURCE_GROUP_DEF_PRIORITY;
-                lac_error_infos.insert({group_info.name, std::current_exception()});
-            }
+            auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
             new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
             resource_group_infos.pop();
         }
@@ -184,7 +167,6 @@ typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfos ResourceContro
         }
     }
     resource_group_infos = new_resource_group_infos;
-    return lac_error_infos;
 }
 
 template <typename NestedTaskQueueType>

@@ -348,7 +348,6 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
 
-    // gjt todo: check whether rg exists.
     const auto & resource_group_name = task->getResourceGroupName();
     if (resource_group_schedulers.find(resource_group_name) == resource_group_schedulers.end())
     {
