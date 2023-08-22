@@ -24,22 +24,40 @@ namespace DB
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
+    try
     {
-        std::lock_guard lock(mu);
-        submitWithoutLock(std::move(task));
+        {
+            std::lock_guard lock(mu);
+            submitWithoutLock(std::move(task));
+        }
+        cv.notify_one();
     }
-    cv.notify_one();
+    catch (...)
+    {
+        FINALIZE_TASK_WITH_EXCEPTION(task);
+    }
 }
 
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
+    if (tasks.empty())
+        return;
+
+    std::unique_lock lock(mu);
+    for (auto & task : tasks)
     {
-        std::lock_guard lock(mu);
-        for (auto & task : tasks)
+        try
         {
             submitWithoutLock(std::move(task));
             cv.notify_one();
+        }
+        catch (...)
+        {
+            // Need to unlock, because will call ResourceControlQueue::cancel(), which will lock mu.
+            lock.unlock();
+            FINALIZE_TASK_WITH_EXCEPTION(task);
+            lock.lock();
         }
     }
 }
@@ -68,16 +86,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     {
         auto task_queue = std::make_shared<NestedTaskQueueType>();
         // May throw if resource group has been deleted.
-        // gjt todo ! handle throw
-        uint64_t priority = LocalAdmissionController::EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
-        try
-        {
-            priority = LocalAdmissionController::global_instance->getPriority(name);
-        }
-        catch (...)
-        {
-            LOG_ERROR(logger, "got exception when submitWithoutLock for rg {}", name);
-        }
+        auto priority = LocalAdmissionController::global_instance->getPriority(name);
         resource_group_infos.push({name, priority, task_queue});
         resource_group_task_queues.insert({name, task_queue});
         task_queue->submit(std::move(task));
@@ -158,18 +167,12 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    try
-    {
-        LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
-    }
-    catch (...)
-    {
-        LOG_ERROR(logger, "got error when consumeResource for rg {}", name);
-    }
+    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
 }
 
 template <typename NestedTaskQueueType>
-typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfo ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
+typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfo ResourceControlQueue<
+    NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
     std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
     LACErrorInfo error_resource_groups;

@@ -65,7 +65,8 @@ private:
     void loop(size_t thread_no);
     void doLoop(size_t thread_no);
 
-    void handleTask(TaskPtr & task);
+    ExecTaskStatus handleTask(TaskPtr & task);
+    void submitByStatus(TaskPtr & task, const ExecTaskStatus & status_after_exec);
 
 private:
     TaskQueuePtr task_queue;

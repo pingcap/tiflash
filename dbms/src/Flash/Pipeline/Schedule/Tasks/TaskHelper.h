@@ -23,7 +23,9 @@
 
 namespace DB
 {
-#define FINISH_STATUS ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
+#define FINISH_STATUS                                      \
+    ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR: \
+    case ExecTaskStatus::CANCELLED
 
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
@@ -31,6 +33,10 @@ namespace DB
 #define FINALIZE_TASK(task) \
     (task)->finalize();     \
     (task).reset();
+
+#define FINALIZE_TASK_WITH_EXCEPTION(task)           \
+    task->onErrorOccurred(std::current_exception()); \
+    FINALIZE_TASK(task);
 
 #define FINALIZE_TASKS(tasks)   \
     for (auto & task : (tasks)) \
