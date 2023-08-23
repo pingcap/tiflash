@@ -66,7 +66,8 @@ int main(int argc, char ** argv)
 {
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
-    DB::tests::TiFlashTestEnv::setupLogger();
+    bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
+    DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
 

@@ -194,9 +194,7 @@ void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value)
 {
     try
     {
-        LOG_TRACE(
-            &Poco::Logger::get("ProxyFFI"),
-            fmt::format("FFI write page {}", UniversalPageId(page_id.data, page_id.len)));
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI write page {}", UniversalPageId(page_id.data, page_id.len));
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         MemoryWriteBuffer buf(0, value.len);
         buf.write(value.data, value.len);
@@ -215,9 +213,7 @@ void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id)
 {
     try
     {
-        LOG_TRACE(
-            &Poco::Logger::get("ProxyFFI"),
-            fmt::format("FFI delete page {}", UniversalPageId(page_id.data, page_id.len)));
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI delete page {}", UniversalPageId(page_id.data, page_id.len));
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         wb->delPage(UniversalPageId(page_id.data, page_id.len));
     }
@@ -291,7 +287,7 @@ void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr pt
     {
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
-        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI consume write batch {}", wb->toString()));
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI consume write batch {}", wb->toString());
         uni_ps->write(std::move(*wb), DB::PS::V3::PageType::RaftData, nullptr);
         wb->clear();
     }
@@ -313,16 +309,19 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
         {
             LOG_TRACE(
                 &Poco::Logger::get("ProxyFFI"),
-                fmt::format("FFI read page {} success", UniversalPageId(page_id.data, page_id.len)));
+                "FFI read page {} success",
+                UniversalPageId(page_id.data, page_id.len));
             return CppStrWithView{
                 .inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage),
-                .view = BaseBuffView{page->data.begin(), page->data.size()}};
+                .view = BaseBuffView{page->data.begin(), page->data.size()},
+            };
         }
         else
         {
             LOG_TRACE(
                 &Poco::Logger::get("ProxyFFI"),
-                fmt::format("FFI read page {} fail", UniversalPageId(page_id.data, page_id.len)));
+                "FFI read page {} fail",
+                UniversalPageId(page_id.data, page_id.len));
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
     }
@@ -339,10 +338,9 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
     {
         LOG_TRACE(
             &Poco::Logger::get("ProxyFFI"),
-            fmt::format(
-                "FFI scan page from {} to {}",
-                UniversalPageId(start_page_id.data, start_page_id.len),
-                UniversalPageId(end_page_id.data, end_page_id.len)));
+            "FFI scan page from {} to {}",
+            UniversalPageId(start_page_id.data, start_page_id.len),
+            UniversalPageId(end_page_id.data, end_page_id.len));
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftDataReader reader(*uni_ps);
         std::vector<UniversalPageId> page_ids;
@@ -370,7 +368,8 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
         return RawCppPtrCarr{
             .inner = data,
             .len = pages.size(),
-            .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
+            .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr),
+        };
     }
     catch (...)
     {
@@ -390,21 +389,20 @@ CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuf
         {
             LOG_TRACE(
                 &Poco::Logger::get("ProxyFFI"),
-                fmt::format(
-                    "FFI get lower bound for page {} success",
-                    UniversalPageId(raw_page_id.data, raw_page_id.len)));
+                "FFI get lower bound for page {} success",
+                UniversalPageId(raw_page_id.data, raw_page_id.len));
             auto * s = RawCppString::New(page_id_opt->asStr());
             return CppStrWithView{
                 .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{s->data(), s->size()}};
+                .view = BaseBuffView{s->data(), s->size()},
+            };
         }
         else
         {
             LOG_TRACE(
                 &Poco::Logger::get("ProxyFFI"),
-                fmt::format(
-                    "FFI get lower bound for page {} fail",
-                    UniversalPageId(raw_page_id.data, raw_page_id.len)));
+                "FFI get lower bound for page {} fail",
+                UniversalPageId(raw_page_id.data, raw_page_id.len));
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
     }
@@ -673,28 +671,6 @@ RawCppPtr PreHandleSnapshot(
     }
 }
 
-template <typename PreHandledSnapshot>
-void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
-{
-    static_assert(std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>, "Unknown pre-handled snapshot type");
-
-    try
-    {
-        auto & kvstore = server->tmt->getKVStore();
-        if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
-        {
-            kvstore->applyPreHandledSnapshot(
-                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)},
-                *server->tmt);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
-}
-
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
     switch (static_cast<RawCppPtrTypeImpl>(type))
@@ -702,7 +678,18 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
     {
         auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
-        ApplyPreHandledSnapshot(server, snap);
+        try
+        {
+            auto & kvstore = server->tmt->getKVStore();
+            kvstore->applyPreHandledSnapshot(
+                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)},
+                *server->tmt);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            exit(-1);
+        }
         break;
     }
     default:
