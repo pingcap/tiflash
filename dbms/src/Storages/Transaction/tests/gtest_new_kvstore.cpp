@@ -786,7 +786,13 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
+<<<<<<< HEAD
             auto kvr1 = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+=======
+            auto kvr1 = proxy_instance
+                            ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            ASSERT_FALSE(kvs.prehandling_trace.hasTask(region_id));
+>>>>>>> 9c1803cb7a (Fix leak in PrehandleTrace (#8009))
             ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
         }
         {

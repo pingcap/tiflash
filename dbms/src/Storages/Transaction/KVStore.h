@@ -254,6 +254,43 @@ private:
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
+<<<<<<< HEAD
+=======
+    struct PreHandlingTrace : MutexLockWrap
+    {
+        std::unordered_map<uint64_t, std::shared_ptr<std::atomic_bool>> tasks;
+
+        std::shared_ptr<std::atomic_bool> registerTask(uint64_t region_id)
+        {
+            // Automaticlly override the old one.
+            auto _ = genLockGuard();
+            auto b = std::make_shared<std::atomic_bool>(false);
+            tasks[region_id] = b;
+            return b;
+        }
+        std::shared_ptr<std::atomic_bool> deregisterTask(uint64_t region_id)
+        {
+            auto _ = genLockGuard();
+            auto it = tasks.find(region_id);
+            if (it != tasks.end())
+            {
+                auto b = it->second;
+                tasks.erase(it);
+                return b;
+            }
+            else
+            {
+                return nullptr;
+            }
+        }
+        bool hasTask(uint64_t region_id)
+        {
+            auto _ = genLockGuard();
+            return tasks.find(region_id) != tasks.end();
+        }
+    };
+
+>>>>>>> 9c1803cb7a (Fix leak in PrehandleTrace (#8009))
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
