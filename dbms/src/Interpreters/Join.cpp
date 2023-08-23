@@ -117,7 +117,7 @@ const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTy
 const String Join::flag_mapped_entry_helper_prefix = "__flag-mapped-entry-match-helper";
 const DataTypePtr Join::flag_mapped_entry_helper_type = std::make_shared<PointerHelper::DataType>();
 #ifdef DBMS_PUBLIC_GTEST
-//const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
+const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
 #endif
 
 
@@ -204,10 +204,10 @@ Join::Join(
         log);
     size_t max_restore_round = 4;
 #ifdef DBMS_PUBLIC_GTEST
-    //max_restore_round = MAX_RESTORE_ROUND_IN_GTEST;
+    max_restore_round = MAX_RESTORE_ROUND_IN_GTEST;
 #endif
 
-    if (hash_join_spill_context->isSpillEnabled() && restore_round >= max_restore_round)
+    if (hash_join_spill_context->supportSpill() && restore_round >= max_restore_round)
     {
         LOG_WARNING(log, fmt::format("restore round reach to {}, spilling will be disabled.", max_restore_round));
         hash_join_spill_context->disableSpill();
@@ -409,7 +409,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     build_sample_block = sample_block;
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     hash_join_spill_context->init(build_concurrency);
-    if (hash_join_spill_context->isSpillEnabled())
+    if (hash_join_spill_context->supportSpill())
     {
         if (join_map_method == JoinMapMethod::CROSS)
         {
@@ -423,11 +423,11 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
             LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
     }
+    if (register_operator_spill_context != nullptr)
+        register_operator_spill_context(hash_join_spill_context);
     if (hash_join_spill_context->isSpillEnabled())
     {
         hash_join_spill_context->buildBuildSpiller(build_sample_block);
-        if (register_operator_spill_context != nullptr)
-            register_operator_spill_context(hash_join_spill_context);
     }
     setSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
@@ -2109,9 +2109,9 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
 
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
-        //if (restore_round == std::max(2, MAX_RESTORE_ROUND_IN_GTEST) - 1
-        //    && spilled_partition_indexes.size() >= partitions.size() / 2)
-        //    return;
+        if (restore_round == std::max(2, MAX_RESTORE_ROUND_IN_GTEST) - 1
+            && spilled_partition_indexes.size() >= partitions.size() / 2)
+            return;
 #endif
 
         for (const auto & partition_to_be_spilled : hash_join_spill_context->getPartitionsToSpill())

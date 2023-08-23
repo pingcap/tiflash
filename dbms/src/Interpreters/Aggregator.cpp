@@ -295,18 +295,13 @@ Aggregator::Aggregator(
         params.spill_config,
         params.getMaxBytesBeforeExternalGroupBy(),
         log);
-    if (agg_spill_context->isSpillEnabled())
+    Block header;
+    if (agg_spill_context->supportSpill())
     {
         /// init spiller if needed
-        auto header = getHeader(false);
+        header = getHeader(false);
         bool is_convertible_to_two_level = AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen);
-        if (is_convertible_to_two_level)
-        {
-            /// for aggregation, the input block is sorted by bucket number
-            /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-            agg_spill_context->buildSpiller(header);
-        }
-        else
+        if (!is_convertible_to_two_level)
         {
             params.setMaxBytesBeforeExternalGroupBy(0);
             agg_spill_context->disableSpill();
@@ -315,8 +310,14 @@ Aggregator::Aggregator(
                 "Aggregation does not support spill because aggregator hash table does not support two level");
         }
     }
-    if (register_operator_spill_context != nullptr && agg_spill_context->isSpillEnabled())
+    if (register_operator_spill_context != nullptr)
         register_operator_spill_context(agg_spill_context);
+    if (agg_spill_context->isSpillEnabled())
+    {
+        /// for aggregation, the input block is sorted by bucket number
+        /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
+        agg_spill_context->buildSpiller(header);
+    }
 }
 
 
