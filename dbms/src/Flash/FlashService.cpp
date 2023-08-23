@@ -35,6 +35,7 @@
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
+#include <IO/IOThreadPools.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -900,8 +901,12 @@ grpc::Status FlashService::EstablishDisaggTask(
 
     try
     {
-        handler->prepare(request);
-        handler->execute(response);
+        auto task = std::make_shared<std::packaged_task<void()>>([&handler, &request, &response]() {
+            handler->prepare(request);
+            handler->execute(response);
+        });
+        WNEstablishDisaggTaskPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        task->get_future().get();
     }
     catch (const RegionException & e)
     {
