@@ -86,7 +86,7 @@ public:
     grpc::Status resign(const v3electionpb::LeaderKey & leader_key);
 
     // Basically same with tidb's Domain::acquireServerID.
-    // For now this is only for resource control.
+    // Only for tiflash resource control.
     UInt64 acquireServerIDFromPD();
 
 private:

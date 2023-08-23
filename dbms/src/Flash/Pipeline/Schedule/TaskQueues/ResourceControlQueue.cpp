@@ -132,14 +132,14 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             if (ru_exhausted)
                 break;
 
-            // task_queue should not be empty, because related resource group should already been deleted
+            // task_queue should not be empty, because corresponding resource group should already been deleted.
             // in updateResourceGroupInfosWithoutLock().
             assert(!group_info.task_queue->empty());
 
             // Take task from nested task queue, and should always take succeed.
             // Because this task queue should not be finished inside lock_guard.
             RUNTIME_CHECK(group_info.task_queue->take(task));
-            assert(task != nullptr);
+            assert(task);
 
             if unlikely (!error_resource_groups.empty())
             {
@@ -181,14 +181,13 @@ typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfo ResourceControl
         const ResourceGroupInfo & group_info = resource_group_infos.top();
         if (!group_info.task_queue->empty())
         {
-            uint64_t new_priority = LocalAdmissionController::EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
+            uint64_t new_priority = LocalAdmissionController::HIGHEST_RESOURCE_CONTROL_PRIORITY;
             try
             {
                 new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
             }
             catch (...)
             {
-                LOG_INFO(logger, "got error for rg {}", group_info.name);
                 error_resource_groups.insert({group_info.name, std::current_exception()});
             }
             new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});

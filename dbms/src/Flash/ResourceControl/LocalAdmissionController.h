@@ -388,7 +388,7 @@ public:
     uint64_t getPriority(const std::string & name)
     {
         if (name.empty())
-            return EMPTY_RESOURCE_GROUP_DEF_PRIORITY;
+            return HIGHEST_RESOURCE_CONTROL_PRIORITY;
 
         ResourceGroupPtr group = getOrFetchResourceGroup(name);
         return group->getPriority(max_ru_per_sec.load());
@@ -439,7 +439,7 @@ public:
     static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     // For tidb_enable_resource_control is disabled.
-    static constexpr uint64_t EMPTY_RESOURCE_GROUP_DEF_PRIORITY = 1;
+    static constexpr uint64_t HIGHEST_RESOURCE_CONTROL_PRIORITY = 0;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;

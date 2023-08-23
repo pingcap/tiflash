@@ -88,7 +88,6 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
         catch (...)
         {
             assert(task);
-            LOG_ERROR(thread_logger, "got error for take() for rg {}", task->getResourceGroupName());
             metrics.decPendingTask();
             task->endTraceMemory();
             FINALIZE_TASK_WITH_EXCEPTION(task);
@@ -123,6 +122,7 @@ ExecTaskStatus TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     }
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
+    // updateStatistics may throw exception, so need to update metrics first.
     task_queue->updateStatistics(task, status_before_exec, total_time_spent);
     return status_after_exec;
 }

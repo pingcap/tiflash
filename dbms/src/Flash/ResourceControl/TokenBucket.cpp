@@ -32,7 +32,6 @@ bool TokenBucket::consume(double n)
     auto now = std::chrono::steady_clock::now();
     compact(now);
 
-    LOG_TRACE(log, "consume ori token: {}, will consume: {}", tokens, n);
     tokens -= n;
     return tokens >= 0.0;
 }

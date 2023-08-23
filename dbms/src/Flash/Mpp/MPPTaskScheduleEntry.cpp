@@ -19,9 +19,7 @@
 
 namespace DB
 {
-MPPTaskScheduleEntry::MPPTaskScheduleEntry(
-    MPPTaskManager * manager_,
-    const MPPTaskId & id_)
+MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_)
     : manager(manager_)
     , id(id_)
     , needed_threads(0)
