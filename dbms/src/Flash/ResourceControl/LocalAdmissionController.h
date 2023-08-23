@@ -157,7 +157,7 @@ private:
     bool lowToken() const
     {
         std::lock_guard lock(mu);
-        return bucket->lowToken();
+        return !burstable && bucket->lowToken();
     }
 
     double getRU() const
@@ -253,6 +253,7 @@ private:
 
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(bucket->peek(), new_fill_rate, new_capacity);
+        stop_trickle_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(trickle_ms);
         LOG_INFO(
             log,
             "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
@@ -289,7 +290,8 @@ private:
         return ori;
     }
 
-    bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura) const
+    bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura)
+        const
     {
         return std::chrono::duration_cast<std::chrono::seconds>(now - last_fetch_tokens_from_gac_timepoint) > dura;
     }
@@ -298,6 +300,12 @@ private:
     {
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
         last_fetch_tokens_from_gac_timepoint = tp;
+    }
+
+    bool inTrickleModeLease(const std::chrono::steady_clock::time_point & tp)
+    {
+        std::lock_guard lock(mu);
+        return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
     const std::string name;
@@ -325,6 +333,7 @@ private:
 
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
         = std::chrono::steady_clock::now();
+    std::chrono::time_point<std::chrono::steady_clock> stop_trickle_timepoint = std::chrono::steady_clock::now();
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -366,11 +375,10 @@ public:
 
         ResourceGroupPtr group = getOrFetchResourceGroup(name);
         group->consumeResource(ru, cpu_time_in_ns);
-        if (!group->burstable && group->lowToken())
+        if (group->lowToken())
         {
             {
                 std::lock_guard lock(mu);
-                LOG_DEBUG(log, "sizeof low_token_resource_groups: {}", low_token_resource_groups.size());
                 low_token_resource_groups.insert(name);
             }
             cv.notify_one();
@@ -543,7 +551,11 @@ private:
         std::string toString() const
         {
             FmtBuffer fmt_buf;
-            fmt_buf.fmtAppend("rg: {}, acquire_tokens: {}, ru_consumption_delta: {}", resource_group_name, acquire_tokens, ru_consumption_delta);
+            fmt_buf.fmtAppend(
+                "rg: {}, acquire_tokens: {}, ru_consumption_delta: {}",
+                resource_group_name,
+                acquire_tokens,
+                ru_consumption_delta);
             return fmt_buf.toString();
         }
     };
@@ -558,8 +570,12 @@ private:
     void checkDegradeMode();
     void watchGAC();
 
+    // Utilities for fetch token from GAC.
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
+    static std::pair<bool, AcquireTokenInfo> tryBuildAcquireInfo(
+        const ResourceGroupPtr & resource_group,
+        bool is_periodically_fetch);
 
     // Watch GAC utilities.
     void doWatch();
@@ -577,21 +593,22 @@ private:
     std::atomic<bool> stopped = false;
 
     std::unordered_map<std::string, ResourceGroupPtr> resource_groups;
+    std::unordered_set<std::string> low_token_resource_groups;
+
     std::atomic<uint64_t> max_ru_per_sec = 0;
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
         = std::chrono::steady_clock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
     uint64_t unique_client_id = 0;
-    Etcd::ClientPtr etcd_client;
+    Etcd::ClientPtr etcd_client = nullptr;
     grpc::ClientContext watch_gac_grpc_context;
     std::shared_ptr<ThreadManager> thread_manager;
 
+    // Callbacks.
     std::function<void()> refill_token_callback;
     std::function<void(const std::string & del_rg_name)> delete_resource_group_callback;
     std::function<void()> clean_tombstone_resource_group_callback;
-
-    std::unordered_set<std::string> low_token_resource_groups;
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };

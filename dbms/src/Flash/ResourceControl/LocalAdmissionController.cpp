@@ -114,29 +114,13 @@ void LocalAdmissionController::startBackgroudJob()
 void LocalAdmissionController::fetchTokensForAllResourceGroups()
 {
     std::vector<AcquireTokenInfo> acquire_infos;
-    auto now = std::chrono::steady_clock::now();
     {
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
         {
-            if (resource_group.second->burstable)
-                continue;
-
-            // gjt todo, direct seconds instead of int.
-            // To avoid periodically_token_fetch after low_token_fetch immediately
-            if (!resource_group.second->needFetchTokenPeridically(now, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL)))
-                continue;
-
-            double token_need_from_gac
-                = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
-
-            if (token_need_from_gac <= 0.0)
-                continue;
-
-            acquire_infos.emplace_back(AcquireTokenInfo{
-                .resource_group_name = resource_group.first,
-                .acquire_tokens = token_need_from_gac,
-                .ru_consumption_delta = resource_group.second->getAndCleanConsumptionDelta()});
+            auto [ok, acquire_info] = tryBuildAcquireInfo(resource_group.second, /*is_periodically_fetch=*/true);
+            if (ok)
+                acquire_infos.push_back(acquire_info);
         }
     }
 
@@ -147,20 +131,15 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
 {
     std::vector<AcquireTokenInfo> acquire_infos;
     {
+        std::lock_guard lock(mu);
         for (const auto & name : low_token_resource_groups)
         {
             auto iter = resource_groups.find(name);
             if (iter != resource_groups.end())
             {
-                double token_need_from_gac
-                    = iter->second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
-                if (token_need_from_gac <= 0.0)
-                    continue;
-
-                acquire_infos.emplace_back(AcquireTokenInfo{
-                    .resource_group_name = iter->second->name,
-                    .acquire_tokens = token_need_from_gac,
-                    .ru_consumption_delta = iter->second->getAndCleanConsumptionDelta()});
+                auto [ok, acquire_info] = tryBuildAcquireInfo(iter->second, /*is_periodically_fetch=*/false);
+                if (ok)
+                    acquire_infos.push_back(acquire_info);
             }
         }
         low_token_resource_groups.clear();
@@ -169,7 +148,39 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
     fetchTokensFromGAC(acquire_infos, "because of low token");
 }
 
-void LocalAdmissionController::fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos, const std::string & desc_str)
+std::pair<bool, LocalAdmissionController::AcquireTokenInfo> LocalAdmissionController::tryBuildAcquireInfo(
+    const ResourceGroupPtr & resource_group,
+    bool is_periodically_fetch)
+{
+    if (resource_group->burstable)
+        return {false, {}};
+
+    // To avoid periodically_token_fetch after low_token_fetch immediately
+    const auto now = std::chrono::steady_clock::now();
+    if (is_periodically_fetch
+        && !resource_group->needFetchTokenPeridically(now, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL)))
+        return {false, {}};
+
+    // During trickle mode, no need to fetch tokens from GAC.
+    if (resource_group->inTrickleModeLease(now))
+        return {false, {}};
+
+    double token_need_from_gac = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
+
+    if (token_need_from_gac <= 0.0)
+        return {false, {}};
+
+    return {
+        true,
+        AcquireTokenInfo{
+            .resource_group_name = resource_group->name,
+            .acquire_tokens = token_need_from_gac,
+            .ru_consumption_delta = resource_group->getAndCleanConsumptionDelta()}};
+}
+
+void LocalAdmissionController::fetchTokensFromGAC(
+    const std::vector<AcquireTokenInfo> & acquire_infos,
+    const std::string & desc_str)
 {
     if (acquire_infos.empty())
     {
@@ -201,7 +212,13 @@ void LocalAdmissionController::fetchTokensFromGAC(const std::vector<AcquireToken
     }
 
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req);
-    LOG_DEBUG(log, "fetch token from GAC {}: acquire_info: {}, req: {}. resp: {}", desc_str, fmt_buf.toString(), gac_req.DebugString(), resp.DebugString());
+    LOG_DEBUG(
+        log,
+        "fetch token from GAC {}: acquire_info: {}, req: {}. resp: {}",
+        desc_str,
+        fmt_buf.toString(),
+        gac_req.DebugString(),
+        resp.DebugString());
 
     auto handled = handleTokenBucketsResp(resp);
     std::vector<std::string> not_found;
