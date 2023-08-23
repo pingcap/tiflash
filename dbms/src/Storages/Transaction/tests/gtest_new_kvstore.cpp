@@ -905,6 +905,7 @@ try
 
             auto kvr1 = proxy_instance
                             ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            ASSERT_FALSE(kvs.prehandling_trace.hasTask(region_id));
             ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
         }
         {
