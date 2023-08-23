@@ -74,7 +74,6 @@ MPPTaskManager::MPPTaskManager(const MinTSOSchedulerConfig & config, UInt64 reso
 MPPTaskManager::~MPPTaskManager()
 {
     LocalAdmissionController::global_instance->unregisterDeleteResourceGroupCallback();
-    LocalAdmissionController::global_instance->unregisterCleanTombstoneResourceGroupCallback();
     std::lock_guard lock(monitor->mu);
     monitor->is_shutdown = true;
     monitor->cv.notify_all();
@@ -351,9 +350,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     {
         String err_msg = LocalAdmissionController::global_instance->isResourceGroupValid(resource_group_name);
         if (!err_msg.empty())
-        {
             throw Exception(err_msg);
-        }
         LOG_DEBUG(log, "new min tso scheduler added {}", resource_group_name);
         auto resource_group_scheduler = std::make_shared<MinTSOScheduler>(min_tso_config);
         schedulers.insert({task->getResourceGroupName(), resource_group_scheduler});
@@ -533,34 +530,15 @@ void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_n
         scheudler->releaseThreadsThenSchedule(needed_threads, *this);
 }
 
-void MPPTaskManager::tagResourceGroupSchedulerReadyToDelete(const String & name)
+void MPPTaskManager::deleteEmptyScheduler()
 {
     std::lock_guard lock(mu);
-    schedulers_ready_to_delete.insert(name);
-}
-
-void MPPTaskManager::cleanTombstoneResourceGroupScheduler()
-{
-    std::lock_guard lock(mu);
-    for (auto delete_iter = schedulers_ready_to_delete.begin();
-         delete_iter != schedulers_ready_to_delete.end();)
+    for (auto iter = schedulers.begin(); iter != schedulers.end();)
     {
-        const String & resource_group_name = *delete_iter;
-        auto schduler_iter = schedulers.find(resource_group_name);
-        if (schduler_iter != schedulers.end())
-        {
-            if (schduler_iter->second->getActiveSetSize() == 0 && schduler_iter->second->getWaitingSetSize() == 0)
-            {
-                schedulers.erase(schduler_iter);
-                delete_iter = schedulers_ready_to_delete.erase(delete_iter);
-            }
-            else
-                ++delete_iter;
-        }
+        if (iter->second->getActiveSetSize() == 0 && iter->second->getWaitingSetSize() == 0)
+            iter = schedulers.erase(iter);
         else
-        {
-            delete_iter = schedulers_ready_to_delete.erase(delete_iter);
-        }
+            ++iter;
     }
 }
 } // namespace DB

@@ -83,8 +83,8 @@ void LocalAdmissionController::startBackgroudJob()
                     }))
                     return;
 
-                if (clean_tombstone_resource_group_callback)
-                    clean_tombstone_resource_group_callback();
+                if (delete_resource_group_callback)
+                    delete_resource_group_callback();
             }
         }
 
@@ -423,8 +423,6 @@ bool LocalAdmissionController::handleDeleteEvent(const mvccpb::KeyValue & kv, st
     {
         std::lock_guard lock(mu);
         erase_num = resource_groups.erase(name);
-        if (delete_resource_group_callback)
-            delete_resource_group_callback(name);
     }
     LOG_INFO(log, "delete resource group {}, erase_num: {}", name, erase_num);
     return true;

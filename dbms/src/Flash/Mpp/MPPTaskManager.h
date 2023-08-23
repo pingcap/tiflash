@@ -200,7 +200,6 @@ class MPPTaskManager : private boost::noncopyable
     // ResourceControl related:
     // <resource_group_name, min_tso_schduler>
     std::unordered_map<String, MPPTaskSchedulerPtr> schedulers;
-    std::unordered_set<String> schedulers_ready_to_delete;
     UInt64 resource_control_mpp_task_hard_limit;
 
 public:
@@ -247,12 +246,8 @@ public:
 
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
 
-    // Tag a resource group scheduler can be delete. It's called in LocalAdmissionController periodically.
-    // And the scheduler will be really deleted when all mpptasks are done.
-    void tagResourceGroupSchedulerReadyToDelete(const String & name);
-
-    // Really delete resource group scheduler whose running mpp tasks is empty.
-    void cleanTombstoneResourceGroupScheduler();
+    // Delete resource group scheduler whose running mpp tasks is empty.
+    void deleteEmptyScheduler();
 
     // NOTE: return nullptr if MPPTask doesn't register to MPPTaskManager.
     MPPTaskSchedulerPtr getSchedulerWithoutLock(const MPPQueryId & query_id)
