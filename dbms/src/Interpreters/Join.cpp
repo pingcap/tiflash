@@ -236,6 +236,8 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
 
 size_t Join::getTotalRowCount() const
 {
+    std::shared_lock lock(rwlock);
+
     size_t res = 0;
 
     if (join_map_method == JoinMapMethod::CROSS)
@@ -245,7 +247,10 @@ size_t Join::getTotalRowCount() const
     else
     {
         for (const auto & partition : partitions)
+        {
+            auto partition_lock = partition->lockPartition();
             res += partition->getRowCount();
+        }
     }
 
     return res;
