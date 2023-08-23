@@ -377,6 +377,10 @@ private:
                 return nullptr;
             }
         }
+        bool hasTask(uint64_t region_id) {
+            auto _ = genLockGuard();
+            return tasks.find(region_id) != tasks.end();
+        }
     };
 
 #ifndef DBMS_PUBLIC_GTEST
