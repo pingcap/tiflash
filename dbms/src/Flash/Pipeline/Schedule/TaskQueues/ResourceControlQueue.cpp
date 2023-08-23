@@ -34,7 +34,8 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
     }
     catch (...)
     {
-        FINALIZE_TASK_WITH_EXCEPTION(task);
+        task->onErrorOccurred(std::current_exception());
+        FINALIZE_TASK(task);
     }
 }
 
@@ -56,7 +57,8 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
         {
             // Need to unlock, because will call ResourceControlQueue::cancel(), which will lock mu.
             lock.unlock();
-            FINALIZE_TASK_WITH_EXCEPTION(task);
+            task->onErrorOccurred(std::current_exception());
+            FINALIZE_TASK(task);
             lock.lock();
         }
     }

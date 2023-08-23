@@ -90,7 +90,8 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
             assert(task);
             metrics.decPendingTask();
             task->endTraceMemory();
-            FINALIZE_TASK_WITH_EXCEPTION(task);
+            task->onErrorOccurred(std::current_exception());
+            FINALIZE_TASK(task);
             continue;
         }
         submitByStatus(task, status_after_exec);

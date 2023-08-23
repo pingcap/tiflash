@@ -344,17 +344,6 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     gather_task_set->registerTask(task->id);
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
-
-    const auto & resource_group_name = task->getResourceGroupName();
-    if (schedulers.find(resource_group_name) == schedulers.end())
-    {
-        String err_msg = LocalAdmissionController::global_instance->isResourceGroupValid(resource_group_name);
-        if (!err_msg.empty())
-            throw Exception(err_msg);
-        LOG_DEBUG(log, "new min tso scheduler added {}", resource_group_name);
-        auto resource_group_scheduler = std::make_shared<MinTSOScheduler>(min_tso_config);
-        schedulers.insert({task->getResourceGroupName(), resource_group_scheduler});
-    }
     return {true, ""};
 }
 
@@ -514,9 +503,15 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     {
         std::lock_guard lock(mu);
         auto scheduler = getSchedulerWithoutLock(resource_group_name);
-        RUNTIME_CHECK_MSG(
-            !scheduler,
-            "cannot find related min tso scheduler for this MPPTask, resource group may be deleted");
+        if (!scheduler)
+        {
+            String err_msg = LocalAdmissionController::global_instance->isResourceGroupValid(resource_group_name);
+            if (!err_msg.empty())
+                throw Exception(err_msg);
+            LOG_DEBUG(log, "new min tso scheduler added {}", resource_group_name);
+            scheduler = std::make_shared<MinTSOScheduler>(min_tso_config);
+            schedulers.insert({resource_group_name, scheduler});
+        }
         scheduled = scheduler->tryToSchedule(schedule_entry, *this);
     }
     return scheduled;
