@@ -347,7 +347,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
 
     const auto & resource_group_name = task->getResourceGroupName();
-    if (resource_group_schedulers.find(resource_group_name) == resource_group_schedulers.end())
+    if (schedulers.find(resource_group_name) == schedulers.end())
     {
         String err_msg = LocalAdmissionController::global_instance->isResourceGroupValid(resource_group_name);
         if (!err_msg.empty())
@@ -356,7 +356,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
         }
         LOG_DEBUG(log, "new min tso scheduler added {}", resource_group_name);
         auto resource_group_scheduler = std::make_shared<MinTSOScheduler>(min_tso_config);
-        resource_group_schedulers.insert({task->getResourceGroupName(), resource_group_scheduler});
+        schedulers.insert({task->getResourceGroupName(), resource_group_scheduler});
     }
     return {true, ""};
 }
@@ -487,7 +487,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     {
         // Check global MPPTask hard limit.
         std::lock_guard lock(mu);
-        for (const auto & ele : resource_group_schedulers)
+        for (const auto & ele : schedulers)
             mintso_active_set_size += ele.second->getActiveSetSize();
     }
 
@@ -495,22 +495,12 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     if (mintso_active_set_size >= resource_control_mpp_task_hard_limit)
     {
         size_t non_throttled_rg_active_set_size = 0;
-        for (const auto & ele : resource_group_schedulers)
+        for (const auto & ele : schedulers)
         {
             // Will ignore the group whose tokens have been exhausted,
             // this can prevent tasks throllted by resource control from occupying too much hard limit proportion.
-            bool is_throttled = false;
-            try
-            {
-                is_throttled = LocalAdmissionController::global_instance->isResourceGroupThrottled(ele.first);
-            }
-            catch (...)
-            {
-                LOG_ERROR(log, "rg got error {}", ele.first);
-                is_throttled = false;
-            }
-
-            if (is_throttled)
+            // NOTE: May throw exception, for example resource group has been deleted.
+            if (LocalAdmissionController::global_instance->isResourceGroupThrottled(ele.first))
                 continue;
 
             non_throttled_rg_active_set_size += ele.second->getActiveSetSize();
@@ -526,11 +516,11 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 
     {
         std::lock_guard lock(mu);
-        auto iter = resource_group_schedulers.find(resource_group_name);
+        auto scheduler = getSchedulerWithoutLock(resource_group_name);
         RUNTIME_CHECK_MSG(
-            iter != resource_group_schedulers.end(),
+            !scheduler,
             "cannot find related min tso scheduler for this MPPTask, resource group may be deleted");
-        scheduled = iter->second->tryToSchedule(schedule_entry, *this);
+        scheduled = scheduler->tryToSchedule(schedule_entry, *this);
     }
     return scheduled;
 }
@@ -546,30 +536,30 @@ void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_n
 void MPPTaskManager::tagResourceGroupSchedulerReadyToDelete(const String & name)
 {
     std::lock_guard lock(mu);
-    resource_group_schedulers_ready_to_delete.insert(name);
+    schedulers_ready_to_delete.insert(name);
 }
 
 void MPPTaskManager::cleanTombstoneResourceGroupScheduler()
 {
     std::lock_guard lock(mu);
-    for (auto delete_iter = resource_group_schedulers_ready_to_delete.begin();
-         delete_iter != resource_group_schedulers_ready_to_delete.end();)
+    for (auto delete_iter = schedulers_ready_to_delete.begin();
+         delete_iter != schedulers_ready_to_delete.end();)
     {
         const String & resource_group_name = *delete_iter;
-        auto schduler_iter = resource_group_schedulers.find(resource_group_name);
-        if (schduler_iter != resource_group_schedulers.end())
+        auto schduler_iter = schedulers.find(resource_group_name);
+        if (schduler_iter != schedulers.end())
         {
             if (schduler_iter->second->getActiveSetSize() == 0 && schduler_iter->second->getWaitingSetSize() == 0)
             {
-                resource_group_schedulers.erase(schduler_iter);
-                delete_iter = resource_group_schedulers_ready_to_delete.erase(delete_iter);
+                schedulers.erase(schduler_iter);
+                delete_iter = schedulers_ready_to_delete.erase(delete_iter);
             }
             else
                 ++delete_iter;
         }
         else
         {
-            delete_iter = resource_group_schedulers_ready_to_delete.erase(delete_iter);
+            delete_iter = schedulers_ready_to_delete.erase(delete_iter);
         }
     }
 }

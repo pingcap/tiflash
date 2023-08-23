@@ -199,8 +199,8 @@ class MPPTaskManager : private boost::noncopyable
 
     // ResourceControl related:
     // <resource_group_name, min_tso_schduler>
-    std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
-    std::unordered_set<String> resource_group_schedulers_ready_to_delete;
+    std::unordered_map<String, MPPTaskSchedulerPtr> schedulers;
+    std::unordered_set<String> schedulers_ready_to_delete;
     UInt64 resource_control_mpp_task_hard_limit;
 
 public:
@@ -262,8 +262,8 @@ public:
 
     MPPTaskSchedulerPtr getSchedulerWithoutLock(const String & resource_group_name)
     {
-        auto iter = resource_group_schedulers.find(resource_group_name);
-        if (iter == resource_group_schedulers.end())
+        auto iter = schedulers.find(resource_group_name);
+        if (iter == schedulers.end())
             return nullptr;
         return iter->second;
     }

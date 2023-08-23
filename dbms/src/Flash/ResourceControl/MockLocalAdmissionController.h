@@ -82,6 +82,8 @@ public:
     void registerCleanTombstoneResourceGroupCallback(const std::function<void()> &) { RUNTIME_ASSERT(0); }
     void unregisterCleanTombstoneResourceGroupCallback() { RUNTIME_ASSERT(0); }
 
+    bool isResourceGroupValid(const std::string &) { RUNTIME_ASSERT(0); }
+
     void stop()
     {
         {
