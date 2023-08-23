@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,21 +63,21 @@ struct WindowFrame
     BoundaryType begin_type = BoundaryType::Unbounded;
     UInt64 begin_offset = 0;
     bool begin_preceding = true;
+    Int32 begin_range_auxiliary_column_index = -1;
+    tipb::RangeCmpDataType begin_cmp_data_type;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
     bool end_preceding = false;
+    Int32 end_range_auxiliary_column_index = -1;
+    tipb::RangeCmpDataType end_cmp_data_type;
 
     bool operator==(const WindowFrame & other) const
     {
         // We don't compare is_default because it's not a real property of the
         // frame, and only influences how we display it.
-        return other.type == type
-            && other.begin_type == begin_type
-            && other.begin_offset == begin_offset
-            && other.begin_preceding == begin_preceding
-            && other.end_type == end_type
-            && other.end_offset == end_offset
+        return other.type == type && other.begin_type == begin_type && other.begin_offset == begin_offset
+            && other.begin_preceding == begin_preceding && other.end_type == end_type && other.end_offset == end_offset
             && other.end_preceding == end_preceding;
     }
 };
@@ -108,6 +108,22 @@ struct WindowDescription
 
     // The window functions that are calculated for this window.
     WindowFunctionDescriptions window_functions_descriptions;
+
+    // Mark the order by column type to avoid type judge
+    // each time we update the start/end frame position.
+    TypeIndex order_by_col_type = TypeIndex::Nothing;
+
+    TypeIndex begin_aux_col_type = TypeIndex::Nothing;
+    TypeIndex end_aux_col_type = TypeIndex::Nothing;
+
+    // ascending or descending for order by column
+    // only used for range frame type
+    bool is_desc;
+
+    // only used for range frame type
+    bool is_order_by_col_nullable;
+    bool is_begin_aux_col_nullable;
+    bool is_end_aux_col_nullable;
 
     void setWindowFrame(const tipb::WindowFrame & frame_);
 

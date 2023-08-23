@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,11 @@ protected:
         fields_map.clear();
     }
 
-    void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version, size_t num_rows)
+    void encodeColumns(
+        TableInfo & table_info,
+        std::vector<Field> & fields,
+        RowEncodeVersion row_version,
+        size_t num_rows)
     {
         // for later check
         std::unordered_map<String, size_t> column_name_columns_index_map;
@@ -109,7 +113,9 @@ protected:
         return reader.read(block, data_list_read, force_decode);
     }
 
-    std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(const ColumnIDs & handle_ids, bool is_common_handle) const
+    std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(
+        const ColumnIDs & handle_ids,
+        bool is_common_handle) const
     {
         return getTableInfoAndFields(
             handle_ids,
@@ -165,8 +171,20 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandle)
 
 constexpr size_t num_iterations_test = 1000;
 
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandle)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandle)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandle)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandle)
+    ->Iterations(num_iterations_test)
+    ->Arg(1)
+    ->Arg(10)
+    ->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandle)
+    ->Iterations(num_iterations_test)
+    ->Arg(1)
+    ->Arg(10)
+    ->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandle)
+    ->Iterations(num_iterations_test)
+    ->Arg(1)
+    ->Arg(10)
+    ->Arg(100);
 
 } // namespace DB::tests

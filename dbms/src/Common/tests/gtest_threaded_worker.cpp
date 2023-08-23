@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,8 +39,7 @@ public:
         : ThreadedWorker(source_queue_, result_queue_, Logger::get(), concurrency)
         , multiply_factor(multiply_factor_)
         , sleep_duration(sleep_duration_)
-    {
-    }
+    {}
 
     ~WorkerMultiply() override { wait(); }
 
@@ -72,8 +71,7 @@ public:
         : ThreadedWorker(source_queue_, result_queue_, Logger::get(), concurrency)
         , error_at(error_at_)
         , sleep_duration(sleep_duration_)
-    {
-    }
+    {}
 
     ~WorkerErrorAtN() override { wait(); }
 
@@ -296,23 +294,10 @@ TEST(ThreadedWorker, ErrorInWorkerWithNonEmptyQueue)
     w.startInBackground();
 
     Int64 r = 0;
-    auto result = w.result_queue->pop(r);
-    ASSERT_EQ(result, MPMCQueueResult::OK);
-
-    result = w.result_queue->pop(r);
-    ASSERT_EQ(result, MPMCQueueResult::OK);
-
-    result = w.result_queue->pop(r);
-    ASSERT_EQ(result, MPMCQueueResult::OK);
-
-    // Because the concurrency is 2, there could be a chance that some new result
-    // is pushed into the result_queue before exception cancel all the wokers.
-    // As long as the queue is cancelled before all elements are handled, consider
-    // this test passed.
     bool error_happened = false;
-    for (size_t i = 0; i < 3; ++i)
+    for (size_t i = 0; i < 6; ++i)
     {
-        result = w.result_queue->pop(r);
+        auto result = w.result_queue->pop(r);
         if (result == MPMCQueueResult::CANCELLED)
         {
             error_happened = true;
@@ -321,7 +306,7 @@ TEST(ThreadedWorker, ErrorInWorkerWithNonEmptyQueue)
     }
     ASSERT_TRUE(error_happened);
 
-    result = w.source_queue->push(10);
+    auto result = w.source_queue->push(10);
     ASSERT_EQ(result, MPMCQueueResult::CANCELLED);
 }
 

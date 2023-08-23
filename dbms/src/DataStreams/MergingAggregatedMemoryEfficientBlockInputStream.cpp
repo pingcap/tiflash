@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     size_t merging_threads_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , aggregator(params, req_id, merging_threads_)
+    , aggregator(params, req_id, merging_threads_, [](const OperatorSpillContextPtr &) {})
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
     , merging_threads(merging_threads_)
@@ -189,10 +189,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
         {
             auto & child = children[i];
 
-            reading_pool->schedule(
-                wrapInvocable(true, [&child] {
-                    child->readPrefix();
-                }));
+            reading_pool->schedule(wrapInvocable(true, [&child] { child->readPrefix(); }));
         }
 
         reading_pool->wait();
@@ -270,7 +267,8 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
                     parallel_merge_data->merged_blocks.erase(it);
 
                     lock.unlock();
-                    parallel_merge_data->have_space.notify_one(); /// We consumed block. Merging thread may merge next block for us.
+                    parallel_merge_data->have_space
+                        .notify_one(); /// We consumed block. Merging thread may merge next block for us.
                     res = popBlocksListFront(current_result);
                     assert(res);
                     break;
@@ -349,7 +347,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                 if (!blocks_to_merge || blocks_to_merge->empty())
                 {
                     {
-                        std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
+                        std::unique_lock merged_blocks_lock(parallel_merge_data->merged_blocks_mutex);
                         parallel_merge_data->exhausted = true;
                     }
 
@@ -361,9 +359,9 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                 output_order = blocks_to_merge->front().info.bucket_num;
 
                 {
-                    std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
+                    std::unique_lock merged_blocks_lock(parallel_merge_data->merged_blocks_mutex);
 
-                    parallel_merge_data->have_space.wait(lock, [this] {
+                    parallel_merge_data->have_space.wait(merged_blocks_lock, [this] {
                         return parallel_merge_data->merged_blocks.size() < merging_threads
                             || parallel_merge_data->finish;
                     });
@@ -409,7 +407,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
 }
 
 
-MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregatedMemoryEfficientBlockInputStream::getNextBlocksToMerge()
+MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregatedMemoryEfficientBlockInputStream::
+    getNextBlocksToMerge()
 {
     /** There are several input sources.
       * From each of them, data may be received in one of following forms:
@@ -431,8 +430,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
     /// Read from source next block with bucket number not greater than 'current_bucket_num'.
 
     auto need_that_input = [this](Input & input) {
-        return !input.is_exhausted
-            && input.block.info.bucket_num < current_bucket_num;
+        return !input.is_exhausted && input.block.info.bucket_num < current_bucket_num;
     };
 
     auto read_from_input = [this](Input & input) {
@@ -474,9 +472,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] {
-                    read_from_input(input);
-                }));
+                reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] { read_from_input(input); }));
             }
         }
 

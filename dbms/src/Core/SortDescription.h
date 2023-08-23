@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,11 @@ struct SortColumnDescription
     std::shared_ptr<ICollator> collator_holder = nullptr;
     ICollator const * collator = nullptr;
 
-    SortColumnDescription(size_t column_number_, int direction_, int nulls_direction_, const std::shared_ptr<ICollator> & collator_ = nullptr)
+    SortColumnDescription(
+        size_t column_number_,
+        int direction_,
+        int nulls_direction_,
+        const std::shared_ptr<ICollator> & collator_ = nullptr)
         : column_number(column_number_)
         , direction(direction_)
         , nulls_direction(nulls_direction_)
@@ -48,7 +52,11 @@ struct SortColumnDescription
         , collator(collator_holder.get())
     {}
 
-    SortColumnDescription(const std::string & column_name_, int direction_, int nulls_direction_, const std::shared_ptr<ICollator> & collator_ = nullptr)
+    SortColumnDescription(
+        const std::string & column_name_,
+        int direction_,
+        int nulls_direction_,
+        const std::shared_ptr<ICollator> & collator_ = nullptr)
         : column_name(column_name_)
         , column_number(0)
         , direction(direction_)
@@ -65,7 +73,11 @@ struct SortColumnDescription
         , collator(collator_)
     {}
 
-    SortColumnDescription(const std::string & column_name_, int direction_, int nulls_direction_, ICollator const * collator_)
+    SortColumnDescription(
+        const std::string & column_name_,
+        int direction_,
+        int nulls_direction_,
+        ICollator const * collator_)
         : column_name(column_name_)
         , column_number(0)
         , direction(direction_)

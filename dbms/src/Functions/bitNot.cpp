@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,10 +44,7 @@ template <>
 struct FunctionUnaryArithmeticMonotonicity<NameBitNot>
 {
     static bool has() { return false; }
-    static IFunction::Monotonicity get(const Field &, const Field &)
-    {
-        return {};
-    }
+    static IFunction::Monotonicity get(const Field &, const Field &) { return {}; }
 };
 
 void registerFunctionBitNot(FunctionFactory & factory)

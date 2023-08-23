@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,18 +70,12 @@ namespace ErrorCodes
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
 
-BlockInputStreams StorageDisaggregated::readThroughS3(
-    const Context & db_context,
-    unsigned num_streams)
+BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
 {
     auto read_task = buildReadTaskWithBackoff(db_context);
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(
-        db_context,
-        read_task,
-        num_streams,
-        pipeline);
+    buildRemoteSegmentInputStreams(db_context, read_task, num_streams, pipeline);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -107,12 +101,7 @@ void StorageDisaggregated::readThroughS3(
 {
     auto read_task = buildReadTaskWithBackoff(db_context);
 
-    buildRemoteSegmentSourceOps(
-        exec_context,
-        group_builder,
-        db_context,
-        read_task,
-        num_streams);
+    buildRemoteSegmentSourceOps(exec_context, group_builder, db_context, read_task, num_streams);
 
     NamesAndTypes source_columns;
     auto header = group_builder.getCurrentHeader();
@@ -139,7 +128,8 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const C
     double total_backoff_seconds = 0.0;
     SCOPE_EXIT({
         // This metric is per-read.
-        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff)
+            .Observe(total_backoff_seconds);
     });
 
     kv::Backoffer bo(kv::copNextMaxBackoff);
@@ -159,9 +149,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const C
                 throw;
 
             Stopwatch w_backoff;
-            SCOPE_EXIT({
-                total_backoff_seconds += w_backoff.elapsedSeconds();
-            });
+            SCOPE_EXIT({ total_backoff_seconds += w_backoff.elapsedSeconds(); });
 
             LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
@@ -194,17 +182,9 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
     auto thread_manager = newThreadManager();
     for (const auto & cop_task : batch_cop_tasks)
     {
-        thread_manager->schedule(
-            true,
-            "buildReadTaskForWriteNode",
-            [&] {
-                buildReadTaskForWriteNode(
-                    db_context,
-                    scan_context,
-                    cop_task,
-                    output_lock,
-                    output_seg_tasks);
-            });
+        thread_manager->schedule(true, "buildReadTaskForWriteNode", [&] {
+            buildReadTaskForWriteNode(db_context, scan_context, cop_task, output_lock, output_seg_tasks);
+        });
     }
 
     // Let's wait for all threads to finish. Otherwise local variable references will be invalid.
@@ -275,9 +255,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             dropRegionCache(cluster->region_cache, req, std::move(retry_regions));
 
-            throw Exception(
-                error.msg(),
-                ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
+            throw Exception(error.msg(), ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
         else if (resp.error().has_error_locked())
         {
@@ -299,16 +277,25 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             std::vector<kv::LockPtr> locks{};
             for (const auto & lock_info : error.locked())
                 locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
-            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.gather_id.query_id.start_ts, locks, pushed);
+            auto before_expired = cluster->lock_resolver->resolveLocks(
+                bo,
+                sender_target_mpp_task_id.gather_id.query_id.start_ts,
+                locks,
+                pushed);
 
             // TODO: Use `pushed` to bypass large txn.
-            LOG_DEBUG(log, "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}", w_resolve_lock.elapsedSeconds(), locks.size(), pushed.size(), before_expired);
+            LOG_DEBUG(
+                log,
+                "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}",
+                w_resolve_lock.elapsedSeconds(),
+                locks.size(),
+                pushed.size(),
+                before_expired);
 
-            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock).Observe(w_resolve_lock.elapsedSeconds());
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock)
+                .Observe(w_resolve_lock.elapsedSeconds());
 
-            throw Exception(
-                error.msg(),
-                ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
+            throw Exception(error.msg(), ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
         else
         {
@@ -335,20 +322,17 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     auto thread_manager = newThreadManager();
     for (const auto & serialized_physical_table : resp.tables())
     {
-        thread_manager->schedule(
-            true,
-            "buildReadTaskForWriteNodeTable",
-            [&] {
-                buildReadTaskForWriteNodeTable(
-                    db_context,
-                    scan_context,
-                    snapshot_id,
-                    resp.store_id(),
-                    req->address(),
-                    serialized_physical_table,
-                    output_lock,
-                    output_seg_tasks);
-            });
+        thread_manager->schedule(true, "buildReadTaskForWriteNodeTable", [&] {
+            buildReadTaskForWriteNodeTable(
+                db_context,
+                scan_context,
+                snapshot_id,
+                resp.store_id(),
+                req->address(),
+                serialized_physical_table,
+                output_lock,
+                output_seg_tasks);
+        });
     }
     thread_manager->wait();
 }
@@ -370,29 +354,27 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     auto thread_manager = newThreadManager();
     auto n = static_cast<size_t>(table.segments().size());
 
-    auto table_tracing_logger = log->getChild(fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
+    auto table_tracing_logger = log->getChild(
+        fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
     for (size_t idx = 0; idx < n; ++idx)
     {
         const auto & remote_seg = table.segments(idx);
 
-        thread_manager->schedule(
-            true,
-            "buildRNReadSegmentTask",
-            [&] {
-                auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
-                    table_tracing_logger,
-                    db_context,
-                    scan_context,
-                    remote_seg,
-                    snapshot_id,
-                    store_id,
-                    store_address,
-                    table.keyspace_id(),
-                    table.table_id());
+        thread_manager->schedule(true, "buildRNReadSegmentTask", [&] {
+            auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
+                table_tracing_logger,
+                db_context,
+                scan_context,
+                remote_seg,
+                snapshot_id,
+                store_id,
+                store_address,
+                table.keyspace_id(),
+                table.table_id());
 
-                std::lock_guard lock(output_lock);
-                output_seg_tasks.push_back(seg_read_task);
-            });
+            std::lock_guard lock(output_lock);
+            output_seg_tasks.push_back(seg_read_task);
+        });
     }
 
     thread_manager->wait();
@@ -406,8 +388,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
  *
  * Similar to `StorageDisaggregated::buildDispatchMPPTaskRequest`
  */
-std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-StorageDisaggregated::buildEstablishDisaggTaskReq(
+std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated::buildEstablishDisaggTaskReq(
     const Context & db_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
@@ -480,15 +461,15 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         0,
         db_context.getTimezoneInfo());
     auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
-        auto iter = std::find_if(
-            defines->begin(),
-            defines->end(),
-            [column_id](const DM::ColumnDefine & d) -> bool { return d.id == column_id; });
+        auto iter = std::find_if(defines->begin(), defines->end(), [column_id](const DM::ColumnDefine & d) -> bool {
+            return d.id == column_id;
+        });
         if (iter != defines->end())
             return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
-    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
+    auto rs_operator
+        = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     return rs_operator;
@@ -510,7 +491,11 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
         *column_defines,
         db_context,
         log);
-    const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
+    const auto read_mode = DM::DeltaMergeStore::getReadMode(
+        db_context,
+        table_scan.isFastScan(),
+        table_scan.keepOrder(),
+        push_down_filter);
     const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     LOG_INFO(
         log,
@@ -597,8 +582,12 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
             .extra_table_id_index = extra_table_id_index,
         }));
     }
-    db_context.getDAGContext()->addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
-    db_context.getDAGContext()->addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
+    db_context.getDAGContext()->addInboundIOProfileInfos(
+        table_scan.getTableScanExecutorID(),
+        group_builder.getCurIOProfileInfos());
+    db_context.getDAGContext()->addOperatorProfileInfos(
+        table_scan.getTableScanExecutorID(),
+        group_builder.getCurProfileInfos());
 }
 
 } // namespace DB

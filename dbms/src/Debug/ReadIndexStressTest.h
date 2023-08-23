@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,16 +42,15 @@ public:
     // min_region_cnt, loop_cnt, type(batch-read-index-v1, async-read-index), concurrency
     static void dbgFuncStressTest(Context & context, const ASTs & args, DBGInvoker::Printer);
 
-    TimeCost run(
-        std::vector<kvrpcpb::ReadIndexRequest> reqs,
-        TestType ver);
+    TimeCost run(std::vector<kvrpcpb::ReadIndexRequest> reqs, TestType ver);
 
-    void runConcurrency(size_t min_region_cnt,
-                        size_t loop_cnt,
-                        TestType ver,
-                        size_t concurrency,
-                        size_t & req_cnt,
-                        std::vector<std::deque<TimeCost>> & tests_time_cost);
+    void runConcurrency(
+        size_t min_region_cnt,
+        size_t loop_cnt,
+        TestType ver,
+        size_t concurrency,
+        size_t & req_cnt,
+        std::vector<std::deque<TimeCost>> & tests_time_cost);
 
     explicit ReadIndexStressTest(const TMTContext &);
     ~ReadIndexStressTest();

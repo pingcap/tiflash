@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,3 +15,4 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
 add_subdirectory (PageCtl EXCLUDE_FROM_ALL)
+add_subdirectory (Checkpoint EXCLUDE_FROM_ALL)

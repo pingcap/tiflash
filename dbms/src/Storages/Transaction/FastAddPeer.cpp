@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,10 @@ ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getPar
     return parsed_checkpoint_data;
 }
 
-std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerCheckpointData(Context & context, UInt64 store_id, UInt64 required_seq)
+std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerCheckpointData(
+    Context & context,
+    UInt64 store_id,
+    UInt64 required_seq)
 {
     CheckpointCacheElementPtr cache_element = nullptr;
     UInt64 cache_seq = 0;
@@ -149,13 +152,18 @@ using raft_serverpb::PeerState;
 using raft_serverpb::RaftApplyState;
 using raft_serverpb::RegionLocalState;
 
-std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLocalState>> tryParseRegionInfoFromCheckpointData(ParsedCheckpointDataHolderPtr checkpoint_data_holder, UInt64 remote_store_id, UInt64 region_id, TiFlashRaftProxyHelper * proxy_helper)
+std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLocalState>> tryParseRegionInfoFromCheckpointData(
+    ParsedCheckpointDataHolderPtr checkpoint_data_holder,
+    UInt64 remote_store_id,
+    UInt64 region_id,
+    TiFlashRaftProxyHelper * proxy_helper)
 {
     auto * log = &Poco::Logger::get("FastAddPeer");
     RegionPtr region;
     {
         auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
-        auto page = checkpoint_data_holder->getUniversalPageStorage()->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         if (page.isValid())
         {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -171,7 +179,8 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
     RaftApplyState apply_state;
     {
         auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
-        auto page = checkpoint_data_holder->getUniversalPageStorage()->read(apply_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(apply_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         if (page.isValid())
         {
             apply_state.ParseFromArray(page.data.begin(), page.data.size());
@@ -186,7 +195,8 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
     RegionLocalState region_state;
     {
         auto local_state_key = UniversalPageIdFormat::toRegionLocalStateKeyInKVEngine(region_id);
-        auto page = checkpoint_data_holder->getUniversalPageStorage()->read(local_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(local_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         if (page.isValid())
         {
             region_state.ParseFromArray(page.data.begin(), page.data.size());
@@ -254,24 +264,42 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
                 RUNTIME_CHECK(store_id != current_store_id);
                 auto iter = checked_seq_map.find(store_id);
                 auto checked_seq = (iter == checked_seq_map.end()) ? 0 : iter->second;
-                auto [data_seq, checkpoint_data] = fap_ctx->getNewerCheckpointData(server->tmt->getContext(), store_id, checked_seq);
+                auto [data_seq, checkpoint_data]
+                    = fap_ctx->getNewerCheckpointData(server->tmt->getContext(), store_id, checked_seq);
                 checked_seq_map[store_id] = data_seq;
                 if (data_seq > checked_seq)
                 {
                     RUNTIME_CHECK(checkpoint_data != nullptr);
-                    auto maybe_region_info = tryParseRegionInfoFromCheckpointData(checkpoint_data, store_id, region_id, server->proxy_helper);
+                    auto maybe_region_info = tryParseRegionInfoFromCheckpointData(
+                        checkpoint_data,
+                        store_id,
+                        region_id,
+                        server->proxy_helper);
                     if (!maybe_region_info.has_value())
                         continue;
                     std::tie(checkpoint_info, region, apply_state, region_state) = *maybe_region_info;
                     if (tryResetPeerIdInRegion(region, region_state, new_peer_id))
                     {
                         success = true;
-                        LOG_INFO(log, "Select checkpoint with seq {} from store {} takes {} seconds, candidate_store_id size {} [region_id={}]", data_seq, checkpoint_info->remote_store_id, watch.elapsedSeconds(), candidate_store_ids.size(), region_id);
+                        LOG_INFO(
+                            log,
+                            "Select checkpoint with seq {} from store {} takes {} seconds, candidate_store_id size {} "
+                            "[region_id={}]",
+                            data_seq,
+                            checkpoint_info->remote_store_id,
+                            watch.elapsedSeconds(),
+                            candidate_store_ids.size(),
+                            region_id);
                         break;
                     }
                     else
                     {
-                        LOG_DEBUG(log, "Checkpoint with seq {} from store {} doesn't contain reusable region info [region_id={}]", data_seq, store_id, region_id);
+                        LOG_DEBUG(
+                            log,
+                            "Checkpoint with seq {} from store {} doesn't contain reusable region info [region_id={}]",
+                            data_seq,
+                            store_id,
+                            region_id);
                     }
                 }
             }
@@ -289,14 +317,24 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         // Write raft log to uni ps
         UniversalWriteBatch wb;
         RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
-        raft_data_reader.traverseRemoteRaftLogForRegion(region_id, [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
-            LOG_DEBUG(log, "Write raft log size {}, region_id={} index={}", size, region_id, UniversalPageIdFormat::getU64ID(page_id));
-            wb.putRemotePage(page_id, 0, size, location, {});
-        });
+        raft_data_reader.traverseRemoteRaftLogForRegion(
+            region_id,
+            [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
+                LOG_DEBUG(
+                    log,
+                    "Write raft log size {}, region_id={} index={}",
+                    size,
+                    region_id,
+                    UniversalPageIdFormat::getU64ID(page_id));
+                wb.putRemotePage(page_id, 0, size, location, {});
+            });
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));
 
-        return genFastAddPeerRes(FastAddPeerStatus::Ok, apply_state.SerializeAsString(), region_state.region().SerializeAsString());
+        return genFastAddPeerRes(
+            FastAddPeerStatus::Ok,
+            apply_state.SerializeAsString(),
+            region_state.region().SerializeAsString());
     }
     catch (...)
     {
@@ -346,7 +384,9 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     }
     catch (...)
     {
-        DB::tryLogCurrentException("FastAddPeer", fmt::format("Failed when try to restore from checkpoint {}", StackTrace().toString()));
+        DB::tryLogCurrentException(
+            "FastAddPeer",
+            fmt::format("Failed when try to restore from checkpoint {}", StackTrace().toString()));
         return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
     }
 }

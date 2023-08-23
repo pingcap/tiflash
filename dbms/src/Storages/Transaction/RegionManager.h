@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +26,11 @@ class RegionTaskLock;
 
 struct RegionTaskCtrl : MutexLockWrap
 {
+    using Mut = std::mutex;
     /// The life time of each RegionTaskElement element should be as long as RegionManager, just return const ref.
     struct RegionTaskElement : private boost::noncopyable
     {
-        mutable std::mutex mutex;
+        mutable Mut mutex;
     };
     /// Encapsulate the task lock for region
     RegionTaskLock genRegionTaskLock(RegionID region_id) const;
@@ -55,15 +56,9 @@ struct RegionManager : SharedMutexLockWrap
         RegionsRangeIndex & index;
     };
 
-    RegionReadLock genReadLock() const
-    {
-        return {genSharedLock(), regions, region_range_index};
-    }
+    RegionReadLock genReadLock() const { return {genSharedLock(), regions, region_range_index}; }
 
-    RegionWriteLock genWriteLock()
-    {
-        return {genUniqueLock(), regions, region_range_index};
-    }
+    RegionWriteLock genWriteLock() { return {genUniqueLock(), regions, region_range_index}; }
 
     /// Encapsulate the task lock for region
     RegionTaskLock genRegionTaskLock(RegionID region_id) const;
@@ -84,10 +79,10 @@ class RegionTaskLock : private boost::noncopyable
 {
     friend struct RegionTaskCtrl;
 
-    explicit RegionTaskLock(std::mutex & mutex_)
+    explicit RegionTaskLock(RegionTaskCtrl::Mut & mutex_)
         : lock(mutex_)
     {}
-    std::lock_guard<std::mutex> lock;
+    std::lock_guard<RegionTaskCtrl::Mut> lock;
 };
 
 } // namespace DB

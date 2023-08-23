@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,11 @@ LocalAggregateTransform::LocalAggregateTransform(
     , params(params_)
     , agg_context(req_id)
 {
-    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
+    agg_context.initBuild(
+        params,
+        local_concurrency,
+        /*hook=*/[&]() { return exec_context.isCancelled(); },
+        exec_context.getRegisterOperatorSpillContext());
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -47,7 +51,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         if unlikely (!block)
         {
             agg_context.getAggSpillContext()->finishSpillableStage();
-            return agg_context.hasSpilledData()
+            return agg_context.hasSpilledData() || agg_context.getAggSpillContext()->needFinalSpill(0)
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);
         }
@@ -107,9 +111,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
         block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;
     case LocalAggStatus::restore:
-        return restorer->tryPop(block)
-            ? OperatorStatus::HAS_OUTPUT
-            : OperatorStatus::IO_IN;
+        return restorer->tryPop(block) ? OperatorStatus::HAS_OUTPUT : OperatorStatus::IO_IN;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,8 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     size_t build_index = 0;
     assert(join_ptr);
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
+        builder.setSinkOp(
+            std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
     });
     auto & join_execute_info = context.getDAGContext()->getJoinExecuteInfoMap()[execId()];
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,8 +54,9 @@ struct QuantileLevels
         if (params.empty())
         {
             if (require_at_least_one_param)
-                throw Exception("Aggregate function for calculation of multiple quantiles require at least one parameter",
-                                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                throw Exception(
+                    "Aggregate function for calculation of multiple quantiles require at least one parameter",
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
             /// If levels are not specified, default is 0.5 (median).
             levels.push_back(0.5);

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ using ColumnFilePersistedSetPtr = std::shared_ptr<ColumnFilePersistedSet>;
 
 /// This class is mostly not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
 /// Only the method that just access atomic variable can be called without extra synchronization
-class ColumnFilePersistedSet : public std::enable_shared_from_this<ColumnFilePersistedSet>
+class ColumnFilePersistedSet
+    : public std::enable_shared_from_this<ColumnFilePersistedSet>
     , private boost::noncopyable
 {
 private:
@@ -87,27 +88,22 @@ public:
      * Segment_log is not available when constructing, because usually
      * at that time the segment has not been constructed yet.
      */
-    void resetLogger(const LoggerPtr & segment_log)
-    {
-        log = segment_log;
-    }
+    void resetLogger(const LoggerPtr & segment_log) { log = segment_log; }
 
     /// Thread safe part start
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }
     String info() const
     {
-        return fmt::format("ColumnFilePersistedSet [{}]: {} column files, {} rows, {} bytes, {} deletes.",
-                           metadata_id,
-                           persisted_files_count.load(),
-                           rows.load(),
-                           bytes.load(),
-                           deletes.load());
+        return fmt::format(
+            "ColumnFilePersistedSet [{}]: {} column files, {} rows, {} bytes, {} deletes.",
+            metadata_id,
+            persisted_files_count.load(),
+            rows.load(),
+            bytes.load(),
+            deletes.load());
     }
     /// Thread safe part end
-    String detailInfo() const
-    {
-        return columnFilesToString(persisted_files);
-    }
+    String detailInfo() const { return columnFilesToString(persisted_files); }
 
     void saveMeta(WriteBatches & wbs) const;
 

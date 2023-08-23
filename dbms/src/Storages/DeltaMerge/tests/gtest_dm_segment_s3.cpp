@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,9 @@ public:
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
         {
             already_initialize_data_store = false;
-            global_context.getSharedContextDisagg()->initRemoteDataStore(global_context.getFileProvider(), /*s3_enabled*/ true);
+            global_context.getSharedContextDisagg()->initRemoteDataStore(
+                global_context.getFileProvider(),
+                /*s3_enabled*/ true);
             ASSERT_TRUE(global_context.getSharedContextDisagg()->remote_data_store != nullptr);
         }
         else
@@ -126,7 +128,13 @@ protected:
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(Logger::get(), *dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
+        return Segment::newSegment(
+            Logger::get(),
+            *dm_context,
+            table_columns,
+            RowKeyRange::newAll(false, 1),
+            storage_pool->newMetaPageId(),
+            0);
     }
 
     // setColumns should update dm_context at the same time
@@ -134,15 +142,16 @@ protected:
     {
         *table_columns = *columns;
 
-        dm_context = std::make_unique<DMContext>(*db_context,
-                                                 storage_path_pool,
-                                                 storage_pool,
-                                                 /*min_version_*/ 0,
-                                                 NullspaceID,
-                                                 /*physical_table_id*/ 100,
-                                                 false,
-                                                 1,
-                                                 db_context->getSettingsRef());
+        dm_context = std::make_unique<DMContext>(
+            *db_context,
+            storage_path_pool,
+            storage_pool,
+            /*min_version_*/ 0,
+            NullspaceID,
+            /*physical_table_id*/ 100,
+            false,
+            1,
+            db_context->getSettingsRef());
     }
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
@@ -185,7 +194,11 @@ try
     }
 
 
-    auto [left, right] = segment->split(dmContext(), tableColumns(), /* use a calculated split point */ std::nullopt, Segment::SplitMode::Logical);
+    auto [left, right] = segment->split(
+        dmContext(),
+        tableColumns(),
+        /* use a calculated split point */ std::nullopt,
+        Segment::SplitMode::Logical);
     ASSERT_TRUE(left != nullptr);
     ASSERT_TRUE(right != nullptr);
 
@@ -200,7 +213,8 @@ try
     auto wn_ps = dmContext().db_context.getWriteNodePageStorage();
     wn_ps->gc(/*not_skip*/ true);
     {
-        auto valid_external_ids = wn_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id));
+        auto valid_external_ids = wn_ps->page_directory->getAliveExternalIds(
+            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id));
         ASSERT_TRUE(valid_external_ids.has_value());
         ASSERT_EQ(valid_external_ids->size(), 1);
         auto all_dt_file_ids = storage_path_pool->getStableDiskDelegator().getAllRemoteDTFilesForGC();

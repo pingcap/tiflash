@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,8 @@ public:
     };
 
     /// Reader is safe to used by multi threads.
-    class Reader : private boost::noncopyable
+    class Reader
+        : private boost::noncopyable
         , private Allocator<false>
     {
         friend class PageFile;
@@ -129,11 +130,27 @@ public:
     /// Create an empty page file.
     PageFile() = default;
     /// Recover a page file from disk.
-    static std::pair<PageFile, Type> recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Poco::Logger * log);
+    static std::pair<PageFile, Type> recover(
+        const String & parent_path,
+        const FileProviderPtr & file_provider,
+        const String & page_file_name,
+        Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider, Type type, Poco::Logger * log);
+    static PageFile newPageFile(
+        PageFileId file_id,
+        UInt32 level,
+        const String & parent_path,
+        const FileProviderPtr & file_provider,
+        Type type,
+        Poco::Logger * log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider, Type type, Poco::Logger * log);
+    static PageFile openPageFileForRead(
+        PageFileId file_id,
+        UInt32 level,
+        const String & parent_path,
+        const FileProviderPtr & file_provider,
+        Type type,
+        Poco::Logger * log);
 
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
@@ -151,15 +168,19 @@ public:
 
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file) { return std::make_unique<Writer>(*this, sync_on_write, create_new_file); }
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file)
+    {
+        return std::make_unique<Writer>(*this, sync_on_write, create_new_file);
+    }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
     std::shared_ptr<Reader> createReader()
     {
         if (unlikely(type != Type::Formal))
-            throw Exception("Try to create reader for PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
-                                + " of illegal type: " + typeToString(type),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Try to create reader for PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
+                    + " of illegal type: " + typeToString(type),
+                ErrorCodes::LOGICAL_ERROR);
 
         return std::make_shared<Reader>(*this);
     }
@@ -198,19 +219,20 @@ public:
 
 private:
     /// Create a new page file.
-    PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, const FileProviderPtr & file_provider_, Type type_, bool is_create, Poco::Logger * log);
+    PageFile(
+        PageFileId file_id_,
+        UInt32 level_,
+        const String & parent_path,
+        const FileProviderPtr & file_provider_,
+        Type type_,
+        bool is_create,
+        Poco::Logger * log);
 
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
 
-    EncryptionPath dataEncryptionPath() const
-    {
-        return EncryptionPath(dataPath(), "");
-    }
-    EncryptionPath metaEncryptionPath() const
-    {
-        return EncryptionPath(metaPath(), "");
-    }
+    EncryptionPath dataEncryptionPath() const { return EncryptionPath(dataPath(), ""); }
+    EncryptionPath metaEncryptionPath() const { return EncryptionPath(metaPath(), ""); }
 
     constexpr static const char * folder_prefix_formal = "page";
     constexpr static const char * folder_prefix_temp = ".temp.page";

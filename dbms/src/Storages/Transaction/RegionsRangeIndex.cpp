@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,9 @@ void RegionsRangeIndex::remove(const RegionRange & range, RegionID region_id)
     for (auto it = begin_it; it != end_it; ++it)
     {
         if (it->second.region_map.erase(region_id) == 0)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": not found region_id=" + toString(region_id), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                std::string(__PRETTY_FUNCTION__) + ": not found region_id=" + toString(region_id),
+                ErrorCodes::LOGICAL_ERROR);
     }
     tryMergeEmpty(begin_it);
 }
@@ -70,6 +72,32 @@ RegionMap RegionsRangeIndex::findByRangeOverlap(const RegionRange & range) const
     RegionMap res;
     for (auto it = begin_it; it != end_it; ++it)
         res.insert(it->second.region_map.begin(), it->second.region_map.end());
+    return res;
+}
+
+std::variant<RegionMap, RegionsRangeIndex::OverlapInfo> RegionsRangeIndex::findByRangeChecked(
+    const RegionRange & range) const
+{
+    auto begin_it = root.lower_bound(range.first);
+    auto end_it = root.lower_bound(range.second);
+    if (begin_it->first.compare(range.first) != 0)
+        --begin_it;
+
+    RegionMap res;
+    for (auto it = begin_it; it != end_it; ++it)
+    {
+        if (it->second.region_map.size() < 2)
+            res.insert(it->second.region_map.begin(), it->second.region_map.end());
+        else
+        {
+            std::vector<RegionID> v;
+            for (const auto & iter : it->second.region_map)
+            {
+                v.push_back(iter.first);
+            }
+            return std::make_tuple(it->first.copy(), std::move(v));
+        }
+    }
     return res;
 }
 

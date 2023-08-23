@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <common/likely.h>
+
 #include <iostream>
 
 namespace DB::ErrorCodes
@@ -60,7 +61,10 @@ inline void writeVarInt(Int64 x, OUT & ostr)
     TiKV::writeVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)), ostr);
 }
 
-inline char * writeVarInt(Int64 x, char * ostr) { return writeVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)), ostr); }
+inline char * writeVarInt(Int64 x, char * ostr)
+{
+    return writeVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)), ostr);
+}
 
 template <typename IN>
 inline void readVarInt(Int64 & x, IN & istr)
@@ -77,19 +81,55 @@ inline const char * readVarInt(Int64 & x, const char * istr, size_t size)
 }
 
 
-inline void writeVarT(UInt64 x, std::ostream & ostr) { writeVarUInt(x, ostr); }
-inline void writeVarT(Int64 x, std::ostream & ostr) { writeVarInt(x, ostr); }
-inline void writeVarT(UInt64 x, WriteBuffer & ostr) { TiKV::writeVarUInt(x, ostr); }
-inline void writeVarT(Int64 x, WriteBuffer & ostr) { TiKV::writeVarInt(x, ostr); }
-inline char * writeVarT(UInt64 x, char *& ostr) { return writeVarUInt(x, ostr); }
-inline char * writeVarT(Int64 x, char *& ostr) { return writeVarInt(x, ostr); }
+inline void writeVarT(UInt64 x, std::ostream & ostr)
+{
+    writeVarUInt(x, ostr);
+}
+inline void writeVarT(Int64 x, std::ostream & ostr)
+{
+    writeVarInt(x, ostr);
+}
+inline void writeVarT(UInt64 x, WriteBuffer & ostr)
+{
+    TiKV::writeVarUInt(x, ostr);
+}
+inline void writeVarT(Int64 x, WriteBuffer & ostr)
+{
+    TiKV::writeVarInt(x, ostr);
+}
+inline char * writeVarT(UInt64 x, char *& ostr)
+{
+    return writeVarUInt(x, ostr);
+}
+inline char * writeVarT(Int64 x, char *& ostr)
+{
+    return writeVarInt(x, ostr);
+}
 
-inline void readVarT(UInt64 & x, std::istream & istr) { readVarUInt(x, istr); }
-inline void readVarT(Int64 & x, std::istream & istr) { readVarInt(x, istr); }
-inline void readVarT(UInt64 & x, ReadBuffer & istr) { TiKV::readVarUInt(x, istr); }
-inline void readVarT(Int64 & x, ReadBuffer & istr) { TiKV::readVarInt(x, istr); }
-inline const char * readVarT(UInt64 & x, const char * istr, size_t size) { return readVarUInt(x, istr, size); }
-inline const char * readVarT(Int64 & x, const char * istr, size_t size) { return readVarInt(x, istr, size); }
+inline void readVarT(UInt64 & x, std::istream & istr)
+{
+    readVarUInt(x, istr);
+}
+inline void readVarT(Int64 & x, std::istream & istr)
+{
+    readVarInt(x, istr);
+}
+inline void readVarT(UInt64 & x, ReadBuffer & istr)
+{
+    TiKV::readVarUInt(x, istr);
+}
+inline void readVarT(Int64 & x, ReadBuffer & istr)
+{
+    TiKV::readVarInt(x, istr);
+}
+inline const char * readVarT(UInt64 & x, const char * istr, size_t size)
+{
+    return readVarUInt(x, istr, size);
+}
+inline const char * readVarT(Int64 & x, const char * istr, size_t size)
+{
+    return readVarInt(x, istr, size);
+}
 
 
 /// For [U]Int32, [U]Int16, size_t.
@@ -130,9 +170,15 @@ inline std::enable_if_t<!std::is_same_v<T, UInt64>, void> readVarUInt(T & x, Rea
     x = tmp;
 }
 
-inline void throwReadAfterEOF() { throw Exception("Attempt to read after eof", DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF); }
+inline void throwReadAfterEOF()
+{
+    throw Exception("Attempt to read after eof", DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF);
+}
 
-inline void throwReadUnfinished() { throw Exception("Read unfinished", DB::ErrorCodes::LOGICAL_ERROR); }
+inline void throwReadUnfinished()
+{
+    throw Exception("Read unfinished", DB::ErrorCodes::LOGICAL_ERROR);
+}
 
 inline void readVarUInt(UInt64 & x, ReadBuffer & istr)
 {
@@ -245,20 +291,24 @@ inline size_t getLengthOfVarUInt(UInt64 x)
     return x < (1ULL << 7)
         ? 1
         : (x < (1ULL << 14)
-                  ? 2
-                  : (x < (1ULL << 21)
-                            ? 3
-                            : (x < (1ULL << 28)
-                                      ? 4
-                                      : (x < (1ULL << 35)
-                                                ? 5
-                                                : (x < (1ULL << 42)
-                                                          ? 6
-                                                          : (x < (1ULL << 49) ? 7
-                                                                              : (x < (1ULL << 56) ? 8 : (x < (1ULL << 63) ? 9 : 10))))))));
+               ? 2
+               : (x < (1ULL << 21)
+                      ? 3
+                      : (x < (1ULL << 28)
+                             ? 4
+                             : (x < (1ULL << 35)
+                                    ? 5
+                                    : (x < (1ULL << 42)
+                                           ? 6
+                                           : (x < (1ULL << 49)
+                                                  ? 7
+                                                  : (x < (1ULL << 56) ? 8 : (x < (1ULL << 63) ? 9 : 10))))))));
 }
 
 
-inline size_t getLengthOfVarInt(Int64 x) { return getLengthOfVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63))); }
+inline size_t getLengthOfVarInt(Int64 x)
+{
+    return getLengthOfVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)));
+}
 
 } // namespace TiKV

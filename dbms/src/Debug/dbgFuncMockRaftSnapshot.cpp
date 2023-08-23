@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,11 +90,13 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
         for (size_t i = 0; i < handle_column_size; i++)
         {
             auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
-            auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
+            auto start_field
+                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());
-            auto end_field
-                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size + i]).value);
+            auto end_field = RegionBench::convertField(
+                column_info,
+                typeid_cast<const ASTLiteral &>(*args[3 + handle_column_size + i]).value);
             TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(end_field, column_info.tp);
             end_keys.emplace_back(end_datum.field());
         }
@@ -112,7 +114,9 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     // Parse row values
     for (auto it = args_begin; it != args_end; it += len)
     {
-        HandleID handle_id = is_common_handle ? 0 : static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value));
+        HandleID handle_id = is_common_handle
+            ? 0
+            : static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value));
         auto tso = static_cast<Timestamp>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value));
         auto del = static_cast<UInt8>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[2]).value));
         {
@@ -181,8 +185,9 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
     size_t args_size = args.size();
     if (dynamic_cast<ASTLiteral *>(args[args_size - 1].get()) != nullptr)
         has_partition_id = true;
-    const String & partition_id
-        = has_partition_id ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args_size - 1]).value)) : "";
+    const String & partition_id = has_partition_id
+        ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args_size - 1]).value))
+        : "";
     size_t offset = has_partition_id ? 1 : 0;
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 2 - offset]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 1 - offset]).name;
@@ -191,8 +196,9 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     if (args_size < 3 + 2 * handle_column_size || args_size > 3 + 2 * handle_column_size + 1)
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
-                        ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
+            ErrorCodes::BAD_ARGUMENTS);
 
     TMTContext & tmt = context.getTMTContext();
 
@@ -210,11 +216,13 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         for (size_t i = 0; i < handle_column_size; i++)
         {
             const auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
-            auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
+            auto start_field
+                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());
-            auto end_field
-                = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + handle_column_size + i]).value);
+            auto end_field = RegionBench::convertField(
+                column_info,
+                typeid_cast<const ASTLiteral &>(*args[1 + handle_column_size + i]).value);
             TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(end_field, column_info.tp);
             end_keys.emplace_back(end_datum.field());
         }
@@ -237,7 +245,8 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);
 
     // Mock to apply an empty snapshot for region[region-id]
-    tmt.getKVStore()->handleApplySnapshot(
+    RegionBench::handleApplySnapshot(
+        *tmt.getKVStore(),
         std::move(region_info),
         peer_id,
         SSTViewVec{nullptr, 0},
@@ -246,7 +255,12 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         std::nullopt,
         tmt);
 
-    output(fmt::format("put region #{}, range[{}, {}) to table #{} with raft commands", region_id, RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key), RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key), table_id));
+    output(fmt::format(
+        "put region #{}, range[{}, {}) to table #{} with raft commands",
+        region_id,
+        RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key),
+        RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key),
+        table_id));
 }
 
 std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
@@ -285,13 +299,14 @@ RegionMockTest::~RegionMockTest()
     region->proxy_helper = ori_proxy_helper;
 }
 
-void GenMockSSTData(const TiDB::TableInfo & table_info,
-                    TableID table_id,
-                    const String & store_key,
-                    UInt64 start_handle,
-                    UInt64 end_handle,
-                    UInt64 num_fields = 1,
-                    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+void GenMockSSTData(
+    const TiDB::TableInfo & table_info,
+    TableID table_id,
+    const String & store_key,
+    UInt64 start_handle,
+    UInt64 end_handle,
+    UInt64 num_fields = 1,
+    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = end_handle - start_handle;
@@ -341,18 +356,21 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
     MockSSTReader::getMockSSTData().clear();
 
     if (cfs.count(ColumnFamilyType::Write) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}]
+            = std::move(write_kv_list);
     if (cfs.count(ColumnFamilyType::Default) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}]
+            = std::move(default_kv_list);
 }
 
 // TODO: make it a more generic testing function
-void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
-                             TableID table_id,
-                             const String & store_key,
-                             const std::vector<UInt64> & handles,
-                             UInt64 num_fields = 1,
-                             const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+void GenMockSSTDataByHandles(
+    const TiDB::TableInfo & table_info,
+    TableID table_id,
+    const String & store_key,
+    const std::vector<UInt64> & handles,
+    UInt64 num_fields = 1,
+    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = handles.size();
@@ -404,9 +422,11 @@ void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
     MockSSTReader::getMockSSTData().clear();
 
     if (cfs.count(ColumnFamilyType::Write) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}]
+            = std::move(write_kv_list);
     if (cfs.count(ColumnFamilyType::Default) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}]
+            = std::move(default_kv_list);
 }
 
 // Simulate a region IngestSST raft command
@@ -442,11 +462,12 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
             ColumnFamilyType::Write,
             BaseBuffView{region_id_str.data(), region_id_str.length()},
         });
-        kvstore->handleIngestSST(region_id,
-                                 SSTViewVec{sst_views.data(), sst_views.size()},
-                                 MockTiKV::instance().getRaftIndex(region_id),
-                                 MockTiKV::instance().getRaftTerm(region_id),
-                                 tmt);
+        kvstore->handleIngestSST(
+            region_id,
+            SSTViewVec{sst_views.data(), sst_views.size()},
+            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getRaftTerm(region_id),
+            tmt);
     }
 
     {
@@ -456,11 +477,12 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
             ColumnFamilyType::Default,
             BaseBuffView{region_id_str.data(), region_id_str.length()},
         });
-        kvstore->handleIngestSST(region_id,
-                                 SSTViewVec{sst_views.data(), sst_views.size()},
-                                 MockTiKV::instance().getRaftIndex(region_id),
-                                 MockTiKV::instance().getRaftTerm(region_id),
-                                 tmt);
+        kvstore->handleIngestSST(
+            region_id,
+            SSTViewVec{sst_views.data(), sst_views.size()},
+            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getRaftTerm(region_id),
+            tmt);
     }
 }
 
@@ -524,8 +546,11 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         Timestamp gc_safe_point = 0;
         if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
         {
-            gc_safe_point
-                = PDClientHelper::getGCSafePointWithRetry(pd_client, keyspace_id, false, context.getSettingsRef().safe_point_update_interval_seconds);
+            gc_safe_point = PDClientHelper::getGCSafePointWithRetry(
+                pd_client,
+                keyspace_id,
+                false,
+                context.getSettingsRef().safe_point_update_interval_seconds);
         }
         /**
          * In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
@@ -545,9 +570,10 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_WARNING(Logger::get(__PRETTY_FUNCTION__),
-                        "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
-                        e.displayText());
+            LOG_WARNING(
+                Logger::get(__PRETTY_FUNCTION__),
+                "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
+                e.displayText());
             // set data_list_read and let apply snapshot process use empty block
             data_list_read = RegionDataReadInfoList();
         }
@@ -602,8 +628,9 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         tmt.getSchemaSyncerManager()->syncSchemas(context, keyspace_id);
 
         if (!atomic_decode(true))
-            throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
+                ErrorCodes::LOGICAL_ERROR);
     }
 
     RemoveRegionCommitCache(region, *data_list_read);
@@ -611,7 +638,10 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
-void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(
+    Context & context,
+    const ASTs & args,
+    DBGInvoker::Printer output)
 {
     FmtBuffer fmt_buf;
     auto region = GenDbgRegionSnapshotWithData(context, args);
@@ -620,7 +650,12 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(Context & context, con
     auto & tmt = context.getTMTContext();
     auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
     fmt_buf.append(", pre-decode block cache");
-    fmt_buf.fmtAppend(" {{ schema_version: ?, data_list size: {}, block row: {} col: {} bytes: {} }}", block_cache->data_list_read.size(), block_cache->block.rows(), block_cache->block.columns(), block_cache->block.bytes());
+    fmt_buf.fmtAppend(
+        " {{ schema_version: ?, data_list size: {}, block row: {} col: {} bytes: {} }}",
+        block_cache->data_list_read.size(),
+        block_cache->block.rows(),
+        block_cache->block.columns(),
+        block_cache->block.bytes());
     GLOBAL_REGION_MAP.insertRegionCache(region_name, {region, std::move(block_cache)});
     output(fmt_buf.toString());
 }
@@ -635,7 +670,9 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
     auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
     auto & tmt = context.getTMTContext();
-    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
+    context.getTMTContext().getKVStore()->checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(
+        {region, std::move(block_cache)},
+        tmt);
 
     output(fmt::format("success apply {} with block cache", region->id()));
 }
@@ -645,12 +682,16 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
 
 // Simulate a region pre-handle snapshot data to DTFiles
 //    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file(database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields=1, cfs="write,default"])"
-void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(
+    Context & context,
+    const ASTs & args,
+    DBGInvoker::Printer output)
 {
     if (args.size() < 7 || args.size() > 9)
-        throw Exception("Args not matched, should be: database_name, table_name, region_id, start, end, schema_string, pk_name"
-                        " [, test-fields, cfs=\"write,default\"]",
-                        ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database_name, table_name, region_id, start, end, schema_string, pk_name"
+            " [, test-fields, cfs=\"write,default\"]",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -685,15 +726,18 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
         Expected expected;
         if (!schema_parser.parse(pos, columns_ast, expected))
             throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
-        ColumnsDescription columns
-            = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+        ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(
+            typeid_cast<const ASTExpressionList &>(*columns_ast),
+            context);
         mocked_table_info = MockTiDB::parseColumns(table_name, columns, handle_pk_name, "dt");
     }
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     const auto & table_info = RegionBench::getTableInfo(context, database_name, table_name);
     if (table_info.is_common_handle)
-        throw Exception("Mocking pre handle SST files to DTFiles to a common handle table is not supported", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Mocking pre handle SST files to DTFiles to a common handle table is not supported",
+            ErrorCodes::LOGICAL_ERROR);
 
     // Mock SST data for handle [start, end)
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
@@ -746,11 +790,15 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
 
 // Simulate a region pre-handle snapshot data to DTFiles
 //    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file_with_handles(database_name, table_name, region_id, schema_string, pk_name, handle0, handle1, ..., handlek)"
-void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(
+    Context & context,
+    const ASTs & args,
+    DBGInvoker::Printer output)
 {
     if (args.size() < 6)
         throw Exception(
-            "Args not matched, should be: database_name, table_name, region_id, schema_string, pk_name, handle0, handle1, ..., handlek",
+            "Args not matched, should be: database_name, table_name, region_id, schema_string, pk_name, handle0, "
+            "handle1, ..., handlek",
             ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -781,15 +829,18 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
         Expected expected;
         if (!schema_parser.parse(pos, columns_ast, expected))
             throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
-        ColumnsDescription columns
-            = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+        ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(
+            typeid_cast<const ASTExpressionList &>(*columns_ast),
+            context);
         mocked_table_info = MockTiDB::parseColumns(table_name, columns, handle_pk_name, "dt");
     }
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     const auto & table_info = RegionBench::getTableInfo(context, database_name, table_name);
     if (table_info.is_common_handle)
-        throw Exception("Mocking pre handle SST files to DTFiles to a common handle table is not supported", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Mocking pre handle SST files to DTFiles to a common handle table is not supported",
+            ErrorCodes::LOGICAL_ERROR);
 
     // Mock SST data for handle [start, end)
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
@@ -804,7 +855,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
     UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
     UInt64 region_start_handle = handles[0];
     UInt64 region_end_handle = handles.back() + 10000;
-    RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, region_start_handle, region_end_handle, index);
+    RegionPtr new_region
+        = RegionBench::createRegion(table->id(), region_id, region_start_handle, region_end_handle, index);
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore.get(), new_region);
@@ -844,7 +896,10 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
 
 // Apply snapshot for a region. (apply a pre-handle snapshot)
 //   ./storages-client.sh "DBGInvoke region_snapshot_apply_file(region_id)"
-void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(
+    Context & context,
+    const ASTs & args,
+    DBGInvoker::Printer output)
 {
     if (args.size() != 1)
         throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);

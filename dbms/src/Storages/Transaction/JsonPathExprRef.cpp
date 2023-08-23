@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,12 +55,15 @@ JsonPathExprRefContainer::JsonPathExprRefContainer(JsonPathExprPtr source_)
     }
 }
 
-std::pair<JsonPathLegRawPtr, ConstJsonPathExprRawPtr> JsonPathExprRefContainer::pop(ConstJsonPathExprRawPtr path_ref_ptr)
+std::pair<JsonPathLegRawPtr, ConstJsonPathExprRawPtr> JsonPathExprRefContainer::pop(
+    ConstJsonPathExprRawPtr path_ref_ptr)
 {
     RUNTIME_CHECK(path_ref_ptr);
     auto leg_pos = path_ref_ptr->leg_pos;
     auto new_leg_pos = leg_pos + 1;
-    return std::make_pair(source->getLegs()[leg_pos].get(), new_leg_pos < all_refs.size() ? all_refs[new_leg_pos].get() : nullptr);
+    return std::make_pair(
+        source->getLegs()[leg_pos].get(),
+        new_leg_pos < all_refs.size() ? all_refs[new_leg_pos].get() : nullptr);
 }
 
 JsonPathExprRef::JsonPathExprRef(JsonPathExprRefContainer * container_, size_t leg_pos_, JsonPathExpressionFlag flag_)

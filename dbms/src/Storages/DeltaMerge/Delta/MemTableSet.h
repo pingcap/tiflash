@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,8 @@ using MemTableSetPtr = std::shared_ptr<MemTableSet>;
 ///
 /// This class is mostly not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
 /// Only the method that just access atomic variable can be called without extra synchronization
-class MemTableSet : public std::enable_shared_from_this<MemTableSet>
+class MemTableSet
+    : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
 private:
@@ -67,19 +68,17 @@ public:
      * Segment_log is not available when constructing, because usually
      * at that time the segment has not been constructed yet.
      */
-    void resetLogger(const LoggerPtr & segment_log)
-    {
-        log = segment_log;
-    }
+    void resetLogger(const LoggerPtr & segment_log) { log = segment_log; }
 
     /// Thread safe part start
     String info() const
     {
-        return fmt::format("MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
-                           column_files_count.load(),
-                           rows.load(),
-                           bytes.load(),
-                           deletes.load());
+        return fmt::format(
+            "MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
+            column_files_count.load(),
+            rows.load(),
+            bytes.load(),
+            deletes.load());
     }
 
     size_t getColumnFileCount() const { return column_files_count.load(); }
@@ -136,10 +135,16 @@ public:
      * `disable_sharing == true` seems nice, but it may cause flush to be less efficient when used frequently.
      * Only specify it when really needed.
      */
-    ColumnFileSetSnapshotPtr createSnapshot(const IColumnFileDataProviderPtr & data_provider, bool disable_sharing = false);
+    ColumnFileSetSnapshotPtr createSnapshot(
+        const IColumnFileDataProviderPtr & data_provider,
+        bool disable_sharing = false);
 
     /// Build a flush task which will try to flush all column files in this MemTableSet at this moment.
-    ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
+    ColumnFileFlushTaskPtr buildFlushTask(
+        DMContext & context,
+        size_t rows_offset,
+        size_t deletes_offset,
+        size_t flush_version);
 
     void removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task);
 };

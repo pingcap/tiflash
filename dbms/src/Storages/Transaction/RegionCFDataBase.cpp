@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,6 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 
     if (!kv_pair)
         return 0;
-
     return insert(std::move(*kv_pair), mode);
 }
 
@@ -71,6 +70,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
         prev_value = TiKVValue::copyFrom(getTiKVValue(kv_pair.second));
     }
     auto [it, ok] = map.emplace(std::move(kv_pair));
+
     // We support duplicated kv pairs if they are the same in snapshot.
     // This is because kvs in raftstore v2's snapshot may be overlapped.
     // However, we still not permit duplicated kvs from raft cmd.
@@ -79,22 +79,26 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
     {
         if (mode == DupCheck::Deny)
         {
-            throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Found existing key in hex: " + getTiKVKey(it->second).toDebugString(),
+                ErrorCodes::LOGICAL_ERROR);
         }
         else if (mode == DupCheck::AllowSame)
         {
             if (prev_value != getTiKVValue(it->second))
             {
-                throw Exception("Found existing key in hex and val differs: "
-                                    + getTiKVKey(it->second).toDebugString()
-                                    + " prev_val: " + getTiKVValue(it->second).toDebugString()
-                                    + " new_val: " + prev_value.toDebugString(),
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    "Found existing key in hex and val differs: " + getTiKVKey(it->second).toDebugString()
+                        + " prev_val: " + getTiKVValue(it->second).toDebugString()
+                        + " new_val: " + prev_value.toDebugString(),
+                    ErrorCodes::LOGICAL_ERROR);
             }
         }
         else
         {
-            throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Found existing key in hex: " + getTiKVKey(it->second).toDebugString(),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 

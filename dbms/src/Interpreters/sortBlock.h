@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,10 @@ void stableSortBlock(Block & block, const SortDescription & description);
 /** Same as stableSortBlock, but do not sort the block, but only calculate the permutation of the values,
   *  so that you can rearrange the column values yourself.
   */
-void stableGetPermutation(const Block & block, const SortDescription & description, IColumn::Permutation & out_permutation);
+void stableGetPermutation(
+    const Block & block,
+    const SortDescription & description,
+    IColumn::Permutation & out_permutation);
 
 
 /** Quickly check whether the block is already sorted. If the block is not sorted - returns false as fast as possible.

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ struct TiDBConvertToString
         {
             /// cast string as string
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * data_from = &col_from_string->getChars();
             const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
 
@@ -173,7 +173,8 @@ struct TiDBConvertToString
         else if constexpr (IsDecimal<FromFieldType>)
         {
             /// cast decimal as string
-            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const auto * col_from
+                = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
             ColumnString::Chars_t container_per_element;
 
@@ -201,7 +202,8 @@ struct TiDBConvertToString
 
             data_to.resize(write_buffer.count());
         }
-        else if (const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
+        else if (
+            const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
         {
             /// cast int/real/time as string
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -248,7 +250,8 @@ struct TiDBConvertToString
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of first argument of function tidb_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
 
         if constexpr (return_nullable)
@@ -490,7 +493,8 @@ struct TiDBConvertToInteger
         if constexpr (IsDecimal<FromFieldType>)
         {
             /// cast decimal as int
-            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const auto * col_from
+                = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
 
             for (size_t i = 0; i < size; ++i)
             {
@@ -505,7 +509,8 @@ struct TiDBConvertToInteger
                 }
             }
         }
-        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)
+        else if constexpr (
+            std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)
         {
             /// cast time as int
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
@@ -523,8 +528,8 @@ struct TiDBConvertToInteger
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
-                        + date_time.hour * 10000 + date_time.minute * 100 + date_time.second;
+                    vec_to[i] = date_time.year * 10000000000ULL + date_time.month * 100000000ULL
+                        + date_time.day * 1000000 + date_time.hour * 10000 + date_time.minute * 100 + date_time.second;
                 }
             }
         }
@@ -532,7 +537,7 @@ struct TiDBConvertToInteger
         {
             /// cast string as int
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
@@ -574,7 +579,8 @@ struct TiDBConvertToInteger
         else
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of first argument of function tidb_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -593,7 +599,12 @@ struct TiDBConvertToFloat
     using FromFieldType = typename FromDataType::FieldType;
     using ToFieldType = typename ToDataType::FieldType;
 
-    static Float64 produceTargetFloat64(Float64 value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
+    static Float64 produceTargetFloat64(
+        Float64 value,
+        bool need_truncate,
+        Float64 shift,
+        Float64 max_f,
+        const Context & context)
     {
         if (need_truncate)
         {
@@ -629,7 +640,7 @@ struct TiDBConvertToFloat
         Float64 max_f,
         const Context & context)
     {
-        Float64 float_value = static_cast<Float64>(value);
+        auto float_value = static_cast<Float64>(value);
         return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
     }
 
@@ -693,7 +704,12 @@ struct TiDBConvertToFloat
         return ret;
     }
 
-    static Float64 strToFloat(const StringRef & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
+    static Float64 strToFloat(
+        const StringRef & value,
+        bool need_truncate,
+        Float64 shift,
+        Float64 max_f,
+        const Context & context)
     {
         String trim_string = trim(value);
         StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
@@ -743,7 +759,8 @@ struct TiDBConvertToFloat
         if constexpr (IsDecimal<FromFieldType>)
         {
             /// cast decimal as real
-            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const auto * col_from
+                = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
 
             for (size_t i = 0; i < size; ++i)
             {
@@ -751,7 +768,8 @@ struct TiDBConvertToFloat
                 vec_to[i] = toFloat(field);
             }
         }
-        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)
+        else if constexpr (
+            std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)
         {
             /// cast time as real
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
@@ -771,11 +789,14 @@ struct TiDBConvertToFloat
                 {
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
-                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                        vec_to[i] = toFloat(
+                            date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second
+                            + date_time.micro_second / 1000000.0);
                     else
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
-                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second);
+                        vec_to[i] = toFloat(
+                            date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -783,7 +804,7 @@ struct TiDBConvertToFloat
         {
             /// cast string as real
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
@@ -816,7 +837,8 @@ struct TiDBConvertToFloat
         else
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " for first argument of function tidb_cast",
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " for first argument of function tidb_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -843,13 +865,22 @@ struct TiDBConvertToFloat
 // NOTE: scale_diff = to_type_scale - from_type_scale.
 // NOTE: The above two optimizations only take effects when from type is int/decimal/date/dateimte.
 //       The logic of cast doesn't care about CastInternalType(Int512) and can_skip_check_overflow(false) at all when from_type is real or string.
-template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
+template <
+    typename FromDataType,
+    typename ToFieldType,
+    bool return_nullable,
+    bool can_skip_check_overflow,
+    typename CastInternalType>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T int_value, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
+    static U toTiDBDecimalInternal(
+        T int_value,
+        const CastInternalType & max_value,
+        const CastInternalType & scale_mul,
+        const Context & context)
     {
         // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
         // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
@@ -861,10 +892,17 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDateTime & date_time, const CastInternalType & max_value, ScaleType from_scale, ScaleType to_scale, const CastInternalType & scale_mul, int fsp, const Context & context)
+    static U toTiDBDecimal(
+        MyDateTime & date_time,
+        const CastInternalType & max_value,
+        ScaleType from_scale,
+        ScaleType to_scale,
+        const CastInternalType & scale_mul,
+        int fsp,
+        const Context & context)
     {
-        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000ULL
-            + date_time.hour * 10000ULL + date_time.minute * 100ULL + date_time.second;
+        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL
+            + date_time.day * 1000000ULL + date_time.hour * 10000ULL + date_time.minute * 100ULL + date_time.second;
         if (fsp > 0)
         {
             Int128 value = static_cast<Int128>(value_without_fsp) * 1000000 + date_time.micro_second;
@@ -878,14 +916,22 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDate & date, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
+    static U toTiDBDecimal(
+        MyDate & date,
+        const CastInternalType & max_value,
+        const CastInternalType & scale_mul,
+        const Context & context)
     {
         UInt64 value = date.year * 10000 + date.month * 100 + date.day;
         return toTiDBDecimalInternal<UInt64, U>(value, max_value, scale_mul, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
+    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(
+        T value,
+        const CastInternalType & max_value,
+        const CastInternalType & scale_mul,
+        const Context & context)
     {
         if constexpr (std::is_signed_v<T>)
             return toTiDBDecimalInternal<T, U>(value, max_value, scale_mul, context);
@@ -894,7 +940,11 @@ struct TiDBConvertToDecimal
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_floating_point_v<T>, U> toTiDBDecimal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static std::enable_if_t<std::is_floating_point_v<T>, U> toTiDBDecimal(
+        T value,
+        PrecType prec,
+        ScaleType scale,
+        const Context & context)
     {
         using UType = typename U::NativeType;
         bool neg = false;
@@ -1125,7 +1175,9 @@ struct TiDBConvertToDecimal
                     v *= 10;
                     if (v > max_value)
                     {
-                        context.getDAGContext()->handleOverflowError("cast string as decimal", Errors::Types::Truncated);
+                        context.getDAGContext()->handleOverflowError(
+                            "cast string as decimal",
+                            Errors::Types::Truncated);
                         return static_cast<UType>(is_negative ? -max_value : max_value);
                     }
                     current_scale++;
@@ -1142,7 +1194,15 @@ struct TiDBConvertToDecimal
     }
 
     /// cast int/real/enum/string/time/decimal as decimal
-    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale, bool, const tipb::FieldType &, const Context & context)
+    static void execute(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        PrecType prec [[maybe_unused]],
+        ScaleType scale,
+        bool,
+        const tipb::FieldType &,
+        const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnDecimal<ToFieldType>::create(size, static_cast<ToFieldType>(0), scale);
@@ -1159,15 +1219,23 @@ struct TiDBConvertToDecimal
         if constexpr (IsDecimal<FromFieldType>)
         {
             /// cast decimal as decimal
-            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const auto * col_from
+                = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
             const CastInternalType max_value = getMaxValueIfNecessary(prec);
             const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(col_from->getScale(), scale);
             for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), max_value, scale, scale_mul, context);
+                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(
+                    vec_from[i],
+                    vec_from.getScale(),
+                    max_value,
+                    scale,
+                    scale_mul,
+                    context);
         }
-        else if constexpr (std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
+        else if constexpr (
+            std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
         {
             /// cast time as decimal
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
@@ -1195,7 +1263,14 @@ struct TiDBConvertToDecimal
                 for (size_t i = 0; i < size; ++i)
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, max_value, from_scale, scale, scale_mul, type.getFraction(), context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(
+                        date_time,
+                        max_value,
+                        from_scale,
+                        scale,
+                        scale_mul,
+                        type.getFraction(),
+                        context);
                 }
             }
         }
@@ -1203,7 +1278,7 @@ struct TiDBConvertToDecimal
         {
             /// cast string as decimal
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
@@ -1216,8 +1291,9 @@ struct TiDBConvertToDecimal
                 current_offset = next_offset;
             }
         }
-        else if (const ColumnVector<FromFieldType> * col_from
-                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+        else if (
+            const ColumnVector<FromFieldType> * col_from
+            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
@@ -1235,13 +1311,15 @@ struct TiDBConvertToDecimal
                 /// cast real as decimal
                 for (size_t i = 0; i < size; ++i)
                     // Always use Float64 to avoid overflow for vec_from[i] * 10^scale.
-                    vec_to[i] = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
+                    vec_to[i]
+                        = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
             }
         }
         else
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of first argument of function tidb_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
         }
         if constexpr (return_nullable)
@@ -1251,10 +1329,11 @@ struct TiDBConvertToDecimal
     }
 
     template <typename ReturnType>
-    static ReturnType handleOverflowErrorForIntAndDecimal(const Context & context,
-                                                          const CastInternalType & to_value,
-                                                          const CastInternalType & max_value [[maybe_unused]],
-                                                          const String & msg)
+    static ReturnType handleOverflowErrorForIntAndDecimal(
+        const Context & context,
+        const CastInternalType & to_value,
+        const CastInternalType & max_value [[maybe_unused]],
+        const String & msg)
     {
         if constexpr (!can_skip_check_overflow)
         {
@@ -1322,7 +1401,8 @@ public:
         int to_fsp [[maybe_unused]] = 0;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
         {
-            const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(removeNullable(block.getByPosition(result).type).get());
+            const auto * tp
+                = dynamic_cast<const DataTypeMyDateTime *>(removeNullable(block.getByPosition(result).type).get());
             to_fsp = tp->getFraction();
         }
 
@@ -1335,7 +1415,7 @@ public:
         {
             // cast string as time
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
-            const ColumnString * col_from = checkAndGetColumn<ColumnString>(col_with_type_and_name.column.get());
+            const auto * col_from = checkAndGetColumn<ColumnString>(col_with_type_and_name.column.get());
             const ColumnString::Chars_t * chars = &col_from->getChars();
             const ColumnString::Offsets * offsets = &col_from->getOffsets();
 
@@ -1373,7 +1453,8 @@ public:
                 current_offset = next_offset;
             }
         }
-        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
+        else if constexpr (
+            std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
         {
             // cast time as time
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
@@ -1493,7 +1574,8 @@ public:
         }
         else if constexpr (IsDecimal<FromFieldType>)
         {
-            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const auto * col_from
+                = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
 
@@ -1525,7 +1607,9 @@ public:
         else
         {
             throw Exception(
-                fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
+                fmt::format(
+                    "Illegal column {} of first argument of function tidb_cast",
+                    block.getByPosition(arguments[0]).column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -1539,7 +1623,9 @@ private:
     template <typename T>
     static void handleInvalidTime(const Context & context, const T & value)
     {
-        context.getDAGContext()->handleInvalidTime(fmt::format("Invalid time value: '{}'", value), Errors::Types::WrongValue);
+        context.getDAGContext()->handleInvalidTime(
+            fmt::format("Invalid time value: '{}'", value),
+            Errors::Types::WrongValue);
     }
 };
 
@@ -1573,16 +1659,19 @@ struct TiDBConvertToDuration
 
         if constexpr (std::is_same_v<FromDataType, DataTypeMyDuration>)
         {
-            const auto & from_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+            const auto & from_type
+                = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
             int from_fsp = from_type->getFsp();
-            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            const auto & to_type
+                = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
             int to_fsp = to_type->getFsp();
             if (to_fsp > from_fsp)
                 block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
             else
             {
                 // round half up
-                const auto & from_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
+                const auto & from_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(
+                    block.getByPosition(arguments[0]).column.get());
                 const auto & from_vec = from_col->getData();
                 auto to_col = ColumnVector<Int64>::create();
                 auto & to_vec = to_col->getData();
@@ -1598,27 +1687,39 @@ struct TiDBConvertToDuration
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate>)
         {
             // cast date as duration
-            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
-            block.getByPosition(result).column = to_type->createColumnConst(size, toField(0)); // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
+            const auto & to_type
+                = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            block.getByPosition(result).column = to_type->createColumnConst(
+                size,
+                toField(
+                    0)); // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
         {
             // cast time as duration
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & from_vec = col_from->getData();
-            const auto & from_type = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(arguments[0]).type.get());
+            const auto & from_type
+                = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(arguments[0]).type.get());
             int from_fsp = from_type->getFraction();
 
             auto to_col = ColumnVector<Int64>::create();
             auto & vec_to = to_col->getData();
             vec_to.resize(size);
-            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            const auto & to_type
+                = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
             int to_fsp = to_type->getFsp();
 
             for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(from_vec[i]);
-                MyDuration duration(1 /*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
+                MyDuration duration(
+                    1 /*neg*/,
+                    datetime.hour,
+                    datetime.minute,
+                    datetime.second,
+                    datetime.micro_second,
+                    from_fsp);
                 if (to_fsp < from_fsp)
                 {
                     vec_to[i] = round(duration.nanoSecond(), (6 - to_fsp) + 3);
@@ -1633,12 +1734,15 @@ struct TiDBConvertToDuration
         else
         {
             throw Exception(
-                fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
+                fmt::format(
+                    "Illegal column {} of first argument of function tidb_cast",
+                    block.getByPosition(arguments[0]).column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
         if constexpr (return_nullable)
-            block.getByPosition(result).column = ColumnNullable::create(std::move(block.getByPosition(result).column), std::move(col_null_map_to));
+            block.getByPosition(result).column
+                = ColumnNullable::create(std::move(block.getByPosition(result).column), std::move(col_null_map_to));
     }
 
     static Int64 round(Int64 x, int fsp)
@@ -1658,7 +1762,8 @@ template <typename...>
 class ExecutableFunctionTiDBCast : public IExecutableFunction
 {
 public:
-    using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
+    using WrapperType
+        = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
     ExecutableFunctionTiDBCast(
         WrapperType && wrapper_function,
@@ -1694,7 +1799,8 @@ private:
     const Context & context;
 };
 
-using MonotonicityForRange = std::function<IFunctionBase::Monotonicity(const IDataType &, const Field &, const Field &)>;
+using MonotonicityForRange
+    = std::function<IFunctionBase::Monotonicity(const IDataType &, const Field &, const Field &)>;
 
 /// FunctionTiDBCast implements SQL cast function in TiDB
 /// The basic idea is to dispatch according to combinations of <From, To> parameter types
@@ -1702,9 +1808,17 @@ template <typename...>
 class FunctionTiDBCast final : public IFunctionBase
 {
 public:
-    using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
+    using WrapperType
+        = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
-    FunctionTiDBCast(const Context & context, const char * name, MonotonicityForRange && monotonicity_for_range, const DataTypes & argument_types, const DataTypePtr & return_type, bool in_union_, const tipb::FieldType & tidb_tp_)
+    FunctionTiDBCast(
+        const Context & context,
+        const char * name,
+        MonotonicityForRange && monotonicity_for_range,
+        const DataTypes & argument_types,
+        const DataTypePtr & return_type,
+        bool in_union_,
+        const tipb::FieldType & tidb_tp_)
         : context(context)
         , name(name)
         , monotonicity_for_range(monotonicity_for_range)
@@ -1742,10 +1856,14 @@ public:
 
     // rule: from_scale_prec <= to_decimal_prec
     template <typename FromDataType>
-    static bool canSkipCheckOverflowForDecimal(DataTypePtr from_type, PrecType to_decimal_prec, ScaleType to_decimal_scale)
+    static bool canSkipCheckOverflowForDecimal(
+        DataTypePtr from_type,
+        PrecType to_decimal_prec,
+        ScaleType to_decimal_scale)
     {
         constexpr bool avoid_truncate_from_value = false;
-        const PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, to_decimal_scale, avoid_truncate_from_value);
+        const PrecType from_scaled_prec
+            = getMinPrecForHoldingFromValue<FromDataType>(from_type, to_decimal_scale, avoid_truncate_from_value);
         return from_scaled_prec <= to_decimal_prec;
     }
 
@@ -1761,7 +1879,10 @@ private:
     const tipb::FieldType & tidb_tp;
 
     template <typename FromDataType>
-    static bool getMinPrecForHoldingInteger(DataTypePtr from_type, ScaleType to_decimal_scale, PrecType & from_scaled_prec)
+    static bool getMinPrecForHoldingInteger(
+        DataTypePtr from_type,
+        ScaleType to_decimal_scale,
+        PrecType & from_scaled_prec)
     {
         const auto f = [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
             using FromFieldType = typename FromDataType::FieldType;
@@ -1793,7 +1914,11 @@ private:
             DataTypeEnum16>(from_type.get(), f);
     }
 
-    static PrecType getMinPrecForHoldingDecimalInternal(PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool avoid_truncate_from_value)
+    static PrecType getMinPrecForHoldingDecimalInternal(
+        PrecType from_prec,
+        ScaleType from_scale,
+        ScaleType to_scale,
+        bool avoid_truncate_from_value)
     {
         Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
         if (scale_diff < 0)
@@ -1806,7 +1931,11 @@ private:
         return from_prec + scale_diff;
     }
 
-    static bool getMinPrecForHoldingDatetime(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value, PrecType & from_scaled_prec)
+    static bool getMinPrecForHoldingDatetime(
+        DataTypePtr from_type,
+        ScaleType to_decimal_scale,
+        bool avoid_truncate_from_value,
+        PrecType & from_scaled_prec)
     {
         if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
         {
@@ -1817,7 +1946,8 @@ private:
                 // Max value of datetime time is '9999-12-31 23:59:59.999999',
                 // which will be treated as 99991231235959.999999 when doing cast,
                 // so here we use 20 as its precision and 6 as its scale.
-                from_scaled_prec = getMinPrecForHoldingDecimalInternal(20, 6, to_decimal_scale, avoid_truncate_from_value);
+                from_scaled_prec
+                    = getMinPrecForHoldingDecimalInternal(20, 6, to_decimal_scale, avoid_truncate_from_value);
             }
             else
             {
@@ -1831,29 +1961,33 @@ private:
         return false;
     }
 
-    static bool getMinPrecForHoldingDecimal(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value, PrecType & from_scaled_prec)
+    static bool getMinPrecForHoldingDecimal(
+        DataTypePtr from_type,
+        ScaleType to_decimal_scale,
+        bool avoid_truncate_from_value,
+        PrecType & from_scaled_prec)
     {
-        return castTypeToEither<
-            DataTypeDecimal32,
-            DataTypeDecimal64,
-            DataTypeDecimal128,
-            DataTypeDecimal256>(from_type.get(), [to_decimal_scale, avoid_truncate_from_value, &from_scaled_prec](const auto & from_type_ptr, bool) {
-            from_scaled_prec = getMinPrecForHoldingDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, avoid_truncate_from_value);
-            return true;
-        });
+        return castTypeToEither<DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256>(
+            from_type.get(),
+            [to_decimal_scale, avoid_truncate_from_value, &from_scaled_prec](const auto & from_type_ptr, bool) {
+                from_scaled_prec = getMinPrecForHoldingDecimalInternal(
+                    from_type_ptr.getPrec(),
+                    from_type_ptr.getScale(),
+                    to_decimal_scale,
+                    avoid_truncate_from_value);
+                return true;
+            });
     }
 
     // Cast optimization doesn't handle float/string/duration for now, so return a max prec value.
     static bool getMinPrecForHoldingOtherTypes(DataTypePtr from_type, PrecType & from_scaled_prec)
     {
-        return castTypeToEither<
-            DataTypeFloat32,
-            DataTypeFloat64,
-            DataTypeString,
-            DataTypeMyDuration>(from_type.get(), [&from_scaled_prec](const auto &, bool) {
-            from_scaled_prec = std::numeric_limits<PrecType>::max();
-            return true;
-        });
+        return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeString, DataTypeMyDuration>(
+            from_type.get(),
+            [&from_scaled_prec](const auto &, bool) {
+                from_scaled_prec = std::numeric_limits<PrecType>::max();
+                return true;
+            });
     }
 
     // The core function of the optimizations of TiDBConvertToDecimal. The basic idea has already described above.
@@ -1867,7 +2001,10 @@ private:
     //     So we plus 1 to scale_diff(check getMinPrecForHoldingDecimalInternal).
     //     Then the rule will be from_prec + scale_diff + 1 <= to_prec when scale_diff < 0.
     template <typename FromDataType>
-    static PrecType getMinPrecForHoldingFromValue(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value)
+    static PrecType getMinPrecForHoldingFromValue(
+        DataTypePtr from_type,
+        ScaleType to_decimal_scale,
+        bool avoid_truncate_from_value)
     {
         PrecType from_scaled_prec = std::numeric_limits<PrecType>::max();
 
@@ -1907,8 +2044,14 @@ private:
     WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
     {
         const bool avoid_truncate_from_value = true;
-        PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, decimal_type->getScale(), avoid_truncate_from_value);
-        const bool can_skip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, decimal_type->getPrec(), decimal_type->getScale());
+        PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(
+            from_type,
+            decimal_type->getScale(),
+            avoid_truncate_from_value);
+        const bool can_skip = canSkipCheckOverflowForDecimal<FromDataType>(
+            from_type,
+            decimal_type->getPrec(),
+            decimal_type->getScale());
         if (!can_skip)
         {
             // If cannot skip overflow check, we should use int type that can hold both scaled_val and max_val.
@@ -1950,7 +2093,13 @@ private:
         ScaleType scale = decimal_type->getScale();
         if (can_skip)
         {
-            return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [prec, scale](
+                       Block & block,
+                       const ColumnNumbers & arguments,
+                       const size_t result,
+                       bool in_union_,
+                       const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, true, CastInternalType>::execute(
                     block,
                     arguments,
@@ -1964,7 +2113,13 @@ private:
         }
         else
         {
-            return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [prec, scale](
+                       Block & block,
+                       const ColumnNumbers & arguments,
+                       const size_t result,
+                       bool in_union_,
+                       const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, false, CastInternalType>::execute(
                     block,
                     arguments,
@@ -1984,7 +2139,12 @@ private:
     {
         /// cast as int
         if (checkDataType<DataTypeUInt64>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
                 TiDBConvertToInteger<FromDataType, DataTypeUInt64, return_nullable>::execute(
                     block,
                     arguments,
@@ -1994,7 +2154,12 @@ private:
                     context_);
             };
         if (checkDataType<DataTypeInt64>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
                 TiDBConvertToInteger<FromDataType, DataTypeInt64, return_nullable>::execute(
                     block,
                     arguments,
@@ -2016,7 +2181,12 @@ private:
 
         /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
                 if (hasUnsignedFlag(tidb_tp_))
                 {
                     TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, true>::execute(
@@ -2040,12 +2210,28 @@ private:
             };
         /// cast as string
         if (checkDataType<DataTypeString>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToString<FromDataType, return_nullable>::execute(block, arguments, result, in_union_, tidb_tp_, context_);
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
+                TiDBConvertToString<FromDataType, return_nullable>::execute(
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         /// cast as time
         if (checkDataType<DataTypeMyDate>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
                 TiDBConvertToTime<FromDataType, DataTypeMyDate, return_nullable>::execute(
                     block,
                     arguments,
@@ -2055,7 +2241,12 @@ private:
                     context_);
             };
         if (checkDataType<DataTypeMyDateTime>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
                 TiDBConvertToTime<FromDataType, DataTypeMyDateTime, return_nullable>::execute(
                     block,
                     arguments,
@@ -2067,7 +2258,12 @@ private:
 
         /// cast as duration
         if (checkDataType<DataTypeMyDuration>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [](Block & block,
+                      const ColumnNumbers & arguments,
+                      const size_t result,
+                      bool in_union_,
+                      const tipb::FieldType & tidb_tp_,
+                      const Context & context_) {
                 TiDBConvertToDuration<FromDataType, DataTypeMyDuration, return_nullable>::execute(
                     block,
                     arguments,
@@ -2083,7 +2279,12 @@ private:
 
     static WrapperType createIdentityWrapper(const DataTypePtr &)
     {
-        return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool, const tipb::FieldType &, const Context &) {
+        return [](Block & block,
+                  const ColumnNumbers & arguments,
+                  const size_t result,
+                  bool,
+                  const tipb::FieldType &,
+                  const Context &) {
             block.getByPosition(result).column = block.getByPosition(arguments.front()).column;
         };
     }
@@ -2146,14 +2347,20 @@ private:
         //  other type, its parameter should be the same
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
-        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
+        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type)
+            && !from_inner_type->isParametric() && !from_inner_type->isString();
     }
 
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
         if (from_type->onlyNull())
         {
-            return [](Block & block, const ColumnNumbers &, const size_t result, bool, const tipb::FieldType &, const Context &) {
+            return [](Block & block,
+                      const ColumnNumbers &,
+                      const size_t result,
+                      bool,
+                      const tipb::FieldType &,
+                      const Context &) {
                 auto & res = block.getByPosition(result);
                 res.column = res.type->createColumnConstWithDefaultValue(block.rows())->convertToFullColumnIfConst();
             };
@@ -2167,7 +2374,13 @@ private:
         auto fn_convert = createWrapper(from_inner_type, to_inner_type, to_type->isNullable());
         if (from_type->isNullable())
         {
-            return [fn_convert, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [fn_convert, to_type](
+                       Block & block,
+                       const ColumnNumbers & arguments,
+                       size_t result,
+                       bool in_union_,
+                       const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
                 const auto & from_col = block.getByPosition(arguments[0]).column;
                 const auto & from_nullable_col = static_cast<const ColumnNullable &>(*from_col);
                 const auto & from_null_map = from_nullable_col.getNullMapData();
@@ -2188,9 +2401,11 @@ private:
                 else
                 {
                     ColumnPtr result_null_map_column
-                        = static_cast<const ColumnNullable &>(*tmp_block.getByPosition(result).column).getNullMapColumnPtr();
+                        = static_cast<const ColumnNullable &>(*tmp_block.getByPosition(result).column)
+                              .getNullMapColumnPtr();
                     ColumnPtr result_not_nullable
-                        = static_cast<const ColumnNullable &>(*tmp_block.getByPosition(result).column).getNestedColumnPtr();
+                        = static_cast<const ColumnNullable &>(*tmp_block.getByPosition(result).column)
+                              .getNestedColumnPtr();
                     size_t size = result_null_map_column->size();
                     MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
                     NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
@@ -2202,12 +2417,14 @@ private:
                     result_null_map_column = std::move(mutable_result_null_map_column);
                     if (result_not_nullable->isColumnConst())
                     {
-                        block.getByPosition(result).column
-                            = ColumnNullable::create(result_not_nullable->convertToFullColumnIfConst(), result_null_map_column);
+                        block.getByPosition(result).column = ColumnNullable::create(
+                            result_not_nullable->convertToFullColumnIfConst(),
+                            result_null_map_column);
                     }
                     else
                     {
-                        block.getByPosition(result).column = ColumnNullable::create(result_not_nullable, result_null_map_column);
+                        block.getByPosition(result).column
+                            = ColumnNullable::create(result_not_nullable, result_null_map_column);
                     }
                 }
             };
@@ -2217,7 +2434,13 @@ private:
             if (isIdentityCast(from_inner_type, to_inner_type) && to_type->isNullable())
             {
                 /// convert not_null type to nullable type
-                return [fn_convert, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                return [fn_convert, to_type](
+                           Block & block,
+                           const ColumnNumbers & arguments,
+                           size_t result,
+                           bool in_union_,
+                           const tipb::FieldType & tidb_tp_,
+                           const Context & context_) {
                     auto & res = block.getByPosition(result);
                     const auto & ret_type = res.type;
                     const auto & nullable_type = static_cast<const DataTypeNullable &>(*ret_type);

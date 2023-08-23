@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,8 @@ namespace DM
 namespace tests
 {
 
-class StoreIngestTest : public SimplePKTestBasic
+class StoreIngestTest
+    : public SimplePKTestBasic
     , public testing::WithParamInterface<bool /* ingest_by_split */>
 {
 public:
@@ -60,10 +61,7 @@ public:
     const bool ingest_by_split;
 };
 
-INSTANTIATE_TEST_CASE_P(
-    Group,
-    StoreIngestTest,
-    ::testing::Bool());
+INSTANTIATE_TEST_CASE_P(Group, StoreIngestTest, ::testing::Bool());
 
 TEST_P(StoreIngestTest, Basic)
 try
@@ -86,10 +84,7 @@ try
 {
     ASSERT_EQ(0, getRowsN());
     auto block1 = fillBlock({.range = {0, 100}});
-    ASSERT_THROW({
-        ingestFiles({.range = {20, 40}, .blocks = {block1}, .clear = false});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ ingestFiles({.range = {20, 40}, .blocks = {block1}, .clear = false}); }, DB::Exception);
 }
 CATCH
 
@@ -117,15 +112,9 @@ try
     auto block1 = fillBlock({.range = {0, 100}});
     auto block2 = fillBlock({.range = {99, 105}});
 
-    ASSERT_THROW({
-        ingestFiles({.range = {0, 500}, .blocks = {block1, block2}});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ ingestFiles({.range = {0, 500}, .blocks = {block1, block2}}); }, DB::Exception);
 
-    ASSERT_THROW({
-        ingestFiles({.range = {0, 500}, .blocks = {block2, block1}});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ ingestFiles({.range = {0, 500}, .blocks = {block2, block1}}); }, DB::Exception);
 }
 CATCH
 
@@ -134,10 +123,7 @@ try
 {
     auto block1 = fillBlock({.range = {0, 100}});
     auto block2 = fillBlock({.range = {100, 142}});
-    ASSERT_THROW({
-        ingestFiles({.range = {0, 500}, .blocks = {block2, block1}});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ ingestFiles({.range = {0, 500}, .blocks = {block2, block1}}); }, DB::Exception);
 }
 CATCH
 
@@ -237,12 +223,7 @@ try
         pool->scheduleOrThrowOnError([=, &log] {
             try
             {
-                LOG_INFO(
-                    log,
-                    "{} to [{}, {})",
-                    op.use_write ? "write" : "ingest",
-                    op.start_key,
-                    op.end_key);
+                LOG_INFO(log, "{} to [{}, {})", op.use_write ? "write" : "ingest", op.start_key, op.end_key);
 
                 ingestFiles({.range = {op.start_key, op.end_key}, .blocks = {op.block}, .clear = false});
             }
@@ -286,7 +267,11 @@ try
     ASSERT_EQ(filled_n, getRowsN());
     ASSERT_EQ(filled_n_raw, getRawRowsN());
 
-    LOG_INFO(log, "Test finished, {} segments after all operations, {} segments after gc", statistics_segments_n, store->segments.size());
+    LOG_INFO(
+        log,
+        "Test finished, {} segments after all operations, {} segments after gc",
+        statistics_segments_n,
+        store->segments.size());
     LOG_INFO(log, "{} rows are filled in [0, {}), without MVCC = {} rows", filled_n, upper_bound, filled_n_raw);
 }
 CATCH

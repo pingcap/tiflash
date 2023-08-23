@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,7 +73,9 @@ const std::string & CFToName(const ColumnFamilyType type)
     case ColumnFamilyType::Lock:
         return ColumnFamilyName::Lock;
     default:
-        throw Exception("Can not tell cf type " + std::to_string(static_cast<uint8_t>(type)), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Can not tell cf type " + std::to_string(static_cast<uint8_t>(type)),
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -87,14 +89,12 @@ static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
 static_assert(sizeof(RaftStoreProxyPtr) == sizeof(ConstRawVoidPtr));
 static_assert(alignof(RaftStoreProxyPtr) == alignof(ConstRawVoidPtr));
 
-EngineStoreApplyRes HandleWriteRaftCmd(
-    const EngineStoreServerWrap * server,
-    WriteCmdsView cmds,
-    RaftCmdHeader header)
+EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
     try
     {
-        return server->tmt->getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
+        return server->tmt->getKVStore()
+            ->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
@@ -145,12 +145,27 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
     }
 }
 
-uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term)
+uint8_t TryFlushData(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint8_t flush_pattern,
+    uint64_t index,
+    uint64_t term,
+    uint64_t truncated_index,
+    uint64_t truncated_term)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term);
+        return kvstore->tryFlushRegionData(
+            region_id,
+            false,
+            flush_pattern,
+            *server->tmt,
+            index,
+            term,
+            truncated_index,
+            truncated_term);
     }
     catch (...)
     {
@@ -179,7 +194,7 @@ void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value)
 {
     try
     {
-        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI write page {}", UniversalPageId(page_id.data, page_id.len)));
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI write page {}", UniversalPageId(page_id.data, page_id.len));
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         MemoryWriteBuffer buf(0, value.len);
         buf.write(value.data, value.len);
@@ -198,7 +213,7 @@ void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id)
 {
     try
     {
-        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI delete page {}", UniversalPageId(page_id.data, page_id.len)));
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI delete page {}", UniversalPageId(page_id.data, page_id.len));
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         wb->delPage(UniversalPageId(page_id.data, page_id.len));
     }
@@ -272,7 +287,7 @@ void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr pt
     {
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
-        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI consume write batch {}", wb->toString()));
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI consume write batch {}", wb->toString());
         uni_ps->write(std::move(*wb), DB::PS::V3::PageType::RaftData, nullptr);
         wb->clear();
     }
@@ -292,12 +307,21 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
         auto * page = new Page(reader.read(UniversalPageId(page_id.data, page_id.len)));
         if (page->isValid())
         {
-            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI read page {} success", UniversalPageId(page_id.data, page_id.len)));
-            return CppStrWithView{.inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage), .view = BaseBuffView{page->data.begin(), page->data.size()}};
+            LOG_TRACE(
+                &Poco::Logger::get("ProxyFFI"),
+                "FFI read page {} success",
+                UniversalPageId(page_id.data, page_id.len));
+            return CppStrWithView{
+                .inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage),
+                .view = BaseBuffView{page->data.begin(), page->data.size()},
+            };
         }
         else
         {
-            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI read page {} fail", UniversalPageId(page_id.data, page_id.len)));
+            LOG_TRACE(
+                &Poco::Logger::get("ProxyFFI"),
+                "FFI read page {} fail",
+                UniversalPageId(page_id.data, page_id.len));
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
     }
@@ -312,7 +336,11 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
 {
     try
     {
-        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI scan page from {} to {}", UniversalPageId(start_page_id.data, start_page_id.len), UniversalPageId(end_page_id.data, end_page_id.len)));
+        LOG_TRACE(
+            &Poco::Logger::get("ProxyFFI"),
+            "FFI scan page from {} to {}",
+            UniversalPageId(start_page_id.data, start_page_id.len),
+            UniversalPageId(end_page_id.data, end_page_id.len));
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftDataReader reader(*uni_ps);
         std::vector<UniversalPageId> page_ids;
@@ -325,7 +353,8 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
             UniversalPageId(start_page_id.data, start_page_id.len),
             UniversalPageId(end_page_id.data, end_page_id.len),
             checker);
-        auto * data = static_cast<PageAndCppStrWithView *>(malloc(pages.size() * sizeof(PageAndCppStrWithView))); // NOLINT(cppcoreguidelines-no-malloc)
+        auto * data = static_cast<PageAndCppStrWithView *>(
+            malloc(pages.size() * sizeof(PageAndCppStrWithView))); // NOLINT(cppcoreguidelines-no-malloc)
         for (size_t i = 0; i < pages.size(); i++)
         {
             auto * target = data + i;
@@ -336,7 +365,11 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
                 .page_view = BaseBuffView{.data = pages[i]->data.begin(), .len = pages[i]->data.size()},
                 .key_view = BaseBuffView{.data = key_str->data(), .len = key_str->size()}};
         }
-        return RawCppPtrCarr{.inner = data, .len = pages.size(), .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
+        return RawCppPtrCarr{
+            .inner = data,
+            .len = pages.size(),
+            .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr),
+        };
     }
     catch (...)
     {
@@ -354,13 +387,22 @@ CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuf
         auto page_id_opt = reader.getLowerBound(UniversalPageId(raw_page_id.data, raw_page_id.len));
         if (page_id_opt.has_value())
         {
-            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI get lower bound for page {} success", UniversalPageId(raw_page_id.data, raw_page_id.len)));
+            LOG_TRACE(
+                &Poco::Logger::get("ProxyFFI"),
+                "FFI get lower bound for page {} success",
+                UniversalPageId(raw_page_id.data, raw_page_id.len));
             auto * s = RawCppString::New(page_id_opt->asStr());
-            return CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}};
+            return CppStrWithView{
+                .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{s->data(), s->size()},
+            };
         }
         else
         {
-            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI get lower bound for page {} fail", UniversalPageId(raw_page_id.data, raw_page_id.len)));
+            LOG_TRACE(
+                &Poco::Logger::get("ProxyFFI"),
+                "FFI get lower bound for page {} fail",
+                UniversalPageId(raw_page_id.data, raw_page_id.len));
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
     }
@@ -404,17 +446,11 @@ static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper
 
 struct RustGcHelper : public ext::Singleton<RustGcHelper>
 {
-    void gcRustPtr(RawVoidPtr ptr, RawRustPtrType type) const
-    {
-        fn_gc_rust_ptr(ptr, type);
-    }
+    void gcRustPtr(RawVoidPtr ptr, RawRustPtrType type) const { fn_gc_rust_ptr(ptr, type); }
 
     RustGcHelper() = default;
 
-    void setRustPtrGcFn(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType))
-    {
-        this->fn_gc_rust_ptr = fn_gc_rust_ptr;
-    }
+    void setRustPtrGcFn(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType)) { this->fn_gc_rust_ptr = fn_gc_rust_ptr; }
 
 private:
     void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType);
@@ -549,7 +585,9 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
     reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
 }
 
-BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v1(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
+BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v1(
+    const std::vector<kvrpcpb::ReadIndexRequest> & req,
+    uint64_t timeout_ms) const
 {
     std::vector<std::string> req_strs;
     req_strs.reserve(req.size());
@@ -567,8 +605,7 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v1(const std::vector<kv
 
 RawRustPtrWrap::RawRustPtrWrap(RawRustPtr inner)
     : RawRustPtr(inner)
-{
-}
+{}
 
 RawRustPtrWrap::~RawRustPtrWrap()
 {
@@ -634,26 +671,6 @@ RawCppPtr PreHandleSnapshot(
     }
 }
 
-template <typename PreHandledSnapshot>
-void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
-{
-    static_assert(std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>, "Unknown pre-handled snapshot type");
-
-    try
-    {
-        auto & kvstore = server->tmt->getKVStore();
-        if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
-        {
-            kvstore->applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)}, *server->tmt);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
-}
-
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
     switch (static_cast<RawCppPtrTypeImpl>(type))
@@ -661,7 +678,18 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
     {
         auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
-        ApplyPreHandledSnapshot(server, snap);
+        try
+        {
+            auto & kvstore = server->tmt->getKVStore();
+            kvstore->applyPreHandledSnapshot(
+                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)},
+                *server->tmt);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            exit(-1);
+        }
         break;
     }
     default:
@@ -776,7 +804,10 @@ void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type)
             break;
         }
         default:
-            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", static_cast<std::underlying_type_t<SpecialCppPtrType>>(type));
+            LOG_ERROR(
+                &Poco::Logger::get(__FUNCTION__),
+                "unknown type {}",
+                static_cast<std::underlying_type_t<SpecialCppPtrType>>(type));
             exit(-1);
         }
     }
@@ -809,8 +840,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
         std::ifstream stream(config_file_path);
         if (!stream)
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
-        auto * s = RawCppString::New((std::istreambuf_iterator<char>(stream)),
-                                     std::istreambuf_iterator<char>());
+        auto * s = RawCppString::New((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
         stream.close();
         /** the returned str must be formated as TOML, proxy will parse and show in form of JASON.
          *  curl `http://{status-addr}/config`, got:
@@ -818,7 +848,9 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
          *
          *  if proxy can NOT parse it, return 500 Internal Server Error.
          * */
-        return CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}};
+        return CppStrWithView{
+            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{s->data(), s->size()}};
     }
     catch (...)
     {
@@ -864,9 +896,7 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
 
     raft_serverpb::RegionLocalState state;
     RawCppStringPtr error_msg_ptr{};
-    SCOPE_EXIT({
-        delete error_msg_ptr;
-    });
+    SCOPE_EXIT({ delete error_msg_ptr; });
     auto res = this->fn_get_region_local_state(this->proxy_ptr, region_id, &state, &error_msg_ptr);
     switch (res)
     {
@@ -874,7 +904,9 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
         break;
     case KVGetStatus::Error:
     {
-        throw Exception(fmt::format("{} meet internal error: {}", __FUNCTION__, *error_msg_ptr), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("{} meet internal error: {}", __FUNCTION__, *error_msg_ptr),
+            ErrorCodes::LOGICAL_ERROR);
     }
     case KVGetStatus::NotFound:
         // make not found as `Tombstone`
@@ -884,7 +916,20 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
+void TiFlashRaftProxyHelper::notifyCompactLog(
+    uint64_t region_id,
+    uint64_t compact_index,
+    uint64_t compact_term,
+    uint64_t applied_index) const
+{
+    this->fn_notify_compact_log(this->proxy_ptr, region_id, compact_index, compact_term, applied_index);
+}
+
+void HandleSafeTSUpdate(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t self_safe_ts,
+    uint64_t leader_safe_ts)
 {
     try
     {
@@ -897,7 +942,6 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
         exit(-1);
     }
 }
-
 
 std::string_view buffToStrView(const BaseBuffView & buf)
 {

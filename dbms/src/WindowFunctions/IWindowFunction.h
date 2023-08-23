@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
-
+#include <WindowFunctions/WindowUtils.h>
 
 namespace DB
 {
@@ -49,4 +49,12 @@ protected:
 
 using WindowFunctionPtr = std::shared_ptr<IWindowFunction>;
 
+// Runtime data for computing one window function.
+struct WindowFunctionWorkspace
+{
+    // TODO add aggregation function
+    WindowFunctionPtr window_function = nullptr;
+
+    ColumnNumbers arguments;
+};
 } // namespace DB

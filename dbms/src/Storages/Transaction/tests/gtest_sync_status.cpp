@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,8 +53,7 @@ namespace tests
 class SyncStatusTest : public ::testing::Test
 {
 public:
-    SyncStatusTest()
-        = default;
+    SyncStatusTest() = default;
     static void SetUpTestCase()
     {
         try
@@ -66,10 +65,7 @@ public:
             // Maybe another test has already registed, ignore exception here.
         }
     }
-    void SetUp() override
-    {
-        recreateMetadataPath();
-    }
+    void SetUp() override { recreateMetadataPath(); }
 
     void TearDown() override
     {
@@ -97,14 +93,15 @@ ASTPtr parseCreateStatement(const String & statement)
     ParserCreateQuery parser;
     const char * pos = statement.data();
     std::string error_msg;
-    auto ast = tryParseQuery(parser,
-                             pos,
-                             pos + statement.size(),
-                             error_msg,
-                             /*hilite=*/false,
-                             String("in ") + __PRETTY_FUNCTION__,
-                             /*allow_multi_statements=*/false,
-                             0);
+    auto ast = tryParseQuery(
+        parser,
+        pos,
+        pos + statement.size(),
+        error_msg,
+        /*hilite=*/false,
+        String("in ") + __PRETTY_FUNCTION__,
+        /*allow_multi_statements=*/false,
+        0);
     if (!ast)
         throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
     return ast;
@@ -186,7 +183,8 @@ void createRegions(size_t region_num, TableID table_id)
     auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < region_num; i++)
     {
-        auto region = makeRegion(i, RecordKVFormat::genKey(table_id, i), RecordKVFormat::genKey(table_id, i + region_num + 10));
+        auto region
+            = makeRegion(i, RecordKVFormat::genKey(table_id, i), RecordKVFormat::genKey(table_id, i + region_num + 10));
         tmt.getRegionTable().shrinkRegionRange(*region);
     }
 }
@@ -211,7 +209,11 @@ try
     store_server_wrap.tmt = &TiFlashTestEnv::getContext()->getTMTContext();
     auto helper = GetEngineStoreServerHelper(&store_server_wrap);
     String path = fmt::format("/tiflash/sync-status/{}", table_id);
-    auto res = helper.fn_handle_http_request(&store_server_wrap, BaseBuffView{path.data(), path.length()}, BaseBuffView{path.data(), path.length()}, BaseBuffView{"", 0});
+    auto res = helper.fn_handle_http_request(
+        &store_server_wrap,
+        BaseBuffView{path.data(), path.length()},
+        BaseBuffView{path.data(), path.length()},
+        BaseBuffView{"", 0});
     EXPECT_EQ(res.status, HttpRequestStatus::Ok);
     {
         // normal region count is 10.
@@ -245,7 +247,11 @@ try
     store_server_wrap.tmt = &TiFlashTestEnv::getContext()->getTMTContext();
     auto helper = GetEngineStoreServerHelper(&store_server_wrap);
     String path = fmt::format("/tiflash/sync-status/{}", table_id);
-    auto res = helper.fn_handle_http_request(&store_server_wrap, BaseBuffView{path.data(), path.length()}, BaseBuffView{path.data(), path.length()}, BaseBuffView{"", 0});
+    auto res = helper.fn_handle_http_request(
+        &store_server_wrap,
+        BaseBuffView{path.data(), path.length()},
+        BaseBuffView{path.data(), path.length()},
+        BaseBuffView{"", 0});
     EXPECT_EQ(res.status, HttpRequestStatus::Ok);
     {
         // normal region count is 20.

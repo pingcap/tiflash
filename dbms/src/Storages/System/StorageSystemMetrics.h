@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,8 @@ class Context;
 
 /** Implements `metrics` system table, which provides information about the operation of the server.
   */
-class StorageSystemMetrics : public ext::SharedPtrHelper<StorageSystemMetrics>
+class StorageSystemMetrics
+    : public ext::SharedPtrHelper<StorageSystemMetrics>
     , public IStorage
 {
 public:

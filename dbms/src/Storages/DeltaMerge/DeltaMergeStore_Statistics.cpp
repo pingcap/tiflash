@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,7 +88,8 @@ StoreStats DeltaMergeStore::getStoreStats()
     stat.delta_placed_rate = static_cast<Float64>(total_placed_rows) / stat.total_delta_rows;
     stat.delta_cache_size = total_delta_cache_size;
     stat.delta_cache_rate = static_cast<Float64>(total_delta_valid_cache_rows) / stat.total_delta_rows;
-    stat.delta_cache_wasted_rate = static_cast<Float64>(total_delta_cache_rows - total_delta_valid_cache_rows) / total_delta_valid_cache_rows;
+    stat.delta_cache_wasted_rate
+        = static_cast<Float64>(total_delta_cache_rows - total_delta_valid_cache_rows) / total_delta_valid_cache_rows;
 
     stat.avg_segment_rows = static_cast<Float64>(stat.total_rows) / stat.segment_count;
     stat.avg_segment_size = static_cast<Float64>(stat.total_size) / stat.segment_count;

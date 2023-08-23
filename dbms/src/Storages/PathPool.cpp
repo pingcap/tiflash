@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,9 +95,17 @@ PathPool::PathPool(
     }
 }
 
-StoragePathPool PathPool::withTable(const String & database_, const String & table_, bool path_need_database_name_) const
+StoragePathPool PathPool::withTable(const String & database_, const String & table_, bool path_need_database_name_)
+    const
 {
-    return StoragePathPool(main_data_paths, latest_data_paths, database_, table_, path_need_database_name_, global_capacity, file_provider);
+    return StoragePathPool(
+        main_data_paths,
+        latest_data_paths,
+        database_,
+        table_,
+        path_need_database_name_,
+        global_capacity,
+        file_provider);
 }
 
 Strings PathPool::listPaths() const
@@ -154,7 +162,11 @@ StoragePathPool::StoragePathPool( //
     , file_provider(std::move(file_provider_))
     , log(Logger::get())
 {
-    RUNTIME_CHECK_MSG(!database.empty() && !table.empty(), "Can NOT create StoragePathPool [database={}] [table={}]", database, table);
+    RUNTIME_CHECK_MSG(
+        !database.empty() && !table.empty(),
+        "Can NOT create StoragePathPool [database={}] [table={}]",
+        database,
+        table);
 
     for (const auto & p : main_data_paths)
     {
@@ -331,12 +343,16 @@ void StoragePathPool::drop(bool recursive, bool must_success)
 // private methods
 //==========================================================================================
 
-String StoragePathPool::getStorePath(const String & extra_path_root, const String & database_name, const String & table_name) const
+String StoragePathPool::getStorePath(
+    const String & extra_path_root,
+    const String & database_name,
+    const String & table_name) const
 {
     if (likely(!path_need_database_name))
         return getNormalizedPath(fmt::format("{}/{}", extra_path_root, escapeForFileName(table_name)));
     else
-        return getNormalizedPath(fmt::format("{}/{}/{}", extra_path_root, escapeForFileName(database_name), escapeForFileName(table_name)));
+        return getNormalizedPath(
+            fmt::format("{}/{}/{}", extra_path_root, escapeForFileName(database_name), escapeForFileName(table_name)));
 }
 
 void StoragePathPool::renamePath(const String & old_path, const String & new_path)
@@ -358,12 +374,13 @@ String StoragePathPool::getPSV2DeleteMarkFilePath() const
 //==========================================================================================
 
 template <typename T>
-String genericChoosePath(const std::vector<T> & paths,
-                         const PathCapacityMetricsPtr & global_capacity,
-                         std::function<String(const std::vector<T> & paths, size_t idx)> path_generator,
-                         std::function<String(const T & path_info)> path_getter,
-                         const LoggerPtr & log,
-                         const String & log_msg)
+String genericChoosePath(
+    const std::vector<T> & paths,
+    const PathCapacityMetricsPtr & global_capacity,
+    std::function<String(const std::vector<T> & paths, size_t idx)> path_generator,
+    std::function<String(const T & path_info)> path_getter,
+    const LoggerPtr & log,
+    const String & log_msg)
 {
     if (paths.size() == 1)
         return path_generator(paths, 0);
@@ -429,12 +446,19 @@ String StableDiskDelegator::choosePath() const
         return fmt::format("{}/{}", paths[idx].path, StoragePathPool::STABLE_FOLDER_NAME);
     };
 
-    std::function<String(const StoragePathPool::MainPathInfo & info)> path_getter = [](const StoragePathPool::MainPathInfo & info) -> String {
+    std::function<String(const StoragePathPool::MainPathInfo & info)> path_getter
+        = [](const StoragePathPool::MainPathInfo & info) -> String {
         return info.path;
     };
 
     const String log_msg = fmt::format("[type=stable] [database={}] [table={}]", pool.database, pool.table);
-    return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
+    return genericChoosePath(
+        pool.main_path_infos,
+        pool.global_capacity,
+        path_generator,
+        path_getter,
+        pool.log,
+        log_msg);
 }
 
 String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exist) const
@@ -450,13 +474,18 @@ String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exis
 
 void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
 {
-    path.remove_suffix(1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
+    path.remove_suffix(
+        1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
     std::lock_guard lock{pool.mutex};
     if (auto iter = pool.dt_file_path_map.find(file_id); unlikely(iter != pool.dt_file_path_map.end()))
     {
         const auto & path_info = pool.main_path_infos[iter->second];
         throw DB::TiFlashException(
-            fmt::format("Try to add a DTFile with duplicated id, file_id={} path={} existed_path={}", file_id, path, path_info.path),
+            fmt::format(
+                "Try to add a DTFile with duplicated id, file_id={} path={} existed_path={}",
+                file_id,
+                path,
+                path_info.path),
             Errors::DeltaTree::Internal);
     }
 
@@ -469,7 +498,11 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
             break;
         }
     }
-    RUNTIME_CHECK_MSG(index != UINT32_MAX, "Try to add a DTFile to an unrecognized path. file_id={} path={}", file_id, path);
+    RUNTIME_CHECK_MSG(
+        index != UINT32_MAX,
+        "Try to add a DTFile to an unrecognized path. file_id={} path={}",
+        file_id,
+        path);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
 
@@ -492,7 +525,8 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
         {
             size_t size_sum = 0;
             auto get_folder_size = [](const Poco::File & target, size_t & counter) -> void {
-                auto get_folder_size_impl = [](const Poco::File & inner_target, size_t & inner_counter, auto & self) -> void {
+                auto get_folder_size_impl
+                    = [](const Poco::File & inner_target, size_t & inner_counter, auto & self) -> void {
                     std::vector<Poco::File> files;
                     inner_target.list(files);
                     for (auto & i : files)
@@ -521,7 +555,12 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     }
     catch (const Poco::Exception & exp)
     {
-        LOG_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
+        LOG_WARNING(
+            pool.log,
+            "failed to get real size info for dtfile. [id={}] [path={}] [err={}]",
+            file_id,
+            path,
+            exp.displayText());
     }
 #endif
 
@@ -609,7 +648,10 @@ void StableDiskDelegator::removeRemoteDTFile(UInt64 local_external_id, bool thro
     if (iter == pool.remote_dt_file_size_map.end())
     {
         if (throw_on_not_exist)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot find remote DMFile when removing, file_id={}", local_external_id);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Cannot find remote DMFile when removing, file_id={}",
+                local_external_id);
         else
             return;
     }
@@ -665,12 +707,13 @@ Strings PSDiskDelegatorMulti::listPaths() const
 
 String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const StoragePathPool::LatestPathInfos & paths, size_t idx)> path_generator =
-        [this](const StoragePathPool::LatestPathInfos & paths, size_t idx) -> String {
+    std::function<String(const StoragePathPool::LatestPathInfos & paths, size_t idx)> path_generator
+        = [this](const StoragePathPool::LatestPathInfos & paths, size_t idx) -> String {
         return fmt::format("{}/{}", paths[idx].path, this->path_prefix);
     };
 
-    std::function<String(const StoragePathPool::LatestPathInfo & info)> path_getter = [](const StoragePathPool::LatestPathInfo & info) -> String {
+    std::function<String(const StoragePathPool::LatestPathInfo & info)> path_getter
+        = [](const StoragePathPool::LatestPathInfo & info) -> String {
         return info.path;
     };
 
@@ -682,7 +725,13 @@ String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
     }
 
     const String log_msg = fmt::format("[type=ps_multi] [database={}] [table={}]", pool.database, pool.table);
-    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
+    return genericChoosePath(
+        pool.latest_path_infos,
+        pool.global_capacity,
+        path_generator,
+        path_getter,
+        pool.log,
+        log_msg);
 }
 
 size_t PSDiskDelegatorMulti::addPageFileUsedSize(
@@ -728,7 +777,11 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
     return fmt::format("{}/{}", pool.latest_path_infos[*index_opt].path, path_prefix);
 }
 
-void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
+void PSDiskDelegatorMulti::removePageFile(
+    const PageFileIdAndLevel & id_lvl,
+    size_t file_size,
+    bool meta_left,
+    bool remove_from_default_path)
 {
     if (remove_from_default_path)
     {
@@ -804,7 +857,11 @@ String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lv
     return fmt::format("{}/{}", pool.latest_path_infos[0].path, path_prefix);
 }
 
-void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
+void PSDiskDelegatorSingle::removePageFile(
+    const PageFileIdAndLevel & /*id_lvl*/,
+    size_t file_size,
+    bool /*meta_left*/,
+    bool /*remove_from_default_path*/)
 {
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }
@@ -911,7 +968,11 @@ void PSDiskDelegatorRaft::freePageFileUsedSize(
     }
 
     RUNTIME_CHECK_MSG(index != UINT32_MAX, "Unrecognized path {}", upper_path);
-    RUNTIME_CHECK_MSG(page_path_map.exist(id_lvl), "Can not find path for PageFile, file_id={} path={}", id_lvl, pf_parent_path);
+    RUNTIME_CHECK_MSG(
+        page_path_map.exist(id_lvl),
+        "Can not find path for PageFile, file_id={} path={}",
+        id_lvl,
+        pf_parent_path);
 
     // update global used size
     pool.global_capacity->freeUsedSize(upper_path, size_to_free);
@@ -924,7 +985,11 @@ String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) c
     return raft_path_infos[*index_opt].path;
 }
 
-void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
+void PSDiskDelegatorRaft::removePageFile(
+    const PageFileIdAndLevel & id_lvl,
+    size_t file_size,
+    bool meta_left,
+    bool remove_from_default_path)
 {
     if (remove_from_default_path)
     {
@@ -974,8 +1039,8 @@ Strings PSDiskDelegatorGlobalMulti::listPaths() const
 
 String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const Strings & paths, size_t idx)> path_generator =
-        [this](const Strings & paths, size_t idx) -> String {
+    std::function<String(const Strings & paths, size_t idx)> path_generator
+        = [this](const Strings & paths, size_t idx) -> String {
         return fmt::format("{}/{}", paths[idx], this->path_prefix);
     };
 
@@ -991,7 +1056,13 @@ String PSDiskDelegatorGlobalMulti::choosePath(const PageFileIdAndLevel & id_lvl)
     }
 
     const String log_msg = "[type=global_ps_multi]";
-    return genericChoosePath(pool.listGlobalPagePaths(), pool.global_capacity, path_generator, path_getter, pool.log, log_msg);
+    return genericChoosePath(
+        pool.listGlobalPagePaths(),
+        pool.global_capacity,
+        path_generator,
+        path_getter,
+        pool.log,
+        log_msg);
 }
 
 size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
@@ -1046,7 +1117,11 @@ void PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
     }
 
     RUNTIME_CHECK_MSG(index != UINT32_MAX, "Unrecognized path {}", upper_path);
-    RUNTIME_CHECK_MSG(page_path_map.exist(id_lvl), "Can not find path for PageFile, file_id={} path={}", id_lvl, pf_parent_path);
+    RUNTIME_CHECK_MSG(
+        page_path_map.exist(id_lvl),
+        "Can not find path for PageFile, file_id={} path={}",
+        id_lvl,
+        pf_parent_path);
 
     // update global used size
     pool.global_capacity->freeUsedSize(upper_path, size_to_free);
@@ -1059,7 +1134,11 @@ String PSDiskDelegatorGlobalMulti::getPageFilePath(const PageFileIdAndLevel & id
     return fmt::format("{}/{}", pool.listGlobalPagePaths()[*index], path_prefix);
 }
 
-void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
+void PSDiskDelegatorGlobalMulti::removePageFile(
+    const PageFileIdAndLevel & id_lvl,
+    size_t file_size,
+    bool meta_left,
+    bool remove_from_default_path)
 {
     if (remove_from_default_path)
     {
@@ -1133,7 +1212,11 @@ String PSDiskDelegatorGlobalSingle::getPageFilePath(const PageFileIdAndLevel & /
     return fmt::format("{}/{}", pool.listGlobalPagePaths()[0], path_prefix);
 }
 
-void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
+void PSDiskDelegatorGlobalSingle::removePageFile(
+    const PageFileIdAndLevel & id_lvl,
+    size_t file_size,
+    bool /*meta_left*/,
+    bool /*remove_from_default_path*/)
 {
     pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[0], file_size);
 
@@ -1146,8 +1229,7 @@ void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & id_l
 PSDiskDelegatorFixedDirectory::PSDiskDelegatorFixedDirectory(const PathPool & pool_, const String & path_)
     : path(path_)
     , pool(pool_)
-{
-}
+{}
 
 bool PSDiskDelegatorFixedDirectory::fileExist(const PageFileIdAndLevel & id_lvl) const
 {

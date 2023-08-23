@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,7 +83,10 @@ public:
         current_stream = children.begin();
     }
 
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_, const ScanContextPtr & scan_context_)
+    ConcatSkippableBlockInputStream(
+        SkippableBlockInputStreams inputs_,
+        std::vector<size_t> && rows_,
+        const ScanContextPtr & scan_context_)
         : rows(std::move(rows_))
         , precede_stream_rows(0)
         , scan_context(scan_context_)

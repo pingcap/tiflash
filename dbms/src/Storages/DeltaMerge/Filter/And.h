@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,9 @@ public:
         for (const auto & child : children)
         {
             const auto tmp = child->roughCheck(start_pack, pack_count, param);
-            std::transform(res.begin(), res.end(), tmp.cbegin(), res.begin(), [](const auto a, const auto b) { return a && b; });
+            std::transform(res.begin(), res.end(), tmp.cbegin(), res.begin(), [](const auto a, const auto b) {
+                return a && b;
+            });
         }
         return res;
     }

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,8 @@ public:
 
     void setValuesFromConfig(const Poco::Util::AbstractConfiguration & config);
 
-    void checkHostAndPort(const std::string & host, const std::string & port) const; /// Does the same as checkURL, but for host and port.
+    void checkHostAndPort(const std::string & host, const std::string & port)
+        const; /// Does the same as checkURL, but for host and port.
 
 private:
     std::atomic_bool is_initialized = false;

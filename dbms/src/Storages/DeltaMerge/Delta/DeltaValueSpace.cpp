@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,10 @@ namespace DM
 // ================================================
 // Public methods
 // ================================================
-DeltaValueSpace::DeltaValueSpace(PageIdU64 id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
+DeltaValueSpace::DeltaValueSpace(
+    PageIdU64 id_,
+    const ColumnFilePersisteds & persisted_files,
+    const ColumnFiles & in_memory_files)
     : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(id_, persisted_files))
     , mem_table_set(std::make_shared<MemTableSet>(in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
@@ -71,7 +74,8 @@ DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
     PageIdU64 delta_id,
     WriteBatches & wbs)
 {
-    auto persisted_file_set = ColumnFilePersistedSet::createFromCheckpoint(context, temp_ps, segment_range, delta_id, wbs);
+    auto persisted_file_set
+        = ColumnFilePersistedSet::createFromCheckpoint(context, temp_ps, segment_range, delta_id, wbs);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
@@ -148,7 +152,12 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             {
                 RUNTIME_CHECK(file_parent_path == delegator.getDTFilePath(file_id));
             }
-            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
+            auto new_file = DMFile::restore(
+                context.db_context.getFileProvider(),
+                file_id,
+                /* page_id= */ new_page_id,
+                file_parent_path,
+                DMFile::ReadMetaMode::all());
 
             auto new_column_file = f->cloneWith(context, new_file, target_range);
             cloned.push_back(new_column_file);
@@ -179,7 +188,10 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneNewlyAppended
     auto [new_mem_files, flushed_mem_files] = mem_table_set->diffColumnFiles(snapshot_mem_files);
     ColumnFiles head_persisted_files;
     head_persisted_files.reserve(snapshot_persisted_files.size() + flushed_mem_files.size());
-    head_persisted_files.insert(head_persisted_files.end(), snapshot_persisted_files.begin(), snapshot_persisted_files.end());
+    head_persisted_files.insert(
+        head_persisted_files.end(),
+        snapshot_persisted_files.begin(),
+        snapshot_persisted_files.end());
     // If there were flush since the snapshot, the flushed files should be behind the files in the snapshot.
     // So let's place these "flused files" after the persisted files in snapshot.
     head_persisted_files.insert(head_persisted_files.end(), flushed_mem_files.begin(), flushed_mem_files.end());
@@ -277,7 +289,11 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     return true;
 }
 
-bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
+bool DeltaValueSpace::ingestColumnFiles(
+    DMContext & /*context*/,
+    const RowKeyRange & range,
+    const ColumnFiles & column_files,
+    bool clear_data_in_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
@@ -299,7 +315,9 @@ bool DeltaValueSpace::flush(DMContext & context)
     SCOPE_EXIT({
         bool v = true;
         if (!is_flushing.compare_exchange_strong(v, false))
-            throw Exception(fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()),
+                ErrorCodes::LOGICAL_ERROR);
     });
 
     LOG_DEBUG(log, "Flush start, delta={}", info());
@@ -319,7 +337,11 @@ bool DeltaValueSpace::flush(DMContext & context)
             LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
             return false;
         }
-        flush_task = mem_table_set->buildFlushTask(context, persisted_file_set->getRows(), persisted_file_set->getDeletes(), persisted_file_set->getCurrentFlushVersion());
+        flush_task = mem_table_set->buildFlushTask(
+            context,
+            persisted_file_set->getRows(),
+            persisted_file_set->getDeletes(),
+            persisted_file_set->getCurrentFlushVersion());
         cur_delta_index = delta_index;
     }
 
@@ -370,7 +392,13 @@ bool DeltaValueSpace::flush(DMContext & context)
             delta_index_epoch += 1;
         }
 
-        LOG_DEBUG(log, "Flush end, flush_tasks={} flush_rows={} flush_deletes={} delta={}", flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes(), info());
+        LOG_DEBUG(
+            log,
+            "Flush end, flush_tasks={} flush_rows={} flush_deletes={} delta={}",
+            flush_task->getTaskNum(),
+            flush_task->getFlushRows(),
+            flush_task->getFlushDeletes(),
+            info());
     }
     return true;
 }
@@ -401,7 +429,8 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_DEBUG(log, "Compact cancel because nothing to compact, delta={}", simpleInfo());
             return true;
         }
-        log_storage_snap = context.storage_pool->logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
+        log_storage_snap = context.storage_pool->logReader()->getSnapshot(
+            /*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
     WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());

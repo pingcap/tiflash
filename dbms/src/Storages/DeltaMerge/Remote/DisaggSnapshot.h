@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,11 +56,7 @@ public:
         DM::ColumnDefinesPtr column_defines,
         std::shared_ptr<std::vector<tipb::FieldType>> output_field_types)
     {
-        return SegmentPagesFetchTask{
-            std::move(seg_task),
-            std::move(column_defines),
-            std::move(output_field_types),
-            ""};
+        return SegmentPagesFetchTask{std::move(seg_task), std::move(column_defines), std::move(output_field_types), ""};
     }
 };
 

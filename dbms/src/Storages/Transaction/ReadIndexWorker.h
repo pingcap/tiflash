@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,8 @@ class ReadIndexTest;
 
 struct AsyncWaker
 {
-    struct Notifier final : AsyncNotifier
+    struct Notifier final
+        : AsyncNotifier
         , MutexCondVarWrap
     {
         // usually sender invoke `wake`, receiver invoke `blockedWaitUtil`
@@ -318,10 +319,7 @@ struct ReadIndexWorker
     {
         return max_read_index_task_timeout.load(std::memory_order_relaxed);
     }
-    static void setMaxReadIndexTaskTimeout(std::chrono::milliseconds t)
-    {
-        max_read_index_task_timeout = t;
-    }
+    static void setMaxReadIndexTaskTimeout(std::chrono::milliseconds t) { max_read_index_task_timeout = t; }
     //    static size_t getMaxReadIndexHistory()
     //    {
     //        return max_read_index_history.load(std::memory_order_relaxed);

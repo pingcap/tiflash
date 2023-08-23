@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,13 +42,23 @@ public:
 void serializeSchema(WriteBuffer & buf, const Block & schema);
 BlockPtr deserializeSchema(ReadBuffer & buf);
 
-void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
+void serializeColumn(
+    WriteBuffer & buf,
+    const IColumn & column,
+    const DataTypePtr & type,
+    size_t offset,
+    size_t limit,
+    CompressionMethod compression_method,
+    Int64 compression_level);
 void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows);
 
 /// Serialize those column files' metadata into buf.
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 /// Recreate column file instances from buf.
-ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
+ColumnFilePersisteds deserializeSavedColumnFiles(
+    const DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf);
 
 ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     DMContext & context,
@@ -61,7 +71,10 @@ void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePers
 ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(const DMContext & context, ReadBuffer & buf, UInt64 version);
 
 void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
-ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
+ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(
+    const DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf);
 
 ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
     DMContext & context,

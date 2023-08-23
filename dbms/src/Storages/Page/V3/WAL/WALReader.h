@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,7 @@ public:
         throw Exception(msg, ErrorCodes::CORRUPTED_DATA);
     }
 
-    bool hasError() const
-    {
-        return error_happened;
-    }
+    bool hasError() const { return error_happened; }
 
 private:
     bool error_happened = false;
@@ -54,20 +51,21 @@ class WALStoreReader
 {
 public:
     static LogFilenameSet listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger);
-    static std::tuple<std::optional<LogFilename>, LogFilenameSet>
-    findCheckpoint(LogFilenameSet && all_files);
+    static std::tuple<std::optional<LogFilename>, LogFilenameSet> findCheckpoint(LogFilenameSet && all_files);
 
-    static WALStoreReaderPtr create(String storage_name,
-                                    FileProviderPtr & provider,
-                                    LogFilenameSet files,
-                                    WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
-                                    const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(
+        String storage_name,
+        FileProviderPtr & provider,
+        LogFilenameSet files,
+        WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
+        const ReadLimiterPtr & read_limiter = nullptr);
 
-    static WALStoreReaderPtr create(String storage_name,
-                                    FileProviderPtr & provider,
-                                    PSDiskDelegatorPtr & delegator,
-                                    WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
-                                    const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(
+        String storage_name,
+        FileProviderPtr & provider,
+        PSDiskDelegatorPtr & delegator,
+        WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
+        const ReadLimiterPtr & read_limiter = nullptr);
 
     static LogReaderPtr createLogReader(
         const LogFilename & filename,

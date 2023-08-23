@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,9 @@ ZlibInflatingReadBuffer::ZlibInflatingReadBuffer(
 #pragma GCC diagnostic pop
 
     if (rc != Z_OK)
-        throw Exception(std::string("inflateInit2 failed: ") + zError(rc) + "; zlib version: " + ZLIB_VERSION, ErrorCodes::ZLIB_INFLATE_FAILED);
+        throw Exception(
+            std::string("inflateInit2 failed: ") + zError(rc) + "; zlib version: " + ZLIB_VERSION,
+            ErrorCodes::ZLIB_INFLATE_FAILED);
 }
 
 ZlibInflatingReadBuffer::~ZlibInflatingReadBuffer()

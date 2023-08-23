@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ public:
 
     std::optional<PageEntry> find(PageId page_id) const;
 
-    const PageEntry at(PageId page_id) const;
+    PageEntry at(PageId page_id) const;
 
     std::pair<bool, PageId> isRefId(PageId page_id) const;
 

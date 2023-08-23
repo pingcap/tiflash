@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@ namespace DM
 {
 void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define);
 void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define);
-void applyAlter(ColumnDefines & table_columns,
-                const AlterCommand & command,
-                const OptionTableInfoConstRef table_info,
-                ColumnID & max_column_id_used);
+void applyAlter(
+    ColumnDefines & table_columns,
+    const AlterCommand & command,
+    const OptionTableInfoConstRef table_info,
+    ColumnID & max_column_id_used);
 
 } // namespace DM
 } // namespace DB

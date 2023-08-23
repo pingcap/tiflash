@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,13 +121,9 @@ inline void ALWAYS_INLINE keyHolderPersistKey(DB::ArenaKeyHolder && holder)
     holder.key.data = holder.pool.insert(holder.key.data, holder.key.size);
 }
 
-inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &)
-{
-}
+inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &) {}
 
-inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &&)
-{
-}
+inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &&) {}
 
 namespace DB
 {
@@ -153,13 +149,9 @@ inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder && hold
     return holder.key;
 }
 
-inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &)
-{
-}
+inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &) {}
 
-inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &&)
-{
-}
+inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &&) {}
 
 inline void ALWAYS_INLINE keyHolderDiscardKey(DB::SerializedKeyHolder & holder)
 {

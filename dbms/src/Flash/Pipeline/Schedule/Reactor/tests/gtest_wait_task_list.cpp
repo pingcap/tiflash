@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,9 +44,7 @@ try
     PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
     context.incActiveRefCount();
-    SCOPE_EXIT({
-        context.decActiveRefCount();
-    });
+    SCOPE_EXIT({ context.decActiveRefCount(); });
 
     WaitingTaskList list;
 

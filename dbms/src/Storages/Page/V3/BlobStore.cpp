@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1282,17 +1282,19 @@ void BlobStore<Trait>::gc(
     const WriteLimiterPtr & write_limiter,
     const ReadLimiterPtr & read_limiter)
 {
-    std::vector<std::tuple<BlobFileId, BlobFileOffset, PageSize>> written_blobs;
-
     if (total_page_size == 0)
     {
-        throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
+        LOG_INFO(log, "BlobStore gc skip, type={}", magic_enum::enum_name(page_type));
+        return;
     }
+
     LOG_INFO(
         log,
-        "BlobStore gc will migrate {} into new blob files",
-        formatReadableSizeWithBinarySuffix(total_page_size));
+        "BlobStore gc will migrate {} into new blob files, type={}",
+        formatReadableSizeWithBinarySuffix(total_page_size),
+        magic_enum::enum_name(page_type));
 
+    std::vector<std::tuple<BlobFileId, BlobFileOffset, PageSize>> written_blobs;
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](
                           const BlobFileId & file_id,
                           char * data_begin,
@@ -1333,6 +1335,7 @@ void BlobStore<Trait>::gc(
     auto alloc_size = config.file_limit_size.get();
     // If `total_page_size` is greater than `config_file_limit`, we will try to write the page data into multiple `BlobFile`s to
     // make the memory consumption smooth during GC.
+    // TODO: move this loop into `PageDirectory<Trait>::getEntriesByBlobIds`
     if (total_page_size > alloc_size)
     {
         size_t biggest_page_size = 0;

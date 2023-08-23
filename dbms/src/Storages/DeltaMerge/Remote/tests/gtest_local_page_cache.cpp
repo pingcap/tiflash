@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,15 +48,9 @@ try
         auto page = cache.getPage({.page_id = 1}, {0});
         ASSERT_EQ("page_1_data", page.getFieldData(0));
     }
-    ASSERT_THROW({
-        cache.getPage({.page_id = 2}, {0});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ cache.getPage({.page_id = 2}, {0}); }, DB::Exception);
 
-    ASSERT_THROW({
-        cache.getPage({.page_id = 1}, {1});
-    },
-                 DB::Exception);
+    ASSERT_THROW({ cache.getPage({.page_id = 1}, {1}); }, DB::Exception);
 
     cache.write({.page_id = 5}, "foo_bar", {3, 4});
     {

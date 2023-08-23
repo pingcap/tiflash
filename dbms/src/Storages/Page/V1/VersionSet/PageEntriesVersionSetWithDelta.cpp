@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,8 +49,9 @@ PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit, bool need_scan_p
     return listAllLiveFiles(lock, need_scan_page_ids);
 }
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
-PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock, bool need_scan_page_ids) const
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::listAllLiveFiles(
+    const std::unique_lock<std::shared_mutex> & lock,
+    bool need_scan_page_ids) const
 {
     (void)lock; // Note read_write_mutex must be hold.
 
@@ -58,7 +59,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::sha
     std::set<PageFileIdAndLevel> live_files;
     std::set<PageId> live_normal_pages;
     // Iterate all snapshot to collect all PageFile in used.
-    for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
+    for (auto s = snapshots->next; s != snapshots.get(); s = s->next) // NOLINT
     {
         collectLiveFilesFromVersionList(*(s->version()), live_files, live_normal_pages, need_scan_page_ids);
     }
@@ -68,7 +69,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::sha
     return {live_files, live_normal_pages};
 }
 
-void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
+void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( // NOLINT
     const PageEntriesView & view,
     std::set<PageFileIdAndLevel> & live_files,
     std::set<PageId> & live_normal_pages,
@@ -89,7 +90,10 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
 // DeltaVersionEditAcceptor
 //==========================================================================================
 
-DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Poco::Logger * log_)
+DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(
+    const PageEntriesView * view_,
+    bool ignore_invalid_ref_,
+    Poco::Logger * log_)
     : view(const_cast<PageEntriesView *>(view_))
     , current_version(view->getSharedTailVersion())
     , ignore_invalid_ref(ignore_invalid_ref_)
@@ -147,8 +151,9 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
     const auto old_entry = view->findNormalPageEntry(normal_page_id);
     if (is_ref_exist && !old_entry)
     {
-        throw DB::Exception("Accessing RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(normal_page_id),
-                            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception(
+            "Accessing RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!old_entry)
@@ -222,21 +227,24 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // The Page to be ref is not exist.
         if (ignore_invalid_ref)
         {
-            LOG_WARNING(log,
-                        "Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage" + DB::toString(rec.page_id)
-                            + " to non-exist Page" + DB::toString(rec.ori_page_id));
+            LOG_WARNING(
+                log,
+                "Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage" + DB::toString(rec.page_id)
+                    + " to non-exist Page" + DB::toString(rec.ori_page_id));
         }
         else
         {
-            throw Exception("Try to add RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Try to add RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 }
 
-void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current,
-                                            const PageEntriesEdit & edit,
-                                            Poco::Logger * log)
+void DeltaVersionEditAcceptor::applyInplace(
+    const PageEntriesVersionSetWithDelta::VersionPtr & current,
+    const PageEntriesEdit & edit,
+    Poco::Logger * log)
 {
     assert(current->isBase());
     assert(current.use_count() == 1);
@@ -258,9 +266,10 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             }
             catch (DB::Exception & e)
             {
-                LOG_WARNING(log,
-                            "Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage" + DB::toString(rec.page_id)
-                                + " to non-exist Page" + DB::toString(rec.ori_page_id));
+                LOG_WARNING(
+                    log,
+                    "Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage"
+                        + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id));
             }
             break;
         case WriteBatch::WriteType::UPSERT:

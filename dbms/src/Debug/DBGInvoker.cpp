@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,7 +101,9 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_snapshot_pre_handle_block", /**/ MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock);
     regSchemalessFunc("region_snapshot_apply_block", /*     */ MockRaftCommand::dbgFuncRegionSnapshotApplyBlock);
     regSchemalessFunc("region_snapshot_pre_handle_file", /* */ MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles);
-    regSchemalessFunc("region_snapshot_pre_handle_file_pks", MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
+    regSchemalessFunc(
+        "region_snapshot_pre_handle_file_pks",
+        MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
 
@@ -130,7 +132,9 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
 
-    regSchemalessFunc("wait_until_no_temp_active_threads_in_dynamic_thread_pool", dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool);
+    regSchemalessFunc(
+        "wait_until_no_temp_active_threads_in_dynamic_thread_pool",
+        dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
@@ -196,7 +200,8 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
         ", ");
     fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
+    std::shared_ptr<StringStreamBlockInputStream> res
+        = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
     Printer printer = [&](const std::string & s) {
         res->append(s);
     };
@@ -206,7 +211,11 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     return res;
 }
 
-BlockInputStreamPtr DBGInvoker::invokeSchemaful(Context & context, const std::string &, const SchemafulDBGFunc & func, const ASTs & args)
+BlockInputStreamPtr DBGInvoker::invokeSchemaful(
+    Context & context,
+    const std::string &,
+    const SchemafulDBGFunc & func,
+    const ASTs & args)
 {
     return func(context, args);
 }

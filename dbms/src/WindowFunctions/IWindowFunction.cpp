@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 #include <magic_enum.hpp>
+#include <memory>
 
 namespace DB
 {
@@ -30,6 +31,40 @@ namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 } // namespace ErrorCodes
+
+namespace
+{
+bool isFrameValid(RowNumber frame_start, RowNumber frame_end, RowNumber partition_start, RowNumber partition_end)
+{
+    return (frame_start < partition_end) && (partition_start < frame_end) && (frame_start < frame_end);
+}
+
+// Return true when the frame is valid
+//
+// Check if the frame is invalid, or we will insert null value into result column
+// Frame is invalid when:
+//   1. partition_end <= frame_start
+//   2. frame_end < partition_start
+//   3. frame_end <= frame_start
+bool checkFrameValidAndHandleInvalidFrame(WindowTransformAction & action, size_t function_index)
+{
+    if (isFrameValid(action.frame_start, action.frame_end, action.partition_start, action.partition_end))
+        return true;
+
+    IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
+    static Field null_field;
+    to.insert(null_field);
+    return false;
+}
+} // namespace
+
+// In window function, some of the functions must return nullable column.
+// Return nullable column functions: FIRST_VALUE, LAST_VALUE, NTH_VALUE, NTILE and all aggregation functions,
+//                                   LEAD/LAG(when receiving less than 3 parameters or when receiving 3 parameters
+//                                            one of the first and the third parameters is related with nullable)
+// Return not nullable column functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, ROW_NUMBER, RANK,
+//                                       LEAD/LAG(When receiving 3 parameters and the first and the third parameters
+//                                                are both not related with nullable)
 
 struct WindowFunctionRank final : public IWindowFunction
 {
@@ -39,10 +74,7 @@ struct WindowFunctionRank final : public IWindowFunction
         : IWindowFunction(argument_types_)
     {}
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     DataTypePtr getReturnType() const override
     {
@@ -54,14 +86,10 @@ struct WindowFunctionRank final : public IWindowFunction
         return std::make_shared<DataTypeInt64>();
     }
 
-    void windowInsertResultInto(
-        WindowTransformAction & action,
-        size_t function_index,
-        const ColumnNumbers &) override
+    void windowInsertResultInto(WindowTransformAction & action, size_t function_index, const ColumnNumbers &) override
     {
         IColumn & to = *action.outputAt(action.current_row)[function_index];
-        assert_cast<ColumnInt64 &>(to).getData().push_back(
-            action.peer_group_start_row_number);
+        assert_cast<ColumnInt64 &>(to).getData().push_back(action.peer_group_start_row_number);
     }
 };
 
@@ -73,10 +101,7 @@ struct WindowFunctionDenseRank final : public IWindowFunction
         : IWindowFunction(argument_types_)
     {}
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     DataTypePtr getReturnType() const override
     {
@@ -88,14 +113,10 @@ struct WindowFunctionDenseRank final : public IWindowFunction
         return std::make_shared<DataTypeInt64>();
     }
 
-    void windowInsertResultInto(
-        WindowTransformAction & action,
-        size_t function_index,
-        const ColumnNumbers &) override
+    void windowInsertResultInto(WindowTransformAction & action, size_t function_index, const ColumnNumbers &) override
     {
         IColumn & to = *action.outputAt(action.current_row)[function_index];
-        assert_cast<ColumnInt64 &>(to).getData().push_back(
-            action.peer_group_number);
+        assert_cast<ColumnInt64 &>(to).getData().push_back(action.peer_group_number);
     }
 };
 
@@ -107,10 +128,7 @@ struct WindowFunctionRowNumber final : public IWindowFunction
         : IWindowFunction(argument_types_)
     {}
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     DataTypePtr getReturnType() const override
     {
@@ -122,14 +140,10 @@ struct WindowFunctionRowNumber final : public IWindowFunction
         return std::make_shared<DataTypeInt64>();
     }
 
-    void windowInsertResultInto(
-        WindowTransformAction & action,
-        size_t function_index,
-        const ColumnNumbers &) override
+    void windowInsertResultInto(WindowTransformAction & action, size_t function_index, const ColumnNumbers &) override
     {
         IColumn & to = *action.outputAt(action.current_row)[function_index];
-        assert_cast<ColumnInt64 &>(to).getData().push_back(
-            action.current_row_number);
+        assert_cast<ColumnInt64 &>(to).getData().push_back(action.current_row_number);
     }
 };
 
@@ -142,25 +156,20 @@ public:
         : IWindowFunction(argument_types_)
     {
         RUNTIME_CHECK(argument_types_.size() == 1);
-        return_type = argument_types_[0];
+        return_type = makeNullable(argument_types_[0]);
     }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return return_type;
-    }
+    DataTypePtr getReturnType() const override { return return_type; }
 
-    void windowInsertResultInto(
-        WindowTransformAction & action,
-        size_t function_index,
-        const ColumnNumbers & arguments) override
+    void windowInsertResultInto(WindowTransformAction & action, size_t function_index, const ColumnNumbers & arguments)
+        override
     {
         assert(action.frame_started);
+        if (!checkFrameValidAndHandleInvalidFrame(action, function_index))
+            return;
+
         IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
         const auto & value_column = *action.inputAt(action.frame_start)[arguments[0]];
         const auto & value_field = value_column[action.frame_start.row];
@@ -180,25 +189,20 @@ public:
         : IWindowFunction(argument_types_)
     {
         RUNTIME_CHECK(argument_types_.size() == 1);
-        return_type = argument_types_[0];
+        return_type = makeNullable(argument_types_[0]);
     }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return return_type;
-    }
+    DataTypePtr getReturnType() const override { return return_type; }
 
-    void windowInsertResultInto(
-        WindowTransformAction & action,
-        size_t function_index,
-        const ColumnNumbers & arguments) override
+    void windowInsertResultInto(WindowTransformAction & action, size_t function_index, const ColumnNumbers & arguments)
+        override
     {
         assert(action.frame_ended);
+        if (!checkFrameValidAndHandleInvalidFrame(action, function_index))
+            return;
+
         IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
 
         // Because [frame_start, frame_end), so we need to get the previous row of the frame_end.
@@ -233,20 +237,12 @@ public:
         default_value_setter = initDefaultValueSetter();
     }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return return_type;
-    }
+    DataTypePtr getReturnType() const override { return return_type; }
 
-    void windowInsertResultInto(
-        WindowTransformAction & action,
-        size_t function_index,
-        const ColumnNumbers & arguments) override
+    void windowInsertResultInto(WindowTransformAction & action, size_t function_index, const ColumnNumbers & arguments)
+        override
     {
         const auto & cur_block = action.blockAt(action.current_row);
 
@@ -355,7 +351,12 @@ private:
                 M(Int64)
 #undef M
             default:
-                throw Exception(fmt::format("the argument type of {} is invalid, expect integer, got {}", name, magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    fmt::format(
+                        "the argument type of {} is invalid, expect integer, got {}",
+                        name,
+                        magic_enum::enum_name(type_index)),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             };
         }
     }
@@ -370,10 +371,7 @@ struct LeadImpl
 {
     static constexpr auto name = "lead";
 
-    static bool locate(
-        const WindowTransformAction & action,
-        RowNumber & value_row,
-        UInt64 offset)
+    static bool locate(const WindowTransformAction & action, RowNumber & value_row, UInt64 offset)
     {
         return action.lead(value_row, offset);
     }
@@ -383,10 +381,7 @@ struct LagImpl
 {
     static constexpr auto name = "lag";
 
-    static bool locate(
-        const WindowTransformAction & action,
-        RowNumber & value_row,
-        UInt64 offset)
+    static bool locate(const WindowTransformAction & action, RowNumber & value_row, UInt64 offset)
     {
         return action.lag(value_row, offset);
     }

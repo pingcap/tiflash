@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,9 +39,10 @@ FLATTEN_INLINE static inline void LoopTwoColumns(
         auto b_size = b_offsets[i] - b_prev_offset;
 
         // Remove last zero byte.
-        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1},
-             {reinterpret_cast<const char *>(&b_data[b_prev_offset]), b_size - 1},
-             i);
+        func(
+            {reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1},
+            {reinterpret_cast<const char *>(&b_data[b_prev_offset]), b_size - 1},
+            i);
 
         a_prev_offset = a_offsets[i];
         b_prev_offset = b_offsets[i];
@@ -51,11 +52,7 @@ FLATTEN_INLINE static inline void LoopTwoColumns(
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
 template <typename Chars, typename Offsets, typename F>
-FLATTEN_INLINE static inline void LoopOneColumn(
-    const Chars & a_data,
-    const Offsets & a_offsets,
-    size_t size,
-    F && func)
+FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offsets & a_offsets, size_t size, F && func)
 {
     uint64_t a_prev_offset = 0;
 

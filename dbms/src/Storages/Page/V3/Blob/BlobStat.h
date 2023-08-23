@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,41 +60,22 @@ public:
         double sm_valid_rate = 0.0;
 
     public:
-        BlobStat(
-            BlobFileId id_,
-            SpaceMap::SpaceMapType sm_type,
-            UInt64 sm_max_caps_,
-            BlobStatType type_)
+        BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_)
             : id(id_)
             , type(type_)
             , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
             , sm_max_caps(sm_max_caps_)
         {}
 
-        [[nodiscard]] std::unique_lock<std::mutex> lock()
-        {
-            return std::unique_lock(sm_lock);
-        }
+        [[nodiscard]] std::unique_lock<std::mutex> lock() { return std::unique_lock(sm_lock); }
 
-        [[nodiscard]] std::unique_lock<std::mutex> defer_lock()
-        {
-            return std::unique_lock(sm_lock, std::defer_lock);
-        }
+        [[nodiscard]] std::unique_lock<std::mutex> defer_lock() { return std::unique_lock(sm_lock, std::defer_lock); }
 
-        bool isNormal() const
-        {
-            return type.load() == BlobStatType::NORMAL;
-        }
+        bool isNormal() const { return type.load() == BlobStatType::NORMAL; }
 
-        bool isReadOnly() const
-        {
-            return type.load() == BlobStatType::READ_ONLY;
-        }
+        bool isReadOnly() const { return type.load() == BlobStatType::READ_ONLY; }
 
-        void changeToReadOnly()
-        {
-            type.store(BlobStatType::READ_ONLY);
-        }
+        void changeToReadOnly() { type.store(BlobStatType::READ_ONLY); }
 
         BlobFileOffset getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &);
 
@@ -125,10 +106,7 @@ public:
     using BlobStatPtr = std::shared_ptr<BlobStat>;
 
 public:
-    BlobStats(
-        LoggerPtr log_,
-        PSDiskDelegatorPtr delegator_,
-        BlobConfig & config);
+    BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig & config);
 
     // Don't require a lock from BlobStats When you already hold a BlobStat lock
     //
@@ -164,7 +142,10 @@ public:
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
          * 
          */
-    std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, PageType page_type, const std::lock_guard<std::mutex> &);
+    std::pair<BlobStatPtr, BlobFileId> chooseStat(
+        size_t buf_size,
+        PageType page_type,
+        const std::lock_guard<std::mutex> &);
 
     BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 

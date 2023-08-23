@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,18 +45,19 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     PSDiskDelegatorPtr & delegator,
     const WALConfig & config)
 {
-    auto reader = WALStoreReader::create(storage_name,
-                                         provider,
-                                         delegator,
-                                         config.getRecoverMode());
+    auto reader = WALStoreReader::create(storage_name, provider, delegator, config.getRecoverMode());
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num, std::move(config))),
+        std::unique_ptr<WALStore>(
+            new WALStore(std::move(storage_name), delegator, provider, last_log_num, std::move(config))),
         reader};
 }
 
-WALStoreReaderPtr WALStore::createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStore::createReaderForFiles(
+    const String & identifier,
+    const LogFilenameSet & log_filenames,
+    const ReadLimiterPtr & read_limiter)
 {
     return WALStoreReader::create(identifier, provider, log_filenames, config.getRecoverMode(), read_limiter);
 }
@@ -76,8 +77,7 @@ WALStore::WALStore(
     , bytes_on_disk(0)
     , logger(Logger::get(storage_name))
     , config(config_)
-{
-}
+{}
 
 void WALStore::apply(String && serialized_edit, const WriteLimiterPtr & write_limiter)
 {
@@ -165,7 +165,11 @@ void WALStore::updateDiskUsage(const LogFilenameSet & log_filenames)
     }
 }
 
-WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_files, UInt64 snap_sequence, std::function<UInt64(const String & record)> max_sequence_getter, bool force)
+WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(
+    size_t max_persisted_log_files,
+    UInt64 snap_sequence,
+    std::function<UInt64(const String & record)> max_sequence_getter,
+    bool force)
 {
     // First we simply check whether the number of files is enough for compaction
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
@@ -203,7 +207,8 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
     {
         if (iter->log_num >= current_writing_log_num)
             continue;
-        if (!found_log_file_smaller_than_snap_sequence && getLogFileMaxSequence(*iter, max_sequence_getter) > snap_sequence)
+        if (!found_log_file_smaller_than_snap_sequence
+            && getLogFileMaxSequence(*iter, max_sequence_getter) > snap_sequence)
             continue;
 
         found_log_file_smaller_than_snap_sequence = true;
@@ -261,15 +266,14 @@ bool WALStore::saveSnapshot(
         fmt_buf.joinStr(
             files_snap.persisted_log_files.begin(),
             files_snap.persisted_log_files.end(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.append(arg.filename(arg.stage));
-            },
+            [](const auto & arg, FmtBuffer & fb) { fb.append(arg.filename(arg.stage)); },
             ", ");
-        fmt_buf.fmtAppend("] [dump_cost={}] [num_records={}] [file={}] [size={}].",
-                          files_snap.dump_elapsed_ms,
-                          files_snap.num_records,
-                          normal_fullname,
-                          serialized_snap.size());
+        fmt_buf.fmtAppend(
+            "] [dump_cost={}] [num_records={}] [file={}] [size={}].",
+            files_snap.dump_elapsed_ms,
+            files_snap.num_records,
+            normal_fullname,
+            serialized_snap.size());
         return fmt_buf.toString();
     };
     LOG_INFO(logger, get_logging_str());
@@ -293,14 +297,21 @@ void WALStore::removeLogFiles(const LogFilenameSet & log_filenames)
     }
 }
 
-UInt64 WALStore::getLogFileMaxSequence(const LogFilename & log_filename, std::function<UInt64(const String & record)> max_sequence_getter)
+UInt64 WALStore::getLogFileMaxSequence(
+    const LogFilename & log_filename,
+    std::function<UInt64(const String & record)> max_sequence_getter)
 {
     std::unique_lock<std::mutex> lock(log_file_max_sequences_cache_mutex);
     auto iter = log_file_max_sequences_cache.find(log_filename);
     if (iter != log_file_max_sequences_cache.end())
         return iter->second;
 
-    auto last_record = WALStoreReader::getLastRecordInLogFile(log_filename, provider, config.getRecoverMode(), /*read_limiter*/ nullptr, logger);
+    auto last_record = WALStoreReader::getLastRecordInLogFile(
+        log_filename,
+        provider,
+        config.getRecoverMode(),
+        /*read_limiter*/ nullptr,
+        logger);
     if (last_record.empty())
         return 0; // empty log file
 

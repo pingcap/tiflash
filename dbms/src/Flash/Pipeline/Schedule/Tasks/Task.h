@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,10 @@ class PipelineExecutorContext;
 class Task
 {
 public:
-    Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+    Task(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     // Only used for unit test.
     explicit Task(PipelineExecutorContext & exec_context_);
@@ -80,6 +83,10 @@ public:
     }
 
     const String & getQueryId() const;
+
+    const String & getResourceGroupName() const;
+
+    const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 
 public:
     LoggerPtr log;
@@ -115,5 +122,4 @@ private:
     bool is_finalized = false;
 };
 using TaskPtr = std::unique_ptr<Task>;
-
 } // namespace DB

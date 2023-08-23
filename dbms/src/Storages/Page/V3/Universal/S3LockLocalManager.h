@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,8 +45,10 @@ public:
     // `last_upload_sequence`, copy the checkpoint info from the latest
     // manifest to `directory` and return a `ManifestFilePrefix`.
     // Otherwise it returns std::nullopt.
-    std::optional<CheckpointProto::ManifestFilePrefix>
-    initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_, const universal::PageDirectoryPtr & directory);
+    std::optional<CheckpointProto::ManifestFilePrefix> initStoreInfo(
+        StoreID actual_store_id,
+        DB::S3::S3LockClientPtr s3lock_client_,
+        const universal::PageDirectoryPtr & directory);
 
     void waitUntilInited();
 

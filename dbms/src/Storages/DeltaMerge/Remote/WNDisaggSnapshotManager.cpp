@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,11 @@ void WNDisaggSnapshotManager::clearExpiredSnapshots()
     {
         if (iter->second.expired_at < now)
         {
-            LOG_INFO(log, "Remove expired Disaggregated Snapshot, task_id={} expired_at={:%Y-%m-%d %H:%M:%S}", iter->first, iter->second.expired_at);
+            LOG_INFO(
+                log,
+                "Remove expired Disaggregated Snapshot, task_id={} expired_at={:%Y-%m-%d %H:%M:%S}",
+                iter->first,
+                iter->second.expired_at);
             iter = snapshots.erase(iter);
         }
         else

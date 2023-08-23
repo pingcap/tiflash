@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,8 @@ std::pair<size_t, size_t> copyColumnsData(
         }
         else
         {
-            auto [actual_offset, actual_limit] = RowKeyFilter::getPosRangeOfSorted(*range, pk_col, rows_offset, rows_limit);
+            auto [actual_offset, actual_limit]
+                = RowKeyFilter::getPosRangeOfSorted(*range, pk_col, rows_offset, rows_limit);
             for (size_t col_index = 0; col_index < to.size(); ++col_index)
                 to[col_index]->insertRangeFrom(*from[col_index], actual_offset, actual_limit);
             return {actual_offset, actual_limit};

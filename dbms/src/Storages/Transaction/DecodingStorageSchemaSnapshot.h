@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +71,11 @@ struct DecodingStorageSchemaSnapshot
     // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
     Int64 decoding_schema_epoch;
 
-    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_, Int64 decoding_schema_epoch_)
+    DecodingStorageSchemaSnapshot(
+        DM::ColumnDefinesPtr column_defines_,
+        const TiDB::TableInfo & table_info_,
+        const DM::ColumnDefine & original_handle_,
+        Int64 decoding_schema_epoch_)
         : column_defines{std::move(column_defines_)}
         , pk_is_handle{table_info_.pk_is_handle}
         , is_common_handle{table_info_.is_common_handle}

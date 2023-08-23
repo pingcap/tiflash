@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,6 +47,10 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 // such as mock TiDB table using TiFlash SQL parser, and getting field type for `void` column in DAG.
 // Note that not every TiFlash type has a corresponding TiDB type,
 // caller should make sure the source type is valid, otherwise exception will be thrown.
-ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value, bool for_test);
+ColumnInfo reverseGetColumnInfo(
+    const NameAndTypePair & column,
+    ColumnID id,
+    const Field & default_value,
+    bool for_test);
 
 } // namespace DB

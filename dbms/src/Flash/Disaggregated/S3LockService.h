@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,9 +58,13 @@ public:
 
     ~S3LockService() = default;
 
-    grpc::Status tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response);
+    grpc::Status tryAddLock(
+        const disaggregated::TryAddLockRequest * request,
+        disaggregated::TryAddLockResponse * response);
 
-    grpc::Status tryMarkDelete(const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response);
+    grpc::Status tryMarkDelete(
+        const disaggregated::TryMarkDeleteRequest * request,
+        disaggregated::TryMarkDeleteResponse * response);
 
 private:
     struct DataFileMutex;
@@ -70,21 +74,12 @@ private:
         std::mutex file_mutex;
         UInt32 ref_count = 0;
 
-        void lock()
-        {
-            file_mutex.lock();
-        }
+        void lock() { file_mutex.lock(); }
 
-        void unlock()
-        {
-            file_mutex.unlock();
-        }
+        void unlock() { file_mutex.unlock(); }
 
         // must be protected by the mutex on the whole map
-        void addRefCount()
-        {
-            ++ref_count;
-        }
+        void addRefCount() { ++ref_count; }
 
         // must be protected by the mutex on the whole map
         UInt32 decreaseRefCount()
@@ -94,7 +89,11 @@ private:
         }
     };
 
-    bool tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response);
+    bool tryAddLockImpl(
+        const String & data_file_key,
+        UInt64 lock_store_id,
+        UInt64 lock_seq,
+        disaggregated::TryAddLockResponse * response);
 
     bool tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response);
 

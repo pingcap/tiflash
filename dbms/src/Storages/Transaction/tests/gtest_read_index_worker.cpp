@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,11 +31,9 @@ namespace tests
 class ReadIndexTest : public ::testing::Test
 {
 public:
-    ReadIndexTest()
-        = default;
+    ReadIndexTest() = default;
 
-    void SetUp() override
-    {}
+    void SetUp() override {}
 
     static size_t computeCntUseHistoryTasks(ReadIndexWorkerManager & manager);
     static void testBasic();
@@ -54,21 +52,15 @@ void ReadIndexTest::testError()
         proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
-    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(
-        proxy_helper,
-        5,
-        [&]() {
-            return std::chrono::milliseconds(10);
-        });
+    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
+        return std::chrono::milliseconds(10);
+    });
     {
         std::vector<kvrpcpb::ReadIndexRequest> reqs;
         std::vector<kvrpcpb::ReadIndexResponse> resps;
         std::list<ReadIndexFuturePtr> futures;
         {
-            reqs = {
-                make_read_index_reqs(2, 10),
-                make_read_index_reqs(2, 12),
-                make_read_index_reqs(2, 13)};
+            reqs = {make_read_index_reqs(2, 10), make_read_index_reqs(2, 12), make_read_index_reqs(2, 13)};
             for (const auto & req : reqs)
             {
                 auto future = manager->genReadIndexFuture(req);
@@ -112,10 +104,7 @@ void ReadIndexTest::testError()
         }
 
         {
-            reqs = {
-                make_read_index_reqs(2, 10),
-                make_read_index_reqs(2, 12),
-                make_read_index_reqs(2, 13)};
+            reqs = {make_read_index_reqs(2, 10), make_read_index_reqs(2, 12), make_read_index_reqs(2, 13)};
             for (const auto & req : reqs)
             {
                 auto future = manager->genReadIndexFuture(req);
@@ -279,9 +268,7 @@ void ReadIndexTest::testNormal()
     auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(
         proxy_helper,
         5,
-        [&]() {
-            return std::chrono::milliseconds(10);
-        },
+        [&]() { return std::chrono::milliseconds(10); },
         3);
 
     for (size_t id = 0; id < manager->workers.size(); ++id)
@@ -303,6 +290,7 @@ void ReadIndexTest::testNormal()
     {
         std::vector<kvrpcpb::ReadIndexRequest> reqs;
         {
+            // One request of start_ts = 10 for every region.
             reqs.reserve(proxy_instance.size());
             for (size_t i = 0; i < proxy_instance.size(); ++i)
             {
@@ -375,9 +363,7 @@ void ReadIndexTest::testNormal()
         }
         {
             // set region id to let mock proxy drop all related tasks.
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) {
-                proxy.region_id_to_drop.emplace(1);
-            });
+            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.emplace(1); });
             std::vector<kvrpcpb::ReadIndexRequest> reqs;
 
             reqs = {make_read_index_reqs(5, 12), make_read_index_reqs(1, 12), make_read_index_reqs(2, 12)};
@@ -391,23 +377,28 @@ void ReadIndexTest::testNormal()
             ASSERT(!GCMonitor::instance().checkClean());
             {
                 // test timeout 0ms
-                proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) {
-                    proxy.region_id_to_drop.emplace(9);
-                });
+                proxy_instance.unsafeInvokeForTest(
+                    [](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.emplace(9); });
                 auto resps = manager->batchReadIndex({make_read_index_reqs(9, 12)}, 0);
-                ASSERT_EQ(resps[0].first.region_error().has_region_not_found(), true); // timeout to region error not found
+                ASSERT_EQ(
+                    resps[0].first.region_error().has_region_not_found(),
+                    true); // timeout to region error not found
             }
 
             // disable drop region task
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) {
-                proxy.region_id_to_drop.clear();
-            });
+            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.clear(); });
 
-            ReadIndexWorker::setMaxReadIndexTaskTimeout(std::chrono::milliseconds{10}); // set max task timeout in worker
-            resps = manager->batchReadIndex(reqs, 500); // the old task is still in worker, poll from mock proxy failed, check timeout and set region error `server_is_busy
-            ASSERT_EQ(resps[1].first.region_error().has_server_is_busy(), true); // meet region error `server_is_busy` for task timeout
+            ReadIndexWorker::setMaxReadIndexTaskTimeout(
+                std::chrono::milliseconds{10}); // set max task timeout in worker
+            resps = manager->batchReadIndex(
+                reqs,
+                500); // the old task is still in worker, poll from mock proxy failed, check timeout and set region error `server_is_busy
+            ASSERT_EQ(
+                resps[1].first.region_error().has_server_is_busy(),
+                true); // meet region error `server_is_busy` for task timeout
 
-            ReadIndexWorker::setMaxReadIndexTaskTimeout(std::chrono::milliseconds{8 * 1000}); // set max task timeout in worker to previous.
+            ReadIndexWorker::setMaxReadIndexTaskTimeout(
+                std::chrono::milliseconds{8 * 1000}); // set max task timeout in worker to previous.
             resps = manager->batchReadIndex(reqs, 500);
             ASSERT_EQ(resps[1].first.read_index(), 669);
         }
@@ -423,9 +414,7 @@ void ReadIndexTest::testNormal()
             }
 
             // set region id to let mock proxy drop all related tasks.
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) {
-                proxy.region_id_to_drop.emplace(1);
-            });
+            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.emplace(1); });
 
             resps = proxy_helper.batchReadIndex_v2(reqs, 50);
 
@@ -433,9 +422,7 @@ void ReadIndexTest::testNormal()
             ASSERT_EQ(resps[1].first.region_error().has_region_not_found(), true); // timeout to region error not found
             ASSERT_EQ(resps[2].first.read_index(), 669);
 
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) {
-                proxy.region_id_to_drop.clear();
-            });
+            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.clear(); });
         }
         {
             // test region not exists
@@ -460,17 +447,16 @@ void ReadIndexTest::testBatch()
         proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
-    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(
-        proxy_helper,
-        5,
-        [&]() {
-            return std::chrono::milliseconds(10);
-        });
+    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
+        return std::chrono::milliseconds(10);
+    });
     // DO NOT run manager and mock proxy in other threads.
     {
         {
             // run with empty `waiting_tasks`
-            manager->getWorkerByRegion(0).data_map.getDataNode(0)->runOneRound(proxy_helper, manager->getWorkerByRegion(0).read_index_notify_ctrl);
+            manager->getWorkerByRegion(0).data_map.getDataNode(0)->runOneRound(
+                proxy_helper,
+                manager->getWorkerByRegion(0).read_index_notify_ctrl);
         }
         {
             // test upsert region
@@ -482,16 +468,14 @@ void ReadIndexTest::testBatch()
 
         std::vector<kvrpcpb::ReadIndexRequest> reqs;
         std::deque<ReadIndexFuturePtr> futures;
-        reqs = {
-            make_read_index_reqs(0, 1),
-            make_read_index_reqs(0, 2),
-            make_read_index_reqs(0, 3),
-            make_read_index_reqs(1, 2),
-            make_read_index_reqs(1, 3)};
+        reqs
+            = {make_read_index_reqs(0, 1),
+               make_read_index_reqs(0, 2),
+               make_read_index_reqs(0, 3),
+               make_read_index_reqs(1, 2),
+               make_read_index_reqs(1, 3)};
         // no waiting task
-        ASSERT_EQ(
-            manager->getWorkerByRegion(0).data_map.getDataNode(0)->waiting_tasks.size(),
-            0);
+        ASSERT_EQ(manager->getWorkerByRegion(0).data_map.getDataNode(0)->waiting_tasks.size(), 0);
         // poll failed
         for (const auto & req : reqs)
         {
@@ -500,17 +484,21 @@ void ReadIndexTest::testBatch()
             futures.emplace_back(future);
         }
         // worker 0 has 3 waiting tasks.
-        ASSERT_EQ(
-            manager->getWorkerByRegion(0).data_map.getDataNode(0)->waiting_tasks.size(),
-            3);
+        ASSERT_EQ(manager->getWorkerByRegion(0).data_map.getDataNode(0)->waiting_tasks.size(), 3);
         // run worker, clean waiting task.
         manager->runOneRoundAll();
-        ASSERT_EQ(
-            manager->getWorkerByRegion(0).data_map.getDataNode(0)->waiting_tasks.size(),
-            0);
+        ASSERT_EQ(manager->getWorkerByRegion(0).data_map.getDataNode(0)->waiting_tasks.size(), 0);
 
-        ASSERT_EQ(1, manager->getWorkerByRegion(0).data_map.getDataNode(0)->running_tasks.size()); // worker 0 has 1 running task.
-        ASSERT_EQ(1, manager->getWorkerByRegion(1).data_map.getDataNode(1)->running_tasks.size()); // worker 1 has 1 running task.
+        ASSERT_EQ(
+            1,
+            manager->getWorkerByRegion(0)
+                .data_map.getDataNode(0)
+                ->running_tasks.size()); // worker 0 has 1 running task.
+        ASSERT_EQ(
+            1,
+            manager->getWorkerByRegion(1)
+                .data_map.getDataNode(1)
+                ->running_tasks.size()); // worker 1 has 1 running task.
         {
             for (auto & r : proxy_instance.regions)
             {
@@ -525,7 +513,8 @@ void ReadIndexTest::testBatch()
         }
         {
             // continuously run same worker, time duration must bigger than setting.
-            ASSERT_FALSE(manager->getWorkerByRegion(0).lastRunTimeout(std::chrono::milliseconds(500))); // failed to check last run timeout
+            ASSERT_FALSE(manager->getWorkerByRegion(0).lastRunTimeout(
+                std::chrono::milliseconds(500))); // failed to check last run timeout
         }
         manager->runOneRoundAll();
 
@@ -553,7 +542,9 @@ void ReadIndexTest::testBatch()
 
         manager->runOneRoundAll(); // failed to execute `fn_make_read_index_task`.
 
-        ASSERT_EQ(0, manager->getWorkerByRegion(8192).data_map.getDataNode(8192)->running_tasks.size()); // no running task
+        ASSERT_EQ(
+            0,
+            manager->getWorkerByRegion(8192).data_map.getDataNode(8192)->running_tasks.size()); // no running task
 
         auto resp = future->poll();
         ASSERT(resp);
@@ -570,9 +561,7 @@ void ReadIndexTest::testBatch()
         std::list<ReadIndexFuturePtr> futures;
         std::vector<kvrpcpb::ReadIndexResponse> resps;
 
-        reqs = {
-            make_read_index_reqs(0, 5),
-            make_read_index_reqs(0, 6)};
+        reqs = {make_read_index_reqs(0, 5), make_read_index_reqs(0, 6)};
         for (const auto & req : reqs)
         {
             auto future = manager->genReadIndexFuture(req);
@@ -631,7 +620,9 @@ void ReadIndexTest::testBatch()
             ASSERT_EQ(resp->read_index(), 670);
         }
 
-        ASSERT_EQ(manager->getWorkerByRegion(0).data_map.getDataNode(0)->history_success_tasks->second.read_index(), 670);
+        ASSERT_EQ(
+            manager->getWorkerByRegion(0).data_map.getDataNode(0)->history_success_tasks->second.read_index(),
+            670);
     }
     {
         MockStressTestCfg::enable = true;

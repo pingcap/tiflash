@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,10 @@ struct MockRaftCommand
     //    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file(database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields=1, cfs="write,default"])"
     static void dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-    static void dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context & context, const ASTs & args, DBGInvoker::Printer output);
+    static void dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(
+        Context & context,
+        const ASTs & args,
+        DBGInvoker::Printer output);
 
     // Apply snapshot for a region. (apply a pre-handle snapshot)
     // Usage:

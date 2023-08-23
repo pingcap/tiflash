@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,9 +52,10 @@ struct ClientConfigurationPerRequest
 
 struct PocoHTTPClientConfiguration
 {
-    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = [](const Aws::Http::HttpRequest &) {
-        return ClientConfigurationPerRequest();
-    };
+    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration
+        = [](const Aws::Http::HttpRequest &) {
+              return ClientConfigurationPerRequest();
+          };
     std::shared_ptr<RemoteHostFilter> remote_host_filter;
     UInt32 s3_max_redirects;
     bool enable_s3_requests_logging;
@@ -81,8 +82,7 @@ public:
     explicit PocoHTTPResponse(const std::shared_ptr<const Aws::Http::HttpRequest> request)
         : Aws::Http::Standard::StandardHttpResponse(request)
         , body_stream(request->GetResponseStreamFactory())
-    {
-    }
+    {}
 
     void SetResponseBody(Aws::IStream & incoming_stream, SessionPtr & session_) /// NOLINT
     {
@@ -92,26 +92,23 @@ public:
 
     void SetResponseBody(Aws::IStream & incoming_stream, PooledHTTPSessionPtr & session_) /// NOLINT
     {
-        body_stream = Aws::Utils::Stream::ResponseStream(
-            Aws::New<SessionAwareIOStream<PooledHTTPSessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf()));
+        body_stream = Aws::Utils::Stream::ResponseStream(Aws::New<SessionAwareIOStream<PooledHTTPSessionPtr>>(
+            "http result streambuf",
+            session_,
+            incoming_stream.rdbuf()));
     }
 
     void SetResponseBody(std::string & response_body) /// NOLINT
     {
-        auto * stream = Aws::New<std::stringstream>("http result buf", response_body); // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        auto * stream
+            = Aws::New<std::stringstream>("http result buf", response_body); // STYLE_CHECK_ALLOW_STD_STRING_STREAM
         stream->exceptions(std::ios::failbit);
         body_stream = Aws::Utils::Stream::ResponseStream(std::move(stream));
     }
 
-    Aws::IOStream & GetResponseBody() const override
-    {
-        return body_stream.GetUnderlyingStream();
-    }
+    Aws::IOStream & GetResponseBody() const override { return body_stream.GetUnderlyingStream(); }
 
-    Aws::Utils::Stream::ResponseStream && SwapResponseStreamOwnership() override
-    {
-        return std::move(body_stream);
-    }
+    Aws::Utils::Stream::ResponseStream && SwapResponseStreamOwnership() override { return std::move(body_stream); }
 
 private:
     Aws::Utils::Stream::ResponseStream body_stream;
@@ -122,7 +119,9 @@ private:
 class PocoHTTPClient : public Aws::Http::HttpClient
 {
 public:
-    explicit PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration, const PocoHTTPClientConfiguration & poco_configuration);
+    explicit PocoHTTPClient(
+        const Aws::Client::ClientConfiguration & client_configuration,
+        const PocoHTTPClientConfiguration & poco_configuration);
     ~PocoHTTPClient() override = default;
 
     std::shared_ptr<Aws::Http::HttpResponse> MakeRequest(

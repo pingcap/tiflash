@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,13 +32,9 @@ public:
         : SinkOp(exec_context_, req_id)
         , index(index_)
         , agg_context(agg_context_)
-    {
-    }
+    {}
 
-    String getName() const override
-    {
-        return "AggregateBuildSinkOp";
-    }
+    String getName() const override { return "AggregateBuildSinkOp"; }
 
 protected:
     void operateSuffixImpl() override;

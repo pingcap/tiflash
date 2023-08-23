@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,7 +87,9 @@ public:
         return v;
     }
 
-    template <typename U, std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>> * = nullptr>
+    template <
+        typename U,
+        std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>> * = nullptr>
     operator U() const // NOLINT(google-explicit-constructor)
     {
         Int256 v = dec.value;
@@ -289,7 +291,11 @@ public:
     Field(Field && rhs) { create(std::move(rhs)); }
 
     template <typename T>
-    Field(T && rhs, std::integral_constant<int, Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr) // NOLINT(google-explicit-constructor)
+    Field(
+        T && rhs,
+        std::integral_constant<
+            int,
+            Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr) // NOLINT(google-explicit-constructor)
     {
         createConcrete(std::forward<T>(rhs));
     }
@@ -371,7 +377,7 @@ public:
     T & get()
     {
         using TWithoutRef = std::remove_reference_t<T>;
-        TWithoutRef * MAY_ALIAS ptr = reinterpret_cast<TWithoutRef *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<TWithoutRef *>(&storage);
         return *ptr;
     };
 
@@ -379,7 +385,7 @@ public:
     const T & get() const
     {
         using TWithoutRef = std::remove_reference_t<T>;
-        const TWithoutRef * MAY_ALIAS ptr = reinterpret_cast<const TWithoutRef *>(&storage);
+        const auto * MAY_ALIAS ptr = reinterpret_cast<const TWithoutRef *>(&storage);
         return *ptr;
     };
 
@@ -408,8 +414,9 @@ public:
     {
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
-            throw Exception("Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
-                            ErrorCodes::BAD_GET);
+            throw Exception(
+                "Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
+                ErrorCodes::BAD_GET);
         return get<T>();
     }
 
@@ -418,8 +425,9 @@ public:
     {
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
-            throw Exception("Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
-                            ErrorCodes::BAD_GET);
+            throw Exception(
+                "Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
+                ErrorCodes::BAD_GET);
         return get<T>();
     }
 
@@ -545,7 +553,20 @@ public:
     bool operator!=(const Field & rhs) const { return !(*this == rhs); }
 
 private:
-    std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), Null, UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>
+    std::aligned_union_t<
+        DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
+        Null,
+        UInt64,
+        UInt128,
+        Int64,
+        Float64,
+        String,
+        Array,
+        Tuple,
+        DecimalField<Decimal32>,
+        DecimalField<Decimal64>,
+        DecimalField<Decimal128>,
+        DecimalField<Decimal256>>
         storage;
 
     Types::Which which;
@@ -561,7 +582,7 @@ private:
     void createConcrete(T && x)
     {
         using JustT = std::decay_t<T>;
-        JustT * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
@@ -571,7 +592,7 @@ private:
     void assignConcrete(T && x)
     {
         using JustT = std::decay_t<T>;
-        JustT * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
         *ptr = std::forward<T>(x);
     }
 
@@ -648,7 +669,7 @@ private:
 
     void create(const char * data, size_t size)
     {
-        String * MAY_ALIAS ptr = reinterpret_cast<String *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<String *>(&storage);
         new (ptr) String(data, size);
         which = Types::String;
     }

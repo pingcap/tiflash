@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,8 +82,7 @@ public:
 
     void bindThreadCPUAffinity() const;
 #else
-    void init(const CPUAffinityConfig &)
-    {}
+    void init(const CPUAffinityConfig &) {}
 
     void bindQueryThread(pid_t) const {}
     void bindOtherThread(pid_t) const {}
@@ -92,10 +91,7 @@ public:
     void bindSelfOtherThread() const {}
     void bindSelfGrpcThread() const {}
 
-    static std::string toString()
-    {
-        return "Not Support";
-    }
+    static std::string toString() { return "Not Support"; }
 
     void bindThreadCPUAffinity() const {}
 #endif

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -137,13 +137,15 @@ inline ::testing::AssertionResult ColumnNameWithIDPairsCompare( //
     if (lhs.first.equals(rhs.first) && lhs.second.equals(rhs.second))
         return ::testing::AssertionSuccess();
     else
-        return ::testing::internal::EqFailure(lhs_expr,
-                                              rhs_expr,
-                                              "<" + lhs.first.toString() + "," + lhs.second.toString() + ">",
-                                              "<" + rhs.first.toString() + "," + rhs.second.toString() + ">",
-                                              false);
+        return ::testing::internal::EqFailure(
+            lhs_expr,
+            rhs_expr,
+            "<" + lhs.first.toString() + "," + lhs.second.toString() + ">",
+            "<" + rhs.first.toString() + "," + rhs.second.toString() + ">",
+            false);
 }
-#define ASSERT_COLUMN_NAME_ID_PAIR_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::ColumnNameWithIDPairsCompare, val1, val2)
+#define ASSERT_COLUMN_NAME_ID_PAIR_EQ(val1, val2) \
+    ASSERT_PRED_FORMAT2(::DB::tests::ColumnNameWithIDPairsCompare, val1, val2)
 
 TEST(CyclicRenameResolver_test, resolve_id_simple_cycle)
 {
@@ -158,11 +160,17 @@ TEST(CyclicRenameResolver_test, resolve_id_simple_cycle)
 
     ASSERT_EQ(rename_result.size(), 3UL);
     // a -> tmp_a
-    ASSERT_COLUMN_NAME_ID_PAIR_EQ(rename_result[0], std::make_pair(ColumnNameWithID{"a", 1L}, generator(ColumnNameWithID{"a", 1})));
+    ASSERT_COLUMN_NAME_ID_PAIR_EQ(
+        rename_result[0],
+        std::make_pair(ColumnNameWithID{"a", 1L}, generator(ColumnNameWithID{"a", 1})));
     // b -> a
-    ASSERT_COLUMN_NAME_ID_PAIR_EQ(rename_result[1], std::make_pair(ColumnNameWithID{"b", 2L}, ColumnNameWithID{"a", 2L}));
+    ASSERT_COLUMN_NAME_ID_PAIR_EQ(
+        rename_result[1],
+        std::make_pair(ColumnNameWithID{"b", 2L}, ColumnNameWithID{"a", 2L}));
     // tmp_a -> b
-    ASSERT_COLUMN_NAME_ID_PAIR_EQ(rename_result[2], std::make_pair(generator(ColumnNameWithID{"a", 1}), ColumnNameWithID{"b", 1}));
+    ASSERT_COLUMN_NAME_ID_PAIR_EQ(
+        rename_result[2],
+        std::make_pair(generator(ColumnNameWithID{"a", 1}), ColumnNameWithID{"b", 1}));
 }
 
 } // namespace DB::tests

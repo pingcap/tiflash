@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,5 +38,8 @@ size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStrea
   * Return: <Block, from_delta>
   * The block containing only the rows that pass the filter and a flag indicating whether the block is from the delta.
   */
-std::pair<Block, bool> readBlockWithFilter(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter);
+std::pair<Block, bool> readBlockWithFilter(
+    SkippableBlockInputStreamPtr & stable,
+    SkippableBlockInputStreamPtr & delta,
+    const IColumn::Filter & filter);
 } // namespace DB::DM

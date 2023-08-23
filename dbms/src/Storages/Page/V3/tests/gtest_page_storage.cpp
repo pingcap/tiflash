@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,7 +111,8 @@ try
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        ReadBufferPtr buff
+            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wbs[i].putPage(page_id + i, /* tag */ 0, buff, buff_size);
     }
     WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
@@ -134,9 +135,7 @@ try
     };
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat, rate_target, LimiterType::UNKNOW);
 
         AtomicStopwatch read_watch;
         for (size_t i = 0; i < wb_nums; ++i)
@@ -150,9 +149,7 @@ try
     }
 
     {
-        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                        rate_target,
-                                                                        LimiterType::UNKNOW);
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat, rate_target, LimiterType::UNKNOW);
 
         std::vector<PageIdU64> page_ids;
         for (size_t i = 0; i < wb_nums; ++i)
@@ -206,9 +203,7 @@ try
     auto get_stat = [&consumed]() {
         return consumed;
     };
-    ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                    rate_target,
-                                                                    LimiterType::UNKNOW);
+    ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat, rate_target, LimiterType::UNKNOW);
 
     AtomicStopwatch read_watch;
     page_storage->gc(/*not_skip*/ false, nullptr, read_limiter);
@@ -350,9 +345,14 @@ try
 
     // Make sure in-disk data is encrypted.
 
-    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, PageTypeUtils::nextFileID(PageType::Normal, 1)),
-                                                                            -1,
-                                                                            nullptr);
+    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(
+        fmt::format(
+            "{}/{}{}",
+            getTemporaryPath(),
+            BlobFile::BLOB_PREFIX_NAME,
+            PageTypeUtils::nextFileID(PageType::Normal, 1)),
+        -1,
+        nullptr);
     file_read->pread(c_buff_read, buf_sz, 0);
     ASSERT_NE(c_buff_read, c_buff);
     file_read->pread(c_buff_read, buf_sz, buf_sz);
@@ -726,7 +726,9 @@ TEST_F(PageStorageTest, IngestFile)
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](
+                            const ExternalPageCallbacks::PathAndIdsVec &,
+                            const std::set<PageIdU64> & living_page_ids) -> void {
         times_remover_called += 1;
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(100), 0);
@@ -754,8 +756,18 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x01, buf_sz);
-        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
-        batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putPage(
+            2,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{64, 79, 128, 196, 256, 301}});
         batch.putRefPage(3, 2);
         batch.putRefPage(4, 2);
         try
@@ -783,11 +795,12 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x02, buf_sz);
-        batch.putPage(1,
-                      0,
-                      std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
-                      buf_sz, //
-                      PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz, //
+            PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
         page_storage->write(std::move(batch));
 
         auto page1 = page_storage->read(1);
@@ -830,8 +843,18 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x01, buf_sz);
-        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
-        batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putPage(
+            2,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{64, 79, 128, 196, 256, 301}});
         batch.putRefPage(3, 2);
         batch.putRefPage(4, 2);
         try
@@ -858,11 +881,12 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x02, buf_sz);
-        batch.putPage(1,
-                      0,
-                      std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
-                      buf_sz, //
-                      PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz, //
+            PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
         page_storage->write(std::move(batch));
 
         auto page1 = page_storage->read(1);
@@ -1206,7 +1230,9 @@ try
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called, &test_stage](
+                            const ExternalPageCallbacks::PathAndIdsVec &,
+                            const std::set<PageIdU64> & living_page_ids) -> void {
         times_remover_called += 1;
         switch (test_stage)
         {
@@ -1303,7 +1329,8 @@ try
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(
+                             ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
             return;
@@ -1314,9 +1341,7 @@ try
 
     // Start a PageStorage gc and suspend it before clean external page
     auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
-    auto th_gc = std::async([&]() {
-        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
-    });
+    auto th_gc = std::async([&]() { page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr); });
     sp_gc.waitAndPause();
 
     // mock table created while gc is running
@@ -1331,7 +1356,9 @@ try
             (*ptr) += 1; // mock access the storage inside callback
             return {};
         };
-        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
+        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](
+                                    const ExternalPageCallbacks::PathAndIdsVec &,
+                                    const std::set<PageIdU64> &) -> void {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)
                 return;
@@ -1362,7 +1389,8 @@ try
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(
+                             ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
             return;
@@ -1373,9 +1401,7 @@ try
 
     // Start a PageStorage gc and suspend it before clean external page
     auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
-    auto th_gc = std::async([&]() {
-        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
-    });
+    auto th_gc = std::async([&]() { page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr); });
     sp_gc.waitAndPause();
 
     // mock table dropped while gc is running
@@ -1442,7 +1468,12 @@ try
 
     {
         WriteBatch batch;
-        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz),
+            buf_sz,
+            PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
         batch.putRefPage(3, 1);
         batch.delPage(1);
         batch.putPage(4, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
