@@ -260,6 +260,8 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
+
+    prehandling_trace.deregisterTask(new_region->id());
 }
 
 std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
