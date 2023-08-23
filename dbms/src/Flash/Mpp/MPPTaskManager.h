@@ -74,8 +74,9 @@ using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 struct MPPQuery
 {
-    MPPQuery(const MPPQueryId & mpp_query_id, bool has_meaningful_gather_id_)
-        : mpp_query_operator_spill_contexts(std::make_shared<QueryOperatorSpillContexts>(mpp_query_id))
+    MPPQuery(const MPPQueryId & mpp_query_id, bool has_meaningful_gather_id_, UInt64 auto_spill_check_min_interval_ms)
+        : mpp_query_operator_spill_contexts(
+            std::make_shared<QueryOperatorSpillContexts>(mpp_query_id, auto_spill_check_min_interval_ms))
         , has_meaningful_gather_id(has_meaningful_gather_id_)
     {}
     MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
@@ -150,7 +151,10 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter != monitored_tasks.end())
         {
-            LOG_WARNING(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
+            LOG_WARNING(
+                log,
+                "task {} is repeatedly added to be monitored which is not an expected behavior!",
+                task_unique_id);
             return;
         }
 
@@ -163,7 +167,7 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter == monitored_tasks.end())
         {
-            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.");
+            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.", task_unique_id);
             return;
         }
 
@@ -236,7 +240,8 @@ public:
     std::pair<MPPTunnelPtr, String> findAsyncTunnel(
         const ::mpp::EstablishMPPConnectionRequest * request,
         EstablishCallData * call_data,
-        grpc::CompletionQueue * cq);
+        grpc::CompletionQueue * cq,
+        const Context & context);
 
     void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 
@@ -264,7 +269,10 @@ public:
     }
 
 private:
-    MPPQueryPtr addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id);
+    MPPQueryPtr addMPPQuery(
+        const MPPQueryId & query_id,
+        bool has_meaningful_gather_id,
+        UInt64 auto_spill_check_min_interval_ms);
     void removeMPPGatherTaskSet(MPPQueryPtr & mpp_query, const MPPGatherId & gather_id, bool on_abort);
     std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> getMPPQueryAndGatherTaskSet(const MPPGatherId & gather_id);
 };

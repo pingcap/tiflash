@@ -22,8 +22,7 @@ namespace DB::tests
 template <typename T>
 using Limits = std::numeric_limits<T>;
 
-// TODO Support more convenient testing framework for Window Function.
-// TODO Tests with frame should be added
+// TODO support unsigned int as the test framework not supports unsigned int so far.
 class LeadLag : public DB::tests::WindowTest
 {
 public:
@@ -367,8 +366,6 @@ CATCH
 TEST_F(LeadLag, Int)
 try
 {
-    // TODO support unsigned int.
-
     testInt<Int8>();
     testInt<Int16>();
     testInt<Int32>();
