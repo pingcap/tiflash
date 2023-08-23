@@ -197,10 +197,8 @@ class MPPTaskManager : private boost::noncopyable
 
     std::shared_ptr<MPPTaskMonitor> monitor;
 
-    // ResourceControl related
-    // key: resource_group_name, value: MPPTaskSchedulerPtr
-    // If resource control is enabled, will use scheduler in resource_group_schedulers.
-    // Otherwise use the global scheduler.
+    // ResourceControl related:
+    // <resource_group_name, min_tso_schduler>
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
     std::unordered_set<String> resource_group_schedulers_ready_to_delete;
     UInt64 resource_control_mpp_task_hard_limit;

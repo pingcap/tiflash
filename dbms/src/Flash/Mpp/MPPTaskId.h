@@ -27,14 +27,16 @@ struct MPPQueryId
     UInt64 local_query_id;
     UInt64 server_id;
     UInt64 start_ts;
+    // 1. For toString(), so we can check the resource group in log.
+    // 2. When release min tso threads, it's easy to find corresponding MinTSOScheduler by query_id.resource_group_name.
     String resource_group_name;
 
-    // gjt todo ?
-    MPPQueryId(UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts)
+    MPPQueryId(UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts, const String & resource_group_name_)
         : query_ts(query_ts)
         , local_query_id(local_query_id)
         , server_id(server_id)
         , start_ts(start_ts)
+        , resource_group_name(resource_group_name_)
     {}
     explicit MPPQueryId(const mpp::TaskMeta & task_meta)
         : query_ts(task_meta.query_ts())
@@ -78,9 +80,9 @@ struct MPPGatherId
         : gather_id(gather_id_)
         , query_id(query_id_)
     {}
-    MPPGatherId(Int64 gather_id_, UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts)
+    MPPGatherId(Int64 gather_id_, UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts, const String & resource_group_name)
         : gather_id(gather_id_)
-        , query_id(query_ts, local_query_id, server_id, start_ts)
+        , query_id(query_ts, local_query_id, server_id, start_ts, resource_group_name)
     {}
     explicit MPPGatherId(const mpp::TaskMeta & task_meta)
         : gather_id(task_meta.gather_id())
@@ -110,7 +112,7 @@ struct MPPTaskId
 {
     MPPTaskId()
         : task_id(unknown_task_id)
-        , gather_id(0, 0, 0, 0, 0){};
+        , gather_id(0, 0, 0, 0, 0, ""){};
 
     MPPTaskId(
         UInt64 start_ts,
@@ -118,9 +120,10 @@ struct MPPTaskId
         UInt64 server_id,
         Int64 gather_id,
         UInt64 query_ts,
-        UInt64 local_query_id)
+        UInt64 local_query_id,
+        const String resource_group_name)
         : task_id(task_id_)
-        , gather_id(gather_id, query_ts, local_query_id, server_id, start_ts)
+        , gather_id(gather_id, query_ts, local_query_id, server_id, start_ts, resource_group_name)
     {}
 
     explicit MPPTaskId(const mpp::TaskMeta & task_meta)

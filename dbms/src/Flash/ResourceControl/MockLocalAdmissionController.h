@@ -76,12 +76,11 @@ public:
         refill_token_callback = nullptr;
     }
 
-    // gjt todo: add unit test
-    void registerDeleteResourceGroupCallback(const std::function<void(const std::string & del_rg_name)> & cb) {}
-    void unregisterDeleteResourceGroupCallback() {}
+    void registerDeleteResourceGroupCallback(const std::function<void(const std::string & del_rg_name)> &) { RUNTIME_ASSERT(0); }
+    void unregisterDeleteResourceGroupCallback() { RUNTIME_ASSERT(0); }
 
-    void registerCleanTombstoneResourceGroupCallback(const std::function<void()> & cb) {}
-    void unregisterCleanTombstoneResourceGroupCallback() {}
+    void registerCleanTombstoneResourceGroupCallback(const std::function<void()> &) { RUNTIME_ASSERT(0); }
+    void unregisterCleanTombstoneResourceGroupCallback() { RUNTIME_ASSERT(0); }
 
     void stop()
     {

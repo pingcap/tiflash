@@ -41,11 +41,11 @@ public:
 
     const MPPTaskId & getMPPTaskId() const;
 
-    const String & getResourceGroupName() const { return resource_group_name; }
+    const String & getResourceGroupName() const { return id.gather_id.query_id.resource_group_name; }
 
     ~MPPTaskScheduleEntry();
 
-    MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_, const String & resource_group_name_ = "");
+    MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_);
 
 private:
     MPPTaskManager * manager;
@@ -57,11 +57,6 @@ private:
     std::condition_variable schedule_cv;
     ScheduleState schedule_state;
     const LoggerPtr log;
-
-    // When resource control is enabled, each resource gorup corresponds one MinTSOScheduler,
-    // resource_group_name is used to specify which MinTSOScheduler to use.
-    // If resource control is not enabled, it will be empty.
-    String resource_group_name;
 };
 
 } // namespace DB
