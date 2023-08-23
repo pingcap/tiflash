@@ -264,10 +264,7 @@ size_t Join::getTotalHashTableAndPoolByteCount()
         return 0;
     size_t res = 0;
     for (const auto & partition : partitions)
-    {
-        /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
         res += partition->getHashMapAndPoolMemoryUsage();
-    }
     return res;
 }
 
