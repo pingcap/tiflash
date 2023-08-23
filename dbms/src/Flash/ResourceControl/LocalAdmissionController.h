@@ -103,8 +103,9 @@ private:
     {
         std::lock_guard lock(mu);
         cpu_time_in_ns += cpu_time_in_ns_;
-        bucket->consume(ru);
         ru_consumption_delta += ru;
+        if (!burstable)
+            bucket->consume(ru);
     }
 
     // Priority greater than zero: Less number means higher priority.
@@ -288,6 +289,17 @@ private:
         return ori;
     }
 
+    bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura) const
+    {
+        return std::chrono::duration_cast<std::chrono::seconds>(now - last_fetch_tokens_from_gac_timepoint) > dura;
+    }
+
+    void updateFetchTokenTimepoint(const std::chrono::steady_clock::time_point & tp)
+    {
+        assert(last_fetch_tokens_from_gac_timepoint <= tp);
+        last_fetch_tokens_from_gac_timepoint = tp;
+    }
+
     const std::string name;
 
     uint32_t user_priority = 0;
@@ -310,6 +322,9 @@ private:
     double ru_consumption_delta = 0.0;
 
     LoggerPtr log;
+
+    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
+        = std::chrono::steady_clock::now();
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -351,7 +366,7 @@ public:
 
         ResourceGroupPtr group = getOrFetchResourceGroup(name);
         group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken())
+        if (!group->burstable && group->lowToken())
         {
             {
                 std::lock_guard lock(mu);
@@ -524,6 +539,13 @@ private:
         std::string resource_group_name;
         double acquire_tokens;
         double ru_consumption_delta;
+
+        std::string toString() const
+        {
+            FmtBuffer fmt_buf;
+            fmt_buf.fmtAppend("rg: {}, acquire_tokens: {}, ru_consumption_delta: {}", resource_group_name, acquire_tokens, ru_consumption_delta);
+            return fmt_buf.toString();
+        }
     };
 
     // Background jobs:
@@ -532,7 +554,7 @@ private:
     // 3. Check if resource group need to goto degrade mode.
     // 4. Watch GAC event to delete resource group.
     void startBackgroudJob();
-    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_tokens);
+    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_tokens, const std::string & desc_str);
     void checkDegradeMode();
     void watchGAC();
 

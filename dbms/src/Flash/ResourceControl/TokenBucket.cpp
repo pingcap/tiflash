@@ -68,7 +68,6 @@ double TokenBucket::getAvgSpeedPerSec()
     double token_changed = last_get_avg_speed_tokens - tokens;
 
     // If dura less than 1 sec, return last sec avg speed.
-    // gjt todo: dura: -9219118422?
     if (dura.count() >= 1)
     {
         avg_speed_per_sec = token_changed / dura.count();

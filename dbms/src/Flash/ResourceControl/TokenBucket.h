@@ -42,7 +42,7 @@ public:
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
-        , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
+        , last_get_avg_speed_timepoint(std::chrono::steady_clock::now())
         , last_get_avg_speed_tokens(init_tokens_)
         , avg_speed_per_sec(0.0)
         , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
