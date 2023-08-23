@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,11 +46,23 @@ bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thr
     if (!in_spillable_stage || !enable_spill)
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
-    if (per_thread_auto_spill_status[thread_num] == AutoSpillStatus::NEED_AUTO_SPILL
-        || (per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold)))
+    if (auto_spill_mode)
     {
-        per_thread_revocable_memories[thread_num] = 0;
-        return true;
+        AutoSpillStatus old_value = AutoSpillStatus::NEED_AUTO_SPILL;
+        if (per_thread_auto_spill_status[thread_num].compare_exchange_strong(
+                old_value,
+                AutoSpillStatus::WAIT_SPILL_FINISH))
+            /// in auto spill mode, don't set revocable_memory to 0 here, so in triggerSpill it will take
+            /// the revocable_memory into account if current spill is on the way
+            return true;
+    }
+    else
+    {
+        if (per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold))
+        {
+            per_thread_revocable_memories[thread_num] = 0;
+            return true;
+        }
     }
     return false;
 }
@@ -67,17 +79,15 @@ Int64 AggSpillContext::triggerSpill(Int64 expected_released_memories)
 {
     if (!in_spillable_stage || !enable_spill)
         return expected_released_memories;
+    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
     auto total_revocable_memory = getTotalRevocableMemory();
     if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
     {
         for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; i++)
         {
             AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-            if (per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL))
-            {
-                expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[i], 0);
-                per_thread_revocable_memories[i] = 0;
-            }
+            per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
+            expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[i], 0);
         }
     }
     return expected_released_memories;
@@ -86,5 +96,6 @@ Int64 AggSpillContext::triggerSpill(Int64 expected_released_memories)
 void AggSpillContext::finishOneSpill(size_t thread_num)
 {
     per_thread_auto_spill_status[thread_num] = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+    per_thread_revocable_memories[thread_num] = 0;
 }
 } // namespace DB

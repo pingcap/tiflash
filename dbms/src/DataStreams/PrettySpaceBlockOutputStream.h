@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,11 +25,17 @@ namespace DB
 class PrettySpaceBlockOutputStream : public PrettyBlockOutputStream
 {
 public:
-    PrettySpaceBlockOutputStream(WriteBuffer & ostr_, const Block & header_, bool no_escapes_, size_t max_rows_, const Context & context_)
-        : PrettyBlockOutputStream(ostr_, header_, no_escapes_, max_rows_, context_) {}
+    PrettySpaceBlockOutputStream(
+        WriteBuffer & ostr_,
+        const Block & header_,
+        bool no_escapes_,
+        size_t max_rows_,
+        const Context & context_)
+        : PrettyBlockOutputStream(ostr_, header_, no_escapes_, max_rows_, context_)
+    {}
 
     void write(const Block & block) override;
     void writeSuffix() override;
 };
 
-}
+} // namespace DB

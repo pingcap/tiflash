@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,10 +25,7 @@ struct JoinImpl
 
     static constexpr auto type = "Join";
 
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_join();
-    }
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_join(); }
 };
 
 using JoinStatisticsBase = ExecutorStatistics<JoinImpl>;

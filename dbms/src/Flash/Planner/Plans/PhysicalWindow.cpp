@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,9 +81,16 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     else
     {
         /// If there are several streams, we merge them into one.
-        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "merge into one for window input");
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            false,
+            "merge into one for window input");
         RUNTIME_CHECK(pipeline.streams.size() == 1);
-        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+        pipeline.firstStream()
+            = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
 
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
@@ -103,11 +110,17 @@ void PhysicalWindow::buildPipelineExecGroupImpl(
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_context, log->identifier(), window_description));
+        builder.appendTransformOp(
+            std::make_unique<WindowTransformOp>(exec_context, log->identifier(), window_description));
     });
 
     if (!fine_grained_shuffle.enable() && is_restore_concurrency)
-        restoreConcurrency(exec_context, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        restoreConcurrency(
+            exec_context,
+            group_builder,
+            concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
 
     executeExpression(exec_context, group_builder, window_description.after_window, log);
 }

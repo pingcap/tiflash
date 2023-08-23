@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -692,11 +692,10 @@ void MPPTask::reportStatus(const String & err_msg)
 
 void MPPTask::handleError(const String & error_msg)
 {
-    auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-    manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
-    if (!is_public)
-        // if the task is not public, need to cancel it explicitly
-        abort(error_msg, AbortType::ONERROR);
+    /// Not call abortMPPGather to avoid issue https://github.com/pingcap/tiflash/issues/7177
+    // auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
+    //manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
+    abort(error_msg, AbortType::ONERROR);
 }
 
 void MPPTask::abort(const String & message, AbortType abort_type)

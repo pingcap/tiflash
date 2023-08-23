@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 
 using ResultType = UInt64;
 
-class FunctionGrouping : public IFunctionBase
+class FunctionGrouping
+    : public IFunctionBase
     , public IExecutableFunction
     , public std::enable_shared_from_this<FunctionGrouping>
 {
@@ -233,10 +234,7 @@ public:
     // at frontend, grouping function can receive maximum number of parameters as 64.
     // at backend, grouping function has been rewritten as receive only gid with meta.
     size_t getNumberOfArguments() const override { return 1; }
-    void setExpr(const tipb::Expr & expr_)
-    {
-        expr = expr_;
-    }
+    void setExpr(const tipb::Expr & expr_) { expr = expr_; }
 
 protected:
     FunctionBasePtr buildImpl(
@@ -259,7 +257,9 @@ protected:
         else if (arg_num > 1)
             throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
-        RUNTIME_CHECK_MSG(arguments[0].type->getTypeId() == TypeIndex::UInt64, "Parameter type of grouping function should be UInt64");
+        RUNTIME_CHECK_MSG(
+            arguments[0].type->getTypeId() == TypeIndex::UInt64,
+            "Parameter type of grouping function should be UInt64");
         return std::make_shared<DataTypeNumber<ResultType>>();
     }
 

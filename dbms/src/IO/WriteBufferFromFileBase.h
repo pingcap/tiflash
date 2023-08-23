@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,10 +31,7 @@ public:
     off_t seek(off_t off, int whence = SEEK_SET);
     void truncate(off_t length = 0);
     virtual off_t getPositionInFile() = 0;
-    virtual off_t getMaterializedBytes()
-    {
-        return getPositionInFile();
-    }
+    virtual off_t getMaterializedBytes() { return getPositionInFile(); }
     virtual void sync() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;

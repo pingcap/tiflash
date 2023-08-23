@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,10 @@ struct RowRefListWithUsedFlag : RowRef
     mutable std::atomic<bool> used{};
     RowRefListWithUsedFlag * next = nullptr;
 
-    void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
+    void setUsed() const
+    {
+        used.store(true, std::memory_order_relaxed);
+    } /// Could be set simultaneously from different threads.
     bool getUsed() const { return used.load(std::memory_order_relaxed); }
 
     RowRefListWithUsedFlag() = default;
@@ -73,7 +76,10 @@ struct WithUsedFlag<true, Base> : Base
     mutable std::atomic<bool> used{};
     using Base::Base;
     using Base_t = Base;
-    void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
+    void setUsed() const
+    {
+        used.store(true, std::memory_order_relaxed);
+    } /// Could be set simultaneously from different threads.
     bool getUsed() const { return used.load(std::memory_order_relaxed); }
 };
 
@@ -185,5 +191,8 @@ using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With flag for every row ref
 
-JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators);
+JoinMapMethod chooseJoinMapMethod(
+    const ColumnRawPtrs & key_columns,
+    Sizes & key_sizes,
+    const TiDB::TiDBCollators & collators);
 } // namespace DB

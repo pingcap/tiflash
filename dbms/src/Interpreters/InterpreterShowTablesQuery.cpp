@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ extern const int SYNTAX_ERROR;
 InterpreterShowTablesQuery::InterpreterShowTablesQuery(const ASTPtr & query_ptr_, Context & context_)
     : query_ptr(query_ptr_)
     , context(context_)
-{
-}
+{}
 
 
 String InterpreterShowTablesQuery::getRewrittenQuery()
@@ -47,7 +46,9 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
         return "SELECT name FROM system.databases";
 
     if (query.temporary && !query.from.empty())
-        throw Exception("The `FROM` and `TEMPORARY` cannot be used together in `SHOW TABLES`", ErrorCodes::SYNTAX_ERROR);
+        throw Exception(
+            "The `FROM` and `TEMPORARY` cannot be used together in `SHOW TABLES`",
+            ErrorCodes::SYNTAX_ERROR);
 
     String database = query.from.empty() ? context.getCurrentDatabase() : query.from;
 

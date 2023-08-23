@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <common/strong_typedef.h>
-#include <set>
-#include <unordered_set>
-#include <memory>
-#include <type_traits>
-
 #include <gtest/gtest.h>
+
+#include <memory>
+#include <set>
+#include <type_traits>
+#include <unordered_set>
 
 
 TEST(StrongTypedefSuite, TypedefsOfTheSameType)

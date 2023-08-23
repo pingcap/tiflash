@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,8 +31,10 @@ TiFlashMetrics::TiFlashMetrics()
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
         std::string name{ProfileEvents::getDescription(event)};
-        auto & family
-            = prometheus::BuildGauge().Name(profile_events_prefix + name).Help("System profile event " + name).Register(*registry);
+        auto & family = prometheus::BuildGauge()
+                            .Name(profile_events_prefix + name)
+                            .Help("System profile event " + name)
+                            .Register(*registry);
         registered_profile_events.push_back(&family.Add({}));
     }
 
@@ -40,16 +42,22 @@ TiFlashMetrics::TiFlashMetrics()
     for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
     {
         std::string name{CurrentMetrics::getDescription(metric)};
-        auto & family
-            = prometheus::BuildGauge().Name(current_metrics_prefix + name).Help("System current metric " + name).Register(*registry);
+        auto & family = prometheus::BuildGauge()
+                            .Name(current_metrics_prefix + name)
+                            .Help("System current metric " + name)
+                            .Register(*registry);
         registered_current_metrics.push_back(&family.Add({}));
     }
 
     auto prometheus_name = TiFlashMetrics::current_metrics_prefix + std::string("StoreSizeUsed");
-    registered_keypace_store_used_family = &prometheus::BuildGauge().Name(prometheus_name).Help("Store size used of keyspace").Register(*registry);
+    registered_keypace_store_used_family
+        = &prometheus::BuildGauge().Name(prometheus_name).Help("Store size used of keyspace").Register(*registry);
     store_used_total_metric = &registered_keypace_store_used_family->Add({{"keyspace_id", ""}, {"type", "all_used"}});
 
-    registered_keyspace_sync_replica_ru_family = &prometheus::BuildCounter().Name("tiflash_storage_sync_replica_ru").Help("RU for synchronous replica of keyspace").Register(*registry);
+    registered_keyspace_sync_replica_ru_family = &prometheus::BuildCounter()
+                                                      .Name("tiflash_storage_sync_replica_ru")
+                                                      .Help("RU for synchronous replica of keyspace")
+                                                      .Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
@@ -66,7 +74,8 @@ prometheus::Counter * TiFlashMetrics::getReplicaSyncRUCounter(UInt32 keyspace_id
     {
         return itr->second;
     }
-    return registered_keyspace_sync_replica_ru[keyspace_id] = &registered_keyspace_sync_replica_ru_family->Add({{"keyspace_id", std::to_string(keyspace_id)}});
+    return registered_keyspace_sync_replica_ru[keyspace_id]
+        = &registered_keyspace_sync_replica_ru_family->Add({{"keyspace_id", std::to_string(keyspace_id)}});
 }
 
 void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,13 +29,9 @@ public:
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_context_, req_id)
         , writer(std::move(writer))
-    {
-    }
+    {}
 
-    String getName() const override
-    {
-        return "ExchangeSenderSinkOp";
-    }
+    String getName() const override { return "ExchangeSenderSinkOp"; }
 
 protected:
     void operatePrefixImpl() override;

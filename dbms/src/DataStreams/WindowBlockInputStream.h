@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Decimal.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -29,18 +30,6 @@ namespace DB
 /* Implementation details.*/
 struct WindowTransformAction
 {
-private:
-    // Used for calculating the frame start
-    std::tuple<RowNumber, bool> stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame);
-    // Used for calculating the frame end
-    std::tuple<RowNumber, bool> stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame);
-
-    RowNumber stepInPreceding(const RowNumber & moved_row, size_t step_num);
-    std::tuple<RowNumber, bool> stepInFollowing(const RowNumber & moved_row, size_t step_num);
-
-    // distance is left - right.
-    UInt64 distance(RowNumber left, RowNumber right);
-
 public:
     WindowTransformAction(
         const Block & input_header,
@@ -120,6 +109,63 @@ public:
 
     void appendInfo(FmtBuffer & buffer) const;
 
+private:
+    // This is the function for Offset type boundary
+    void stepToFrameStart();
+    // This is the function for Offset type boundary
+    void stepToFrameEnd();
+
+    // Used for calculating the frame start for rows frame type
+    std::tuple<RowNumber, bool> stepToStartForRowsFrame(const RowNumber & current_row, const WindowFrame & frame);
+    // Used for calculating the frame end for rows frame type
+    std::tuple<RowNumber, bool> stepToEndForRowsFrame(const RowNumber & current_row, const WindowFrame & frame);
+
+    // Used for calculating the frame start for range frame type
+    std::tuple<RowNumber, bool> stepToStartForRangeFrame();
+    // Used for calculating the frame end for range frame type
+    std::tuple<RowNumber, bool> stepToEndForRangeFrame();
+
+    template <bool is_desc>
+    RowNumber stepToStartForRangeFrameOrderCase();
+
+    template <bool is_desc>
+    std::tuple<RowNumber, bool> stepToEndForRangeFrameOrderCase();
+
+    template <typename T, bool is_desc>
+    RowNumber stepToStartForRangeFrameImpl();
+
+    template <typename T, bool is_desc>
+    RowNumber stepToEndForRangeFrameImpl();
+
+    template <typename T, bool is_begin, bool is_desc>
+    RowNumber stepForRangeFrameImpl();
+
+    // We should use this function when the current order by column row is null.
+    template <bool is_begin>
+    RowNumber findRangeFrameIfNull(RowNumber cursor);
+
+    template <typename AuxColType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
+
+    template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
+
+    template <
+        typename AuxColType,
+        typename OrderByColType,
+        int CmpDataType,
+        bool is_begin,
+        bool is_desc,
+        bool is_order_by_col_nullable>
+    RowNumber moveCursorAndFindRangeFrameImpl(RowNumber cursor, AuxColType current_row_aux_value);
+
+    RowNumber stepInPreceding(const RowNumber & moved_row, size_t step_num);
+    std::tuple<RowNumber, bool> stepInFollowing(const RowNumber & moved_row, size_t step_num);
+
+    // distance is left - right.
+    UInt64 distance(RowNumber left, RowNumber right);
+
+public:
     LoggerPtr log;
 
     bool input_is_finished = false;
@@ -130,7 +176,7 @@ public:
 
     // Indices of the PARTITION BY columns in block.
     std::vector<size_t> partition_column_indices;
-    // Indices of the ORDER BY columns in block;
+    // Indices of the ORDER BY columns in block.
     std::vector<size_t> order_column_indices;
 
     // Per-window-function scratch spaces.
@@ -186,10 +232,17 @@ public:
     bool frame_ended = false;
     bool frame_started = false;
 
+    RowNumber range_null_frame_start;
+    RowNumber range_null_frame_end;
+    bool is_range_null_frame_initialized = false;
+
     // The previous frame boundaries that correspond to the current state of the
     // aggregate function. We use them to determine how to update the aggregation
     // state after we find the new frame.
     RowNumber prev_frame_start;
+
+    // Auxiliary variable for range frame type when calculating frame_end
+    RowNumber prev_frame_end;
 
     //TODO: used as template parameters
     bool only_have_row_number = false;

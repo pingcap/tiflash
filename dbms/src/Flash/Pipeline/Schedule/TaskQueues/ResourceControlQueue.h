@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,13 +31,16 @@ class ResourceControlQueue
 public:
     ResourceControlQueue()
     {
+        RUNTIME_CHECK_MSG(
+            LocalAdmissionController::global_instance != nullptr,
+            "LocalAdmissionController::global_instance has not been initialized yet.");
         LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() {
             std::lock_guard lock(mu);
             cv.notify_all();
         });
     }
 
-    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->stop(); }
+    ~ResourceControlQueue() override { LocalAdmissionController::global_instance->unregisterRefillTokenCallback(); }
 
     void submit(TaskPtr && task) override;
 
@@ -45,7 +48,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value) override;
+    void updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_value) override;
 
     bool empty() const override;
 

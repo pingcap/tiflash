@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@
 
 namespace DB
 {
-class SimplePipelineTask : public Task
+class SimplePipelineTask
+    : public Task
     , public PipelineTaskBase
 {
 public:
@@ -30,24 +31,14 @@ public:
         PipelineExecPtr && pipeline_exec_)
         : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
         , PipelineTaskBase(std::move(pipeline_exec_))
-    {
-    }
+    {}
 
 protected:
-    ExecTaskStatus executeImpl() override
-    {
-        return runExecute();
-    }
+    ExecTaskStatus executeImpl() override { return runExecute(); }
 
-    ExecTaskStatus executeIOImpl() override
-    {
-        return runExecuteIO();
-    }
+    ExecTaskStatus executeIOImpl() override { return runExecuteIO(); }
 
-    ExecTaskStatus awaitImpl() override
-    {
-        return runAwait();
-    }
+    ExecTaskStatus awaitImpl() override { return runAwait(); }
 
     void finalizeImpl() override
     {

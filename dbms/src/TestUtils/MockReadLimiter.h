@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,8 +25,7 @@ public:
         LimiterType type_ = LimiterType::UNKNOW,
         UInt64 refill_period_ms_ = 100)
         : ReadLimiter(getIOStatistic_, rate_limit_per_sec_, type_, refill_period_ms_)
-    {
-    }
+    {}
 
 protected:
     void consumeBytes(Int64 bytes) override

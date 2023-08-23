@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,10 +50,19 @@ struct FixedClearableHashTableCell
 
 
 template <typename Key, typename Allocator = HashTableAllocator>
-class FixedClearableHashSet : public FixedHashTable<Key, FixedClearableHashTableCell<Key>, FixedHashTableStoredSize<FixedClearableHashTableCell<Key>>, Allocator>
+class FixedClearableHashSet
+    : public FixedHashTable<
+          Key,
+          FixedClearableHashTableCell<Key>,
+          FixedHashTableStoredSize<FixedClearableHashTableCell<Key>>,
+          Allocator>
 {
 public:
-    using Base = FixedHashTable<Key, FixedClearableHashTableCell<Key>, FixedHashTableStoredSize<FixedClearableHashTableCell<Key>>, Allocator>;
+    using Base = FixedHashTable<
+        Key,
+        FixedClearableHashTableCell<Key>,
+        FixedHashTableStoredSize<FixedClearableHashTableCell<Key>>,
+        Allocator>;
     using LookupResult = typename Base::LookupResult;
 
     void clear()

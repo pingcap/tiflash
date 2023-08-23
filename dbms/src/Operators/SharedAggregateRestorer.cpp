@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,9 +132,7 @@ bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
     return result;
 }
 
-SharedAggregateRestorer::SharedAggregateRestorer(
-    Aggregator & aggregator_,
-    SharedSpilledBucketDataLoaderPtr loader_)
+SharedAggregateRestorer::SharedAggregateRestorer(Aggregator & aggregator_, SharedSpilledBucketDataLoaderPtr loader_)
     : aggregator(aggregator_)
     , loader(std::move(loader_))
 {
@@ -182,9 +180,7 @@ SharedLoadResult SharedAggregateRestorer::tryLoadBucketData()
         return SharedLoadResult::SUCCESS;
     if (!loader->tryPop(bucket_data))
         return SharedLoadResult::RETRY;
-    return bucket_data.empty()
-        ? SharedLoadResult::FINISHED
-        : SharedLoadResult::SUCCESS;
+    return bucket_data.empty() ? SharedLoadResult::FINISHED : SharedLoadResult::SUCCESS;
 }
 
 } // namespace DB

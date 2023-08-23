@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,9 +33,7 @@ enum Enum
 inline const char * toString(UInt64 stage)
 {
     static const char * data[] = {"FetchColumns", "WithMergeableState", "Complete"};
-    return stage < 3
-        ? data[stage]
-        : "Unknown stage";
+    return stage < 3 ? data[stage] : "Unknown stage";
 }
 } // namespace QueryProcessingStage
 

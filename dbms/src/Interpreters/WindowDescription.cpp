@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,17 @@
 #include <Core/Field.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+#include <tipb/expression.pb.h>
 
 #include <magic_enum.hpp>
+#include <string>
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
-}
+} // namespace ErrorCodes
 
 WindowFrame::BoundaryType getBoundaryTypeFromTipb(const tipb::WindowFrameBound & bound)
 {
@@ -46,9 +48,7 @@ WindowFrame::FrameType getFrameTypeFromTipb(const tipb::WindowFrameType & type)
     case tipb::WindowFrameType::Groups:
         return WindowFrame::FrameType::Groups;
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknown frame type {}",
-                        type);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", type);
     }
 }
 
@@ -58,9 +58,11 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.begin_offset = frame_.start().offset();
     frame.begin_type = getBoundaryTypeFromTipb(frame_.start());
     frame.begin_preceding = (frame_.start().type() == tipb::WindowBoundType::Preceding);
+    frame.begin_cmp_data_type = frame_.start().cmp_data_type();
     frame.end_offset = frame_.end().offset();
     frame.end_type = getBoundaryTypeFromTipb(frame_.end());
     frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
+    frame.end_cmp_data_type = frame_.end().cmp_data_type();
     frame.is_default = false;
 }
 
@@ -90,9 +92,7 @@ String frameTypeToString(const WindowFrame::FrameType & type)
     case WindowFrame::FrameType::Ranges:
         return "Ranges";
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknown frame type {}",
-                        static_cast<Int32>(type));
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", static_cast<Int32>(type));
     }
 }
 
@@ -107,9 +107,7 @@ String boundaryTypeToString(const WindowFrame::BoundaryType & type)
     case WindowFrame::BoundaryType::Offset:
         return "Offset";
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknown boundary type {}",
-                        magic_enum::enum_name(type));
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown boundary type {}", magic_enum::enum_name(type));
     }
 }
 } // namespace DB

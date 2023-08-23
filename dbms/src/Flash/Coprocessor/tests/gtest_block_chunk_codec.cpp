@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,10 +30,8 @@ static Block prepareBlock(size_t rows)
     {
         DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
         auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-        block.insert(ColumnWithTypeAndName{
-            std::move(int64_column),
-            int64_data_type,
-            String("col") + std::to_string(i)});
+        block.insert(
+            ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
     }
     return block;
 }

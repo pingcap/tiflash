@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,10 +51,7 @@ std::pair<ExpressionActionsPtr, std::vector<String>> buildLiteralProjection(
 class ProjectionTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        initializeDAGContext();
-    }
+    void SetUp() override { initializeDAGContext(); }
 
 public:
     static void SetUpTestCase()

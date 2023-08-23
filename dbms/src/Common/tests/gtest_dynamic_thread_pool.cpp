@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,8 +68,9 @@ try
     DynamicThreadPool pool(0, std::chrono::milliseconds(50));
 
     auto f0 = pool.schedule(true, [] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            return 0; });
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return 0;
+    });
     pool.schedule(true, [] { return 0; });
 
     auto cnt = pool.threadCount();

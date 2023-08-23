@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,6 +113,18 @@ std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder build
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     return tasks;
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::executeProblematicMPPTasks(
+    QueryTasks & tasks,
+    const DAGProperties & properties,
+    BlockInputStreamPtr & stream)
+{
+    stream = executeMPPQueryWithMultipleContext(
+        properties,
+        tasks,
+        MockComputeServerManager::instance().getServerConfigMap());
+    return readBlock(stream);
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties)

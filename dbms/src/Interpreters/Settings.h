@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -316,7 +316,8 @@ struct Settings
     M(SettingFloat, auto_memory_revoke_target_threshold, 0.5, "When auto revoking memory, try to revoke enough that the memory usage is filled below the target percentage at the end.")                                                 \
     M(SettingUInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                    \
     M(SettingBool, enable_cop_stream_for_remote_read, true, "Enable cop stream for remote read")                                                                                                                                        \
-    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")
+    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
+    M(SettingUInt64, auto_spill_check_min_interval_ms, 100, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")
 
 
 // clang-format on

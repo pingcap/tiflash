@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,8 +40,7 @@ public:
         , max_wait_time_ns(max_wait_time_ms < 0 ? 0 : 1000000UL * max_wait_time_ms)
         , waiting_rf_list(std::move(waiting_rf_list_))
         , ready_rf_list(std::move(ready_rf_list_))
-    {
-    }
+    {}
 
     static void filterAndMoveReadyRfs(RuntimeFilteList & waiting_rf_list, RuntimeFilteList & ready_rf_list)
     {
@@ -63,7 +62,9 @@ public:
         }
     }
 
-    static void submitReadyRfsAndSegmentTaskPool(const RuntimeFilteList & ready_rf_list, const DM::SegmentReadTaskPoolPtr & task_pool)
+    static void submitReadyRfsAndSegmentTaskPool(
+        const RuntimeFilteList & ready_rf_list,
+        const DM::SegmentReadTaskPoolPtr & task_pool)
     {
         for (const RuntimeFilterPtr & rf : ready_rf_list)
         {
@@ -74,10 +75,7 @@ public:
     }
 
 private:
-    ExecTaskStatus executeImpl() override
-    {
-        return ExecTaskStatus::WAITING;
-    }
+    ExecTaskStatus executeImpl() override { return ExecTaskStatus::WAITING; }
 
     ExecTaskStatus awaitImpl() override
     {

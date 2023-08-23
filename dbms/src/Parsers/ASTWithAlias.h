@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,15 +34,20 @@ public:
 
     using IAST::IAST;
 
-    String getColumnName() const override final { return prefer_alias_to_column_name && !alias.empty() ? alias : getColumnNameImpl(); }
+    String getColumnName() const override final
+    {
+        return prefer_alias_to_column_name && !alias.empty() ? alias : getColumnNameImpl();
+    }
     String getAliasOrColumnName() const override { return alias.empty() ? getColumnNameImpl() : alias; }
     String tryGetAlias() const override { return alias; }
     void setAlias(const String & to) override { alias = to; }
 
     /// Calls formatImplWithoutAlias, and also outputs an alias. If necessary, encloses the entire expression in brackets.
-    void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override final;
+    void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+        const override final;
 
-    virtual void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const = 0;
+    virtual void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
+        const = 0;
 
 protected:
     virtual String getColumnNameImpl() const = 0;
@@ -56,4 +61,4 @@ inline ASTPtr setAlias(ASTPtr ast, const String & alias)
 };
 
 
-}
+} // namespace DB

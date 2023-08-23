@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 
 namespace DB
 {
-MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size, bool is_infinite_)
+MockTableScanBlockInputStream::MockTableScanBlockInputStream(
+    ColumnsWithTypeAndName columns,
+    size_t max_block_size,
+    bool is_infinite_)
     : columns(columns)
     , output_index(0)
     , max_block_size(max_block_size)

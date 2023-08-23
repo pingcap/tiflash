@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,11 +107,16 @@ __attribute__((pure)) bool memoryIsByteSSE2(const void * data, size_t size, std:
     {
     case 3:
         result = compareArraySSE2<4>(
-            {_mm_load_si128(current_address + 0), _mm_load_si128(current_address + 1), _mm_load_si128(current_address + 2), tail},
+            {_mm_load_si128(current_address + 0),
+             _mm_load_si128(current_address + 1),
+             _mm_load_si128(current_address + 2),
+             tail},
             filled_vector);
         break;
     case 2:
-        result = compareArraySSE2<3>({_mm_load_si128(current_address + 0), _mm_load_si128(current_address + 1), tail}, filled_vector);
+        result = compareArraySSE2<3>(
+            {_mm_load_si128(current_address + 0), _mm_load_si128(current_address + 1), tail},
+            filled_vector);
         break;
     case 1:
         result = compareArraySSE2<2>({_mm_load_si128(current_address + 0), tail}, filled_vector);
