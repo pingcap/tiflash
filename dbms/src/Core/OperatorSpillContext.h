@@ -57,6 +57,7 @@ public:
     void disableSpill() { enable_spill = false; }
     void finishSpillableStage();
     virtual bool supportFurtherSpill() const { return in_spillable_stage; }
+    bool isInAutoSpillMode() const { return auto_spill_mode; }
     Int64 getTotalRevocableMemory()
     {
         if (supportAutoTriggerSpill())

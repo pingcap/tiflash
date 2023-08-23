@@ -499,6 +499,23 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index)
     data.clear();
 }
 
+void Join::checkAndMarkPartitionSpilledIfNeeded(JoinPartition & join_partition, std::unique_lock<std::mutex> & partition_lock, size_t partition_index, size_t stream_index)
+{
+        auto ret = hash_join_spill_context->updatePartitionRevocableMemory(partition_index, join_partition.revocableBytes());
+        if (ret)
+        {
+            if (!hash_join_spill_context->isPartitionSpilled(partition_index))
+            {
+                /// first spill
+                hash_join_spill_context->markPartitionSpilled(partition_index);
+                join_partition.releasePartitionPoolAndHashMap(partition_lock);
+                spilled_partition_indexes.push_back(partition_index);
+            }
+            auto blocks_to_spill = join_partition.trySpillBuildPartition(partition_lock);
+            markBuildSideSpillData(partition_index, std::move(blocks_to_spill), stream_index);
+        }
+}
+
 /// the block should be valid.
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
@@ -539,7 +556,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         }
         assert(dispatch_blocks.size() == build_concurrency);
 
-        /// first insert block to join partition
         for (size_t j = stream_index; j < block_size_to_be_inserted + stream_index; ++j)
         {
             size_t i = j % build_concurrency;
@@ -550,60 +566,20 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             const auto & join_partition = partitions[i];
             auto partition_lock = join_partition->lockPartition();
             join_partition->insertBlockForBuild(std::move(dispatch_blocks[i]));
+            /// to release memory before insert if already marked spill
+            checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
             if (!hash_join_spill_context->isPartitionSpilled(i))
             {
-                /// double check to release memory before insert, todo should move this code into hashtable.resize()
-                if (hash_join_spill_context->updatePartitionRevocableMemory(i, join_partition->revocableBytes()))
-                {
-                    if (!hash_join_spill_context->isPartitionSpilled(i))
-                    {
-                        hash_join_spill_context->markPartitionSpilled(i);
-                        join_partition->releasePartitionPoolAndHashMap(partition_lock);
-                        spilled_partition_indexes.push_back(i);
-                    }
-                }
-                if (!hash_join_spill_context->isPartitionSpilled(i))
-                {
-                    insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
-                    join_partition->updateHashMapAndPoolMemoryUsage();
-                    if (hash_join_spill_context->updatePartitionRevocableMemory(i, join_partition->revocableBytes()))
-                    {
-                        if (!hash_join_spill_context->isPartitionSpilled(i))
-                        {
-                            hash_join_spill_context->markPartitionSpilled(i);
-                            join_partition->releasePartitionPoolAndHashMap(partition_lock);
-                            spilled_partition_indexes.push_back(i);
-                        }
-                    }
-                }
+                insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
+                join_partition->updateHashMapAndPoolMemoryUsage();
+                /// double check here to release memory
+                checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
+                /// todo trigger auto spill check here
             }
         }
-        /// second check spill
-        for (size_t j = stream_index; j < block_size_to_be_inserted + stream_index; ++j)
-        {
-            size_t i = j % build_concurrency;
-            Blocks blocks_to_spill;
-            {
-                const auto & join_partition = partitions[i];
-                auto partition_lock = join_partition->lockPartition();
-                auto ret = hash_join_spill_context->updatePartitionRevocableMemory(i, join_partition->revocableBytes());
-                if (ret)
-                {
-                    if (!hash_join_spill_context->isPartitionSpilled(i))
-                    {
-                        /// first spill
-                        hash_join_spill_context->markPartitionSpilled(i);
-                        join_partition->releasePartitionPoolAndHashMap(partition_lock);
-                        spilled_partition_indexes.push_back(i);
-                    }
-                    blocks_to_spill = join_partition->trySpillBuildPartition(partition_lock);
-                }
-                else
-                    continue;
-            }
-            markBuildSideSpillData(i, std::move(blocks_to_spill), stream_index);
-        }
-        spillMostMemoryUsedPartitionIfNeed(stream_index);
+        if (!hash_join_spill_context->isInAutoSpillMode())
+            spillMostMemoryUsedPartitionIfNeed(stream_index);
+        LOG_DEBUG(log, fmt::format("all bytes used after one insert: {}, hash table and pool size: {}", getTotalByteCount(), getTotalHashTableAndPoolByteCount()));
     }
 }
 
@@ -2160,7 +2136,6 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
             markBuildSideSpillData(partition_to_be_spilled, std::move(blocks_to_spill), stream_index);
         }
     }
-    LOG_DEBUG(log, fmt::format("all bytes used after spill: {}, hash table and pool size: {}", getTotalByteCount(), getTotalHashTableAndPoolByteCount()));
 }
 
 bool Join::getPartitionSpilled(size_t partition_index) const

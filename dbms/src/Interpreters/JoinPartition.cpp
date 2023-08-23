@@ -290,6 +290,7 @@ void JoinPartition::releasePartitionPoolAndHashMap(std::unique_lock<std::mutex> 
     clearMaps(maps_any_full, join_map_method);
     clearMaps(maps_all_full, join_map_method);
     clearMaps(maps_all_full_with_row_flag, join_map_method);
+    LOG_DEBUG(log, "release {} memories", hash_table_pool_memory_usage);
     hash_table_pool_memory_usage = 0;
 }
 

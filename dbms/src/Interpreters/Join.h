@@ -233,6 +233,8 @@ public:
     /// Sum size in bytes of all hash table and pools
     size_t getTotalHashTableAndPoolByteCount();
 
+    void checkAndMarkPartitionSpilledIfNeeded(JoinPartition & join_partition, std::unique_lock<std::mutex> & partition_lock, size_t partition_index, size_t stream_index);
+
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
     ASTTableJoin::Kind getKind() const { return kind; }
