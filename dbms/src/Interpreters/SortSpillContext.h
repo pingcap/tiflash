@@ -37,7 +37,7 @@ public:
     bool updateRevocableMemory(Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override { return revocable_memory; };
     Int64 triggerSpill(Int64 expected_released_memories) override;
-    bool needFinalSpill() const { return auto_spill_status == AutoSpillStatus::NEED_AUTO_SPILL; }
+    bool needFinalSpill() const { return auto_spill_status != AutoSpillStatus::NO_NEED_AUTO_SPILL; }
     bool supportAutoTriggerSpill() const override { return true; }
 };
 

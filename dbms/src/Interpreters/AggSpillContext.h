@@ -45,7 +45,7 @@ public:
     void finishOneSpill(size_t thread_num);
     bool needFinalSpill(size_t thread_num) const
     {
-        return per_thread_auto_spill_status[thread_num] == AutoSpillStatus::NEED_AUTO_SPILL;
+        return per_thread_auto_spill_status[thread_num] != AutoSpillStatus::NO_NEED_AUTO_SPILL;
     }
 };
 
