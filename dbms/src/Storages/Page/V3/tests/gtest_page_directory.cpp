@@ -1549,6 +1549,64 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, Issue7915Case4)
+try
+{
+    PageEntryV3
+        entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3
+        entry_2_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_2_v1);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 3));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        dir->gcInMemEntries(u128::PageDirectoryType::InMemGCOption{.need_removed_entries = false});
+        ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+    }
+
+    // restart and check
+    dir = restoreFromDisk();
+    {
+        EXPECT_EQ(dir->numPages(), 1);
+        auto snap = dir->createSnapshot("");
+        EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry_2_v1);
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+
+    // restart again
+    dir = restoreFromDisk();
+    {
+        EXPECT_EQ(dir->numPages(), 3);
+        auto snap = dir->createSnapshot("");
+        EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
+        auto normal_id = getNormalPageIdU64(dir, 11, snap);
+        EXPECT_EQ(normal_id, 10);
+    }
+}
+CATCH
+
 TEST(MultiVersionRefCount, RefAndCollapse)
 try
 {
