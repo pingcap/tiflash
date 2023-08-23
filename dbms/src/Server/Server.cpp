@@ -1419,8 +1419,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         constexpr auto delta_index_cache_ratio = 0.02;
-        size_t n
-            = config().getUInt64("delta_index_cache_size", server_info.memory_info.capacity * delta_index_cache_ratio);
+        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
+            ? server_info.memory_info.capacity * delta_index_cache_ratio
+            : backup_delta_index_cache_size;
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
         LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
