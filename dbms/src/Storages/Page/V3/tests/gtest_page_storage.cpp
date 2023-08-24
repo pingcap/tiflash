@@ -1881,7 +1881,7 @@ try
     }
 
     {
-        auto page = page_storage->read(page_id1);
+        auto page = page_storage->readImpl(TEST_NAMESPACE_ID, page_id1, nullptr, nullptr, /*throw_on_not_exist*/false);
         ASSERT_FALSE(page.isValid());
     }
     {

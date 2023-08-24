@@ -454,13 +454,39 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 break;
             }
             case WriteBatchWriteType::PUT:
-            case WriteBatchWriteType::UPSERT:
             case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "write batch have a invalid total size == 0 while this kind of entry exist, write_type={}",
-                    magic_enum::enum_name(write.type));
+            {
+                RUNTIME_CHECK(
+                    write.size == 0 && write.offsets.size() == 0,
+                    write.page_id,
+                    write.size,
+                    write.offsets.size());
+
+                ChecksumClass digest;
+                digest.update("", write.size);
+
+                auto [blob_id, offset_in_file] = getPosFromStats(0, page_type);
+                PageEntryV3 entry{
+                    .file_id = blob_id,
+                    .size = write.size,
+                    .padded_size = 0,
+                    .tag = write.tag,
+                    .offset = offset_in_file,
+                    .checksum = digest.checksum(),
+                };
+
+                if (write.type == WriteBatchWriteType::PUT)
+                {
+                    edit.put(wb.getFullPageId(write.page_id), entry);
+                }
+                else
+                {
+                    edit.updateRemote(wb.getFullPageId(write.page_id), entry);
+                }
                 break;
+            }
+            case WriteBatchWriteType::UPSERT:
+                throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
             }
         }
         return edit;
@@ -600,13 +626,12 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
         throw Exception(
-            fmt::format(
-                "write batch have a invalid total size, or something wrong in parse write batch "
-                "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
-                all_page_data_size,
-                (buffer_pos - buffer),
-                actually_allocated_size),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "write batch have a invalid total size, or something wrong in parse write batch "
+            "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
+            all_page_data_size,
+            (buffer_pos - buffer),
+            actually_allocated_size);
     }
 
     try
