@@ -31,7 +31,7 @@ void SortSpillContext::buildSpiller(const Block & input_schema)
 
 bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 {
-    if (!in_spillable_stage || !enable_spill)
+    if (!supportFurtherSpill() || !enable_spill)
         return false;
     revocable_memory = new_value;
     if (auto_spill_mode)
@@ -57,7 +57,7 @@ Int64 SortSpillContext::triggerSpill(Int64 expected_released_memories)
 {
     if unlikely(expected_released_memories <= 0)
         return expected_released_memories;
-    if (!in_spillable_stage || !enable_spill)
+    if (!supportFurtherSpill() || !enable_spill)
         return expected_released_memories;
     RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
     auto total_revocable_memory = getTotalRevocableMemory();

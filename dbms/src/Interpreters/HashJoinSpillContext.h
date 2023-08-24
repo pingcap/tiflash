@@ -31,6 +31,7 @@ private:
     SpillConfig probe_spill_config;
     SpillerPtr probe_spiller;
     Int64 max_cached_bytes;
+    std::atomic<bool> in_build_stage{true};
 
 public:
     HashJoinSpillContext(
@@ -55,6 +56,8 @@ public:
     bool supportAutoTriggerSpill() const override { return true; }
     void finishOneSpill(size_t partition_id);
     bool needFinalSpill(size_t partition_id) const { return (*partition_spill_status)[partition_id] != AutoSpillStatus::NO_NEED_AUTO_SPILL; }
+    void finishBuild();
+    void finishSpillableStage() override;
 };
 
 using HashJoinSpillContextPtr = std::shared_ptr<HashJoinSpillContext>;

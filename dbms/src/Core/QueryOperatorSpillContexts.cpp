@@ -80,9 +80,4 @@ Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memor
     }
     return expected_released_memories;
 }
-void OperatorSpillContext::finishSpillableStage()
-{
-    LOG_INFO(log, "Operator finish spill stage");
-    in_spillable_stage = false;
-}
 } // namespace DB

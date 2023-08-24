@@ -47,7 +47,7 @@ Int64 HashJoinSpillContext::getTotalRevocableMemoryImpl()
     Int64 ret = 0;
     for (size_t part_index = 0; part_index < partition_revocable_memories->size(); ++part_index)
     {
-        if (in_spillable_stage || isPartitionSpilled(part_index))
+        if (in_build_stage || isPartitionSpilled(part_index))
             ret += (*partition_revocable_memories)[part_index];
     }
     return ret;
@@ -55,7 +55,12 @@ Int64 HashJoinSpillContext::getTotalRevocableMemoryImpl()
 
 bool HashJoinSpillContext::supportFurtherSpill() const
 {
-    return in_spillable_stage || isSpilled();
+    return in_build_stage || isSpilled();
+}
+
+void HashJoinSpillContext::finishSpillableStage()
+{
+    throw Exception("Not supported");
 }
 
 void HashJoinSpillContext::buildBuildSpiller(const Block & input_schema)
@@ -66,6 +71,12 @@ void HashJoinSpillContext::buildBuildSpiller(const Block & input_schema)
         (*partition_revocable_memories).size(),
         input_schema,
         log);
+}
+
+void HashJoinSpillContext::finishBuild()
+{
+    LOG_INFO(log, "Hash join finish build stage");
+    in_build_stage = false;
 }
 
 void HashJoinSpillContext::buildProbeSpiller(const Block & input_schema)
@@ -136,7 +147,7 @@ SpillConfig HashJoinSpillContext::createProbeSpillConfig(const String & spill_id
 std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
 {
     std::vector<size_t> ret;
-    if (!in_spillable_stage || !isSpillEnabled())
+    if (!in_build_stage || !isSpillEnabled())
         return ret;
     Int64 target_partition_index = -1;
     if (operator_spill_threshold <= 0 || getTotalRevocableMemoryImpl() <= static_cast<Int64>(operator_spill_threshold))
@@ -186,8 +197,8 @@ Int64 HashJoinSpillContext::triggerSpill(Int64 expected_released_memories)
     {
         if (pair.second.second <= 0)
             continue;
-        if (!in_spillable_stage && !isPartitionSpilled(pair.first))
-            /// no new partition spill is allowed
+        if (!in_build_stage && !isPartitionSpilled(pair.first))
+            /// no new partition spill is allowed if not in build stage
             continue;
         AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
         /// mark for spill

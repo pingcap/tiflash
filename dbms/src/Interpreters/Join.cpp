@@ -1718,7 +1718,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
     if (isEnableSpill())
     {
-        hash_join_spill_context->finishSpillableStage();
+        hash_join_spill_context->finishBuild();
         if (isSpilled())
         {
             // TODO support runtime filter with spill.

@@ -34,7 +34,6 @@ class OperatorSpillContext
 {
 protected:
     UInt64 operator_spill_threshold;
-    std::atomic<bool> in_spillable_stage{true};
     std::atomic<bool> is_spilled{false};
     bool enable_spill = true;
     bool auto_spill_mode = false;
@@ -42,6 +41,9 @@ protected:
     LoggerPtr log;
 
     virtual Int64 getTotalRevocableMemoryImpl() = 0;
+
+private:
+    std::atomic<bool> in_spillable_stage{true};
 
 public:
     /// minimum revocable operator memories that will trigger a spill
@@ -55,7 +57,6 @@ public:
     bool isSpillEnabled() const { return enable_spill && (auto_spill_mode || operator_spill_threshold > 0); }
     bool supportSpill() const { return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0); }
     void disableSpill() { enable_spill = false; }
-    void finishSpillableStage();
     virtual bool supportFurtherSpill() const { return in_spillable_stage; }
     bool isInAutoSpillMode() const { return auto_spill_mode; }
     void setAutoSpillMode()
@@ -85,6 +86,11 @@ public:
     /// so user does not need set operator_spill_threshold explicitly
     virtual bool supportAutoTriggerSpill() const { return false; }
     virtual Int64 triggerSpill(Int64 expected_released_memories) = 0;
+    virtual void finishSpillableStage()
+    {
+        LOG_INFO(log, "Operator finish spill stage");
+        in_spillable_stage = false;
+    }
 };
 
 using OperatorSpillContextPtr = std::shared_ptr<OperatorSpillContext>;
