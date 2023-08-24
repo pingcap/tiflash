@@ -258,16 +258,16 @@ TEST_F(BlobStoreStatsTest, testStat)
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, 10);
-    ASSERT_FALSE(stat);
+    ASSERT_EQ(stat, nullptr);
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, 20);
-    ASSERT_FALSE(stat);
+    ASSERT_EQ(stat, nullptr);
 
     stats.createStat(0, config.file_limit_size, stats.lock());
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
-    ASSERT_TRUE(stat);
+    ASSERT_NE(stat, nullptr);
 
     // PageType::RaftData should not use the same stat with PageType::Normal
     BlobStats::BlobStatPtr raft_stat;
@@ -324,6 +324,45 @@ TEST_F(BlobStoreStatsTest, testStat)
     ASSERT_EQ(offset, 130);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110 + 10);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 90 + 120);
+    ASSERT_LE(stat->sm_valid_rate, 1);
+}
+
+TEST_F(BlobStoreStatsTest, StatWithEmptyBlob)
+{
+    BlobFileId blob_file_id = 0;
+    BlobStats::BlobStatPtr stat;
+
+    BlobStats stats(logger, delegator, config);
+
+    stats.createStat(0, config.file_limit_size, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
+    ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
+    ASSERT_NE(stat, nullptr);
+
+    auto offset = stat->getPosFromStat(10, stat->lock());
+    ASSERT_EQ(offset, 0);
+
+    offset = stat->getPosFromStat(0, stat->lock()); // empty
+    ASSERT_EQ(offset, 10);
+
+    offset = stat->getPosFromStat(20, stat->lock());
+    ASSERT_EQ(offset, 10);
+
+    offset = stat->getPosFromStat(100, stat->lock());
+    ASSERT_EQ(offset, 30);
+
+    ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_rate, 1);
+
+    stat->removePosFromStat(10, 0, stat->lock());
+    ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_rate, 1.0);
+
+    stat->removePosFromStat(10, 20, stat->lock());
+    ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_size, 10 + 100);
     ASSERT_LE(stat->sm_valid_rate, 1);
 }
 

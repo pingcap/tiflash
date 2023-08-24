@@ -406,6 +406,41 @@ TEST_P(SpaceMapTest, TestGetUsedBoundary)
     }
 }
 
+TEST_P(SpaceMapTest, EmptyBlob)
+{
+    auto smap = SpaceMap::createSpaceMap(SpaceMap::SMAP64_STD_MAP, 0, 100);
+    smap->markUsed(50, 10);
+    auto sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 60);
+    ASSERT_EQ(sizes.second, 10);
+    ASSERT_EQ(smap->getUsedBoundary(), 60);
+
+    smap->markUsed(60, 0);
+    ASSERT_EQ(smap->getUsedBoundary(), 60);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 60);
+    ASSERT_EQ(sizes.second, 10);
+
+    smap->markUsed(60, 20);
+    ASSERT_EQ(smap->getUsedBoundary(), 80);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 80);
+    ASSERT_EQ(sizes.second, 30);
+
+    smap->markFree(60, 0);
+    ASSERT_EQ(smap->getUsedBoundary(), 80);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 80);
+    ASSERT_EQ(sizes.second, 30);
+
+    smap->markFree(60, 20);
+    ASSERT_EQ(smap->getUsedBoundary(), 60);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 60);
+    ASSERT_EQ(sizes.second, 10);
+}
+
+
 INSTANTIATE_TEST_CASE_P(Type, SpaceMapTest, testing::Values(SpaceMap::SMAP64_STD_MAP));
 
 TEST(SpaceMapSTDMapTest, TestMarkFreeSearch)
