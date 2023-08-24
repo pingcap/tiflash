@@ -350,7 +350,6 @@ std::tuple<bool, String> BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset off
     bool success = smap->markUsed(offset, buf_size);
     if (!success)
     {
-        return std::make_tuple(success, smap->toDebugString());
         String msg = (buf_size == 0) ? "" : smap->toDebugString();
         return std::make_tuple(success, msg);
     }
