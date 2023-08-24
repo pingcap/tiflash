@@ -264,7 +264,7 @@ protected:
         {
             return true;
         }
-        
+
         // for an empty blob, no new free block is created, just skip
         if (length == 0)
         {
