@@ -67,7 +67,7 @@ public:
     }
     Int64 getTotalRevocableMemory()
     {
-        if (supportAutoTriggerSpill())
+        if (supportFurtherSpill())
             return getTotalRevocableMemoryImpl();
         else
             return 0;
@@ -86,7 +86,7 @@ public:
     /// so user does not need set operator_spill_threshold explicitly
     virtual bool supportAutoTriggerSpill() const { return false; }
     virtual Int64 triggerSpill(Int64 expected_released_memories) = 0;
-    virtual void finishSpillableStage()
+    void finishSpillableStage()
     {
         LOG_INFO(log, "Operator finish spill stage");
         in_spillable_stage = false;

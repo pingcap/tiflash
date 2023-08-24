@@ -37,11 +37,14 @@ Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memor
             "Query memory usage exceeded threshold, trigger auto spill check, expected released memory: {}",
             expected_released_memories);
 
-        if (check_cooldown_time && watch.elapsedFromLastTime() < auto_spill_check_min_interval_ns)
+        auto current_time = watch.elapsed();
+        if (check_cooldown_time && current_time - last_checked_time_ns < auto_spill_check_min_interval_ns)
         {
             LOG_IMPL(log, log_level, "Auto spill check still in cooldown time, skip this check");
             return expected_released_memories;
         }
+
+        last_checked_time_ns = current_time;
 
         auto ret = expected_released_memories;
 

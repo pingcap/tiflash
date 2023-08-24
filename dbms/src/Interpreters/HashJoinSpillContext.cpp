@@ -55,12 +55,7 @@ Int64 HashJoinSpillContext::getTotalRevocableMemoryImpl()
 
 bool HashJoinSpillContext::supportFurtherSpill() const
 {
-    return in_build_stage || isSpilled();
-}
-
-void HashJoinSpillContext::finishSpillableStage()
-{
-    throw Exception("Not supported");
+    return OperatorSpillContext::supportFurtherSpill() && (in_build_stage || isSpilled());
 }
 
 void HashJoinSpillContext::buildBuildSpiller(const Block & input_schema)

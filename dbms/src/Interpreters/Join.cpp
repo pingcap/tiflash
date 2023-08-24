@@ -1844,6 +1844,7 @@ void Join::workAfterProbeFinish(size_t stream_index)
                 spilled_partition_index,
                 partitions[spilled_partition_index]->trySpillProbePartition(),
                 stream_index);
+        hash_join_spill_context->finishSpillableStage();
     }
 
     // If it is no longer to scan non-matched-data from the hash table, the hash table can be released.
