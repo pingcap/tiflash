@@ -125,25 +125,6 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         }
     }
 
-    {
-        auto keyspace_id = new_region->getKeyspaceID();
-        auto table_id = new_region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
-        {
-            switch (storage->engineType())
-            {
-            case TiDB::StorageEngine::DT:
-            {
-                break;
-            }
-            default:
-                throw Exception(
-                    "Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-    }
-
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
@@ -163,9 +144,9 @@ void KVStore::onSnapshot(
     TMTContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
-    auto keyspace_id = new_region_wrap->getKeyspaceID();
 
     {
+        auto keyspace_id = new_region_wrap->getKeyspaceID();
         auto table_id = new_region_wrap->getMappedTableID();
         if (auto storage = tmt.getStorages().get(keyspace_id, table_id);
             storage && storage->engineType() == TiDB::StorageEngine::DT)
@@ -192,10 +173,13 @@ void KVStore::onSnapshot(
                     {
                         LOG_INFO(
                             log,
-                            "clear old range before apply snapshot, region_id={} old_range={} new_range={}",
+                            "clear old range before apply snapshot, region_id={} old_range={} new_range={} "
+                            "keyspace_id={} table_id={}",
                             region_id,
                             old_key_range.toDebugString(),
-                            new_key_range.toDebugString());
+                            new_key_range.toDebugString(),
+                            keyspace_id,
+                            table_id);
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
                         // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
                         dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
@@ -270,6 +254,7 @@ void KVStore::onSnapshot(
         auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
 
+        // check that old_region is not changed and no new applied raft-log during applying snapshot.
         if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
         {
             throw Exception(
@@ -283,7 +268,7 @@ void KVStore::onSnapshot(
         {
             LOG_DEBUG(log, "previous {}, new {}", old_region->getDebugString(), new_region->getDebugString());
             {
-                // remove index first
+                // remove index for key_range -> region_id first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
                 {
                     auto manage_lock = genRegionMgrWriteLock(task_lock);
@@ -294,7 +279,7 @@ void KVStore::onSnapshot(
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
             {
-                // add index
+                // add index for new_region
                 auto manage_lock = genRegionMgrWriteLock(task_lock);
                 manage_lock.index.add(new_region);
             }
@@ -310,6 +295,8 @@ void KVStore::onSnapshot(
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
+
+    prehandling_trace.deregisterTask(new_region->id());
 }
 
 std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
@@ -325,8 +312,13 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     try
     {
         SCOPE_EXIT({ new_region->afterPrehandleSnapshot(); });
-        external_files
-            = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
+        external_files = preHandleSSTsToDTFiles( //
+            new_region,
+            snaps,
+            index,
+            term,
+            DM::FileConvertJobType::ApplySnapshot,
+            tmt);
     }
     catch (DB::Exception & e)
     {
@@ -398,7 +390,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                     context.getSettingsRef().safe_point_update_interval_seconds);
             }
             physical_table_id = storage->getTableInfo().id;
-            auto log_prefix = fmt::format("table_id={}", physical_table_id);
+            auto log_prefix = fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id);
 
             auto & global_settings = context.getGlobalContext().getSettingsRef();
 
@@ -491,7 +483,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             else
             {
                 // Other unrecoverable error, throw
-                e.addMessage(fmt::format("physical_table_id={}", physical_table_id));
+                e.addMessage(fmt::format("keyspace={} physical_table_id={}", keyspace_id, physical_table_id));
                 throw;
             }
         }
@@ -514,7 +506,8 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(true));
+    // `new_region` may change in the previous function, just log the region_id down
+    LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
 }
 
 template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
@@ -560,15 +553,18 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(
 void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
 {
     UNUSED(tmt);
-    auto task = prehandling_trace.deregisterTask(region_id);
-    if (task)
+    auto cancel_flag = prehandling_trace.deregisterTask(region_id);
+    if (cancel_flag)
     {
-        LOG_INFO(log, "Try cancel pre-handling from upper layer [region_id={}] but not found", region_id);
-        task->store(true, std::memory_order_seq_cst);
+        // The task is registered, set the cancel flag to true and the generated files
+        // will be clear later by `releasePreHandleSnapshot`
+        LOG_INFO(log, "Try cancel pre-handling from upper layer, region_id={}", region_id);
+        cancel_flag->store(true, std::memory_order_seq_cst);
     }
     else
     {
-        LOG_INFO(log, "Start cancel pre-handling from upper layer [region_id={}]", region_id);
+        // the task is not registered, continue
+        LOG_INFO(log, "Start cancel pre-handling from upper layer, region_id={}", region_id);
     }
 }
 
@@ -604,20 +600,6 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     });
 
     return std::make_shared<Region>(std::move(meta), proxy_helper);
-}
-
-void KVStore::handleApplySnapshot(
-    metapb::Region && region,
-    uint64_t peer_id,
-    const SSTViewVec snaps,
-    uint64_t index,
-    uint64_t term,
-    std::optional<uint64_t> deadline_index,
-    TMTContext & tmt)
-{
-    auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
-    applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
 void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
@@ -743,8 +725,11 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
                 // Call `ingestFiles` to ingest external DTFiles.
                 // Note that ingest sst won't remove the data in the key range
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                dm_storage
-                    ->ingestFiles(key_range, external_files, /*clear_data_in_range=*/false, context.getSettingsRef());
+                dm_storage->ingestFiles( //
+                    key_range,
+                    external_files,
+                    /*clear_data_in_range=*/false,
+                    context.getSettingsRef());
             }
             catch (DB::Exception & e)
             {

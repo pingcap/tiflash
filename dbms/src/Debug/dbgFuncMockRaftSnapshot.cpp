@@ -245,7 +245,8 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);
 
     // Mock to apply an empty snapshot for region[region-id]
-    tmt.getKVStore()->handleApplySnapshot(
+    RegionBench::handleApplySnapshot(
+        *tmt.getKVStore(),
         std::move(region_info),
         peer_id,
         SSTViewVec{nullptr, 0},

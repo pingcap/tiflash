@@ -139,6 +139,7 @@ private:
      */
     size_t total_committed_rows = 0;
     size_t total_committed_bytes = 0;
+    size_t total_bytes_on_disk = 0;
 
     Stopwatch watch;
 };

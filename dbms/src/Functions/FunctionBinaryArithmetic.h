@@ -926,7 +926,7 @@ private:
 
         int interval_arg = 1;
         /// do not check null type because only divide op may use non-default-impl for nulls
-        const DataTypeInterval * interval_data_type = checkAndGetDataType<DataTypeInterval>(type1.get());
+        const auto * interval_data_type = checkAndGetDataType<DataTypeInterval>(type1.get());
         if (!interval_data_type)
         {
             interval_arg = 0;
