@@ -76,7 +76,7 @@ public:
 
     void reConfig(const TokenBucketConfig & config);
 
-    TokenBucketConfig getConfig(const std::chrono::steady_clock::time_point & tp = std::chrono::steady_clock::now()) 
+    TokenBucketConfig getConfig(const std::chrono::steady_clock::time_point & tp = std::chrono::steady_clock::now())
     {
         compact(tp);
         return {tokens, fill_rate, capacity};

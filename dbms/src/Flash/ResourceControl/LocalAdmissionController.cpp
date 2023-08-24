@@ -27,7 +27,7 @@ ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::st
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
     resource_manager::GetResourceGroupResponse resp;
-    
+
     try
     {
         resp = cluster->pd_client->getResourceGroup(req);
