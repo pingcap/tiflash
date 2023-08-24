@@ -377,7 +377,7 @@ public:
     T & get()
     {
         using TWithoutRef = std::remove_reference_t<T>;
-        TWithoutRef * MAY_ALIAS ptr = reinterpret_cast<TWithoutRef *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<TWithoutRef *>(&storage);
         return *ptr;
     };
 
@@ -385,7 +385,7 @@ public:
     const T & get() const
     {
         using TWithoutRef = std::remove_reference_t<T>;
-        const TWithoutRef * MAY_ALIAS ptr = reinterpret_cast<const TWithoutRef *>(&storage);
+        const auto * MAY_ALIAS ptr = reinterpret_cast<const TWithoutRef *>(&storage);
         return *ptr;
     };
 
@@ -582,7 +582,7 @@ private:
     void createConcrete(T && x)
     {
         using JustT = std::decay_t<T>;
-        JustT * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
@@ -592,7 +592,7 @@ private:
     void assignConcrete(T && x)
     {
         using JustT = std::decay_t<T>;
-        JustT * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<JustT *>(&storage);
         *ptr = std::forward<T>(x);
     }
 
@@ -669,7 +669,7 @@ private:
 
     void create(const char * data, size_t size)
     {
-        String * MAY_ALIAS ptr = reinterpret_cast<String *>(&storage);
+        auto * MAY_ALIAS ptr = reinterpret_cast<String *>(&storage);
         new (ptr) String(data, size);
         which = Types::String;
     }

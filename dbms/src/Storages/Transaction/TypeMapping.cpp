@@ -105,9 +105,10 @@ template <typename T>
 inline constexpr bool IsEnumType = EnumType<T>::value;
 
 template <typename T>
-std::enable_if_t<!IsSignedType<T> && !IsDecimalType<T> && !IsEnumType<T> && !std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr> getDataTypeByColumnInfoBase(
-    const ColumnInfo &,
-    const T *)
+std::enable_if_t<
+    !IsSignedType<T> && !IsDecimalType<T> && !IsEnumType<T> && !std::is_same_v<T, DataTypeMyDateTime>,
+    DataTypePtr> //
+getDataTypeByColumnInfoBase(const ColumnInfo &, const T *)
 {
     return std::make_shared<T>();
 }
@@ -133,9 +134,8 @@ std::enable_if_t<IsDecimalType<T>, DataTypePtr> getDataTypeByColumnInfoBase(cons
 
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr> getDataTypeByColumnInfoBase(
-    const ColumnInfo & column_info,
-    const T *)
+std::enable_if_t<std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr> //
+getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
 {
     // In some cases, TiDB will set the decimal to -1, change -1 to 6 to avoid error
     return std::make_shared<T>(column_info.decimal == -1 ? 6 : column_info.decimal);
@@ -164,7 +164,14 @@ TypeMapping::TypeMapping()
 // This method ignores the nullable flag.
 DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
 {
-    return type_map[column_info.tp](column_info);
+    auto iter = type_map.find(column_info.tp);
+    RUNTIME_CHECK_MSG(
+        iter != type_map.end(),
+        "Invalid type from column info, column_id={} tp={} flag={}",
+        column_info.id,
+        column_info.tp,
+        column_info.flag);
+    return (iter->second)(column_info);
 }
 
 // Get the data type according to column_info, respecting

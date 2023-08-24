@@ -173,7 +173,7 @@ void EstablishCallData::initRpc()
 void EstablishCallData::tryConnectTunnel()
 {
     auto * task_manager = service->getContext()->getTMTContext().getMPPTaskManager().get();
-    auto [tunnel, err_msg] = task_manager->findAsyncTunnel(&request, this, cq);
+    auto [tunnel, err_msg] = task_manager->findAsyncTunnel(&request, this, cq, *service->getContext());
     if (tunnel == nullptr && err_msg.empty())
     {
         /// Call data will be put to cq by alarm, just return is ok

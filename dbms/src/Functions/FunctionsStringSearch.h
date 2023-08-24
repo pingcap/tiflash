@@ -52,6 +52,7 @@ public:
             break;
         case TiDB::ITiDBCollator::CollatorType::UTF8MB4_GENERAL_CI:
         case TiDB::ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI:
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_0900_AI_CI:
             collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
             break;
         default:
