@@ -51,6 +51,19 @@ public:
 
     ~TokenBucket() = default;
 
+    struct TokenBucketConfig
+    {
+        TokenBucketConfig(const double tokens_, const double fill_rate_, const double capacity_)
+            : tokens(tokens_)
+            , fill_rate(fill_rate_)
+            , capacity(capacity_)
+        {}
+
+        double tokens;
+        double fill_rate;
+        double capacity;
+    };
+
     // Put n tokens into bucket.
     void put(double n);
 
@@ -61,9 +74,13 @@ public:
 
     double peek(const TimePoint & timepoint) const;
 
-    void reConfig(double new_tokens, double new_fill_rate, double new_capacity);
+    void reConfig(const TokenBucketConfig & config);
 
-    std::tuple<double, double, double> getCurrentConfig() const { return std::make_tuple(tokens, fill_rate, capacity); }
+    TokenBucketConfig getConfig(const std::chrono::steady_clock::time_point & tp = std::chrono::steady_clock::now()) 
+    {
+        compact(tp);
+        return {tokens, fill_rate, capacity};
+    }
 
     double getAvgSpeedPerSec();
 

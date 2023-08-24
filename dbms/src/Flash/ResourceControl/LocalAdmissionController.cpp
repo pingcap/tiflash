@@ -27,6 +27,7 @@ ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::st
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
     resource_manager::GetResourceGroupResponse resp;
+    
     try
     {
         resp = cluster->pd_client->getResourceGroup(req);
@@ -34,18 +35,13 @@ ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::st
     catch (...)
     {
         auto err_msg = getCurrentExceptionMessage(false);
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("got error when fetch resource group {} from GAC, err_msg: {}", name, err_msg);
-        throw ::DB::Exception(fmt_buf.toString());
+        throw ::DB::Exception(fmt::format("getOrFetchResourceGroup({}) failed: {}", name, err_msg));
     }
-    RUNTIME_CHECK_MSG(
-        !resp.has_error(),
-        "fetch resource group({}) info from GAC failed: {}",
-        name,
-        resp.error().message());
+
+    RUNTIME_CHECK_MSG(!resp.has_error(), "getOrFetchResourceGroup({}) failed: {}", name, resp.error().message());
 
     std::string err_msg = isGACRespValid(resp.group());
-    RUNTIME_CHECK_MSG(err_msg.empty(), "fetch resource group({}) info from GAC failed: {}", name, err_msg);
+    RUNTIME_CHECK_MSG(err_msg.empty(), "getOrFetchResourceGroup({}) failed: {}", name, err_msg);
 
     return addResourceGroup(resp.group()).first;
 }
@@ -58,46 +54,48 @@ void LocalAdmissionController::startBackgroudJob()
     }
     catch (...)
     {
-        // If error happens constantly, the bg thread will not work and will keeping log error.
-        auto err_msg = getCurrentExceptionMessage(true);
+        auto err_msg = getCurrentExceptionMessage(false);
         LOG_FATAL(log, err_msg);
     }
 
-    std::function<void()> tmp_refill_token_callback;
     while (!stopped.load())
     {
-        bool only_fetch_for_low_token = true;
+        std::function<void()> local_refill_token_callback = nullptr;
+        std::function<void()> local_delete_resource_group_callback = nullptr;
+        bool fetch_token_periodically = false;
+
         {
             std::unique_lock<std::mutex> lock(mu);
-            tmp_refill_token_callback = refill_token_callback;
+            local_refill_token_callback = refill_token_callback;
+            local_delete_resource_group_callback = delete_resource_group_callback;
 
             if (low_token_resource_groups.empty())
             {
-                only_fetch_for_low_token = false;
+                fetch_token_periodically = true;
                 if (cv.wait_for(lock, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
                         return stopped.load();
                     }))
                     return;
-
-                if (delete_resource_group_callback)
-                    delete_resource_group_callback();
             }
         }
 
         try
         {
-            if (only_fetch_for_low_token)
-            {
-                fetchTokensForLowTokenResourceGroups();
-            }
-            else
+            if (fetch_token_periodically)
             {
                 fetchTokensForAllResourceGroups();
                 checkDegradeMode();
             }
+            else
+            {
+                fetchTokensForLowTokenResourceGroups();
+            }
 
-            if (tmp_refill_token_callback)
-                tmp_refill_token_callback();
+            if (local_refill_token_callback)
+                local_refill_token_callback();
+
+            if (fetch_token_periodically && local_delete_resource_group_callback)
+                local_delete_resource_group_callback();
         }
         catch (...)
         {
@@ -210,13 +208,14 @@ void LocalAdmissionController::fetchTokensFromGAC(
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req);
     LOG_DEBUG(
         log,
-        "fetch token from GAC {}: acquire_info: {}, req: {}. resp: {}",
+        "fetch token from GAC {}: acquire_infos: {}, req: {}. resp: {}",
         desc_str,
         fmt_buf.toString(),
         gac_req.DebugString(),
         resp.DebugString());
 
     auto handled = handleTokenBucketsResp(resp);
+    // not_found includes resource group names that appears in gac_req but not found in resp.
     std::vector<std::string> not_found;
     not_found.reserve(handled.size());
     for (const auto & info : acquire_infos)
@@ -319,12 +318,12 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             if (trickle_ms == 0)
             {
                 // GAC has enough tokens for LAC.
-                resource_group->updateInNormalMode(added_tokens, capacity);
+                resource_group->updateNormalMode(added_tokens, capacity);
             }
             else
             {
                 // GAC doesn't have enough tokens for LAC, start to trickle.
-                resource_group->updateInTrickleMode(added_tokens, capacity, trickle_ms);
+                resource_group->updateTrickleMode(added_tokens, capacity, trickle_ms);
             }
             resource_group->updateFetchTokenTimepoint(now);
         }

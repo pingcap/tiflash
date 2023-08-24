@@ -30,10 +30,10 @@ void MockLocalAdmissionController::refillTokenBucket()
                 auto & rg = ele.second;
                 if (rg->bucket->isStatic())
                 {
-                    auto [_, ori_fill_rate, ori_cap] = rg->bucket->getCurrentConfig();
+                    auto config = rg->bucket->getConfig();
                     // Use capacity as new token, because for static token bucket, its fill rate is zero.
-                    const double new_token = rg->bucket->peek() + ori_cap;
-                    rg->bucket->reConfig(new_token, ori_fill_rate, ori_cap);
+                    config.tokens += config.capacity;
+                    rg->bucket->reConfig(config);
                 }
             }
         }

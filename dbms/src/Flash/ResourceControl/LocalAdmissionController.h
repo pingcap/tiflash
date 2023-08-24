@@ -208,7 +208,7 @@ private:
         return acquire_num;
     }
 
-    void updateInNormalMode(double add_tokens, double new_capacity)
+    void updateNormalMode(double add_tokens, double new_capacity)
     {
         assert(add_tokens >= 0);
 
@@ -219,9 +219,13 @@ private:
             burstable = true;
             return;
         }
-        auto [ori_tokens, _, _] = bucket->getCurrentConfig();
+        auto config = bucket->getConfig();
         std::string ori_bucket_info = bucket->toString();
-        bucket->reConfig(ori_tokens + add_tokens, 0.0, new_capacity);
+
+        config.tokens += add_tokens;
+        config.fill_rate = 0;
+        config.capacity = new_capacity;
+        bucket->reConfig(config);
         LOG_INFO(
             log,
             "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
@@ -230,7 +234,7 @@ private:
             bucket->toString());
     }
 
-    void updateInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
+    void updateTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
     {
         assert(add_tokens > 0.0);
         assert(trickle_ms > 0);
@@ -255,7 +259,7 @@ private:
             trickle_sec);
 
         std::string ori_bucket_info = bucket->toString();
-        bucket->reConfig(bucket->peek(), new_fill_rate, new_capacity);
+        bucket->reConfig(TokenBucket::TokenBucketConfig(bucket->peek(), new_fill_rate, new_capacity));
         stop_trickle_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(trickle_ms);
         LOG_INFO(
             log,
@@ -274,9 +278,11 @@ private:
 
         bucket_mode = TokenBucketMode::degrade_mode;
         double avg_speed = bucket->getAvgSpeedPerSec();
-        auto [ori_tokens, _, ori_capacity] = bucket->getCurrentConfig();
+        auto config = bucket->getConfig();
         std::string ori_bucket_info = bucket->toString();
-        bucket->reConfig(ori_tokens, avg_speed, ori_capacity);
+
+        config.fill_rate = avg_speed;
+        bucket->reConfig(config);
         LOG_INFO(
             log,
             "token bucket of rg {} reconfig to normal mode done: {}",
@@ -344,17 +350,10 @@ private:
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 
 // LocalAdmissionController is the local(tiflash) part of the distributed token bucket algorithm.
-// 1. It manages all ResourceGroups for one tiflash node.
-//   1. create: Fetch info from GAC if RG not found in LAC.
-//   2. delete: Watch GAC to delete RG.
-//   3. update: Update fill_rate/capacity of TokenBucket periodically.
-// 2. Fetch token/RU from GAC:
-//   1: Periodically.
-//   2: Low token threshold.
-// 3. When GAC has no enough tokens for LAC, LAC will start trickling(a.k.a. using availableTokens/trickleTime as refill rate).
-// 4. Degrade Mode:
-//   1. If cannot get resp from GAC for a while, will enter degrade mode.
-//   2. LAC runs as an independent token bucket whose refill rate is RU_PER_SEC in degrade mode.
+// It manages all resource groups:
+// 1. Creation, deletion and config updates of resource group.
+// 2. Fetching tokens from GAC periodically or when tokens are low.
+// 3. Record resource consumption and the priority of each resource group.
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
@@ -554,7 +553,7 @@ private:
     // 3. Check if resource group need to goto degrade mode.
     // 4. Watch GAC event to delete resource group.
     void startBackgroudJob();
-    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_tokens, const std::string & desc_str);
+    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos, const std::string & desc_str);
     void checkDegradeMode();
     void watchGAC();
 
