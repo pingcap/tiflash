@@ -295,11 +295,8 @@ Aggregator::Aggregator(
         params.spill_config,
         params.getMaxBytesBeforeExternalGroupBy(),
         log);
-    Block header;
     if (agg_spill_context->supportSpill())
     {
-        /// init spiller if needed
-        header = getHeader(false);
         bool is_convertible_to_two_level = AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen);
         if (!is_convertible_to_two_level)
         {
@@ -314,9 +311,10 @@ Aggregator::Aggregator(
         register_operator_spill_context(agg_spill_context);
     if (agg_spill_context->isSpillEnabled())
     {
+        /// init spiller if needed
         /// for aggregation, the input block is sorted by bucket number
         /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-        agg_spill_context->buildSpiller(header);
+        agg_spill_context->buildSpiller(getHeader(false));
     }
 }
 
