@@ -348,17 +348,17 @@ void BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size
 {
     if (!smap->markUsed(offset, buf_size))
     {
-        // if (buf_size == 0)
-        // {
-        //     LOG_WARNING(
-        //         Logger::get(),
-        //         "Restore position from BlobStat ignore empty page, the space is already being used"
-        //         ", offset=0x{:X} buf_size={} blob_id={}",
-        //         offset,
-        //         buf_size,
-        //         id);
-        //     return;
-        // }
+        if (buf_size == 0)
+        {
+            LOG_WARNING(
+                Logger::get(),
+                "Restore position from BlobStat ignore empty page, the space is already being used"
+                ", offset=0x{:X} buf_size={} blob_id={}",
+                offset,
+                buf_size,
+                id);
+            return;
+        }
 
         LOG_ERROR(Logger::get(), smap->toDebugString());
         throw Exception(
