@@ -236,7 +236,9 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
 
 size_t Join::getTotalRowCount() const
 {
-    std::shared_lock lock(rwlock);
+    std::shared_lock rw_lock(rwlock);
+
+    std::unique_lock lock(build_probe_mutex);
 
     size_t res = 0;
 
