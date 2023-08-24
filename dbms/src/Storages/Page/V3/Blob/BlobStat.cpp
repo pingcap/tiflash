@@ -17,6 +17,7 @@
 #include <Storages/Page/V3/Blob/BlobStat.h>
 #include <Storages/PathPool.h>
 #include <boost_wrapper/string_split.h>
+#include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
 
@@ -55,7 +56,7 @@ void BlobStats::restoreByEntry(const PageEntryV3 & entry)
     }
 }
 
-std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(String blob_name)
+std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(const String & blob_name)
 {
     String err_msg;
     if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
@@ -187,6 +188,20 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
     eraseStat(std::move(stat), lock);
 }
 
+void BlobStats::setAllToReadOnly()
+{
+    auto lock_stats = lock();
+    for (const auto & [path, stats] : stats_map)
+    {
+        UNUSED(path);
+        for (const auto & stat : stats)
+        {
+            LOG_INFO(log, "BlobStat is set to read only, blob_id={}", stat->id);
+            stat->changeToReadOnly();
+        }
+    }
+}
+
 std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(
     size_t buf_size,
     PageType page_type,
@@ -314,7 +329,7 @@ size_t BlobStats::BlobStat::removePosFromStat(
 {
     if (!smap->markFree(offset, buf_size))
     {
-        smap->logDebugString();
+        LOG_ERROR(Logger::get(), smap->toDebugString());
         throw Exception(
             fmt::format(
                 "Remove position from BlobStat failed, invalid position [offset={}] [buf_size={}] [blob_id={}]",
@@ -333,15 +348,26 @@ void BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size
 {
     if (!smap->markUsed(offset, buf_size))
     {
-        smap->logDebugString();
+        // if (buf_size == 0)
+        // {
+        //     LOG_WARNING(
+        //         Logger::get(),
+        //         "Restore position from BlobStat ignore empty page, the space is already being used"
+        //         ", offset=0x{:X} buf_size={} blob_id={}",
+        //         offset,
+        //         buf_size,
+        //         id);
+        //     return;
+        // }
+
+        LOG_ERROR(Logger::get(), smap->toDebugString());
         throw Exception(
-            fmt::format(
-                "Restore position from BlobStat failed, the space/subspace is already being used [offset={}] "
-                "[buf_size={}] [blob_id={}]",
-                offset,
-                buf_size,
-                id),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Restore position from BlobStat failed, the space/subspace is already being used"
+            ", offset=0x{:X} buf_size={} blob_id={}",
+            offset,
+            buf_size,
+            id);
     }
 }
 

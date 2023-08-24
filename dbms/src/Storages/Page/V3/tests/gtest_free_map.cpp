@@ -49,8 +49,7 @@ protected:
 TEST_P(SpaceMapTest, InitAndDestory)
 {
     SpaceMapPtr smap = SpaceMap::createSpaceMap(test_type, 0, 100);
-
-    smap->logDebugString();
+    LOG_INFO(Logger::get(), smap->toDebugString());
 }
 
 
@@ -212,11 +211,11 @@ TEST_P(SpaceMapTest, TestMargins2)
     // Right margin in marked used space
     // Left margin contain freed space
     ASSERT_FALSE(smap->markFree(49, 10));
-    smap->logDebugString();
+    LOG_INFO(Logger::get(), smap->toDebugString());
     // Left margin align with marked used space left margin
     // But right margin contain freed space
     ASSERT_FALSE(smap->markFree(51, 20));
-    smap->logDebugString();
+    LOG_INFO(Logger::get(), smap->toDebugString());
     // Right margin align with marked used space right margin
     // But left margin contain freed space
     ASSERT_FALSE(smap->markUsed(40, 19));

@@ -92,6 +92,10 @@ public:
         PageType page_type = PageType::Normal,
         const WriteLimiterPtr & write_limiter = nullptr);
 
+    // Freeze coming writes on all existing BlobFiles.
+    // New writes will be written to new BlobFiles.
+    void freezeBlobFiles();
+
     void remove(const PageEntries & del_entries);
 
     PageMap read(PageIdAndEntries & entries, const ReadLimiterPtr & read_limiter = nullptr);

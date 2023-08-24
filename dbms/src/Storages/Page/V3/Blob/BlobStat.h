@@ -129,19 +129,25 @@ public:
     void eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
     /**
-         * Choose a available `BlobStat` from `BlobStats`.
-         * 
-         * If we can't find any usable span to fit `buf_size` in the existed stats.
-         * Then it will return null `BlobStat` with a available `BlobFileId`. 
-         * eq. {nullptr,`BlobFileId`}.
-         * The `BlobFileId` can use to create a new `BlobFile`.
-         *  
-         * If we do find a usable span to fit `buf_size`.
-         * Then it will return a available `BlobStatPtr` with a `INVALID_BLOBFILE_ID`.
-         * eq. {`BlobStatPtr`,INVALID_BLOBFILE_ID}.
-         * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
-         * 
-         */
+     * Change all existing BlobStat to be `ReadOnly`. So following new blobs will
+     * be written to new `BlobStat`.
+     */
+    void setAllToReadOnly();
+
+    /**
+     * Choose a available `BlobStat` from `BlobStats`.
+     * 
+     * If we can't find any usable span to fit `buf_size` in the existed stats.
+     * Then it will return null `BlobStat` with a available `BlobFileId`. 
+     * eq. {nullptr,`BlobFileId`}.
+     * The `BlobFileId` can use to create a new `BlobFile`.
+     *  
+     * If we do find a usable span to fit `buf_size`.
+     * Then it will return a available `BlobStatPtr` with a `INVALID_BLOBFILE_ID`.
+     * eq. {`BlobStatPtr`,INVALID_BLOBFILE_ID}.
+     * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
+     * 
+     */
     std::pair<BlobStatPtr, BlobFileId> chooseStat(
         size_t buf_size,
         PageType page_type,
@@ -156,7 +162,7 @@ public:
         return stats_map;
     }
 
-    static std::pair<BlobFileId, String> getBlobIdFromName(String blob_name);
+    static std::pair<BlobFileId, String> getBlobIdFromName(const String & blob_name);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
