@@ -83,7 +83,7 @@ def main():
     if files_to_format:
         print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
         for file in files_to_format:
-            cmd = 'clang-format -i {}'.format(file)
+            cmd = 'clang-format-15 -i {}'.format(file)
             if subprocess.Popen(cmd, shell=True, cwd=tiflash_repo_path).wait():
                 exit(-1)
 
