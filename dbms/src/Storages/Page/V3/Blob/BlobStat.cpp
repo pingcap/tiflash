@@ -42,17 +42,18 @@ BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig &
     , config(config_)
 {}
 
-void BlobStats::restoreByEntry(const PageEntryV3 & entry)
+std::tuple<bool, String> BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
     if (entry.file_id != INVALID_BLOBFILE_ID)
     {
         auto stat = blobIdToStat(entry.file_id);
-        stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
+        return stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
     }
     else
     {
         // It must be an entry point to remote data location
         RUNTIME_CHECK(entry.checkpoint_info.is_valid && entry.checkpoint_info.is_local_data_reclaimed);
+        return std::make_tuple(true, "");
     }
 }
 
@@ -344,31 +345,16 @@ size_t BlobStats::BlobStat::removePosFromStat(
     return sm_valid_size;
 }
 
-void BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
+std::tuple<bool, String> BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
 {
-    if (!smap->markUsed(offset, buf_size))
+    bool success = smap->markUsed(offset, buf_size);
+    if (!success)
     {
-        if (buf_size == 0)
-        {
-            LOG_WARNING(
-                Logger::get(),
-                "Restore position from BlobStat ignore empty page, the space is already being used"
-                ", offset=0x{:X} buf_size={} blob_id={}",
-                offset,
-                buf_size,
-                id);
-            return;
-        }
-
-        LOG_ERROR(Logger::get(), smap->toDebugString());
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Restore position from BlobStat failed, the space/subspace is already being used"
-            ", offset=0x{:X} buf_size={} blob_id={}",
-            offset,
-            buf_size,
-            id);
+        return std::make_tuple(success, smap->toDebugString());
+        String msg = (buf_size == 0) ? "" : smap->toDebugString();
+        return std::make_tuple(success, msg);
     }
+    return std::make_tuple(success, "");
 }
 
 void BlobStats::BlobStat::recalculateSpaceMap()

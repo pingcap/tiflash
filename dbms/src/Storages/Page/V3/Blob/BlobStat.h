@@ -80,26 +80,26 @@ public:
         BlobFileOffset getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &);
 
         /**
-             * The return value is the valid data size remained in the BlobFile after the remove
-             */
+          * The return value is the valid data size remained in the BlobFile after the remove
+          */
         size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::unique_lock<std::mutex> &);
 
         /**
-             * This method is only used when blobstore restore
-             * Restore space map won't change the `sm_total_size`/`sm_valid_size`/`sm_valid_rate`
-             */
-        void restoreSpaceMap(BlobFileOffset offset, size_t buf_size);
+         * This method is only used when blobstore restore
+         * Restore space map won't change the `sm_total_size`/`sm_valid_size`/`sm_valid_rate`
+         */
+        std::tuple<bool, String> restoreSpaceMap(BlobFileOffset offset, size_t buf_size);
 
         /**
-             * After we restore the space map.
-             * We still need to recalculate a `sm_total_size`/`sm_valid_size`/`sm_valid_rate`.
-             */
+          * After we restore the space map.
+          * We still need to recalculate a `sm_total_size`/`sm_valid_size`/`sm_valid_rate`.
+          */
         void recalculateSpaceMap();
 
         /**
-             * The `sm_max_cap` is not accurate after GC removes out-of-date data, or after restoring from disk.
-             * Caller should call this function to update the `sm_max_cap` so that we can reuse the space in this BlobStat.
-             */
+          * The `sm_max_cap` is not accurate after GC removes out-of-date data, or after restoring from disk.
+          * Caller should call this function to update the `sm_max_cap` so that we can reuse the space in this BlobStat.
+          */
         void recalculateCapacity();
     };
 
@@ -167,7 +167,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    void restoreByEntry(const PageEntryV3 & entry);
+    std::tuple<bool, String> restoreByEntry(const PageEntryV3 & entry);
     void restore();
     template <typename>
     friend class PageDirectoryFactory;

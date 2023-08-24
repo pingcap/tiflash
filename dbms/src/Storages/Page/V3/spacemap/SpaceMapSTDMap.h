@@ -64,14 +64,16 @@ protected:
         UInt64 count = 0;
 
         FmtBuffer fmt_buffer;
-        fmt_buffer.append("SpaceMap entries: {");
-        // Need use `count`,so can't use `joinStr` here.
-        for (auto & it : free_map)
-        {
-            fmt_buffer.fmtAppend("{{'index':{},'start':{},'size':{}}}", count, it.first, it.second);
-            count++;
-        }
-        fmt_buffer.append("}");
+        fmt_buffer.append("SpaceMap entries: [");
+        fmt_buffer.joinStr(
+            free_map.begin(),
+            free_map.end(),
+            [&count](const auto & it, FmtBuffer & fb) {
+                fb.fmtAppend(R"({{"index":{},"start":{},"size":{}}})", count, it.first, it.second);
+                count += 1;
+            },
+            ",");
+        fmt_buffer.append("]");
         return fmt_buffer.toString();
     }
 
