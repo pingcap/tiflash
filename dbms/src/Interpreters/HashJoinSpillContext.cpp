@@ -86,10 +86,10 @@ void HashJoinSpillContext::markPartitionSpilled(size_t partition_index)
 
 bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, Int64 new_value)
 {
+    bool is_spilled = (*partition_is_spilled)[partition_id];
     (*partition_revocable_memories)[partition_id] = new_value;
     if (operator_spill_threshold > 0)
     {
-        bool is_spilled = (*partition_is_spilled)[partition_id];
         auto force_spill
             = is_spilled && operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() > static_cast<Int64>(operator_spill_threshold);
         return (force_spill || (is_spilled && max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes));
@@ -100,6 +100,11 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
         if ((*partition_spill_status)[partition_id] == AutoSpillStatus::NEED_AUTO_SPILL)
         {
             AutoSpillStatus old_value = AutoSpillStatus::NEED_AUTO_SPILL;
+            return (*partition_spill_status)[partition_id].compare_exchange_strong(old_value, AutoSpillStatus::WAIT_SPILL_FINISH);
+        }
+        else if (is_spilled && (*partition_spill_status)[partition_id] == AutoSpillStatus::NO_NEED_AUTO_SPILL && max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes)
+        {
+            AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
             return (*partition_spill_status)[partition_id].compare_exchange_strong(old_value, AutoSpillStatus::WAIT_SPILL_FINISH);
         }
         return false;
