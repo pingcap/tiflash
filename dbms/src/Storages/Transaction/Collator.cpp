@@ -734,6 +734,7 @@ struct TiDBCollatorTypeIDMap
         id_to_type[ITiDBCollator::UTF8_UNICODE_CI] = ITiDBCollator::CollatorType::UTF8_UNICODE_CI;
         id_to_type[ITiDBCollator::UTF8MB4_UNICODE_CI] = ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI;
         id_to_type[ITiDBCollator::UTF8MB4_0900_AI_CI] = ITiDBCollator::CollatorType::UTF8MB4_0900_AI_CI;
+        id_to_type[ITiDBCollator::UTF8MB4_0900_BIN] = ITiDBCollator::CollatorType::UTF8MB4_0900_BIN;
         id_to_type[ITiDBCollator::UTF8MB4_BIN] = ITiDBCollator::CollatorType::UTF8MB4_BIN;
         id_to_type[ITiDBCollator::LATIN1_BIN] = ITiDBCollator::CollatorType::LATIN1_BIN;
         id_to_type[ITiDBCollator::BINARY] = ITiDBCollator::CollatorType::BINARY;
@@ -755,6 +756,7 @@ ITiDBCollator::ITiDBCollator(int32_t collator_id_)
 {}
 
 using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
+using UTF8MB4_0900_BIN_TYPE = BinCollator<Rune, false>;
 
 struct TiDBCollatorPtrMap
 {
@@ -772,6 +774,7 @@ struct TiDBCollatorPtrMap
         static const auto c_utf8_unicode_ci = UCACICollator<Unicode0400, true>(ITiDBCollator::UTF8_UNICODE_CI);
         static const auto c_utf8mb4_unicode_ci = UCACICollator<Unicode0400, true>(ITiDBCollator::UTF8MB4_UNICODE_CI);
         static const auto c_utf8mb4_0900_ai_ci = UCACICollator<Unicode0900, false>(ITiDBCollator::UTF8MB4_0900_AI_CI);
+        static const auto c_utf8mb4_0900_bin = UTF8MB4_0900_BIN_TYPE(ITiDBCollator::UTF8MB4_0900_BIN);
         static const auto c_utf8mb4_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8MB4_BIN);
         static const auto c_latin1_bin = BinCollator<char, true>(ITiDBCollator::LATIN1_BIN);
         static const auto c_binary = BinCollator<char, false>(ITiDBCollator::BINARY);
@@ -795,6 +798,7 @@ struct TiDBCollatorPtrMap
         M(utf8_unicode_ci);
         M(utf8mb4_unicode_ci);
         M(utf8mb4_0900_ai_ci);
+        M(utf8mb4_0900_bin);
         M(utf8mb4_bin);
         M(latin1_bin);
         M(binary);

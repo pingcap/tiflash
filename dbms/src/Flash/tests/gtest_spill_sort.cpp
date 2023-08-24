@@ -125,7 +125,8 @@ try
         TiDB::ITiDBCollator::UTF8MB4_BIN,
         TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
         TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
-        TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI};
+        TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
+        TiDB::ITiDBCollator::UTF8MB4_0900_BIN};
     for (const auto & collator_id : collators)
     {
         context.setCollation(collator_id);

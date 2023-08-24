@@ -37,6 +37,7 @@ public:
         UTF8_UNICODE_CI = 192,
         UTF8MB4_UNICODE_CI = 224,
         UTF8MB4_0900_AI_CI = 255,
+        UTF8MB4_0900_BIN = 309,
         UTF8MB4_BIN = 46,
         LATIN1_BIN = 47,
         BINARY = 63,
@@ -60,6 +61,7 @@ public:
         UTF8_UNICODE_CI,
         UTF8MB4_UNICODE_CI,
         UTF8MB4_0900_AI_CI,
+        UTF8MB4_0900_BIN,
         // ----
         MAX_,
     };
