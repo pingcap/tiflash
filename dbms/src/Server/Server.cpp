@@ -1796,7 +1796,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-
     return Application::EXIT_OK;
 }
 } // namespace DB

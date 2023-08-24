@@ -52,19 +52,15 @@ ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::st
 
 void LocalAdmissionController::startBackgroudJob()
 {
-    while (!stopped.load())
+    try
     {
-        try
-        {
-            unique_client_id = etcd_client->acquireServerIDFromPD();
-            break;
-        }
-        catch (...)
-        {
-            // If error happens constantly, the bg thread will not work and will keeping log error.
-            auto err_msg = getCurrentExceptionMessage(true);
-            handleBackgroundError(err_msg);
-        }
+        unique_client_id = etcd_client->acquireServerIDFromPD();
+    }
+    catch (...)
+    {
+        // If error happens constantly, the bg thread will not work and will keeping log error.
+        auto err_msg = getCurrentExceptionMessage(true);
+        LOG_FATAL(log, err_msg);
     }
 
     std::function<void()> tmp_refill_token_callback;
@@ -284,6 +280,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         return {};
     }
 
+    const auto now = std::chrono::steady_clock::now();
     for (const resource_manager::TokenBucketResponse & one_resp : resp.responses())
     {
         // For each resource group.
@@ -322,13 +319,14 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             if (trickle_ms == 0)
             {
                 // GAC has enough tokens for LAC.
-                resource_group->toNormalMode(added_tokens, capacity);
+                resource_group->updateInNormalMode(added_tokens, capacity);
             }
             else
             {
                 // GAC doesn't have enough tokens for LAC, start to trickle.
-                resource_group->toTrickleMode(added_tokens, capacity, trickle_ms);
+                resource_group->updateInTrickleMode(added_tokens, capacity, trickle_ms);
             }
+            resource_group->updateFetchTokenTimepoint(now);
         }
     }
     return handled_resource_group_names;

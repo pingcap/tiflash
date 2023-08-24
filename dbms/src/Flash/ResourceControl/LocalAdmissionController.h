@@ -34,6 +34,9 @@ namespace DB
 {
 class LocalAdmissionController;
 
+// NOTE: Member function of ResourceGroup should only be called by LocalAdmissionController,
+// so we can make sure the lock order of LocalAdmissionController::mu is always before ResourceGroup::mu,
+// which helps to avoid dead lock.
 class ResourceGroup final : private boost::noncopyable
 {
 public:
@@ -80,9 +83,6 @@ private:
         if (capacity < 0)
             init_cap = std::numeric_limits<int64_t>::max();
         bucket = std::make_unique<TokenBucket>(init_fill_rate, init_tokens, log->identifier(), init_cap);
-        assert(
-            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
-            || user_priority == HighPriorityValue);
     }
 
     // Priority of resource group set by user.
@@ -152,6 +152,9 @@ private:
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         user_ru_per_sec = setting.fill_rate();
         burstable = (setting.burst_limit() < 0);
+        assert(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
     }
 
     bool lowToken() const
@@ -182,7 +185,7 @@ private:
         }
 
         // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
-        // while user query speed is limited due to LAC requests too few RU.
+        // but user query speed is limited due to LAC requests too few RU.
         double acquire_num = avg_speed * n * amplification;
 
         // Prevent avg_speed from being 0 due to RU exhaustion.
@@ -205,8 +208,7 @@ private:
         return acquire_num;
     }
 
-    // New tokens fetched from GAC, update remaining tokens.
-    void toNormalMode(double add_tokens, double new_capacity)
+    void updateInNormalMode(double add_tokens, double new_capacity)
     {
         assert(add_tokens >= 0);
 
@@ -217,9 +219,9 @@ private:
             burstable = true;
             return;
         }
-        auto [ori_tokens, ori_fill_rate, ori_capacity] = bucket->getCurrentConfig();
+        auto [ori_tokens, _, _] = bucket->getCurrentConfig();
         std::string ori_bucket_info = bucket->toString();
-        bucket->reConfig(ori_tokens + add_tokens, ori_fill_rate, ori_capacity);
+        bucket->reConfig(ori_tokens + add_tokens, 0.0, new_capacity);
         LOG_INFO(
             log,
             "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
@@ -228,7 +230,7 @@ private:
             bucket->toString());
     }
 
-    void toTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
+    void updateInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
     {
         assert(add_tokens > 0.0);
         assert(trickle_ms > 0);
@@ -246,8 +248,9 @@ private:
         const double new_fill_rate = add_tokens / trickle_sec;
         RUNTIME_CHECK_MSG(
             new_fill_rate > 0.0,
-            "token bucket of {} transform to trickle mode failed. trickle_ms: {}, trickle_sec: {}",
+            "token bucket of {} reconfig to trickle mode failed. add_tokens: {} trickle_ms: {}, trickle_sec: {}",
             name,
+            add_tokens,
             trickle_ms,
             trickle_sec);
 
@@ -293,11 +296,13 @@ private:
     bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura)
         const
     {
+        std::lock_guard lock(mu);
         return std::chrono::duration_cast<std::chrono::seconds>(now - last_fetch_tokens_from_gac_timepoint) > dura;
     }
 
     void updateFetchTokenTimepoint(const std::chrono::steady_clock::time_point & tp)
     {
+        std::lock_guard lock(mu);
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
         last_fetch_tokens_from_gac_timepoint = tp;
     }
@@ -341,9 +346,9 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 // LocalAdmissionController is the local(tiflash) part of the distributed token bucket algorithm.
 // 1. It manages all ResourceGroups for one tiflash node.
 //   1. create: Fetch info from GAC if RG not found in LAC.
-//   2. delete: Cleanup deleted RG from LAC periodically.
+//   2. delete: Watch GAC to delete RG.
 //   3. update: Update fill_rate/capacity of TokenBucket periodically.
-// 2. Will fetch token/RU from GAC:
+// 2. Fetch token/RU from GAC:
 //   1: Periodically.
 //   2: Low token threshold.
 // 3. When GAC has no enough tokens for LAC, LAC will start trickling(a.k.a. using availableTokens/trickleTime as refill rate).
@@ -487,7 +492,9 @@ public:
     }
 
 private:
-    // Get ResourceGroup by name, if not exist, fetch from PD.
+    // getOrFetchResourceGroup() and findResourceGroup() should be private,
+    // this is to avoid user call member function of ResourceGroup directly.
+    // So we can avoid dead lock.
     ResourceGroupPtr getOrFetchResourceGroup(const std::string & name);
     ResourceGroupPtr findResourceGroup(const std::string & name)
     {

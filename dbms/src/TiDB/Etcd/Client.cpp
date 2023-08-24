@@ -237,9 +237,11 @@ grpc::Status Client::resign(const v3electionpb::LeaderKey & leader_key)
     return status;
 }
 
+// Using ectd Txn to check if /tidb/server_id/gen_server_id exists.
+// If doesn't exists, put it to etcd and return. Otherwise retry(max retry 3 times).
 UInt64 Client::acquireServerIDFromPD()
 {
-    const int retry_times = 3;
+    const Int32 retry_times = 3;
     UInt64 random_server_id = 0;
     bool acquire_succ = false;
 
@@ -247,13 +249,13 @@ UInt64 Client::acquireServerIDFromPD()
     std::mt19937_64 gen(dev());
     std::uniform_int_distribution dist;
 
-    for (int i = 0; i < retry_times; ++i)
+    for (Int32 i = 0; i < retry_times; ++i)
     {
         auto exists_server_ids = getExistsServerID();
 
-        int max_count = 65535;
+        const Int32 max_count = std::numeric_limits<Int32>::max();
         bool gen_random_server_id_succ = false;
-        for (int count = 0; count < max_count; ++count)
+        for (Int32 count = 0; count < max_count; ++count)
         {
             random_server_id = dist(gen);
             if (exists_server_ids.find(random_server_id) == exists_server_ids.end())
@@ -316,6 +318,8 @@ std::unordered_set<UInt64> Client::getExistsServerID()
         throw Exception("getExistsServerID failed, grpc error: {}", status.error_message());
 
     std::unordered_set<UInt64> exists_server_ids;
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("all existing server ids: ");
     for (const auto & kv : range_resp.kvs())
     {
         String key = kv.key();
@@ -323,7 +327,9 @@ std::unordered_set<UInt64> Client::getExistsServerID()
         RUNTIME_CHECK(prefix == TIDB_SERVER_ID_ETCD_PATH);
         String server_id_str(key.begin() + TIDB_SERVER_ID_ETCD_PATH.size() + 1, key.end());
         exists_server_ids.insert(std::stoi(server_id_str));
+        fmt_buf.fmtAppend("{};", server_id_str);
     }
+    LOG_INFO(log, fmt_buf.toString());
     return exists_server_ids;
 }
 
