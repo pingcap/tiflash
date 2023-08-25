@@ -175,6 +175,8 @@ libs/libtiflash-proxy
 tmp/
 
 tests/fullstack-test2/auto_gen
+tests/docker/data
+tests/docker/log
 
 CoverageReport
 
