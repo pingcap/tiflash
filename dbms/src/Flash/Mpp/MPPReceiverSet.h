@@ -32,7 +32,7 @@ public:
     {}
     ~MPPReceiverSet()
     {
-        /// close will set every receiver to closed state without blocking risk
+        /// close will close every receiver's internal MPMC queue and avoid blocking risk in waitAllConnectionsDone
         close();
     }
     void addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver);
