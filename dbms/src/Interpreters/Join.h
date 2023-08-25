@@ -231,7 +231,11 @@ public:
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
 
-    void checkAndMarkPartitionSpilledIfNeeded(JoinPartition & join_partition, std::unique_lock<std::mutex> & partition_lock, size_t partition_index, size_t stream_index);
+    void checkAndMarkPartitionSpilledIfNeeded(
+        JoinPartition & join_partition,
+        std::unique_lock<std::mutex> & partition_lock,
+        size_t partition_index,
+        size_t stream_index);
 
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 

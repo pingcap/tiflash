@@ -96,9 +96,12 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
     (*partition_revocable_memories)[partition_id] = new_value;
     if (operator_spill_threshold > 0)
     {
-        auto force_spill
-            = is_spilled && operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() > static_cast<Int64>(operator_spill_threshold);
-        return (force_spill || (is_spilled && max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes));
+        auto force_spill = is_spilled && operator_spill_threshold > 0
+            && getTotalRevocableMemoryImpl() > static_cast<Int64>(operator_spill_threshold);
+        return (
+            force_spill
+            || (is_spilled && max_cached_bytes > 0
+                && (*partition_revocable_memories)[partition_id] > max_cached_bytes));
     }
     else
     {
@@ -106,12 +109,18 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
         if ((*partition_spill_status)[partition_id] == AutoSpillStatus::NEED_AUTO_SPILL)
         {
             AutoSpillStatus old_value = AutoSpillStatus::NEED_AUTO_SPILL;
-            return (*partition_spill_status)[partition_id].compare_exchange_strong(old_value, AutoSpillStatus::WAIT_SPILL_FINISH);
+            return (*partition_spill_status)[partition_id].compare_exchange_strong(
+                old_value,
+                AutoSpillStatus::WAIT_SPILL_FINISH);
         }
-        else if (is_spilled && (*partition_spill_status)[partition_id] == AutoSpillStatus::NO_NEED_AUTO_SPILL && max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes)
+        else if (
+            is_spilled && (*partition_spill_status)[partition_id] == AutoSpillStatus::NO_NEED_AUTO_SPILL
+            && max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes)
         {
             AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-            return (*partition_spill_status)[partition_id].compare_exchange_strong(old_value, AutoSpillStatus::WAIT_SPILL_FINISH);
+            return (*partition_spill_status)[partition_id].compare_exchange_strong(
+                old_value,
+                AutoSpillStatus::WAIT_SPILL_FINISH);
         }
         return false;
     }
@@ -170,17 +179,22 @@ std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
 
 Int64 HashJoinSpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    std::vector<std::pair<size_t, std::pair<bool, Int64>>> partition_index_to_revocable_memories(partition_revocable_memories->size());
+    std::vector<std::pair<size_t, std::pair<bool, Int64>>> partition_index_to_revocable_memories(
+        partition_revocable_memories->size());
     for (size_t i = 0; i < (*partition_revocable_memories).size(); i++)
-        partition_index_to_revocable_memories[i] = std::make_pair(i, std::make_pair(isPartitionSpilled(i), (*partition_revocable_memories)[i].load()));
-    std::sort(partition_index_to_revocable_memories.begin(), partition_index_to_revocable_memories.end(), [](const auto & a, const auto & b) {
-        if (a.second.first != b.second.first)
-        {
-            /// spilled partition has highest priority
-            return a.second.first;
-        }
-        return a.second.second > b.second.second;
-    });
+        partition_index_to_revocable_memories[i]
+            = std::make_pair(i, std::make_pair(isPartitionSpilled(i), (*partition_revocable_memories)[i].load()));
+    std::sort(
+        partition_index_to_revocable_memories.begin(),
+        partition_index_to_revocable_memories.end(),
+        [](const auto & a, const auto & b) {
+            if (a.second.first != b.second.first)
+            {
+                /// spilled partition has highest priority
+                return a.second.first;
+            }
+            return a.second.second > b.second.second;
+        });
     for (const auto & pair : partition_index_to_revocable_memories)
     {
         if (pair.second.second <= 0)
@@ -192,7 +206,8 @@ Int64 HashJoinSpillContext::triggerSpillImpl(Int64 expected_released_memories)
         /// mark for spill
         if ((*partition_spill_status)[pair.first].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL))
             LOG_DEBUG(log, "mark partition {} to spill for {}", pair.first, op_name);
-        expected_released_memories = std::max(expected_released_memories - (*partition_revocable_memories)[pair.first], 0);
+        expected_released_memories
+            = std::max(expected_released_memories - (*partition_revocable_memories)[pair.first], 0);
         if (expected_released_memories <= 0)
             return expected_released_memories;
     }

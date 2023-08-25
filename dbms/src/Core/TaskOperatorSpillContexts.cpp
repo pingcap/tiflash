@@ -58,7 +58,7 @@ void TaskOperatorSpillContexts::appendAdditionalOperatorSpillContexts()
 }
 void TaskOperatorSpillContexts::registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
 {
-    if likely(operator_spill_context->supportSpill() && operator_spill_context->supportAutoTriggerSpill())
+    if likely (operator_spill_context->supportSpill() && operator_spill_context->supportAutoTriggerSpill())
     {
         std::unique_lock lock(mutex);
         operator_spill_context->setAutoSpillMode();

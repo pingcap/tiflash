@@ -496,21 +496,26 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index)
     data.clear();
 }
 
-void Join::checkAndMarkPartitionSpilledIfNeeded(JoinPartition & join_partition, std::unique_lock<std::mutex> & partition_lock, size_t partition_index, size_t stream_index)
+void Join::checkAndMarkPartitionSpilledIfNeeded(
+    JoinPartition & join_partition,
+    std::unique_lock<std::mutex> & partition_lock,
+    size_t partition_index,
+    size_t stream_index)
 {
-        auto ret = hash_join_spill_context->updatePartitionRevocableMemory(partition_index, join_partition.revocableBytes());
-        if (ret)
+    auto ret
+        = hash_join_spill_context->updatePartitionRevocableMemory(partition_index, join_partition.revocableBytes());
+    if (ret)
+    {
+        if (!hash_join_spill_context->isPartitionSpilled(partition_index))
         {
-            if (!hash_join_spill_context->isPartitionSpilled(partition_index))
-            {
-                /// first spill
-                hash_join_spill_context->markPartitionSpilled(partition_index);
-                join_partition.releasePartitionPoolAndHashMap(partition_lock);
-                spilled_partition_indexes.push_back(partition_index);
-            }
-            auto blocks_to_spill = join_partition.trySpillBuildPartition(partition_lock);
-            markBuildSideSpillData(partition_index, std::move(blocks_to_spill), stream_index);
+            /// first spill
+            hash_join_spill_context->markPartitionSpilled(partition_index);
+            join_partition.releasePartitionPoolAndHashMap(partition_lock);
+            spilled_partition_indexes.push_back(partition_index);
         }
+        auto blocks_to_spill = join_partition.trySpillBuildPartition(partition_lock);
+        markBuildSideSpillData(partition_index, std::move(blocks_to_spill), stream_index);
+    }
 }
 
 /// the block should be valid.
@@ -577,7 +582,12 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         }
         if (!hash_join_spill_context->isInAutoSpillMode())
             spillMostMemoryUsedPartitionIfNeed(stream_index);
-        LOG_DEBUG(log, fmt::format("all bytes used after one insert: {}, hash table and pool size: {}", getTotalByteCount(), getTotalHashTableAndPoolByteCount()));
+        LOG_DEBUG(
+            log,
+            fmt::format(
+                "all bytes used after one insert: {}, hash table and pool size: {}",
+                getTotalByteCount(),
+                getTotalHashTableAndPoolByteCount()));
     }
 }
 
@@ -1745,10 +1755,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
                     join_partition->releasePartitionPoolAndHashMap(partition_lock);
                     spilled_partition_indexes.push_back(i);
                 }
-                markBuildSideSpillData(
-                    i,
-                    partitions[i]->trySpillBuildPartition(),
-                    stream_index);
+                markBuildSideSpillData(i, partitions[i]->trySpillBuildPartition(), stream_index);
             }
         }
         LOG_DEBUG(log, "memory usage after build finish: {}", getTotalByteCount());
@@ -2220,7 +2227,11 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             auto new_max_bytes_before_external_join = hash_join_spill_context->getOperatorSpillThreshold();
             /// have operator level threshold
             if (new_max_bytes_before_external_join > 0)
-                new_max_bytes_before_external_join = std::max(1, static_cast<UInt64>(new_max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency)));
+                new_max_bytes_before_external_join = std::max(
+                    1,
+                    static_cast<UInt64>(
+                        new_max_bytes_before_external_join
+                        * (static_cast<double>(restore_join_build_concurrency) / build_concurrency)));
             restore_join = createRestoreJoin(new_max_bytes_before_external_join, spilled_partition_index);
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
