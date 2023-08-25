@@ -567,11 +567,12 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
             if (!hash_join_spill_context->isPartitionSpilled(i))
             {
+                // todo add hash table resize callback to check if current partition is already marked to spill
                 insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
                 join_partition->updateHashMapAndPoolMemoryUsage();
                 /// double check here to release memory
                 checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
-                /// todo trigger auto spill check here
+                /// todo check if it is necessary to trigger auto spill check here
             }
         }
         if (!hash_join_spill_context->isInAutoSpillMode())
