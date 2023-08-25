@@ -230,8 +230,6 @@ public:
     size_t getTotalByteCount();
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
-    /// Sum size in bytes of all hash table and pools
-    size_t getTotalHashTableAndPoolByteCount();
 
     void checkAndMarkPartitionSpilledIfNeeded(JoinPartition & join_partition, std::unique_lock<std::mutex> & partition_lock, size_t partition_index, size_t stream_index);
 
@@ -505,6 +503,9 @@ private:
     void finalizeNullAwareSemiFamilyBuild();
 
     void finalizeCrossJoinBuild();
+
+    /// Sum size in bytes of all hash table and pools
+    size_t getTotalHashTableAndPoolByteCount();
 };
 
 } // namespace DB
