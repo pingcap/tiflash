@@ -238,8 +238,6 @@ size_t Join::getTotalRowCount() const
 {
     std::shared_lock rw_lock(rwlock);
 
-    std::unique_lock lock(build_probe_mutex);
-
     size_t res = 0;
 
     if (join_map_method == JoinMapMethod::CROSS)
