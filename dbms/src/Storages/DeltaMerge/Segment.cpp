@@ -40,6 +40,7 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
+#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -2337,7 +2338,12 @@ Segment::ReadInfo Segment::getReadInfo(
         // Try update shared index, if my_delta_index is more advanced.
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
+        {
             LOG_DEBUG(tracing_logger, "Segment updated delta index");
+            // Update cache size.
+            if (auto cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
+                cache->setDeltaIndex(segment_snap->delta->getSharedDeltaIndex());
+        }
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
