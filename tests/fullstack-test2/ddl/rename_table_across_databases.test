@@ -17,7 +17,7 @@ mysql> drop table if exists test_new.t2;
 mysql> drop database if exists test_new;
 
 mysql> create table test.t(a int, b int)
-mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+mysql> alter table test.t set tiflash replica 1 
 
 mysql> insert into test.t values (1, 1);
 mysql> insert into test.t values (1, 2);
