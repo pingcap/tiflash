@@ -52,7 +52,7 @@ public:
     SpillConfig createBuildSpillConfig(const String & spill_id) const;
     SpillConfig createProbeSpillConfig(const String & spill_id) const;
     std::vector<size_t> getPartitionsToSpill();
-    Int64 triggerSpill(Int64 expected_released_memories) override;
+    Int64 triggerSpillImpl(Int64 expected_released_memories) override;
     bool supportAutoTriggerSpill() const override { return true; }
     void finishOneSpill(size_t partition_id);
     bool needFinalSpill(size_t partition_id) const { return (*partition_spill_status)[partition_id] != AutoSpillStatus::NO_NEED_AUTO_SPILL; }

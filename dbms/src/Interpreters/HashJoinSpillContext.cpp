@@ -55,7 +55,7 @@ Int64 HashJoinSpillContext::getTotalRevocableMemoryImpl()
 
 bool HashJoinSpillContext::supportFurtherSpill() const
 {
-    return OperatorSpillContext::supportFurtherSpill() && (in_build_stage || isSpilled());
+    return in_spillable_stage && (in_build_stage || isSpilled());
 }
 
 void HashJoinSpillContext::buildBuildSpiller(const Block & input_schema)
@@ -168,15 +168,8 @@ std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
     return ret;
 }
 
-Int64 HashJoinSpillContext::triggerSpill(Int64 expected_released_memories)
+Int64 HashJoinSpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    if unlikely(expected_released_memories <= 0)
-        return expected_released_memories;
-    if (!supportFurtherSpill() || !enable_spill)
-        return expected_released_memories;
-    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
-    if (getTotalRevocableMemory() < MIN_SPILL_THRESHOLD)
-        return expected_released_memories;
     std::vector<std::pair<size_t, std::pair<bool, Int64>>> partition_index_to_revocable_memories(partition_revocable_memories->size());
     for (size_t i = 0; i < (*partition_revocable_memories).size(); i++)
         partition_index_to_revocable_memories[i] = std::make_pair(i, std::make_pair(isPartitionSpilled(i), (*partition_revocable_memories)[i].load()));
