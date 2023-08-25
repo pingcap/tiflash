@@ -15,11 +15,16 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
+
+namespace DB::DM
+{
+class DeltaIndex;
+using DeltaIndexPtr = std::shared_ptr<DeltaIndex>;
+} // namespace DB::DM
 
 namespace DB::DM::Remote
 {
@@ -30,10 +35,8 @@ namespace DB::DM::Remote
 class RNDeltaIndexCache : private boost::noncopyable
 {
 public:
-    // TODO: Currently we use a quantity based cache size. We could change to memory-size based.
-    //       However, as the delta index's size could be changing, we need to implement our own LRU instead.
-    explicit RNDeltaIndexCache(size_t max_cache_keys)
-        : cache(max_cache_keys)
+    explicit RNDeltaIndexCache(size_t max_cache_size)
+        : cache(max_cache_size)
     {}
 
     struct CacheKey
@@ -51,6 +54,17 @@ public:
         }
     };
 
+    struct CacheValue
+    {
+        CacheValue(const DeltaIndexPtr & delta_index_, size_t bytes_)
+            : delta_index(delta_index_)
+            , bytes(bytes_)
+        {}
+
+        DeltaIndexPtr delta_index;
+        size_t bytes;
+    };
+
     struct CacheKeyHasher
     {
         size_t operator()(const CacheKey & k) const
@@ -65,13 +79,22 @@ public:
         }
     };
 
+    struct CacheValueWeight
+    {
+        size_t operator()(const CacheValue & v) const { return v.bytes; }
+    };
+
     /**
      * Returns a cached or newly created delta index, which is assigned to the specified segment(at)epoch.
      */
     DeltaIndexPtr getDeltaIndex(const CacheKey & key);
 
+    // `setDeltaIndex` will updated cache size and remove overflows if necessary.
+    void setDeltaIndex(const DeltaIndexPtr & delta_index);
+
 private:
-    LRUCache<CacheKey, DeltaIndex, CacheKeyHasher> cache;
+    std::mutex mtx;
+    LRUCache<CacheKey, CacheValue, CacheKeyHasher, CacheValueWeight> cache;
 };
 
 } // namespace DB::DM::Remote

@@ -1410,22 +1410,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
-    /// This setting is currently a bit tricky:
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
-    //    controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is 2000. 0 means cache is disabled, and it
-    ///   controls the **number** of trees keep in the memory. <-- Will be fixed.
+    ///   controls the number of total bytes keep in the memory.
+    /// - In disaggregated mode, its default value is memory_capacity_of_host * 0.02.
+    ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        size_t n = config().getUInt64("delta_index_cache_count", 2000);
+        constexpr auto delta_index_cache_ratio = 0.02;
+        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
+            ? server_info.memory_info.capacity * delta_index_cache_ratio
+            : backup_delta_index_cache_size;
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
-
-        // TODO: Currently RNDeltaIndexCache caches by number of entities, instead of
-        // number of bytes!
-
         global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
     }
     else
