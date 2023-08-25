@@ -49,8 +49,7 @@ protected:
 TEST_P(SpaceMapTest, InitAndDestory)
 {
     SpaceMapPtr smap = SpaceMap::createSpaceMap(test_type, 0, 100);
-
-    smap->logDebugString();
+    LOG_INFO(Logger::get(), smap->toDebugString());
 }
 
 
@@ -212,11 +211,11 @@ TEST_P(SpaceMapTest, TestMargins2)
     // Right margin in marked used space
     // Left margin contain freed space
     ASSERT_FALSE(smap->markFree(49, 10));
-    smap->logDebugString();
+    LOG_INFO(Logger::get(), smap->toDebugString());
     // Left margin align with marked used space left margin
     // But right margin contain freed space
     ASSERT_FALSE(smap->markFree(51, 20));
-    smap->logDebugString();
+    LOG_INFO(Logger::get(), smap->toDebugString());
     // Right margin align with marked used space right margin
     // But left margin contain freed space
     ASSERT_FALSE(smap->markUsed(40, 19));
@@ -406,6 +405,41 @@ TEST_P(SpaceMapTest, TestGetUsedBoundary)
         ASSERT_EQ(smap->getUsedBoundary(), 100);
     }
 }
+
+TEST_P(SpaceMapTest, EmptyBlob)
+{
+    auto smap = SpaceMap::createSpaceMap(SpaceMap::SMAP64_STD_MAP, 0, 100);
+    smap->markUsed(50, 10);
+    auto sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 60);
+    ASSERT_EQ(sizes.second, 10);
+    ASSERT_EQ(smap->getUsedBoundary(), 60);
+
+    smap->markUsed(60, 0);
+    ASSERT_EQ(smap->getUsedBoundary(), 60);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 60);
+    ASSERT_EQ(sizes.second, 10);
+
+    smap->markUsed(60, 20);
+    ASSERT_EQ(smap->getUsedBoundary(), 80);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 80);
+    ASSERT_EQ(sizes.second, 30);
+
+    smap->markFree(60, 0);
+    ASSERT_EQ(smap->getUsedBoundary(), 80);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 80);
+    ASSERT_EQ(sizes.second, 30);
+
+    smap->markFree(60, 20);
+    ASSERT_EQ(smap->getUsedBoundary(), 60);
+    sizes = smap->getSizes();
+    ASSERT_EQ(sizes.first, 60);
+    ASSERT_EQ(sizes.second, 10);
+}
+
 
 INSTANTIATE_TEST_CASE_P(Type, SpaceMapTest, testing::Values(SpaceMap::SMAP64_STD_MAP));
 

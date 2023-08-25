@@ -148,6 +148,11 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     page_directory->apply(std::move(edit), write_limiter);
 }
 
+void PageStorageImpl::freezeDataFiles()
+{
+    blob_store.freezeBlobFiles();
+}
+
 DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
