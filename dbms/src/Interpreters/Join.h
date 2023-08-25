@@ -223,6 +223,7 @@ public:
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
     /// Number of keys in all built JOIN maps.
+    /// This function can only be used externally because it uses `shared_lock(rwlock)`, and `shared_lock` is not reentrant.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
     size_t getTotalByteCount();
