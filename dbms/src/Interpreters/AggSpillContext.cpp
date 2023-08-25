@@ -77,7 +77,7 @@ Int64 AggSpillContext::getTotalRevocableMemoryImpl()
 
 Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; i++)
+    for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; ++i)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
         per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
