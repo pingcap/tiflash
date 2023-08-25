@@ -28,3 +28,6 @@ enable-placement-rules = true
 [dashboard]
 ## When enabled, usage data will be sent to PingCAP for improving user experience.
 enable-telemetry = false
+
+[log]
+level = "debug"
