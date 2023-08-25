@@ -138,7 +138,8 @@ public:
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         gather_ids.push_back(gather_id);
         running_queries.emplace_back([&, properties, gather_id]() {
             BlockInputStreamPtr stream;
@@ -576,7 +577,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto res = prepareMPPStreams(
             context.scan("test_db", "test_table_1")
                 .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
@@ -594,7 +596,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto tasks = prepareMPPTasks(
             context.scan("test_db", "test_table_1")
                 .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
@@ -628,7 +631,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto res = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
@@ -654,7 +658,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto stream = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -682,7 +687,8 @@ try
             properties1.query_ts,
             properties1.local_query_id,
             properties1.server_id,
-            properties1.start_ts);
+            properties1.start_ts,
+            /*resource_group_name=*/"");
         auto res1 = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
@@ -693,7 +699,8 @@ try
             properties2.query_ts,
             properties2.local_query_id,
             properties2.server_id,
-            properties2.start_ts);
+            properties2.start_ts,
+            /*resource_group_name=*/"");
         auto res2 = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -721,7 +728,8 @@ try
                 properties.query_ts,
                 properties.local_query_id,
                 properties.server_id,
-                properties.start_ts);
+                properties.start_ts,
+                /*resource_group_name=*/"");
             queries.push_back(std::make_tuple(
                 gather_id,
                 prepareMPPStreams(
@@ -840,7 +848,7 @@ try
         auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
         initRandomFailPoint(config_str);
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts, /*resource_group_name=*/"");
         try
         {
             BlockInputStreamPtr tmp = prepareMPPStreams(
@@ -893,7 +901,8 @@ try
                 properties.query_ts,
                 properties.local_query_id,
                 properties.server_id,
-                properties.start_ts);
+                properties.start_ts,
+                /*resource_group_name=*/"");
             /// currently all the failpoints are automatically disabled after triggered once, so have to enable it before every run
             FailPointHelper::enableFailPoint(failpoint);
             BlockInputStreamPtr stream;

@@ -75,7 +75,9 @@ MPPTaskManager::MPPTaskManager(
 
 MPPTaskManager::~MPPTaskManager()
 {
+#ifndef DBMS_PUBLIC_GTEST
     LocalAdmissionController::global_instance->unregisterDeleteResourceGroupCallback();
+#endif
     std::lock_guard lock(monitor->mu);
     monitor->is_shutdown = true;
     monitor->cv.notify_all();
