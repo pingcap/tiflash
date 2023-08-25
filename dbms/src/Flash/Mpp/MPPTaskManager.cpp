@@ -63,7 +63,9 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     return ptr;
 }
 
-MPPTaskManager::MPPTaskManager(const MinTSOSchedulerConfig & min_tso_config_, UInt64 resource_control_mpp_task_hard_limit_)
+MPPTaskManager::MPPTaskManager(
+    const MinTSOSchedulerConfig & min_tso_config_,
+    UInt64 resource_control_mpp_task_hard_limit_)
     : min_tso_config(min_tso_config_)
     , aborted_query_gather_cache(ABORTED_MPPGATHER_CACHE_SIZE)
     , log(Logger::get())
