@@ -54,6 +54,9 @@ public:
         case TiDB::ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI:
             collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
             break;
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_0900_AI_CI:
+            collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_BIN);
+            break;
         default:
             break;
         }

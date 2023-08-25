@@ -491,7 +491,11 @@ bool KVStore::canFlushRegionDataImpl(
         can_flush = true;
     }
     auto gap_threshold = region_compact_log_gap.load();
-
+    auto last_restart_log_applied = curr_region.lastRestartLogApplied();
+    if (last_restart_log_applied + gap_threshold > index)
+    {
+        gap_threshold = std::max(gap_threshold / 2, 1);
+    }
     auto last_compact_log_applied = curr_region.lastCompactLogApplied();
     auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
 

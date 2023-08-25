@@ -117,6 +117,17 @@ EngineStoreApplyRes applyWriteRaftCmd(
     UInt64 term,
     TMTContext & tmt,
     ::DB::DM::WriteResult * write_result_ptr = nullptr);
+
+void handleApplySnapshot(
+    KVStore & kvstore,
+    metapb::Region && region,
+    uint64_t peer_id,
+    SSTViewVec,
+    uint64_t index,
+    uint64_t term,
+    std::optional<uint64_t>,
+    TMTContext & tmt);
+
 } // namespace DB::RegionBench
 
 namespace DB

@@ -161,18 +161,6 @@ public:
         uint64_t truncated_index,
         uint64_t truncated_term);
 
-    /**
-     * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
-     */
-    void handleApplySnapshot(
-        metapb::Region && region,
-        uint64_t peer_id,
-        SSTViewVec,
-        uint64_t index,
-        uint64_t term,
-        std::optional<uint64_t>,
-        TMTContext & tmt);
-
     void handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
     // For Raftstore V2, there could be some orphan keys in the write column family being left to `new_region` after pre-handled.
@@ -376,6 +364,11 @@ private:
             {
                 return nullptr;
             }
+        }
+        bool hasTask(uint64_t region_id)
+        {
+            auto _ = genLockGuard();
+            return tasks.find(region_id) != tasks.end();
         }
     };
 
