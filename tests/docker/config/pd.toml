@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+[log]
+level = "debug"
+
 [pd-server]
 ## Disable dashboard
 dashboard-address = "none"
@@ -28,6 +31,3 @@ enable-placement-rules = true
 [dashboard]
 ## When enabled, usage data will be sent to PingCAP for improving user experience.
 enable-telemetry = false
-
-[log]
-level = "debug"

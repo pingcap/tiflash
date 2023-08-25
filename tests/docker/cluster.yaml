@@ -45,6 +45,7 @@ services:
     command:
       - --addr=0.0.0.0:20160
       - --advertise-addr=tikv0:20160
+      - --status_address=tikv0:20180
       - --pd=pd0:2379
       - --config=/tikv.toml
       - --data-dir=/data
