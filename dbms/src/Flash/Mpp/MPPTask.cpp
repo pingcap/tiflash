@@ -292,14 +292,14 @@ void MPPTask::initExchangeReceivers()
     }
     catch (...)
     {
-        std::unique_lock lock(mtx);
+        std::lock_guard lock(mtx);
         if (status != RUNNING)
             throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
         receiver_set = std::move(receiver_set_local);
         throw;
     }
     {
-        std::unique_lock lock(mtx);
+        std::lock_guard lock(mtx);
         if (status != RUNNING)
             throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
         receiver_set = std::move(receiver_set_local);
