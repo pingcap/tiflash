@@ -50,6 +50,7 @@ protected:
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_BIN),
     };
 
     ColumnWithTypeAndName escape = createConstColumn<Int32>(1, static_cast<Int32>('\\'));
@@ -691,7 +692,8 @@ TEST_F(StringMatch, CheckEscape)
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::ASCII_BIN),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN),
-        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI)};
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_BIN)};
 
     std::vector<std::optional<String>> expr_vec{"", "aaz", "aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
     std::vector<std::optional<String>> pat_vec{"", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
