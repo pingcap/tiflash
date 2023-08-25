@@ -113,11 +113,6 @@ public:
     virtual bool check(CheckerFunc /*checker*/, size_t /*size*/) { return true; }
 
     /**
-     * Log the status of space map
-     */
-    void logDebugString();
-
-    /**
      * return the status of space map
      */
     virtual String toDebugString() = 0;
