@@ -53,6 +53,7 @@
 #include <grpcpp/support/status_code_enum.h>
 #include <kvproto/disaggregated.pb.h>
 
+#include <chrono>
 #include <ext/scope_guard.h>
 
 namespace DB
@@ -901,10 +902,13 @@ grpc::Status FlashService::EstablishDisaggTask(
 
     try
     {
-        auto task = std::make_shared<std::packaged_task<void()>>([&handler, &request, &response]() {
-            handler->prepare(request);
-            handler->execute(response);
-        });
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&handler, &request, &response, deadline = grpc_context->deadline()]() {
+                auto current = std::chrono::system_clock::now();
+                RUNTIME_CHECK(current < deadline, current, deadline);
+                handler->prepare(request);
+                handler->execute(response);
+            });
         WNEstablishDisaggTaskPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
         task->get_future().get();
     }
