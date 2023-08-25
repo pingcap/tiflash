@@ -191,6 +191,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::initExchangeReceivers()
 {
     auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
+<<<<<<< HEAD
     dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
@@ -221,6 +222,50 @@ void MPPTask::initExchangeReceivers()
     });
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
+=======
+    try
+    {
+        dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
+            if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
+            {
+                assert(executor.has_executor_id());
+                const auto & executor_id = executor.executor_id();
+                // In order to distinguish different exchange receivers.
+                auto exchange_receiver = std::make_shared<ExchangeReceiver>(
+                    std::make_shared<GRPCReceiverContext>(
+                        executor.exchange_receiver(),
+                        dag_context->getMPPTaskMeta(),
+                        context->getTMTContext().getKVCluster(),
+                        context->getTMTContext().getMPPTaskManager(),
+                        context->getSettingsRef().enable_local_tunnel,
+                        context->getSettingsRef().enable_async_grpc_client),
+                    executor.exchange_receiver().encoded_task_meta_size(),
+                    context->getMaxStreams(),
+                    log->identifier(),
+                    executor_id,
+                    executor.fine_grained_shuffle_stream_count(),
+                    context->getSettingsRef());
+
+                receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
+
+                if (status != RUNNING)
+                    throw Exception(
+                        "exchange receiver map can not be initialized, because the task is not in running state");
+            }
+            return true;
+        });
+    }
+    catch (...)
+    {
+        std::lock_guard lock(mtx);
+        if (status != RUNNING)
+            throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
+        receiver_set = std::move(receiver_set_local);
+        throw;
+    }
+    {
+        std::lock_guard lock(mtx);
+>>>>>>> e5fedf703c (Fix potential receiver blocked in deconstruction (#8020))
         if (status != RUNNING)
             throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
         receiver_set = std::move(receiver_set_local);
