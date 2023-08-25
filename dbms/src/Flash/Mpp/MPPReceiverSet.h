@@ -30,6 +30,11 @@ public:
     explicit MPPReceiverSet(const String & req_id)
         : log(Logger::get(req_id))
     {}
+    ~MPPReceiverSet()
+    {
+        /// close will set every receiver to closed state without blocking risk
+        close();
+    }
     void addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver);
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;

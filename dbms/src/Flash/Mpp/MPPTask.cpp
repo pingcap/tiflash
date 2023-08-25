@@ -258,7 +258,9 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::initExchangeReceivers()
 {
     auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
-    dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
+    try
+    {
+        dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
             assert(executor.has_executor_id());
@@ -279,14 +281,23 @@ void MPPTask::initExchangeReceivers()
                 executor.fine_grained_shuffle_stream_count(),
                 context->getSettingsRef());
 
+            receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
+
             if (status != RUNNING)
                 throw Exception(
                     "exchange receiver map can not be initialized, because the task is not in running state");
-
-            receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
-        }
-        return true;
-    });
+            }
+            return true;
+        });
+    }
+    catch (...)
+    {
+        std::unique_lock lock(mtx);
+        if (status != RUNNING)
+            throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
+        receiver_set = std::move(receiver_set_local);
+        throw;
+    }
     {
         std::unique_lock lock(mtx);
         if (status != RUNNING)
