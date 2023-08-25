@@ -502,7 +502,6 @@ std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_insta
 #endif
 
 // Defined in PD resource_manager_client.go.
-// gjt todo add test to ensure not change.
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
 const std::string LocalAdmissionController::WATCH_GAC_ERR_PREFIX = "watch resource group event failed: ";
 

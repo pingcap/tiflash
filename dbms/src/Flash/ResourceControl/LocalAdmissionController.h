@@ -357,6 +357,9 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
+    // For tidb_enable_resource_control is disabled.
+    static constexpr uint64_t HIGHEST_RESOURCE_CONTROL_PRIORITY = 0;
+
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
@@ -433,21 +436,6 @@ public:
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
 
-    // gjt todo private?
-    // Interval of fetch from GAC periodically.
-    static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
-    // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
-    static constexpr uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
-    // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
-    static constexpr auto DEGRADE_MODE_DURATION = 120;
-    static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
-    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
-    // For tidb_enable_resource_control is disabled.
-    static constexpr uint64_t HIGHEST_RESOURCE_CONTROL_PRIORITY = 0;
-
-    static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
-    static const std::string WATCH_GAC_ERR_PREFIX;
-
     // 1. This callback will be called everytime AcquireTokenBuckets GRPC is called.
     // 2. For now, only support one callback.
     //    Because only ResourceControlQueue will register this callback.
@@ -491,6 +479,18 @@ public:
     }
 
 private:
+    // Interval of fetch from GAC periodically.
+    static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
+    // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
+    static constexpr uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
+    // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
+    static constexpr auto DEGRADE_MODE_DURATION = 120;
+    static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
+    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
+
+    static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
+    static const std::string WATCH_GAC_ERR_PREFIX;
+
     // getOrFetchResourceGroup() and findResourceGroup() should be private,
     // this is to avoid user call member function of ResourceGroup directly.
     // So we can avoid dead lock.

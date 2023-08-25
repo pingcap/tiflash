@@ -28,6 +28,7 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -563,7 +564,6 @@ void MPPTask::runImpl()
         }
         auto cpu_ru = query_executor_holder->collectRequestUnit();
         auto read_ru = dag_context->getReadRU();
-        // gjt todo: LAC also consider read_ru
         LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRU(cpu_ru, read_ru);
@@ -579,6 +579,14 @@ void MPPTask::runImpl()
             runtime_statistics.blocks,
             runtime_statistics.bytes);
 
+        // Only report RU consumption to GAC for now.
+        // Will not affect the execution process of MPPTask,
+        // as the consult operation will only be performed after MPPTask is completed.
+        // NOTE: May throw if resource group is deleted.
+        LocalAdmissionController::global_instance->consumeResource(
+            dag_context->getResourceGroupName(),
+            toRU(read_ru),
+            0);
         result.verify();
     }
     catch (...)
