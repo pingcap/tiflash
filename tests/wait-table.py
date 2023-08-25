@@ -28,7 +28,7 @@ database = argv[1]
 tables = argv[2:-1]
 client = argv[-1]
 
-timeout = 600
+timeout = 120
 sleep_time = 1.0
 
 for table in tables:
