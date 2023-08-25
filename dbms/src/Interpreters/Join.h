@@ -165,6 +165,7 @@ public:
         const SpillConfig & probe_spill_config_,
         Int64 join_restore_concurrency_,
         const Names & tidb_output_column_names_,
+        const RegisterOperatorSpillContext & register_operator_spill_context_,
         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
         const JoinNonEqualConditions & non_equal_conditions_ = {},
         size_t max_block_size = 0,
@@ -229,6 +230,12 @@ public:
     size_t getTotalByteCount();
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
+
+    void checkAndMarkPartitionSpilledIfNeeded(
+        JoinPartition & join_partition,
+        std::unique_lock<std::mutex> & partition_lock,
+        size_t partition_index,
+        size_t stream_index);
 
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
@@ -370,6 +377,8 @@ private:
 
     JoinPtr restore_join;
 
+    RegisterOperatorSpillContext register_operator_spill_context;
+
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;
 
@@ -498,6 +507,9 @@ private:
     void finalizeNullAwareSemiFamilyBuild();
 
     void finalizeCrossJoinBuild();
+
+    /// Sum size in bytes of all hash table and pools
+    size_t getTotalHashTableAndPoolByteCount();
 };
 
 } // namespace DB

@@ -25,7 +25,7 @@ Int64 TaskOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memori
     for (auto & operator_spill_context : operator_spill_contexts)
     {
         assert(operator_spill_context->supportAutoTriggerSpill());
-        if (operator_spill_context->spillableStageFinished())
+        if (!operator_spill_context->supportFurtherSpill())
         {
             has_finished_operator_spill_contexts = true;
             continue;
@@ -41,7 +41,7 @@ Int64 TaskOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memori
             std::remove_if(
                 operator_spill_contexts.begin(),
                 operator_spill_contexts.end(),
-                [](const auto & context) { return context->spillableStageFinished(); }),
+                [](const auto & context) { return !context->supportFurtherSpill(); }),
             operator_spill_contexts.end());
     }
     return expected_released_memories;
@@ -58,9 +58,10 @@ void TaskOperatorSpillContexts::appendAdditionalOperatorSpillContexts()
 }
 void TaskOperatorSpillContexts::registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
 {
-    if (operator_spill_context->supportAutoTriggerSpill())
+    if likely (operator_spill_context->supportSpill() && operator_spill_context->supportAutoTriggerSpill())
     {
         std::unique_lock lock(mutex);
+        operator_spill_context->setAutoSpillMode();
         additional_operator_spill_contexts.push_back(operator_spill_context);
         has_additional_operator_spill_contexts = true;
     }
