@@ -24,7 +24,7 @@ mysql> create database db_test
 
 # Ensure that we can create table for that database
 mysql> create table db_test.t(a int not null, b int not null)
-mysql> alter table db_test.t set tiflash replica 1 
+mysql> alter table db_test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
 func> wait_table db_test t
 

@@ -16,7 +16,7 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test.t_new;
 
 mysql> create table test.t(a int, b int)
-mysql> alter table test.t set tiflash replica 1 
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
 mysql> insert into test.t values (1, 1);
 mysql> insert into test.t values (1, 2);
@@ -71,7 +71,7 @@ mysql> drop database if exists d2;
 mysql> create database d1;
 mysql> create database d2;
 mysql> create table d1.t1(a int, b int);
-mysql> alter table d1.t1 set tiflash replica 1 
+mysql> alter table d1.t1 set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
 mysql> insert into d1.t1 values (1, 1);
 
@@ -123,8 +123,8 @@ mysql> drop table if exists test.r1;
 mysql> drop table if exists test.r2;
 mysql> create table test.t1(a int, b int);
 mysql> create table test.t2(a int, b int);
-mysql> alter table test.t1 set tiflash replica 1 
-mysql> alter table test.t2 set tiflash replica 1 
+mysql> alter table test.t1 set tiflash replica 1 location labels 'rack', 'host', 'abc'
+mysql> alter table test.t2 set tiflash replica 1 location labels 'rack', 'host', 'abc'
 mysql> insert into test.t1 values (1, 2);
 mysql> insert into test.t2 values (3, 4);
 
