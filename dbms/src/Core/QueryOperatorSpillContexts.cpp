@@ -16,14 +16,14 @@
 
 namespace DB
 {
-Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memories)
+Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memories, bool ignore_cooldown_time_check)
 {
     std::unique_lock lock(mutex, std::try_to_lock);
     /// use mutex to avoid concurrent check
     if (lock.owns_lock())
     {
         auto log_level = Poco::Message::PRIO_DEBUG;
-        bool check_cooldown_time = true;
+        bool check_cooldown_time = !ignore_cooldown_time_check;
         if unlikely (!first_check_done)
         {
             first_check_done = true;

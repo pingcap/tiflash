@@ -50,6 +50,7 @@ public:
         }
         trigger_threshold = static_cast<Int64>(memory_tracker->getLimit() * auto_memory_revoke_trigger_threshold);
         target_threshold = static_cast<Int64>(memory_tracker->getLimit() * auto_memory_revoke_target_threshold);
+        force_trigger_threshold = static_cast<Int64>(memory_tracker->getLimit() * 0.85);
     }
 
     void triggerAutoSpill()
@@ -57,7 +58,7 @@ public:
         auto current_memory_usage = memory_tracker->get();
         if (current_memory_usage > trigger_threshold)
         {
-            query_operator_spill_contexts->triggerAutoSpill(current_memory_usage - target_threshold);
+            query_operator_spill_contexts->triggerAutoSpill(current_memory_usage - target_threshold, current_memory_usage > force_trigger_threshold);
         }
     }
 
@@ -66,5 +67,6 @@ private:
     std::shared_ptr<QueryOperatorSpillContexts> query_operator_spill_contexts;
     Int64 trigger_threshold;
     Int64 target_threshold;
+    Int64 force_trigger_threshold;
 };
 } // namespace DB

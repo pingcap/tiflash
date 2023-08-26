@@ -30,7 +30,7 @@ public:
         watch.start();
     }
 
-    Int64 triggerAutoSpill(Int64 expected_released_memories);
+    Int64 triggerAutoSpill(Int64 expected_released_memories, bool ignore_cooldown_time_check = false);
 
     void registerTaskOperatorSpillContexts(
         const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)

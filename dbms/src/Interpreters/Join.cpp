@@ -426,6 +426,8 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     {
         hash_join_spill_context->buildBuildSpiller(build_sample_block);
     }
+    for (auto & partition : partitions)
+        partition->setResizeCallbackIfNeeded();
     setSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
 }
@@ -572,11 +574,20 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
             if (!hash_join_spill_context->isPartitionSpilled(i))
             {
-                // todo add hash table resize callback to check if current partition is already marked to spill
-                insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
-                join_partition->updateHashMapAndPoolMemoryUsage();
+                bool meet_resize_exception = false;
+                try
+                {
+                    insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
+                    join_partition->updateHashMapAndPoolMemoryUsage();
+                }
+                catch (ResizeException &)
+                {
+                    meet_resize_exception = true;
+                    LOG_DEBUG(log, "Meet resize exception when insert into partition {}", i);
+                }
                 /// double check here to release memory
                 checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
+                RUNTIME_CHECK_MSG(!meet_resize_exception || hash_join_spill_context->isPartitionSpilled(i), "resize exception must trigger partition to spill");
                 /// todo check if it is necessary to trigger auto spill check here
             }
         }
@@ -1744,7 +1755,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
         for (size_t i = 0; i < partitions.size(); ++i)
         {
-            if (hash_join_spill_context->needFinalSpill(i) || hash_join_spill_context->isPartitionSpilled(i))
+            if (hash_join_spill_context->isPartitionMarkedForAutoSpill(i) || hash_join_spill_context->isPartitionSpilled(i))
             {
                 if (!hash_join_spill_context->isPartitionSpilled(i))
                 {

@@ -55,10 +55,7 @@ public:
     Int64 triggerSpillImpl(Int64 expected_released_memories) override;
     bool supportAutoTriggerSpill() const override { return true; }
     void finishOneSpill(size_t partition_id);
-    bool needFinalSpill(size_t partition_id) const
-    {
-        return (*partition_spill_status)[partition_id] != AutoSpillStatus::NO_NEED_AUTO_SPILL;
-    }
+    bool isPartitionMarkedForAutoSpill(size_t partition_id) const { return (*partition_spill_status)[partition_id] != AutoSpillStatus::NO_NEED_AUTO_SPILL; }
     void finishBuild();
 };
 

@@ -37,6 +37,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int ERROR_DURING_HASH_TABLE_OR_ARENA_RESIZE;
 } // namespace ErrorCodes
 
 class Exception : public Poco::Exception
@@ -100,6 +101,12 @@ public:
 
 private:
     int saved_errno;
+};
+
+class ResizeException : public Exception
+{
+public:
+    explicit ResizeException(const std::string & msg) : Exception(msg, ErrorCodes::ERROR_DURING_HASH_TABLE_OR_ARENA_RESIZE) {}
 };
 
 using Exceptions = std::vector<std::exception_ptr>;
