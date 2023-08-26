@@ -145,7 +145,9 @@ try
     task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_3);
 
     UInt64 min_check_interval = 1000;
-    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""), min_check_interval);
+    QueryOperatorSpillContexts query_operator_spill_contexts(
+        MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""),
+        min_check_interval);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_1);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_2);
 

@@ -34,8 +34,12 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
     }
     catch (...)
     {
+        assert(!task);
         task->onErrorOccurred(std::current_exception());
-        FINALIZE_TASK(task);
+        {
+            std::lock_guard lock(mu);
+            cancel_task_queue.push_back(std::move(task));
+        }
     }
 }
 
@@ -55,10 +59,10 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
         }
         catch (...)
         {
-            // Need to unlock, because will call ResourceControlQueue::cancel(), which will lock mu.
+            assert(!task);
+            cancel_task_queue.push_back(std::move(task));
             lock.unlock();
             task->onErrorOccurred(std::current_exception());
-            FINALIZE_TASK(task);
             lock.lock();
         }
     }
@@ -114,7 +118,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 
         auto error_resource_groups = updateResourceGroupInfosWithoutLock();
 
-        while (!resource_group_infos.empty())
+        if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
             const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
@@ -129,29 +133,26 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 is_finished,
                 group_info.task_queue->empty());
 
-            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
-            // Should not take any task from nested task queue for this situation.
-            if (ru_exhausted)
-                break;
-
-            // task_queue should not be empty, because corresponding resource group should already been deleted.
-            // in updateResourceGroupInfosWithoutLock().
-            assert(!group_info.task_queue->empty());
-
-            // Take task from nested task queue, and should always take succeed.
-            // Because this task queue should not be finished inside lock_guard.
-            RUNTIME_CHECK(group_info.task_queue->take(task));
-            assert(task);
-
             if unlikely (!error_resource_groups.empty())
             {
                 auto iter = error_resource_groups.find(group_info.name);
                 if likely (iter != error_resource_groups.end())
                 {
-                    std::rethrow_exception(iter->second);
+                    mustTakeTask(group_info.task_queue, task);
+                    lock.unlock();
+                    task->onErrorOccurred(iter->second);
+                    lock.lock();
+                    return true;
                 }
             }
-            return true;
+
+            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
+            // Should not take any task from nested task queue for this situation.
+            if (!ru_exhausted)
+            {
+                mustTakeTask(group_info.task_queue, task);
+                return true;
+            }
         }
 
         assert(!task);
@@ -169,7 +170,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
+    CATCH_AND_IGNORE(LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value));
 }
 
 template <typename NestedTaskQueueType>
@@ -263,6 +264,14 @@ void ResourceControlQueue<NestedTaskQueueType>::mustEraseResourceGroupInfoWithou
         name,
         erase_num);
     resource_group_infos.pop();
+}
+
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task)
+{
+    assert(!task_queue->empty());
+    RUNTIME_CHECK(task_queue->take(task));
+    assert(task);
 }
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;

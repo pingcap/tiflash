@@ -74,27 +74,10 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
     LOG_INFO(thread_logger, "start loop");
 
     TaskPtr task;
-    ExecTaskStatus status_after_exec;
-    while (true)
+    while (likely(task_queue->take(task)))
     {
-        try
-        {
-            if unlikely (!task_queue->take(task))
-                break;
-
-            metrics.decPendingTask();
-            status_after_exec = handleTask(task);
-        }
-        catch (...)
-        {
-            assert(task);
-            metrics.decPendingTask();
-            task->endTraceMemory();
-            task->onErrorOccurred(std::current_exception());
-            FINALIZE_TASK(task);
-            continue;
-        }
-        submitByStatus(task, status_after_exec);
+        metrics.decPendingTask();
+        handleTask(task);
         assert(!task);
     }
 
@@ -102,7 +85,7 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
 }
 
 template <typename Impl>
-ExecTaskStatus TaskThreadPool<Impl>::handleTask(TaskPtr & task)
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
     task->startTraceMemory();
@@ -121,16 +104,9 @@ ExecTaskStatus TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
+    task_queue->updateStatistics(task, status_before_exec, total_time_spent);
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
-    // updateStatistics may throw exception, so need to update metrics first.
-    task_queue->updateStatistics(task, status_before_exec, total_time_spent);
-    return status_after_exec;
-}
-
-template <typename Impl>
-void TaskThreadPool<Impl>::submitByStatus(TaskPtr & task, const ExecTaskStatus & status_after_exec)
-{
     switch (status_after_exec)
     {
     case ExecTaskStatus::RUNNING:

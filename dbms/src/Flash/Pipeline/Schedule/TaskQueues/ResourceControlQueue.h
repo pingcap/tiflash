@@ -89,6 +89,7 @@ private:
 
     // Erase resource group info and task_queue.
     void mustEraseResourceGroupInfoWithoutLock(const String & name);
+    static void mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task);
 
     // Submit task into task queue of specific resource group.
     void submitWithoutLock(TaskPtr && task);

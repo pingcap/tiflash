@@ -78,7 +78,10 @@ std::shared_ptr<ResourceGroup> createResourceGroupOfDynamicTokenBucket(
 
     // Default token bucket is static.
     // Here we setup dynamic token bucket.
-    TokenBucket::TokenBucketConfig config(user_ru_per_sec, user_ru_per_sec, static_cast<double>(std::numeric_limits<uint64_t>::max()));
+    TokenBucket::TokenBucketConfig config(
+        user_ru_per_sec,
+        user_ru_per_sec,
+        static_cast<double>(std::numeric_limits<uint64_t>::max()));
     resource_group->bucket->reConfig(config);
     return resource_group;
 }

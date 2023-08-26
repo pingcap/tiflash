@@ -610,8 +610,7 @@ try
             executeMPPTasks(tasks, properties);
         }
         catch (...)
-        {
-        }
+        {}
         EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     WRAP_FOR_SERVER_TEST_END
@@ -848,7 +847,12 @@ try
         auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
         initRandomFailPoint(config_str);
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts, /*resource_group_name=*/"");
+        MPPQueryId query_id(
+            properties.query_ts,
+            properties.local_query_id,
+            properties.server_id,
+            properties.start_ts,
+            /*resource_group_name=*/"");
         try
         {
             BlockInputStreamPtr tmp = prepareMPPStreams(
