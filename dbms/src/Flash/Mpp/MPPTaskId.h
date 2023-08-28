@@ -27,8 +27,6 @@ struct MPPQueryId
     UInt64 local_query_id;
     UInt64 server_id;
     UInt64 start_ts;
-    // 1. For toString(), so we can check the resource group in log.
-    // 2. When release min tso threads, it's easy to find corresponding MinTSOScheduler by query_id.resource_group_name.
     String resource_group_name;
 
     MPPQueryId(

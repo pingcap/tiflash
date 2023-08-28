@@ -1552,7 +1552,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         "Compiled with ENABLE_TESTS enabled, will use MockLocalAdmissionController, which means tiflash "
         "ResourceControl will be disabled.");
 #else
-    auto mpp_task_manager = tmt_context.getMPPTaskManager();
     LocalAdmissionController::global_instance
         = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
