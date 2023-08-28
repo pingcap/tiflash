@@ -63,10 +63,8 @@ KVStore::KVStore(Context & context)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
-    , region_raft_log_eager_gc_threshold(256)
 {
-    // default config about compact-log: period 120s, rows 40k, bytes 32MB.
-    // default config about RaftLog eager gc: rows 256
+    // default config about compact-log: period 120s, rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited");
 }
 
@@ -291,8 +289,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
 
         auto [first_index, applied_index] = region->getRaftLogRange();
         if (bool need_persist
-            = raft_log_gc_hints
-                  .updateHint(region_id, first_index, applied_index, region_raft_log_eager_gc_threshold.load());
+            = raft_log_gc_hints.updateHint(region_id, first_index, applied_index, region_compact_log_gap.load());
             need_persist)
         {
             // Persist RegionMeta on the storage engine
@@ -366,7 +363,6 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, U
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
     region_compact_log_gap = gap;
-    region_raft_log_eager_gc_threshold = gap;
 
     LOG_INFO(log, "threshold config: period {}, rows {}, bytes {}, gap {}", sec, rows, bytes, gap);
 }
@@ -562,8 +558,8 @@ bool KVStore::canFlushRegionDataImpl(
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
         LOG_INFO(
             log,
-            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} gap "
-            "{}/{}",
+            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
+            " gap {}/{}",
             curr_region.toString(false),
             index,
             term,
@@ -650,7 +646,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
-    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback //
+        || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
         || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
@@ -673,8 +670,9 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
     TMTContext & tmt)
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ //
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
+    });
     auto type = request.cmd_type();
     switch (request.cmd_type())
     {

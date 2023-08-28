@@ -185,7 +185,7 @@ public:
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
 
     void setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap);
-    UInt64 getRaftLogEagerGCRows() const { return region_raft_log_eager_gc_threshold.load(); }
+    UInt64 getRaftLogEagerGCRows() const { return region_compact_log_gap.load(); }
 
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
@@ -403,7 +403,6 @@ private:
     std::atomic<UInt64> region_compact_log_min_rows;
     std::atomic<UInt64> region_compact_log_min_bytes;
     std::atomic<UInt64> region_compact_log_gap;
-    std::atomic<UInt64> region_raft_log_eager_gc_threshold;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
