@@ -75,20 +75,13 @@ Int64 AggSpillContext::getTotalRevocableMemoryImpl()
     return ret;
 }
 
-Int64 AggSpillContext::triggerSpill(Int64 expected_released_memories)
+Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    if (!in_spillable_stage || !enable_spill)
-        return expected_released_memories;
-    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
-    auto total_revocable_memory = getTotalRevocableMemory();
-    if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
+    for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; ++i)
     {
-        for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; i++)
-        {
-            AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-            per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
-            expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[i], 0);
-        }
+        AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+        per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
+        expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[i], 0);
     }
     return expected_released_memories;
 }
