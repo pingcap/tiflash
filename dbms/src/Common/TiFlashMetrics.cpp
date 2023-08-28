@@ -58,10 +58,8 @@ TiFlashMetrics::TiFlashMetrics()
                                                       .Name("tiflash_storage_sync_replica_ru")
                                                       .Help("RU for synchronous replica of keyspace")
                                                       .Register(*registry);
-    registered_min_tso_scheduler_family = &prometheus::BuildGauge()
-                                                    .Name("tiflash_task_scheduler")
-                                                    .Help("Min-tso task scheduler")
-                                                    .Register(*registry);
+    registered_min_tso_scheduler_family
+        = &prometheus::BuildGauge().Name("tiflash_task_scheduler").Help("Min-tso task scheduler").Register(*registry);
 }
 
 prometheus::Gauge * TiFlashMetrics::getOrCreateMinTSOGauge(const String & resource_group_name, const String & type)

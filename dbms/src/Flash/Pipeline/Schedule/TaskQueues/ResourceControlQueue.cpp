@@ -72,7 +72,8 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
 }
 
 template <typename NestedTaskQueueType>
-typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr & task)
+typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceControlQueue<
+    NestedTaskQueueType>::submitWithoutLock(TaskPtr & task)
 {
     if unlikely (is_finished)
     {

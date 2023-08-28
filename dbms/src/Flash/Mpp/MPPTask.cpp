@@ -592,8 +592,10 @@ void MPPTask::runImpl()
 
         // Only report RU consumption to GAC for now.
         // Will not affect the execution process of this MPPTask(may affect other MPPTask of this resource group).
-        CATCH_AND_LOG(LocalAdmissionController::global_instance
-                             ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0), log);
+        CATCH_AND_LOG(
+            LocalAdmissionController::global_instance
+                ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0),
+            log);
         result.verify();
     }
     catch (...)
