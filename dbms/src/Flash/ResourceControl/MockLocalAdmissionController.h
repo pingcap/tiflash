@@ -76,15 +76,6 @@ public:
         refill_token_callback = nullptr;
     }
 
-    void registerDeleteResourceGroupCallback(const std::function<void(const std::string & del_rg_name)> &)
-    {
-        RUNTIME_ASSERT(0);
-    }
-    void unregisterDeleteResourceGroupCallback() { RUNTIME_ASSERT(0); }
-
-    void registerCleanTombstoneResourceGroupCallback(const std::function<void()> &) { RUNTIME_ASSERT(0); }
-    void unregisterCleanTombstoneResourceGroupCallback() { RUNTIME_ASSERT(0); }
-
     std::string isResourceGroupValid(const std::string &) { RUNTIME_ASSERT(0); }
 
     void stop()

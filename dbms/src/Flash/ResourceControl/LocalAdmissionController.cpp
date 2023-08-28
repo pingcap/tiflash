@@ -61,13 +61,11 @@ void LocalAdmissionController::startBackgroudJob()
     while (!stopped.load())
     {
         std::function<void()> local_refill_token_callback = nullptr;
-        std::function<void()> local_delete_resource_group_callback = nullptr;
         bool fetch_token_periodically = false;
 
         {
             std::unique_lock<std::mutex> lock(mu);
             local_refill_token_callback = refill_token_callback;
-            local_delete_resource_group_callback = delete_resource_group_callback;
 
             if (low_token_resource_groups.empty())
             {
@@ -93,9 +91,6 @@ void LocalAdmissionController::startBackgroudJob()
 
             if (local_refill_token_callback)
                 local_refill_token_callback();
-
-            if (fetch_token_periodically && local_delete_resource_group_callback)
-                local_delete_resource_group_callback();
         }
         catch (...)
         {

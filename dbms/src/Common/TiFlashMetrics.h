@@ -442,18 +442,6 @@ namespace DB
       F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}),                                                         \
       F(type_active_rpc_async_worker, {"type", "rpc_async_worker_active"}),                                                         \
       F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))                                                           \
-    M(tiflash_task_scheduler,                                                                                                       \
-      "Min-tso task scheduler",                                                                                                     \
-      Gauge,                                                                                                                        \
-      F(type_min_tso, {"type", "min_tso"}),                                                                                         \
-      F(type_waiting_queries_count, {"type", "waiting_queries_count"}),                                                             \
-      F(type_active_queries_count, {"type", "active_queries_count"}),                                                               \
-      F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                 \
-      F(type_active_tasks_count, {"type", "active_tasks_count"}),                                                                   \
-      F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                           \
-      F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                     \
-      F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                     \
-      F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                     \
     M(tiflash_task_scheduler_waiting_duration_seconds,                                                                              \
       "Bucketed histogram of task waiting for scheduling duration",                                                                 \
       Histogram,                                                                                                                    \
@@ -795,6 +783,8 @@ public:
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
 
+    prometheus::Gauge * getOrCreateMinTSOGauge(const String & resource_group_name, const String & type);
+
 private:
     TiFlashMetrics();
 
@@ -823,6 +813,9 @@ private:
     prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
+
+    prometheus::Family<prometheus::Gauge> * registered_resource_group_min_tso_family;
+    std::unordered_map<String, prometheus::Gauge *> registered_resource_group_min_tso;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
-#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
@@ -63,21 +62,15 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     return ptr;
 }
 
-MPPTaskManager::MPPTaskManager(
-    const MinTSOSchedulerConfig & min_tso_config_,
-    UInt64 resource_control_mpp_task_hard_limit_)
-    : min_tso_config(min_tso_config_)
+MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
+    : scheduler(std::move(scheduler_))
     , aborted_query_gather_cache(ABORTED_MPPGATHER_CACHE_SIZE)
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
-    , resource_control_mpp_task_hard_limit(resource_control_mpp_task_hard_limit_)
 {}
 
 MPPTaskManager::~MPPTaskManager()
 {
-#ifndef DBMS_PUBLIC_GTEST
-    LocalAdmissionController::global_instance->unregisterDeleteResourceGroupCallback();
-#endif
     std::lock_guard lock(monitor->mu);
     monitor->is_shutdown = true;
     monitor->cv.notify_all();
@@ -111,12 +104,8 @@ void MPPTaskManager::removeMPPGatherTaskSet(MPPQueryPtr & query, const MPPGather
     query->mpp_gathers.erase(gather_id);
     if (query->mpp_gathers.empty())
     {
-        const auto & query_id = gather_id.query_id;
-        auto scheduler = getSchedulerWithoutLock(query_id);
-        // Maybe for some reason, task never register.
-        if likely (scheduler != nullptr)
-            scheduler->deleteQuery(query_id, *this, on_abort, -1);
-        mpp_query_map.erase(query_id);
+        scheduler->deleteQuery(gather_id.query_id, *this, on_abort, -1);
+        mpp_query_map.erase(gather_id.query_id);
         GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     }
 }
@@ -288,9 +277,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
             cv.notify_all();
             return;
         }
-        auto scheduler = getSchedulerWithoutLock(gather_id.query_id);
-        if likely (scheduler != nullptr)
-            scheduler->deleteQuery(gather_id.query_id, *this, true, gather_id.gather_id);
+        scheduler->deleteQuery(gather_id.query_id, *this, true, gather_id.gather_id);
         cv.notify_all();
     }
 
@@ -480,74 +467,13 @@ std::pair<MPPGatherTaskSetPtr, String> MPPTaskManager::getGatherTaskSet(const MP
 
 bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 {
-    bool scheduled = false;
-    const String & resource_group_name = schedule_entry.getResourceGroupName();
-
-    size_t mintso_active_set_size = 0;
-    {
-        // Check global MPPTask hard limit.
-        std::lock_guard lock(mu);
-        for (const auto & ele : schedulers)
-            mintso_active_set_size += ele.second->getActiveSetSize();
-    }
-
-    // This check helps reduce the contention of lock within resource group.
-    if (mintso_active_set_size >= resource_control_mpp_task_hard_limit)
-    {
-        size_t non_throttled_rg_active_set_size = 0;
-        for (const auto & ele : schedulers)
-        {
-            // Will ignore the group whose tokens have been exhausted,
-            // this can prevent tasks throllted by resource control from occupying too much hard limit proportion.
-            // NOTE: May throw exception, for example resource group has been deleted.
-            if (LocalAdmissionController::global_instance->isResourceGroupThrottled(ele.first))
-                continue;
-
-            non_throttled_rg_active_set_size += ele.second->getActiveSetSize();
-        }
-        if (non_throttled_rg_active_set_size >= resource_control_mpp_task_hard_limit)
-            throw Exception(fmt::format(
-                "too many running mpp tasks(mpptask hard limit: {}, "
-                "current total mpptask: {}, non throttled resource group mpptasks: {})",
-                resource_control_mpp_task_hard_limit,
-                mintso_active_set_size,
-                non_throttled_rg_active_set_size));
-    }
-
-    {
-        std::lock_guard lock(mu);
-        auto scheduler = getSchedulerWithoutLock(resource_group_name);
-        if (!scheduler)
-        {
-            String err_msg = LocalAdmissionController::global_instance->isResourceGroupValid(resource_group_name);
-            if (!err_msg.empty())
-                throw Exception(err_msg);
-            LOG_DEBUG(log, "new min tso scheduler added {}", resource_group_name);
-            scheduler = std::make_shared<MinTSOScheduler>(min_tso_config);
-            schedulers.insert({resource_group_name, scheduler});
-        }
-        scheduled = scheduler->tryToSchedule(schedule_entry, *this);
-    }
-    return scheduled;
+    std::lock_guard lock(mu);
+    return scheduler->tryToSchedule(schedule_entry, *this);
 }
 
-void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads)
+void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_name, const int needed_threads)
 {
     std::lock_guard lock(mu);
-    auto scheudler = getSchedulerWithoutLock(resource_group_name);
-    if likely (scheudler)
-        scheudler->releaseThreadsThenSchedule(needed_threads, *this);
-}
-
-void MPPTaskManager::deleteEmptyScheduler()
-{
-    std::lock_guard lock(mu);
-    for (auto iter = schedulers.begin(); iter != schedulers.end();)
-    {
-        if (iter->second->getActiveSetSize() == 0 && iter->second->getWaitingSetSize() == 0)
-            iter = schedulers.erase(iter);
-        else
-            ++iter;
-    }
+    scheduler->releaseThreadsThenSchedule(resource_group_name, needed_threads, *this);
 }
 } // namespace DB

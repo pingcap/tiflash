@@ -27,12 +27,14 @@ extern const char random_min_tso_scheduler_failpoint[];
 
 constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
-MinTSOScheduler::MinTSOScheduler(const MinTSOSchedulerConfig & config)
-    : min_query_id(MPPTaskId::Max_Query_Id)
-    , thread_soft_limit(config.soft_limit)
-    , thread_hard_limit(config.hard_limit)
-    , estimated_thread_usage(0)
-    , active_set_soft_limit(config.active_set_soft_limit)
+#define GET_MIN_TSO_METRIC(resource_group_name, type) \
+    TiFlashMetrics::instance().getOrCreateMinTSOGauge(resource_group_name, type)
+
+MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit)
+    : thread_soft_limit(soft_limit)
+    , thread_hard_limit(hard_limit)
+    , global_estimated_thread_usage(0)
+    , active_set_soft_limit(active_set_soft_limit)
     , log(Logger::get())
 {
     auto cores = static_cast<size_t>(getNumberOfLogicalCPUCores() / 2);
@@ -57,8 +59,8 @@ MinTSOScheduler::MinTSOScheduler(const MinTSOSchedulerConfig & config)
                 log,
                 "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by "
                 "default, and active_set_soft_limit is {}.",
-                config.hard_limit,
-                config.soft_limit,
+                hard_limit,
+                soft_limit,
                 OS_THREAD_SOFT_LIMIT,
                 thread_hard_limit,
                 thread_soft_limit,
@@ -73,15 +75,19 @@ MinTSOScheduler::MinTSOScheduler(const MinTSOSchedulerConfig & config)
                 thread_soft_limit,
                 active_set_soft_limit);
         }
-        GET_METRIC(tiflash_task_scheduler, type_min_tso).Set(min_query_id.query_ts);
-        GET_METRIC(tiflash_task_scheduler, type_thread_soft_limit).Set(thread_soft_limit);
-        GET_METRIC(tiflash_task_scheduler, type_thread_hard_limit).Set(thread_hard_limit);
-        GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-        GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(0);
-        GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(0);
-        GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Set(0);
-        GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Set(0);
-        GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Set(0);
+
+        const String empty_resource_group;
+        const auto & empty_detail = getOrCreateSchedulerDetail(empty_resource_group);
+        GET_MIN_TSO_METRIC(empty_resource_group, "min_tso")->Set(empty_detail.min_query_id.query_ts);
+        GET_MIN_TSO_METRIC(empty_resource_group, "thread_soft_limit")->Set(thread_soft_limit);
+        GET_MIN_TSO_METRIC(empty_resource_group, "thread_hard_limit")->Set(thread_hard_limit);
+        GET_MIN_TSO_METRIC(empty_resource_group, "estimated_thread_usage")->Set(empty_detail.estimated_thread_usage);
+        GET_MIN_TSO_METRIC(empty_resource_group, "global_estimated_thread_usage")->Set(global_estimated_thread_usage);
+        GET_MIN_TSO_METRIC(empty_resource_group, "waiting_queries_count")->Set(0);
+        GET_MIN_TSO_METRIC(empty_resource_group, "active_queries_count")->Set(0);
+        GET_MIN_TSO_METRIC(empty_resource_group, "waiting_tasks_count")->Set(0);
+        GET_MIN_TSO_METRIC(empty_resource_group, "active_tasks_count")->Set(0);
+        GET_MIN_TSO_METRIC(empty_resource_group, "hard_limit_exceeded_count")->Set(0);
     }
 }
 
@@ -108,7 +114,7 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTa
 void MinTSOScheduler::deleteQuery(
     const MPPQueryId & query_id,
     MPPTaskManager & task_manager,
-    const bool is_cancelled,
+    bool is_cancelled,
     Int64 gather_id)
 {
     if (isDisabled())
@@ -116,6 +122,7 @@ void MinTSOScheduler::deleteQuery(
         return;
     }
 
+    auto & detail = mustGetSchedulerDetail(query_id.resource_group_name);
     bool all_gathers_deleted = true;
     auto query = task_manager.getMPPQueryWithoutLock(query_id);
 
@@ -133,7 +140,7 @@ void MinTSOScheduler::deleteQuery(
                         if (task != nullptr)
                             task->scheduleThisTask(ScheduleState::FAILED);
                         gather_it.second->waiting_tasks.pop();
-                        GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                        GET_MIN_TSO_METRIC(query_id.resource_group_name, "waiting_tasks_count")->Decrement();
                     }
                 }
             }
@@ -151,19 +158,20 @@ void MinTSOScheduler::deleteQuery(
             "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.",
             is_cancelled ? "Cancelled" : "Finished",
             query_id.toString(),
-            query_id == min_query_id,
-            active_set.find(query_id) != active_set.end(),
-            active_set.size(),
-            waiting_set.find(query_id) != waiting_set.end(),
-            waiting_set.size());
-        active_set.erase(query_id);
-        waiting_set.erase(query_id);
-        GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
-        GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
+            query_id == detail.min_query_id,
+            detail.active_set.find(query_id) != detail.active_set.end(),
+            detail.active_set.size(),
+            detail.waiting_set.find(query_id) != detail.waiting_set.end(),
+            detail.waiting_set.size());
+        detail.active_set.erase(query_id);
+        detail.waiting_set.erase(query_id);
+        GET_MIN_TSO_METRIC(query_id.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
+        GET_MIN_TSO_METRIC(query_id.resource_group_name, "active_queries_count")->Set(detail.active_set.size());
+
         /// NOTE: if updated min_query_id query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
-        if (updateMinQueryId(query_id, true, is_cancelled ? "when cancelling it" : "as finishing it"))
+        if (detail.updateMinQueryId(query_id, true, is_cancelled ? "when cancelling it" : "as finishing it", log))
         {
-            scheduleWaitingQueries(task_manager);
+            scheduleWaitingQueries(detail, task_manager, log);
         }
     }
     else
@@ -178,42 +186,51 @@ void MinTSOScheduler::deleteQuery(
 }
 
 /// NOTE: should not throw exceptions due to being called when destruction.
-void MinTSOScheduler::releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager)
+void MinTSOScheduler::releaseThreadsThenSchedule(
+    const String & resource_group_name,
+    int needed_threads,
+    MPPTaskManager & task_manager)
 {
     if (isDisabled())
     {
         return;
     }
 
-    auto updated_estimated_threads = static_cast<Int64>(estimated_thread_usage) - needed_threads;
+    auto & detail = mustGetSchedulerDetail(resource_group_name);
+    auto updated_estimated_threads = static_cast<Int64>(detail.estimated_thread_usage) - needed_threads;
     RUNTIME_ASSERT(
         updated_estimated_threads >= 0,
         log,
         "estimated_thread_usage should not be smaller than 0, actually is {}.",
         updated_estimated_threads);
 
-    estimated_thread_usage = updated_estimated_threads;
-    GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-    GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Decrement();
+    detail.estimated_thread_usage = updated_estimated_threads;
+    GET_MIN_TSO_METRIC(resource_group_name, "estimated_thread_usage")->Set(detail.estimated_thread_usage);
+    GET_MIN_TSO_METRIC(resource_group_name, "active_tasks_count")->Decrement();
     /// as tasks release some threads, so some tasks would get scheduled.
-    scheduleWaitingQueries(task_manager);
+    scheduleWaitingQueries(detail, task_manager, log);
+    if (detail.active_set.size() + detail.waiting_set.size() == 0)
+    {
+        LOG_INFO(log, "min tso scheduler_detail of resouce group {} deleted", resource_group_name);
+        scheduler_details.erase(resource_group_name);
+    }
 }
 
-void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
+void MinTSOScheduler::scheduleWaitingQueries(SchedulerDetail & detail, MPPTaskManager & task_manager, LoggerPtr log)
 {
     /// schedule new tasks
-    while (!waiting_set.empty())
+    while (!detail.waiting_set.empty())
     {
-        auto current_query_id = *waiting_set.begin();
+        auto current_query_id = *detail.waiting_set.begin();
         auto query = task_manager.getMPPQueryWithoutLock(current_query_id);
         if (nullptr == query) /// silently solve this rare case
         {
             LOG_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id.toString());
-            updateMinQueryId(current_query_id, true, "as it is not in the task manager.");
-            active_set.erase(current_query_id);
-            waiting_set.erase(current_query_id);
-            GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
-            GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
+            detail.updateMinQueryId(current_query_id, true, "as it is not in the task manager.", log);
+            detail.active_set.erase(current_query_id);
+            detail.waiting_set.erase(current_query_id);
+            GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
+            GET_MIN_TSO_METRIC(detail.resource_group_name, "active_queries_count")->Set(detail.active_set.size());
             continue;
         }
 
@@ -221,8 +238,8 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
             log,
             "query {} (is min = {}) is to be scheduled from waiting set (size = {}).",
             current_query_id.toString(),
-            current_query_id == min_query_id,
-            waiting_set.size());
+            current_query_id == detail.min_query_id,
+            detail.waiting_set.size());
         /// schedule tasks one by one
         for (auto & gather_set : query->mpp_gathers)
         {
@@ -237,22 +254,22 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
                     {
                         gather_set.second->waiting_tasks
                             .pop(); /// it should be pop from the waiting queue, because the task is scheduled with errors.
-                        GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                        GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_tasks_count")->Decrement();
                     }
                     return;
                 }
                 gather_set.second->waiting_tasks.pop();
-                GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_tasks_count")->Decrement();
             }
         }
         LOG_DEBUG(
             log,
             "query {} (is min = {}) is scheduled from waiting set (size = {}).",
             current_query_id.toString(),
-            current_query_id == min_query_id,
-            waiting_set.size());
-        waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
-        GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
+            current_query_id == detail.min_query_id,
+            detail.waiting_set.size());
+        detail.waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
+        GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
     }
 }
 
@@ -261,42 +278,46 @@ bool MinTSOScheduler::scheduleImp(
     const MPPQueryId & query_id,
     const MPPGatherTaskSetPtr & query_task_set,
     MPPTaskScheduleEntry & schedule_entry,
-    const bool isWaiting,
+    bool isWaiting,
     bool & has_error)
 {
     auto needed_threads = schedule_entry.getNeededThreads();
+    auto & detail = getOrCreateSchedulerDetail(query_id.resource_group_name);
+
     auto check_for_new_min_tso
-        = query_id <= min_query_id && estimated_thread_usage + needed_threads <= thread_hard_limit;
-    auto check_for_not_min_tso
-        = (active_set.size() < active_set_soft_limit || active_set.find(query_id) != active_set.end())
-        && (estimated_thread_usage + needed_threads <= thread_soft_limit);
+        = query_id <= detail.min_query_id && global_estimated_thread_usage + needed_threads <= thread_hard_limit;
+    auto check_for_not_min_tso = (detail.active_set.size() < active_set_soft_limit
+                                  || detail.active_set.find(query_id) != detail.active_set.end())
+        && (detail.estimated_thread_usage + needed_threads <= thread_soft_limit);
     if (check_for_new_min_tso || check_for_not_min_tso)
     {
-        updateMinQueryId(query_id, false, isWaiting ? "from the waiting set" : "when directly schedule it");
-        active_set.insert(query_id);
+        detail.updateMinQueryId(query_id, false, isWaiting ? "from the waiting set" : "when directly schedule it", log);
+        detail.active_set.insert(query_id);
         if (schedule_entry.schedule(ScheduleState::SCHEDULED))
         {
-            estimated_thread_usage += needed_threads;
-            GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Increment();
+            detail.estimated_thread_usage += needed_threads;
+            global_estimated_thread_usage += needed_threads;
+            GET_MIN_TSO_METRIC(detail.resource_group_name, "active_tasks_count")->Increment();
         }
-        GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
-        GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
+        GET_MIN_TSO_METRIC(detail.resource_group_name, "active_queries_count")->Set(detail.active_set.size());
+        GET_MIN_TSO_METRIC(detail.resource_group_name, "estimated_thread_usage")->Set(detail.estimated_thread_usage);
+        GET_MIN_TSO_METRIC("", "global_estimated_thread_usage")->Set(global_estimated_thread_usage);
         LOG_DEBUG(
             log,
             "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} "
             "of the thread {} limit {}.",
             schedule_entry.getMPPTaskId().toString(),
-            active_set.size(),
+            detail.active_set.size(),
             isWaiting ? "from the waiting set" : "directly",
             needed_threads,
-            estimated_thread_usage,
-            min_query_id == query_id ? "hard" : "soft",
-            min_query_id == query_id ? thread_hard_limit : thread_soft_limit);
+            detail.estimated_thread_usage,
+            detail.min_query_id == query_id ? "hard" : "soft",
+            detail.min_query_id == query_id ? thread_hard_limit : thread_soft_limit);
         return true;
     }
     else
     {
-        bool is_query_id_min = query_id <= min_query_id;
+        bool is_query_id_min = query_id <= detail.min_query_id;
         fiu_do_on(FailPoints::random_min_tso_scheduler_failpoint, is_query_id_min = true;);
         if (is_query_id_min) /// the min_query_id query should fully run, otherwise throw errors here.
         {
@@ -305,21 +326,22 @@ bool MinTSOScheduler::scheduleImp(
                 "threads are unavailable for the query {} ({} min_query_id {}) {}, need {}, but used {} of the thread "
                 "hard limit {}, {} active and {} waiting queries.",
                 query_id.toString(),
-                query_id == min_query_id ? "is" : "is newer than",
-                min_query_id.toString(),
+                query_id == detail.min_query_id ? "is" : "is newer than",
+                detail.min_query_id.toString(),
                 isWaiting ? "from the waiting set" : "when directly schedule it",
                 needed_threads,
-                estimated_thread_usage,
+                detail.estimated_thread_usage,
                 thread_hard_limit,
-                active_set.size(),
-                waiting_set.size());
+                detail.active_set.size(),
+                detail.waiting_set.size());
             LOG_ERROR(log, "{}", msg);
-            GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
+            GET_MIN_TSO_METRIC(detail.resource_group_name, "hard_limit_exceeded_count")->Increment();
             if (isWaiting)
             {
                 /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this query_id and update metrics.
                 schedule_entry.schedule(ScheduleState::EXCEEDED);
-                waiting_set.erase(query_id); /// avoid the left waiting tasks of this query reaching here many times.
+                detail.waiting_set.erase(
+                    query_id); /// avoid the left waiting tasks of this query reaching here many times.
             }
             else
             {
@@ -329,10 +351,10 @@ bool MinTSOScheduler::scheduleImp(
         }
         if (!isWaiting)
         {
-            waiting_set.insert(query_id);
+            detail.waiting_set.insert(query_id);
             query_task_set->waiting_tasks.push(schedule_entry.getMPPTaskId());
-            GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
-            GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
+            GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
+            GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_tasks_count")->Increment();
         }
         LOG_INFO(
             log,
@@ -341,16 +363,20 @@ bool MinTSOScheduler::scheduleImp(
             "required threads count are {}, waiting set size = {}",
             query_id.toString(),
             !isWaiting,
-            thread_soft_limit - estimated_thread_usage,
-            active_set_soft_limit - active_set.size(),
+            thread_soft_limit - detail.estimated_thread_usage,
+            active_set_soft_limit - detail.active_set.size(),
             needed_threads,
-            waiting_set.size());
+            detail.waiting_set.size());
         return false;
     }
 }
 
 /// if return true, then need to schedule the waiting tasks of the min_query_id.
-bool MinTSOScheduler::updateMinQueryId(const MPPQueryId & query_id, const bool retired, const String & msg)
+bool MinTSOScheduler::SchedulerDetail::updateMinQueryId(
+    const MPPQueryId & query_id,
+    bool retired,
+    const String & msg,
+    LoggerPtr log)
 {
     auto old_min_query_id = min_query_id;
     bool force_scheduling = false;
@@ -372,8 +398,8 @@ bool MinTSOScheduler::updateMinQueryId(const MPPQueryId & query_id, const bool r
     if (min_query_id
         != old_min_query_id) /// if min_query_id == MPPTaskId::Max_Query_Id and the query_id is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
     {
-        GET_METRIC(tiflash_task_scheduler, type_min_tso)
-            .Set(min_query_id.query_ts == 0 ? min_query_id.start_ts : min_query_id.query_ts);
+        GET_MIN_TSO_METRIC(resource_group_name, "min_tso")
+            ->Set(min_query_id.query_ts == 0 ? min_query_id.start_ts : min_query_id.query_ts);
         LOG_DEBUG(
             log,
             "min_query_id query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.",
@@ -385,6 +411,24 @@ bool MinTSOScheduler::updateMinQueryId(const MPPQueryId & query_id, const bool r
             waiting_set.size());
     }
     return force_scheduling;
+}
+
+MinTSOScheduler::SchedulerDetail & MinTSOScheduler::mustGetSchedulerDetail(const String & resource_group_name)
+{
+    auto iter = scheduler_details.find(resource_group_name);
+    RUNTIME_CHECK(iter != scheduler_details.end());
+    return iter->second;
+}
+
+MinTSOScheduler::SchedulerDetail & MinTSOScheduler::getOrCreateSchedulerDetail(const String & resource_group_name)
+{
+    const String name_with_prefix = "rg_" + resource_group_name;
+    auto iter = scheduler_details.find(resource_group_name);
+    if (iter == scheduler_details.end())
+    {
+        iter = scheduler_details.insert({resource_group_name, SchedulerDetail(resource_group_name)}).first;
+    }
+    return iter->second;
 }
 
 } // namespace DB

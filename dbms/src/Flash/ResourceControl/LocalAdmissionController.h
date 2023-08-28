@@ -452,20 +452,6 @@ public:
         refill_token_callback = nullptr;
     }
 
-    // This callback will be called when Etcd watcher find resource group is deleted by GAC.
-    void registerDeleteResourceGroupCallback(const std::function<void()> & cb)
-    {
-        std::lock_guard lock(mu);
-        RUNTIME_CHECK_MSG(delete_resource_group_callback == nullptr, "callback cannot be registered multiple times");
-        delete_resource_group_callback = cb;
-    }
-    void unregisterDeleteResourceGroupCallback()
-    {
-        std::lock_guard lock(mu);
-        RUNTIME_CHECK_MSG(delete_resource_group_callback != nullptr, "callback cannot be nullptr before unregistering");
-        delete_resource_group_callback = nullptr;
-    }
-
     // LAC will call register of ResourceControlQueue, so if ResourceControlQueue should call LAC::stop()
     // to make sure LAC will never call its callback after ResourceControlQueue is destructed.
     void stop()
@@ -592,9 +578,7 @@ private:
     grpc::ClientContext watch_gac_grpc_context;
     std::shared_ptr<ThreadManager> thread_manager;
 
-    // Callbacks.
     std::function<void()> refill_token_callback;
-    std::function<void()> delete_resource_group_callback;
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };

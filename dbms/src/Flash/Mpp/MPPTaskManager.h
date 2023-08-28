@@ -187,7 +187,7 @@ public:
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
-    const MinTSOSchedulerConfig min_tso_config;
+    MPPTaskSchedulerPtr scheduler;
 
     std::mutex mu;
 
@@ -201,13 +201,8 @@ class MPPTaskManager : private boost::noncopyable
 
     std::shared_ptr<MPPTaskMonitor> monitor;
 
-    // ResourceControl related:
-    // <resource_group_name, min_tso_schduler>
-    std::unordered_map<String, MPPTaskSchedulerPtr> schedulers;
-    UInt64 resource_control_mpp_task_hard_limit;
-
 public:
-    MPPTaskManager(const MinTSOSchedulerConfig & min_tso_config_, UInt64 resource_control_mpp_task_hard_limit_);
+    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
 
     ~MPPTaskManager();
 
@@ -250,23 +245,6 @@ public:
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
-
-    // Delete resource group scheduler whose running mpp tasks is empty.
-    void deleteEmptyScheduler();
-
-    // NOTE: return nullptr if MPPTask doesn't register to MPPTaskManager.
-    MPPTaskSchedulerPtr getSchedulerWithoutLock(const MPPQueryId & query_id)
-    {
-        return getSchedulerWithoutLock(query_id.resource_group_name);
-    }
-
-    MPPTaskSchedulerPtr getSchedulerWithoutLock(const String & resource_group_name)
-    {
-        auto iter = schedulers.find(resource_group_name);
-        if (iter == schedulers.end())
-            return nullptr;
-        return iter->second;
-    }
 
 private:
     MPPQueryPtr addMPPQuery(
