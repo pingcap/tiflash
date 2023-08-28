@@ -165,6 +165,62 @@ try
 }
 CATCH
 
+TEST_F(BlobStoreStatsTest, RestoreWithEmptyPage)
+try
+{
+    BlobStats stats(logger, delegator, config);
+
+    BlobFileId file_id1 = 11;
+
+    {
+        const auto & lock = stats.lock();
+        stats.createStatNotChecking(file_id1, config.file_limit_size, lock);
+    }
+
+    {
+        // one entry before
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 1024,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 1024,
+            .checksum = 0x4567,
+        });
+        // the entry with the same position
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 512,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 0, // empty
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 2048, // an empty page shared the same position
+            .checksum = 0x4567,
+        });
+        stats.restore();
+    }
+
+    auto stats_copy = stats.getStats();
+
+    ASSERT_EQ(stats_copy.size(), std::min(getTotalStatsNum(stats_copy), path_num));
+    ASSERT_EQ(getTotalStatsNum(stats_copy), 1);
+    EXPECT_EQ(stats.cur_max_id, file_id1);
+
+    auto stat = stats.blobIdToStat(file_id1);
+    EXPECT_EQ(stat->sm_total_size, 2048 + 512);
+    EXPECT_EQ(stat->sm_valid_size, 1024 + 512);
+
+    EXPECT_ANY_THROW({ stats.createStat(file_id1, config.file_limit_size, stats.lock()); });
+}
+CATCH
+
 TEST_F(BlobStoreStatsTest, testStats)
 {
     BlobStats stats(logger, delegator, config);
@@ -202,16 +258,16 @@ TEST_F(BlobStoreStatsTest, testStat)
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, 10);
-    ASSERT_FALSE(stat);
+    ASSERT_EQ(stat, nullptr);
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, 20);
-    ASSERT_FALSE(stat);
+    ASSERT_EQ(stat, nullptr);
 
     stats.createStat(0, config.file_limit_size, stats.lock());
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
-    ASSERT_TRUE(stat);
+    ASSERT_NE(stat, nullptr);
 
     // PageType::RaftData should not use the same stat with PageType::Normal
     BlobStats::BlobStatPtr raft_stat;
@@ -268,6 +324,45 @@ TEST_F(BlobStoreStatsTest, testStat)
     ASSERT_EQ(offset, 130);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110 + 10);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 90 + 120);
+    ASSERT_LE(stat->sm_valid_rate, 1);
+}
+
+TEST_F(BlobStoreStatsTest, StatWithEmptyBlob)
+{
+    BlobFileId blob_file_id = 0;
+    BlobStats::BlobStatPtr stat;
+
+    BlobStats stats(logger, delegator, config);
+
+    stats.createStat(0, config.file_limit_size, stats.lock());
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
+    ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
+    ASSERT_NE(stat, nullptr);
+
+    auto offset = stat->getPosFromStat(10, stat->lock());
+    ASSERT_EQ(offset, 0);
+
+    offset = stat->getPosFromStat(0, stat->lock()); // empty
+    ASSERT_EQ(offset, 10);
+
+    offset = stat->getPosFromStat(20, stat->lock());
+    ASSERT_EQ(offset, 10);
+
+    offset = stat->getPosFromStat(100, stat->lock());
+    ASSERT_EQ(offset, 30);
+
+    ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_rate, 1);
+
+    stat->removePosFromStat(10, 0, stat->lock());
+    ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_rate, 1.0);
+
+    stat->removePosFromStat(10, 20, stat->lock());
+    ASSERT_EQ(stat->sm_total_size, 10 + 20 + 100);
+    ASSERT_EQ(stat->sm_valid_size, 10 + 100);
     ASSERT_LE(stat->sm_valid_rate, 1);
 }
 
