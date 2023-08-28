@@ -226,20 +226,26 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         /// schedule tasks one by one
         for (auto & gather_set : query->mpp_gathers)
         {
+            bool has_error = false;
             while (!gather_set.second->waiting_tasks.empty())
             {
-                auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
-                bool has_error = false;
-                if (task != nullptr
-                    && !scheduleImp(current_query_id, gather_set.second, task->getScheduleEntry(), true, has_error))
+                if (has_error)
                 {
-                    if (has_error)
-                    {
-                        gather_set.second->waiting_tasks
-                            .pop(); /// it should be pop from the waiting queue, because the task is scheduled with errors.
-                        GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
-                    }
-                    return;
+                    auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
+                    if (task != nullptr)
+                        task->getScheduleEntry().schedule(ScheduleState::EXCEEDED);
+                    gather_set.second->waiting_tasks.pop();
+                    GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                    continue;
+                }
+
+                auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
+                if (task != nullptr)
+                {
+                    bool scheduled
+                        = scheduleImp(current_query_id, gather_set.second, task->getScheduleEntry(), true, has_error);
+                    if (!scheduled && !has_error)
+                        return;
                 }
                 gather_set.second->waiting_tasks.pop();
                 GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
@@ -317,9 +323,8 @@ bool MinTSOScheduler::scheduleImp(
             GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
             if (isWaiting)
             {
-                /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this query_id and update metrics.
+                /// set this task be failed to schedule, and the task will throw exception.
                 schedule_entry.schedule(ScheduleState::EXCEEDED);
-                waiting_set.erase(query_id); /// avoid the left waiting tasks of this query reaching here many times.
             }
             else
             {
