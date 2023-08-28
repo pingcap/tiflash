@@ -36,10 +36,6 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
     {
         assert(!task);
         task->onErrorOccurred(std::current_exception());
-        {
-            std::lock_guard lock(mu);
-            cancel_task_queue.push_back(std::move(task));
-        }
     }
 }
 
@@ -60,7 +56,6 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
         catch (...)
         {
             assert(!task);
-            cancel_task_queue.push_back(std::move(task));
             lock.unlock();
             task->onErrorOccurred(std::current_exception());
             lock.lock();
