@@ -20,6 +20,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -104,6 +106,24 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
             auto str = msg.str();
             if (!str.empty())
                 LOG_INFO(log, "{}", str);
+        }
+    }
+}
+
+void KVStore::restoreRegionRaftLogRange(const UniversalPageStoragePtr & uni_ps)
+{
+    RaftDataReader reader(*uni_ps);
+    auto task_lock = genTaskLock();
+    auto manage_lock = genRegionMgrWriteLock(task_lock);
+    for (const auto & iter : manage_lock.regions)
+    {
+        const RegionID region_id = iter.first;
+        const auto scan_beg = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
+        // const auto scan_end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
+        auto lower_key = reader.getLowerBound(scan_beg);
+        if (lower_key && lower_key->size() == 1 + 1 + 1 + 8 + 1 + 8)
+        {
+            //
         }
     }
 }

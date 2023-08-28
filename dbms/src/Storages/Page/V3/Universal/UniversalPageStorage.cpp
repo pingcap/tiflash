@@ -399,8 +399,13 @@ bool UniversalPageStorage::gc(
     const ReadLimiterPtr & read_limiter)
 {
     PS::V3::RemoteFileValidSizes remote_valid_sizes;
-    bool done_anything
-        = manager.gc(*blob_store, *page_directory, write_limiter, read_limiter, &remote_valid_sizes, log);
+    bool done_anything = manager.gc( //
+        *blob_store,
+        *page_directory,
+        write_limiter,
+        read_limiter,
+        &remote_valid_sizes,
+        log);
     // update the valid size cache of remote file ids
     remote_data_files_stat_cache.updateValidSize(remote_valid_sizes);
     return done_anything;

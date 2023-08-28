@@ -1658,8 +1658,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     wal->apply(std::move(ser_edit), write_limiter);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
     watch.restart();
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ //
+        GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds());
+    });
 
     SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;

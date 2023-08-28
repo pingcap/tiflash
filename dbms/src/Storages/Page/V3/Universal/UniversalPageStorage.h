@@ -90,7 +90,7 @@ public:
         , delegator(std::move(delegator_))
         , config(config_)
         , file_provider(file_provider_)
-        , log(Logger::get("UniversalPageStorage", name))
+        , log(Logger::get("UniversalPageStorage", storage_name))
     {}
 
     ~UniversalPageStorage();

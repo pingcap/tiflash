@@ -81,6 +81,8 @@ class PathPool;
 class RegionPersister;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 enum class PersistRegionReason
 {
@@ -115,6 +117,7 @@ class KVStore final : private boost::noncopyable
 public:
     explicit KVStore(Context & context);
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
+    void restoreRegionRaftLogRange(const UniversalPageStoragePtr & uni_ps);
 
     RegionPtr getRegion(RegionID region_id) const;
 
