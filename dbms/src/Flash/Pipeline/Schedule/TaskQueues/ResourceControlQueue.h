@@ -60,7 +60,6 @@ public:
 private:
 #endif
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
-    // <resource_group_name, resource_group_task_queues>
     using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
 
     struct ResourceGroupInfo
@@ -84,6 +83,9 @@ private:
 
     using LACErrorInfo = std::unordered_map<String, std::exception_ptr>;
 
+    bool needSubmit(TaskPtr & task);
+    NestedTaskQueuePtr & getSubmitTaskQueue(TaskPtr & task);
+
     // Update resource_group_infos, will reorder resource group by priority.
     LACErrorInfo updateResourceGroupInfosWithoutLock();
 
@@ -91,8 +93,7 @@ private:
     void mustEraseResourceGroupInfoWithoutLock(const String & name);
     static void mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task);
 
-    // Submit task into task queue of specific resource group.
-    void submitWithoutLock(TaskPtr && task);
+    typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr submitWithoutLock(TaskPtr & task);
 
     mutable std::mutex mu;
     std::condition_variable cv;

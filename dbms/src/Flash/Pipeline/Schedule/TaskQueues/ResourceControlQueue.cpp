@@ -28,13 +28,16 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
     {
         {
             std::lock_guard lock(mu);
-            submitWithoutLock(std::move(task));
+            // May throw resource group not found exception.
+            NestedTaskQueuePtr task_queue = submitWithoutLock(task);
+            if likely (task_queue)
+                task_queue->submit(std::move(task));
         }
         cv.notify_one();
     }
     catch (...)
     {
-        assert(!task);
+        assert(task);
         task->onErrorOccurred(std::current_exception());
     }
 }
@@ -45,63 +48,62 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
     if (tasks.empty())
         return;
 
-    std::unique_lock lock(mu);
-    for (auto & task : tasks)
     {
-        try
+        std::unique_lock lock(mu);
+        for (auto & task : tasks)
         {
-            submitWithoutLock(std::move(task));
-            cv.notify_one();
-        }
-        catch (...)
-        {
-            assert(!task);
-            lock.unlock();
-            task->onErrorOccurred(std::current_exception());
-            lock.lock();
+            try
+            {
+                // May throw resource group not found exception.
+                NestedTaskQueuePtr task_queue = submitWithoutLock(task);
+                if likely (task_queue)
+                    task_queue->submit(std::move(task));
+            }
+            catch (...)
+            {
+                assert(task);
+                lock.unlock();
+                task->onErrorOccurred(std::current_exception());
+                lock.lock();
+            }
         }
     }
+    cv.notify_all();
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && task)
+typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr & task)
 {
     if unlikely (is_finished)
     {
         FINALIZE_TASK(task);
-        return;
+        return nullptr;
     }
 
     const auto & query_id = task->getQueryId();
     if unlikely (cancel_query_id_cache.contains(query_id))
     {
         cancel_task_queue.push_back(std::move(task));
-        return;
+        return nullptr;
     }
 
-    // name can be empty, it means resource control is disabled.
     const String & name = task->getResourceGroupName();
-
     auto iter = resource_group_task_queues.find(name);
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedTaskQueueType>();
-        // May throw if resource group has been deleted.
         auto priority = LocalAdmissionController::global_instance->getPriority(name);
         resource_group_infos.push({name, priority, task_queue});
-        resource_group_task_queues.insert({name, task_queue});
-        task_queue->submit(std::move(task));
+        auto [iter, inserted] = resource_group_task_queues.insert({name, task_queue});
+        assert(inserted);
     }
-    else
-    {
-        iter->second->submit(std::move(task));
-    }
+    return iter->second;
 }
 
 template <typename NestedTaskQueueType>
 bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 {
-    assert(task == nullptr);
+    assert(!task);
     std::unique_lock lock(mu);
     while (true)
     {
@@ -165,7 +167,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    CATCH_AND_IGNORE(LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value));
+    CATCH_AND_LOG(LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value), logger);
 }
 
 template <typename NestedTaskQueueType>

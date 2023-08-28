@@ -53,7 +53,7 @@ public:
 
     struct TokenBucketConfig
     {
-        TokenBucketConfig(const double tokens_, const double fill_rate_, const double capacity_)
+        TokenBucketConfig(double tokens_, double fill_rate_, double capacity_)
             : tokens(tokens_)
             , fill_rate(fill_rate_)
             , capacity(capacity_)

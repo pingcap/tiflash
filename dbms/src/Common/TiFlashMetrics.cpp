@@ -58,9 +58,9 @@ TiFlashMetrics::TiFlashMetrics()
                                                       .Name("tiflash_storage_sync_replica_ru")
                                                       .Help("RU for synchronous replica of keyspace")
                                                       .Register(*registry);
-    registered_resource_group_min_tso_family = &prometheus::BuildGauge()
+    registered_min_tso_scheduler_family = &prometheus::BuildGauge()
                                                     .Name("tiflash_task_scheduler")
-                                                    .Help("min tso task schduler metrics") // gjt todo
+                                                    .Help("Min-tso task scheduler")
                                                     .Register(*registry);
 }
 
@@ -73,7 +73,7 @@ prometheus::Gauge * TiFlashMetrics::getOrCreateMinTSOGauge(const String & resour
     {
         return iter->second;
     }
-    return registered_resource_group_min_tso[key] = &registered_resource_group_min_tso_family->Add(labels);
+    return registered_resource_group_min_tso[key] = &registered_min_tso_scheduler_family->Add(labels);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)

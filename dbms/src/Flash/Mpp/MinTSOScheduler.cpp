@@ -76,18 +76,17 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
                 active_set_soft_limit);
         }
 
-        const String empty_resource_group;
-        const auto & empty_detail = getOrCreateSchedulerDetail(empty_resource_group);
-        GET_MIN_TSO_METRIC(empty_resource_group, "min_tso")->Set(empty_detail.min_query_id.query_ts);
-        GET_MIN_TSO_METRIC(empty_resource_group, "thread_soft_limit")->Set(thread_soft_limit);
-        GET_MIN_TSO_METRIC(empty_resource_group, "thread_hard_limit")->Set(thread_hard_limit);
-        GET_MIN_TSO_METRIC(empty_resource_group, "estimated_thread_usage")->Set(empty_detail.estimated_thread_usage);
-        GET_MIN_TSO_METRIC(empty_resource_group, "global_estimated_thread_usage")->Set(global_estimated_thread_usage);
-        GET_MIN_TSO_METRIC(empty_resource_group, "waiting_queries_count")->Set(0);
-        GET_MIN_TSO_METRIC(empty_resource_group, "active_queries_count")->Set(0);
-        GET_MIN_TSO_METRIC(empty_resource_group, "waiting_tasks_count")->Set(0);
-        GET_MIN_TSO_METRIC(empty_resource_group, "active_tasks_count")->Set(0);
-        GET_MIN_TSO_METRIC(empty_resource_group, "hard_limit_exceeded_count")->Set(0);
+        const auto & empty_detail = getOrCreateSchedulerDetail("");
+        GET_MIN_TSO_METRIC("", "min_tso")->Set(empty_detail.min_query_id.query_ts);
+        GET_MIN_TSO_METRIC("", "thread_soft_limit")->Set(thread_soft_limit);
+        GET_MIN_TSO_METRIC("", "thread_hard_limit")->Set(thread_hard_limit);
+        GET_MIN_TSO_METRIC("", "estimated_thread_usage")->Set(empty_detail.estimated_thread_usage);
+        GET_MIN_TSO_METRIC("", "global_estimated_thread_usage")->Set(global_estimated_thread_usage);
+        GET_MIN_TSO_METRIC("", "waiting_queries_count")->Set(0);
+        GET_MIN_TSO_METRIC("", "active_queries_count")->Set(0);
+        GET_MIN_TSO_METRIC("", "waiting_tasks_count")->Set(0);
+        GET_MIN_TSO_METRIC("", "active_tasks_count")->Set(0);
+        GET_MIN_TSO_METRIC("", "hard_limit_exceeded_count")->Set(0);
     }
 }
 

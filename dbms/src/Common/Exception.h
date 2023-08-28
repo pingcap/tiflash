@@ -349,12 +349,14 @@ constexpr auto maybeStringLiteralExpr(const std::string_view sv)
         }                                                              \
     } while (false)
 
-#define CATCH_AND_IGNORE(stmt) \
-    try                        \
-    {                          \
-        (stmt);                \
-    }                          \
-    catch (...)                \
-    {}
+#define CATCH_AND_LOG(stmt, log)                              \
+    try                                                       \
+    {                                                         \
+        (stmt);                                               \
+    }                                                         \
+    catch (...)                                               \
+    {                                                         \
+        LOG_WARNING((log), getCurrentExceptionMessage(true)); \
+    }
 
 } // namespace DB

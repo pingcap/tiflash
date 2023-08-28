@@ -237,7 +237,7 @@ grpc::Status Client::resign(const v3electionpb::LeaderKey & leader_key)
     return status;
 }
 
-// Using ectd Txn to check if /tidb/server_id/gen_server_id exists.
+// Using ectd Txn to check if /tidb/server_id/server_id exists.
 // If doesn't exists, put it to etcd and return. Otherwise retry(max retry 3 times).
 UInt64 Client::acquireServerIDFromPD()
 {

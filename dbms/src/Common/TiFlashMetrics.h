@@ -815,7 +815,7 @@ private:
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
-    prometheus::Family<prometheus::Gauge> * registered_resource_group_min_tso_family;
+    prometheus::Family<prometheus::Gauge> * registered_min_tso_scheduler_family;
     std::unordered_map<String, prometheus::Gauge *> registered_resource_group_min_tso;
 
 public:
