@@ -297,7 +297,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
         {
             // Persist RegionMeta on the storage engine
             tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
-            persistRegion(*region, &region_persist_lock, "Eager RaftLog GC after normal write");
+            persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
             // return "Persist" to proxy for persisting the RegionMeta
             apply_res = EngineStoreApplyRes::Persist;
         }

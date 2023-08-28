@@ -91,18 +91,21 @@ enum class PersistRegionReason
     ProactiveFlush,
     ApplySnapshotPrevRegion,
     ApplySnapshotCurRegion,
-    IngestSst
+    IngestSst,
+    EagerRaftGc,
 };
 
-constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()]
-    = {"debug",
-       "admin cmd useless",
-       "admin raft cmd",
-       "tryFlushRegionData",
-       "ProactiveFlush",
-       "save previous region before apply",
-       "save current region after apply",
-       "ingestsst"};
+constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()] = {
+    "debug",
+    "admin cmd useless",
+    "admin raft cmd",
+    "tryFlushRegionData",
+    "ProactiveFlush",
+    "save previous region before apply",
+    "save current region after apply",
+    "ingestsst",
+    "eager raft log gc",
+};
 
 static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistRegionReasonMap) / sizeof(const char *));
 
@@ -181,7 +184,7 @@ public:
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
 
-    void setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 eager_gc_rows);
+    void setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap);
     UInt64 getRaftLogEagerGCRows() const { return region_raft_log_eager_gc_threshold.load(); }
 
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);

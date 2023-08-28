@@ -68,6 +68,7 @@ public:
 
     UInt64 appliedIndex() const;
     UInt64 appliedIndexTerm() const;
+    UInt64 truncateIndex() const;
 
     ImutRegionRangePtr getRange() const;
 

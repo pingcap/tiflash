@@ -94,7 +94,8 @@ RegionGcTask getRegionTask(
     {
         LOG_DEBUG(
             logger,
-            "Skip eager gc, region_id={} persist_first_index={} persist_applied_index={} hint_first_index={} hint_applied_index={}",
+            "Skip eager gc, region_id={} persist_first_index={} persist_applied_index={} hint_first_index={} "
+            "hint_applied_index={}",
             region_id,
             region_state.truncated_state().index(),
             region_state.applied_index(),

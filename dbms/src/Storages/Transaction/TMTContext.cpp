@@ -374,7 +374,6 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * COMPACT_LOG_MIN_GAP = "flash.compact_log_min_gap";
-    static constexpr const char * RAFT_LOG_EAGER_GC_THRESHOLD = "flash.raft_log_eager_gc_threshold";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";

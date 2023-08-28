@@ -703,7 +703,7 @@ void Region::assignRegion(Region && new_region)
     data.assignRegionData(std::move(new_region.data));
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
-    transient_truncated_index = meta.getApplyState().truncated_state().index();
+    transient_truncated_index = meta.truncateIndex();
 }
 
 /// try to clean illegal data because of feature `compaction filter`
@@ -949,7 +949,7 @@ Region::Region(RegionMeta && meta_)
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
-    , transient_truncated_index(meta.getApplyState().truncated_state().index())
+    , transient_truncated_index(meta.truncateIndex())
     , log(Logger::get())
     , keyspace_id(meta.getRange()->getKeyspaceID())
     , mapped_table_id(meta.getRange()->getMappedTableID())

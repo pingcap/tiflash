@@ -17,6 +17,8 @@
 #include <Storages/Transaction/RegionMeta.h>
 #include <fmt/core.h>
 
+#include <mutex>
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -117,6 +119,12 @@ UInt64 RegionMeta::appliedIndexTerm() const
 {
     std::lock_guard lock(mutex);
     return applied_term;
+}
+
+UInt64 RegionMeta::truncateIndex() const
+{
+    std::lock_guard lock(mutex);
+    return apply_state.truncated_state().index();
 }
 
 RegionMeta::RegionMeta(RegionMeta && rhs)
