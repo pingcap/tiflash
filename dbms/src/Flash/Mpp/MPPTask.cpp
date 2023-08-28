@@ -591,8 +591,7 @@ void MPPTask::runImpl()
             runtime_statistics.bytes);
 
         // Only report RU consumption to GAC for now.
-        // Will not affect the execution process of MPPTask,
-        // as the consult operation will only be performed after MPPTask is completed.
+        // Will not affect the execution process of this MPPTask(may affect other MPPTask of this resource group).
         CATCH_AND_LOG(LocalAdmissionController::global_instance
                              ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0), log);
         result.verify();

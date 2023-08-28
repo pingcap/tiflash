@@ -339,8 +339,8 @@ bool MinTSOScheduler::scheduleImp(
             {
                 /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this query_id and update metrics.
                 schedule_entry.schedule(ScheduleState::EXCEEDED);
-                detail.waiting_set.erase(
-                    query_id); /// avoid the left waiting tasks of this query reaching here many times.
+                /// avoid the left waiting tasks of this query reaching here many times.
+                detail.waiting_set.erase(query_id);
             }
             else
             {

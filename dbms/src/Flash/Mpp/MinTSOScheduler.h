@@ -20,26 +20,13 @@
 namespace DB
 {
 class MinTSOScheduler;
-using MPPTaskSchedulerPtr = std::shared_ptr<MinTSOScheduler>;
+using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
 
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
 struct MPPGatherTaskSet;
 using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
-
-struct MinTSOSchedulerConfig
-{
-    MinTSOSchedulerConfig(UInt64 soft_limit_, UInt64 hard_limit_, UInt64 active_set_soft_limit_)
-        : soft_limit(soft_limit_)
-        , hard_limit(hard_limit_)
-        , active_set_soft_limit(active_set_soft_limit_)
-    {}
-
-    UInt64 soft_limit;
-    UInt64 hard_limit;
-    UInt64 active_set_soft_limit;
-};
 
 /// scheduling tasks in the set according to the tso order under the soft limit of threads, but allow the min_query_id query to preempt threads under the hard limit of threads.
 /// The min_query_id query avoids the deadlock resulted from threads competition among nodes.
@@ -48,7 +35,7 @@ struct MinTSOSchedulerConfig
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
-    MinTSOScheduler(UInt64 thread_soft_limit, UInt64 thread_hard_limit, UInt64 active_set_soft_limit);
+    MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit);
     ~MinTSOScheduler() = default;
     /// try to schedule this task if it is the min_query_id query or there are enough threads, otherwise put it into the waiting set.
     /// NOTE: call tryToSchedule under the lock protection of MPPTaskManager
@@ -89,6 +76,7 @@ private:
 
         bool updateMinQueryId(const MPPQueryId & query_id, bool retired, const String & msg, LoggerPtr log);
     };
+
     void scheduleWaitingQueries(SchedulerDetail & detail, MPPTaskManager & task_manager, LoggerPtr log);
     SchedulerDetail & mustGetSchedulerDetail(const String & resource_group_name);
     SchedulerDetail & getOrCreateSchedulerDetail(const String & resource_group_name);
