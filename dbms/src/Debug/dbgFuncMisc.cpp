@@ -141,7 +141,10 @@ void dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool(Context &, const AST
         auto wait_time = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
         wait_time = std::min(wait_time, MAX_WAIT_TIME);
         /// should update the value when there is long running threads using dynamic thread pool
-        static const int expected_value = 0;
+        /// Long running thread:
+        /// 1. LocalAdmissionController::fetchGAC
+        /// 2. LocalAdmissionController::watchGAC
+        static const int expected_value = 2;
 
         while (wait_time > 0)
         {

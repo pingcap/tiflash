@@ -29,7 +29,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
         {
             std::lock_guard lock(mu);
             // May throw resource group not found exception.
-            NestedTaskQueuePtr task_queue = submitWithoutLock(task);
+            NestedTaskQueuePtr task_queue = getSubmitTaskQueuWithoutLock(task);
             if likely (task_queue)
                 task_queue->submit(std::move(task));
         }
@@ -55,7 +55,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
             try
             {
                 // May throw resource group not found exception.
-                NestedTaskQueuePtr task_queue = submitWithoutLock(task);
+                NestedTaskQueuePtr task_queue = getSubmitTaskQueuWithoutLock(task);
                 if likely (task_queue)
                     task_queue->submit(std::move(task));
             }
@@ -73,7 +73,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
 
 template <typename NestedTaskQueueType>
 typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceControlQueue<
-    NestedTaskQueueType>::submitWithoutLock(TaskPtr & task)
+    NestedTaskQueueType>::getSubmitTaskQueuWithoutLock(TaskPtr & task)
 {
     if unlikely (is_finished)
     {
@@ -183,7 +183,7 @@ typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfo ResourceControl
         const ResourceGroupInfo & group_info = resource_group_infos.top();
         if (!group_info.task_queue->empty())
         {
-            uint64_t new_priority = LocalAdmissionController::HIGHEST_RESOURCE_CONTROL_PRIORITY;
+            uint64_t new_priority = LocalAdmissionController::HIGHEST_RESOURCE_GROUP_PRIORITY;
             try
             {
                 new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);

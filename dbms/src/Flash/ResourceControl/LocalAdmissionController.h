@@ -353,12 +353,12 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 // It manages all resource groups:
 // 1. Creation, deletion and config updates of resource group.
 // 2. Fetching tokens from GAC periodically or when tokens are low.
-// 3. Record resource consumption and the priority of each resource group.
+// 3. Record/report resource consumption and the priority of each resource group.
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
     // For tidb_enable_resource_control is disabled.
-    static constexpr uint64_t HIGHEST_RESOURCE_CONTROL_PRIORITY = 0;
+    static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
@@ -395,7 +395,7 @@ public:
     uint64_t getPriority(const std::string & name)
     {
         if (name.empty())
-            return HIGHEST_RESOURCE_CONTROL_PRIORITY;
+            return HIGHEST_RESOURCE_GROUP_PRIORITY;
 
         ResourceGroupPtr group = getOrFetchResourceGroup(name);
         return group->getPriority(max_ru_per_sec.load());
@@ -436,9 +436,6 @@ public:
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
 
-    // 1. This callback will be called everytime AcquireTokenBuckets GRPC is called.
-    // 2. For now, only support one callback.
-    //    Because only ResourceControlQueue will register this callback.
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
         std::lock_guard lock(mu);
@@ -452,8 +449,6 @@ public:
         refill_token_callback = nullptr;
     }
 
-    // LAC will call register of ResourceControlQueue, so if ResourceControlQueue should call LAC::stop()
-    // to make sure LAC will never call its callback after ResourceControlQueue is destructed.
     void stop()
     {
         if (stopped)

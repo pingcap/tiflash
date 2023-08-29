@@ -62,7 +62,7 @@ private:
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
     using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
 
-    typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr submitWithoutLock(TaskPtr & task);
+    typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr getSubmitTaskQueuWithoutLock(TaskPtr & task);
 
     struct ResourceGroupInfo
     {
