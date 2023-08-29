@@ -91,6 +91,33 @@ try
 }
 CATCH
 
+TEST_F(TestOperatorSpillContext, AggAutoTriggerSpill)
+try
+{
+    auto agg_spill_config = *spill_config_ptr;
+    /// unlimited cache bytes
+    std::vector<Int64> max_cached_bytes = {0, OperatorSpillContext::MIN_SPILL_THRESHOLD + 1, OperatorSpillContext::MIN_SPILL_THRESHOLD - 1};
+    std::vector<size_t> expected_spill_threads = {5, 5, 10};
+    size_t threads = 10;
+    for (size_t index = 0; index < max_cached_bytes.size(); ++index)
+    {
+        agg_spill_config.max_cached_data_bytes_in_spiller = max_cached_bytes[index];
+        auto spill_context = std::make_shared<AggSpillContext>(threads, agg_spill_config, 0, logger);
+        spill_context->setAutoSpillMode();
+        for (size_t i = 0; i < threads; ++i)
+            spill_context->updatePerThreadRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD, i);
+        ASSERT_TRUE(spill_context->triggerSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 5) == 0);
+        size_t spilled_partition = 0;
+        for (size_t i = 0; i < threads; ++i)
+        {
+            if (spill_context->isThreadMarkedForAutoSpill(i))
+                spilled_partition++;
+        }
+        ASSERT_TRUE(spilled_partition == expected_spill_threads[index]);
+    }
+}
+CATCH
+
 TEST_F(TestOperatorSpillContext, SortMarkSpill)
 try
 {
