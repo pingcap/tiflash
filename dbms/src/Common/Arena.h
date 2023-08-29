@@ -99,7 +99,7 @@ private:
     {
         if (resize_callback != nullptr)
         {
-            if (!resize_callback())
+            if unlikely(!resize_callback())
                 throw ResizeException("Error in arena resize");
         }
         head = new Chunk(nextSize(min_size), head);

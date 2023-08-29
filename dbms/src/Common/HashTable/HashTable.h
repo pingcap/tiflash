@@ -484,7 +484,7 @@ protected:
     {
         if (resize_callback != nullptr)
         {
-            if (!resize_callback())
+            if unlikely(!resize_callback())
                 throw DB::ResizeException("Error in hash table resize");
         }
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES

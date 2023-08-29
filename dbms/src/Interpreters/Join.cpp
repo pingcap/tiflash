@@ -592,7 +592,8 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     }
                     /// double check here to release memory
                     checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
-                    RUNTIME_CHECK_MSG(!meet_resize_exception || hash_join_spill_context->isPartitionSpilled(i), "resize exception must trigger partition to spill");
+                    if (meet_resize_exception)
+                        RUNTIME_CHECK_MSG(hash_join_spill_context->isPartitionSpilled(i), "resize exception must trigger partition to spill");
                 }
             }
             if (auto_spill_trigger != nullptr)
