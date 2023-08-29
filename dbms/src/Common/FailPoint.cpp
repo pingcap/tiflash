@@ -87,7 +87,7 @@ namespace DB
     M(force_remote_read_for_batch_cop)                       \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
-    M(force_change_all_blobs_to_read_only)                   \
+    M(force_pick_all_blobs_to_full_gc)                       \
     M(force_ingest_via_delta)                                \
     M(force_ingest_via_replace)                              \
     M(unblock_query_init_after_write)                        \

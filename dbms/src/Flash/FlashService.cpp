@@ -171,7 +171,8 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
 
 void updateSettingsForAutoSpill(ContextPtr & context, const LoggerPtr & log)
 {
-    if (context->getSettingsRef().max_memory_usage.getActualBytes(1024 * 1024 * 1024ULL) > 0)
+    if (context->getSettingsRef().max_memory_usage.getActualBytes(1024 * 1024 * 1024ULL) > 0
+        && context->getSettingsRef().auto_memory_revoke_trigger_threshold.get() > 0)
     {
         /// auto spill is set, disable operator spill threshold
         bool need_log_warning = false;

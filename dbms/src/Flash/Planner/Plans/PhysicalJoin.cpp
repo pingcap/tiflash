@@ -178,6 +178,12 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_spill_config,
         settings.join_restore_concurrency,
         join_output_column_names,
+        [&](const OperatorSpillContextPtr & operator_spill_context) {
+            if (context.getDAGContext() != nullptr)
+            {
+                context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+            }
+        },
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,

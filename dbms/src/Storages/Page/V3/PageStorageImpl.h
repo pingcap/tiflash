@@ -62,6 +62,10 @@ public:
 
     void writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 
+    // After this, all existing data file will be frozen and new coming writes
+    // will be written to new data files.
+    void freezeDataFiles();
+
     DB::PageEntry getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot) override;
 
     DB::Page readImpl(

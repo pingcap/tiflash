@@ -53,18 +53,11 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
     return false;
 }
 
-Int64 SortSpillContext::triggerSpill(Int64 expected_released_memories)
+Int64 SortSpillContext::triggerSpillImpl(DB::Int64 expected_released_memories)
 {
-    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
-    if (!in_spillable_stage || !enable_spill)
-        return expected_released_memories;
-    auto total_revocable_memory = getTotalRevocableMemory();
-    if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
-    {
-        AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-        auto_spill_status.compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
-        expected_released_memories = std::max(expected_released_memories - revocable_memory, 0);
-    }
+    AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+    auto_spill_status.compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
+    expected_released_memories = std::max(expected_released_memories - revocable_memory, 0);
     return expected_released_memories;
 }
 

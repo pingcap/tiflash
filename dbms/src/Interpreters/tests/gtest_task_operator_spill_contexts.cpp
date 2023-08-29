@@ -74,9 +74,9 @@ try
     /// additional_operator_spill_contexts has been merged to operator_spill_contexts
     ASSERT_TRUE(task_operator_spill_contexts.additionalOperatorSpillContextCount() == 0);
     task_operator_spill_contexts.registerOperatorSpillContext(join_spill_context);
-    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 2);
-    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
     ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 3);
+    task_operator_spill_contexts.registerOperatorSpillContext(sort_spill_context);
+    ASSERT_TRUE(task_operator_spill_contexts.operatorSpillContextCount() == 4);
 }
 CATCH
 
