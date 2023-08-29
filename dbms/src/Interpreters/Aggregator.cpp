@@ -79,7 +79,6 @@ bool AggregatedDataVariants::tryMarkNeedSpill()
         convertToTwoLevel();
     }
     need_spill = true;
-    aggregator->agg_spill_context->markSpilled();
     return true;
 }
 
@@ -891,7 +890,9 @@ bool Aggregator::executeOnBlock(
 
     /** Flush data to disk if too much RAM is consumed.
       */
-    if (agg_spill_context->updatePerThreadRevocableMemory(result.revocableBytes(), thread_num))
+    auto revocable_bytes = result.revocableBytes();
+    LOG_DEBUG(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
+    if (agg_spill_context->updatePerThreadRevocableMemory(revocable_bytes, thread_num))
     {
         result.tryMarkNeedSpill();
     }
@@ -922,6 +923,7 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
 void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num)
 {
     assert(data_variants.need_spill);
+    agg_spill_context->markSpilled();
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                                                     \
     case AggregationMethodType(NAME):                                                                               \
