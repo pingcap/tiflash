@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -40,6 +41,15 @@ public:
         assert(sorted_input_stream != nullptr);
         cur_block = {};
         children.push_back(child);
+    }
+
+    ~PKSquashingBlockInputStream() override
+    {
+        LOG_DEBUG(
+            &Poco::Logger::get("PKSquashingBlockInputStream"),
+            "Total runs {}, max_sort_rows {}",
+            runs,
+            max_sort_rows);
     }
 
     String getName() const override { return "PKSquashing"; }
@@ -69,6 +79,7 @@ public:
             first_read = false;
         }
 
+        runs++;
         cur_block = next_block;
         if (!cur_block)
             return finializeBlock(std::move(cur_block));
@@ -180,6 +191,8 @@ private:
 
     bool first_read = true;
     const bool is_common_handle;
+    size_t max_sort_rows{0};
+    size_t runs{0};
 };
 
 } // namespace DM
