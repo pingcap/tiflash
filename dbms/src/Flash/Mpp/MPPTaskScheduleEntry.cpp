@@ -31,7 +31,7 @@ MPPTaskScheduleEntry::~MPPTaskScheduleEntry()
 {
     if (schedule_state == ScheduleState::SCHEDULED)
     {
-        manager->releaseThreadsFromScheduler(getResourceGroupName(), needed_threads);
+        manager->releaseThreadsFromScheduler(needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
 }

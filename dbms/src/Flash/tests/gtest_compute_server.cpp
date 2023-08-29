@@ -945,8 +945,16 @@ try
     context.context->setSetting("task_scheduler_active_set_soft_limit", active_set_soft_limit);
     startServers(1);
     setCancelTest();
-    ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 0);
-    ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+    ASSERT_TRUE(
+        TiFlashMetrics::instance()
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+            .Value()
+        == 0);
+    ASSERT_TRUE(
+        TiFlashMetrics::instance()
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+            .Value()
+        == 0);
     std::vector<std::thread> running_queries;
     std::vector<MPPGatherId> gather_ids;
     try
@@ -958,12 +966,28 @@ try
         }
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 2);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 2);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         addOneQuery(1, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 3);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 3);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         for (const auto & gather_id : gather_ids)
             MockComputeServerManager::instance().cancelGather(gather_id);
         for (auto & t : running_queries)
@@ -977,18 +1001,42 @@ try
         }
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 2);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 2);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         addOneQuery(30, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 2);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 1);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 2);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 1);
         /// cancel 1 running query
         MockComputeServerManager::instance().cancelGather(gather_ids[0]);
         running_queries[0].join();
         std::this_thread::sleep_for(2s);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 2);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 2);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         for (size_t i = 1; i < running_queries.size(); i++)
             MockComputeServerManager::instance().cancelGather(gather_ids[i]);
         for (size_t i = 1; i < running_queries.size(); i++)
@@ -1011,8 +1059,16 @@ try
 {
     startServers(1);
     setCancelTest();
-    ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 0);
-    ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+    ASSERT_TRUE(
+        TiFlashMetrics::instance()
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+            .Value()
+        == 0);
+    ASSERT_TRUE(
+        TiFlashMetrics::instance()
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+            .Value()
+        == 0);
     std::vector<std::thread> running_queries;
     std::vector<MPPGatherId> gather_ids;
     auto multiple_gathers_properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, 1);
@@ -1029,8 +1085,16 @@ try
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
         /// 6 gathers, but two query
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 2);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 2);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         std::vector<size_t> killed_gathers{0, 2, 4};
         std::vector<size_t> remaining_gathers{1, 3};
         for (const auto i : killed_gathers)
@@ -1044,22 +1108,46 @@ try
             assertGatherActive(gather_ids[i]);
         }
         /// the active query count should not change
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 2);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 2);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         /// kill single gather query
         MockComputeServerManager::instance().cancelGather(gather_ids[5]);
         assertGatherCancelled(gather_ids[5]);
         /// the active query count should be 1
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 1);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 1);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         /// kill the rest gathers
         for (const auto i : remaining_gathers)
         {
             MockComputeServerManager::instance().cancelGather(gather_ids[i]);
             assertGatherCancelled(gather_ids[i]);
         }
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "active_queries_count")->Value() == 0);
-        ASSERT_TRUE(TiFlashMetrics::instance().getOrCreateMinTSOGauge("", "waiting_queries_count")->Value() == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .Value()
+            == 0);
+        ASSERT_TRUE(
+            TiFlashMetrics::instance()
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .Value()
+            == 0);
         for (auto & t : running_queries)
             if (t.joinable())
                 t.join();
