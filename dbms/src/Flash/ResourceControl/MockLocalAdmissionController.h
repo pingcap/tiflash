@@ -61,8 +61,6 @@ public:
 
     uint64_t getPriority(const std::string & name) const { return get_priority_func(name); }
 
-    bool isResourceGroupThrottled(const std::string & name) const { return is_resource_group_throttled_func(name); }
-
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
         std::lock_guard lock(call_back_mutex);
@@ -75,8 +73,6 @@ public:
         RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
         refill_token_callback = nullptr;
     }
-
-    std::string isResourceGroupValid(const std::string &) { RUNTIME_ASSERT(0); }
 
     void stop()
     {

@@ -48,6 +48,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
     if (tasks.empty())
         return;
 
+    std::vector<std::pair<TaskPtr, std::exception_ptr>> error_task_infos;
     {
         std::unique_lock lock(mu);
         for (auto & task : tasks)
@@ -61,12 +62,15 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
             }
             catch (...)
             {
-                assert(task);
-                lock.unlock();
-                task->onErrorOccurred(std::current_exception());
-                lock.lock();
+                error_task_infos.emplace_back(std::move(task), std::current_exception());
             }
         }
+    }
+    for (auto & info : error_task_infos)
+    {
+        assert(info.first);
+        assert(info.second);
+        info.first->onErrorOccurred(info.second);
     }
     cv.notify_all();
 }

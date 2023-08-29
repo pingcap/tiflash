@@ -54,8 +54,8 @@ void LocalAdmissionController::startBackgroudJob()
     }
     catch (...)
     {
-        auto err_msg = getCurrentExceptionMessage(false);
-        LOG_FATAL(log, err_msg);
+        LOG_FATAL(log, getCurrentExceptionMessage(false));
+        std::terminate();
     }
 
     while (!stopped.load())
