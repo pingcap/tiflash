@@ -95,7 +95,8 @@ typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceC
         auto task_queue = std::make_shared<NestedTaskQueueType>();
         auto priority = LocalAdmissionController::global_instance->getPriority(name);
         resource_group_infos.push({name, priority, task_queue});
-        auto [iter, inserted] = resource_group_task_queues.insert({name, task_queue});
+        bool inserted = false;
+        std::tie(iter, inserted) = resource_group_task_queues.insert({name, task_queue});
         assert(inserted);
     }
     return iter->second;
