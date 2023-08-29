@@ -24,6 +24,7 @@ class AutoSpillTrigger
 {
 private:
     constexpr static const float MAX_TRIGGER_THRESHOLD = 0.85;
+
 public:
     AutoSpillTrigger(
         const MemoryTrackerPtr & memory_tracker_,
@@ -39,11 +40,14 @@ public:
             "Invalid auto trigger threshold {} or invalid auto target threshold {}",
             auto_memory_revoke_trigger_threshold,
             auto_memory_revoke_target_threshold);
-        if (unlikely(auto_memory_revoke_trigger_threshold < auto_memory_revoke_target_threshold || auto_memory_revoke_trigger_threshold > MAX_TRIGGER_THRESHOLD))
+        if (unlikely(
+                auto_memory_revoke_trigger_threshold < auto_memory_revoke_target_threshold
+                || auto_memory_revoke_trigger_threshold > MAX_TRIGGER_THRESHOLD))
         {
             LOG_WARNING(
                 query_operator_spill_contexts->getLogger(),
-                "Auto trigger threshold {} less than auto target threshold {} or more than max trigger threshold {}, not valid, use default value instead",
+                "Auto trigger threshold {} less than auto target threshold {} or more than max trigger threshold {}, "
+                "not valid, use default value instead",
                 auto_memory_revoke_trigger_threshold,
                 auto_memory_revoke_target_threshold,
                 MAX_TRIGGER_THRESHOLD);
@@ -61,7 +65,9 @@ public:
         auto current_memory_usage = memory_tracker->get();
         if (current_memory_usage > trigger_threshold)
         {
-            query_operator_spill_contexts->triggerAutoSpill(current_memory_usage - target_threshold, current_memory_usage > force_trigger_threshold);
+            query_operator_spill_contexts->triggerAutoSpill(
+                current_memory_usage - target_threshold,
+                current_memory_usage > force_trigger_threshold);
         }
     }
 

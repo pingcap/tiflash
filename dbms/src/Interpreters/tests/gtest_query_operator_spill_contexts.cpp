@@ -161,8 +161,7 @@ try
         query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3)
         == OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);
     ASSERT_TRUE(
-        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3, true)
-        == 0);
+        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3, true) == 0);
     ASSERT_TRUE(
         query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3)
         == OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);

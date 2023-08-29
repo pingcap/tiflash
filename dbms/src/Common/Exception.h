@@ -106,7 +106,9 @@ private:
 class ResizeException : public Exception
 {
 public:
-    explicit ResizeException(const std::string & msg) : Exception(msg, ErrorCodes::ERROR_DURING_HASH_TABLE_OR_ARENA_RESIZE) {}
+    explicit ResizeException(const std::string & msg)
+        : Exception(msg, ErrorCodes::ERROR_DURING_HASH_TABLE_OR_ARENA_RESIZE)
+    {}
 };
 
 using Exceptions = std::vector<std::exception_ptr>;

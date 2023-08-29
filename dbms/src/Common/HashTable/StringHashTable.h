@@ -86,7 +86,10 @@ struct StringHashTableHash
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
     }
 #endif
-    size_t ALWAYS_INLINE operator()(StringRef key) const { return StringRefHash()(key); }
+    size_t ALWAYS_INLINE operator()(StringRef key) const
+    {
+        return StringRefHash()(key);
+    }
 };
 
 template <typename Cell>
@@ -380,11 +383,20 @@ public:
         }
     };
 
-    LookupResult ALWAYS_INLINE find(const Key & x) { return dispatch(*this, x, FindCallable{}); }
+    LookupResult ALWAYS_INLINE find(const Key & x)
+    {
+        return dispatch(*this, x, FindCallable{});
+    }
 
-    ConstLookupResult ALWAYS_INLINE find(const Key & x) const { return dispatch(*this, x, FindCallable{}); }
+    ConstLookupResult ALWAYS_INLINE find(const Key & x) const
+    {
+        return dispatch(*this, x, FindCallable{});
+    }
 
-    bool ALWAYS_INLINE has(const Key & x, size_t = 0) const { return dispatch(*this, x, FindCallable{}) != nullptr; }
+    bool ALWAYS_INLINE has(const Key & x, size_t = 0) const
+    {
+        return dispatch(*this, x, FindCallable{}) != nullptr;
+    }
 
     void write(DB::WriteBuffer & wb) const
     {
@@ -430,9 +442,15 @@ public:
         ms.readText(rb);
     }
 
-    size_t size() const { return m0.size() + m1.size() + m2.size() + m3.size() + ms.size(); }
+    size_t size() const
+    {
+        return m0.size() + m1.size() + m2.size() + m3.size() + ms.size();
+    }
 
-    bool empty() const { return m0.empty() && m1.empty() && m2.empty() && m3.empty() && ms.empty(); }
+    bool empty() const
+    {
+        return m0.empty() && m1.empty() && m2.empty() && m3.empty() && ms.empty();
+    }
 
     size_t getBufferSizeInBytes() const
     {

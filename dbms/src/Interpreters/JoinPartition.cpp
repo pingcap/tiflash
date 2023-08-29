@@ -163,12 +163,12 @@ static void setResizeCallbackImpl(const Maps & maps, JoinMapMethod method, const
     case JoinMapMethod::EMPTY:
     case JoinMapMethod::CROSS:
         return;
-#define M(NAME)               \
-    case JoinMapMethod::NAME: \
-        if (maps.NAME)        \
+#define M(NAME)                                            \
+    case JoinMapMethod::NAME:                              \
+        if (maps.NAME)                                     \
             maps.NAME->setResizeCallback(resize_callback); \
         return;
-    APPLY_FOR_JOIN_VARIANTS(M)
+        APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
 
     default:
@@ -235,8 +235,7 @@ void JoinPartition::setResizeCallbackIfNeeded()
 {
     if (hash_join_spill_context->isSpillEnabled() && hash_join_spill_context->isInAutoSpillMode())
     {
-        auto resize_callback = [this]()
-        {
+        auto resize_callback = [this]() {
             return !hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index);
         };
         assert(pool != nullptr);
