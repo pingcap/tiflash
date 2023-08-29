@@ -157,6 +157,8 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
         std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
+        std::make_pair("tidb_max_tiflash_query_memory_per_node", "max_memory_usage"),
+        std::make_pair("tidb_tiflash_auto_spill_ratio", "auto_memory_revoke_trigger_threshold"),
     };
     for (const auto & names : tidb_varname_to_tiflash_varname)
     {
