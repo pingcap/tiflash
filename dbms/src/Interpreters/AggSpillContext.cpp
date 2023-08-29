@@ -95,7 +95,7 @@ Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
     for (size_t i = checked_thread + 1; i < per_thread_revocable_memories.size(); ++i)
     {
         /// unlike sort and hash join, the implementation of current agg spill does not support partial spill, that is to say,
-        /// once agg spill is triggered, all the data will be spilled in the end, so here to spill the data if big enough
+        /// once agg spill is triggered, all the data will be spilled in the end, so here to spill the data if memory usage is large enough
         if (spill_config.max_cached_data_bytes_in_spiller > 0 && per_thread_revocable_memories[i] >= static_cast<Int64>(spill_config.max_cached_data_bytes_in_spiller))
         {
             AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
