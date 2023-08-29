@@ -162,6 +162,7 @@ struct VoidMapped
     }
 };
 
+using ResizeCallback = std::function<bool()>;
 /** Compile-time interface for cell of the hash table.
   * Different cell types are used to implement different hash tables.
   * The cell must contain a key.
@@ -428,6 +429,7 @@ protected:
     size_t m_size = 0; /// Amount of elements
     Cell * buf; /// A piece of memory for all elements except the element with zero key.
     Grower grower;
+    ResizeCallback resize_callback;
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
     mutable size_t collisions = 0;
@@ -480,6 +482,11 @@ protected:
     /// Increase the size of the buffer.
     void resize(size_t for_num_elems = 0, size_t for_buf_size = 0)
     {
+        if (resize_callback != nullptr)
+        {
+            if unlikely (!resize_callback())
+                throw DB::ResizeException("Error in hash table resize");
+        }
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
         Stopwatch watch;
 #endif
@@ -735,6 +742,8 @@ public:
         destroyElements();
         free();
     }
+
+    void setResizeCallback(const ResizeCallback & resize_callback_) { resize_callback = resize_callback_; }
 
     HashTable & operator=(HashTable && rhs)
     {
@@ -1398,6 +1407,7 @@ public:
         return hash_table.has(x, hash_value);
     }
     size_t getBufferSizeInBytes() const { return hash_table.getBufferSizeInBytes(); }
+    void setResizeCallback(const ResizeCallback & resize_callback) { hash_table.setResizeCallback(resize_callback); }
     size_t size() const { return hash_table.size(); }
 
 private:
@@ -1574,6 +1584,12 @@ public:
             /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
             ret += getSegmentBufferSizeInBytes(i);
         return ret;
+    }
+
+    void setResizeCallback(const ResizeCallback & resize_callback)
+    {
+        for (auto & segment : segments)
+            segment->setResizeCallback(resize_callback);
     }
 
     size_t getSegmentBufferSizeInBytes(size_t segment_index) const

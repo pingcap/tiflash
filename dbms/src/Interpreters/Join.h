@@ -48,6 +48,8 @@ using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
+class AutoSpillTrigger;
+
 struct RestoreInfo
 {
     JoinPtr join;
@@ -166,6 +168,7 @@ public:
         Int64 join_restore_concurrency_,
         const Names & tidb_output_column_names_,
         const RegisterOperatorSpillContext & register_operator_spill_context_,
+        AutoSpillTrigger * auto_spill_trigger_,
         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
         const JoinNonEqualConditions & non_equal_conditions_ = {},
         size_t max_block_size = 0,
@@ -378,6 +381,8 @@ private:
     JoinPtr restore_join;
 
     RegisterOperatorSpillContext register_operator_spill_context;
+
+    AutoSpillTrigger * auto_spill_trigger;
 
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;

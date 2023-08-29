@@ -17,6 +17,7 @@
 #include <Common/ColumnsHashing.h>
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
+#include <Core/AutoSpillTrigger.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -135,6 +136,7 @@ Join::Join(
     Int64 join_restore_concurrency_,
     const Names & tidb_output_column_names_,
     const RegisterOperatorSpillContext & register_operator_spill_context_,
+    AutoSpillTrigger * auto_spill_trigger_,
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
@@ -165,6 +167,7 @@ Join::Join(
     , runtime_filter_list(runtime_filter_list_)
     , join_restore_concurrency(join_restore_concurrency_)
     , register_operator_spill_context(register_operator_spill_context_)
+    , auto_spill_trigger(auto_spill_trigger_)
     , shallow_copy_cross_probe_threshold(
           shallow_copy_cross_probe_threshold_ > 0 ? shallow_copy_cross_probe_threshold_
                                                   : std::max(1, max_block_size / 10))
@@ -385,6 +388,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         join_restore_concurrency,
         tidb_output_column_names,
         register_operator_spill_context,
+        auto_spill_trigger,
         collators,
         non_equal_conditions,
         max_block_size,
@@ -426,6 +430,8 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     {
         hash_join_spill_context->buildBuildSpiller(build_sample_block);
     }
+    for (auto & partition : partitions)
+        partition->setResizeCallbackIfNeeded();
     setSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
 }
@@ -565,20 +571,35 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             {
                 continue;
             }
-            const auto & join_partition = partitions[i];
-            auto partition_lock = join_partition->lockPartition();
-            join_partition->insertBlockForBuild(std::move(dispatch_blocks[i]));
-            /// to release memory before insert if already marked spill
-            checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
-            if (!hash_join_spill_context->isPartitionSpilled(i))
             {
-                // todo add hash table resize callback to check if current partition is already marked to spill
-                insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
-                join_partition->updateHashMapAndPoolMemoryUsage();
-                /// double check here to release memory
+                const auto & join_partition = partitions[i];
+                auto partition_lock = join_partition->lockPartition();
+                join_partition->insertBlockForBuild(std::move(dispatch_blocks[i]));
+                /// to release memory before insert if already marked spill
                 checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
-                /// todo check if it is necessary to trigger auto spill check here
+                if (!hash_join_spill_context->isPartitionSpilled(i))
+                {
+                    bool meet_resize_exception = false;
+                    try
+                    {
+                        insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
+                        join_partition->updateHashMapAndPoolMemoryUsage();
+                    }
+                    catch (ResizeException &)
+                    {
+                        meet_resize_exception = true;
+                        LOG_DEBUG(log, "Meet resize exception when insert into partition {}", i);
+                    }
+                    /// double check here to release memory
+                    checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
+                    if (meet_resize_exception)
+                        RUNTIME_CHECK_MSG(
+                            hash_join_spill_context->isPartitionSpilled(i),
+                            "resize exception must trigger partition to spill");
+                }
             }
+            if (auto_spill_trigger != nullptr)
+                auto_spill_trigger->triggerAutoSpill();
         }
         if (!hash_join_spill_context->isInAutoSpillMode())
             spillMostMemoryUsedPartitionIfNeed(stream_index);
@@ -1744,7 +1765,8 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
         for (size_t i = 0; i < partitions.size(); ++i)
         {
-            if (hash_join_spill_context->needFinalSpill(i) || hash_join_spill_context->isPartitionSpilled(i))
+            if (hash_join_spill_context->isPartitionMarkedForAutoSpill(i)
+                || hash_join_spill_context->isPartitionSpilled(i))
             {
                 if (!hash_join_spill_context->isPartitionSpilled(i))
                 {
