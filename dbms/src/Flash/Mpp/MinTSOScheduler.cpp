@@ -229,9 +229,11 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
             bool has_error = false;
             while (!gather_set.second->waiting_tasks.empty())
             {
+                auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
+                /// Only when MinTSO task reach hard limit, has_error is set true. Schedule all waiting tasks with
+                /// same query id and gather id to be exceeded state.
                 if (has_error)
                 {
-                    auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
                     if (task != nullptr)
                         task->getScheduleEntry().schedule(ScheduleState::EXCEEDED);
                     gather_set.second->waiting_tasks.pop();
@@ -239,7 +241,6 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
                     continue;
                 }
 
-                auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
                 if (task != nullptr)
                 {
                     bool scheduled
