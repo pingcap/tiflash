@@ -705,10 +705,7 @@ public:
     using LookupResult = Cell *;
     using ConstLookupResult = const Cell *;
 
-    size_t hash(const Key & x) const
-    {
-        return Hash::operator()(x);
-    }
+    size_t hash(const Key & x) const { return Hash::operator()(x); }
 
 
     HashTable()
@@ -746,10 +743,7 @@ public:
         free();
     }
 
-    void setResizeCallback(const ResizeCallback & resize_callback_)
-    {
-        resize_callback = resize_callback_;
-    }
+    void setResizeCallback(const ResizeCallback & resize_callback_) { resize_callback = resize_callback_; }
 
     HashTable & operator=(HashTable && rhs)
     {
@@ -845,10 +839,7 @@ public:
         return const_iterator(this, ptr);
     }
 
-    const_iterator cbegin() const
-    {
-        return begin();
-    }
+    const_iterator cbegin() const { return begin(); }
 
     iterator begin()
     {
@@ -872,34 +863,16 @@ public:
         return const_iterator(this, buf ? buf + grower.bufSize() : buf);
     }
 
-    const_iterator cend() const
-    {
-        return end();
-    }
+    const_iterator cend() const { return end(); }
 
-    iterator end()
-    {
-        return iterator(this, buf ? buf + grower.bufSize() : buf);
-    }
+    iterator end() { return iterator(this, buf ? buf + grower.bufSize() : buf); }
 
 
 protected:
-    const_iterator iteratorTo(const Cell * ptr) const
-    {
-        return const_iterator(this, ptr);
-    }
-    iterator iteratorTo(Cell * ptr)
-    {
-        return iterator(this, ptr);
-    }
-    const_iterator iteratorToZero() const
-    {
-        return iteratorTo(this->zeroValue());
-    }
-    iterator iteratorToZero()
-    {
-        return iteratorTo(this->zeroValue());
-    }
+    const_iterator iteratorTo(const Cell * ptr) const { return const_iterator(this, ptr); }
+    iterator iteratorTo(Cell * ptr) { return iterator(this, ptr); }
+    const_iterator iteratorToZero() const { return iteratorTo(this->zeroValue()); }
+    iterator iteratorToZero() { return iteratorTo(this->zeroValue()); }
 
 
     /// If the key is zero, insert it into a special place and return true.
@@ -992,10 +965,7 @@ protected:
 
 
 public:
-    void reserve(size_t num_elements)
-    {
-        resize(num_elements);
-    }
+    void reserve(size_t num_elements) { resize(num_elements); }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
     std::pair<LookupResult, bool> ALWAYS_INLINE insert(const value_type & x)
@@ -1327,15 +1297,9 @@ public:
     }
 
 
-    size_t size() const
-    {
-        return m_size;
-    }
+    size_t size() const { return m_size; }
 
-    bool empty() const
-    {
-        return 0 == m_size;
-    }
+    bool empty() const { return 0 == m_size; }
 
     void clear()
     {
@@ -1356,15 +1320,9 @@ public:
         free();
     }
 
-    size_t getBufferSizeInBytes() const
-    {
-        return grower.bufSize() * sizeof(Cell);
-    }
+    size_t getBufferSizeInBytes() const { return grower.bufSize() * sizeof(Cell); }
 
-    size_t getBufferSizeInCells() const
-    {
-        return grower.bufSize();
-    }
+    size_t getBufferSizeInCells() const { return grower.bufSize(); }
 
     /// Return offset for result in internal buffer.
     /// Result can have value up to `getBufferSizeInCells() + 1`
@@ -1378,10 +1336,7 @@ public:
     }
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    size_t getCollisions() const
-    {
-        return collisions;
-    }
+    size_t getCollisions() const { return collisions; }
 #endif
 };
 
