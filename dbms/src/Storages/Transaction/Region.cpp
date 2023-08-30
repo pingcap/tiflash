@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
@@ -26,6 +27,7 @@
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <memory>
@@ -42,6 +44,10 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_region_persist_version[];
+} // namespace FailPoints
 
 enum class RegionPersistVersion
 {
@@ -406,7 +412,17 @@ static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
-    const auto binary_version = Region::CURRENT_VERSION;
+    auto binary_version = Region::CURRENT_VERSION;
+    fiu_do_on(FailPoints::force_region_persist_version, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_version); v)
+        {
+            binary_version = std::any_cast<UInt64>(v.value());
+            LOG_WARNING(
+                Logger::get(),
+                "Failpoint force_region_persist_version set region binary version, value={}",
+                binary_version);
+        }
+    });
     size_t total_size = writeBinary2(binary_version, buf);
     UInt64 applied_index = -1;
 

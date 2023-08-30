@@ -35,6 +35,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_region_persist_version[];
+} // namespace FailPoints
 
 namespace tests
 {
@@ -130,6 +134,42 @@ try
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     auto restored_meta = RegionMeta::deserialize(read_buf);
     ASSERT_EQ(restored_meta, meta);
+}
+CATCH
+
+TEST_F(RegionSeriTest, RegionOldFormatVersion)
+try
+{
+    TableID table_id = 100;
+    auto region = std::make_shared<Region>(createRegionMeta(1001, table_id));
+    TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
+    region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+    region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+    region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+    region->updateRaftLogEagerIndex(1024);
+
+    const auto path = dir_path + "/region.test";
+    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_region_persist_version,
+        /*version*/ static_cast<UInt64>(1)); // format version = 1
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    write_buf.next();
+    write_buf.sync();
+    ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+
+    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    auto new_region = Region::deserialize(read_buf);
+    ASSERT_REGION_EQ(*new_region, *region);
+    {
+        // For the region restored with binary_version == 1, the eager_truncated_index is equals to
+        // truncated_index
+        const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
+        ASSERT_EQ(new_region->mutMeta().truncateIndex(), 5);
+        ASSERT_EQ(eager_truncated_index, 5);
+    }
 }
 CATCH
 

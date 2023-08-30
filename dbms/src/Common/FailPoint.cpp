@@ -68,7 +68,8 @@ namespace DB
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
-    M(exception_new_dynamic_thread)
+    M(exception_new_dynamic_thread)                               \
+    M(force_region_persist_version)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
