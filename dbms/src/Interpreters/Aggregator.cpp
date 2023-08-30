@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThresholdUtils.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/AggHashTableToBlocksBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -1019,40 +1020,22 @@ void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & meth
     RUNTIME_ASSERT(
         agg_spill_context->getSpiller() != nullptr,
         "spiller must not be nullptr in Aggregator when spilling");
-    size_t max_temporary_block_size_rows = 0;
-    size_t max_temporary_block_size_bytes = 0;
 
-    auto update_max_sizes = [&](const Block & block) {
-        size_t block_size_rows = block.rows();
-        size_t block_size_bytes = block.bytes();
-
-        if (block_size_rows > max_temporary_block_size_rows)
-            max_temporary_block_size_rows = block_size_rows;
-        if (block_size_bytes > max_temporary_block_size_bytes)
-            max_temporary_block_size_bytes = block_size_bytes;
-    };
-
-    Blocks blocks;
-    for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
-    {
-        /// memory in hash table is released after `convertOneBucketToBlock`,
-        /// so the peak memory usage is not increased although we save all
-        /// the blocks before the actual spill
-        blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
-        update_max_sizes(blocks.back());
-    }
-    agg_spill_context->getSpiller()->spillBlocks(std::move(blocks), 0);
+    auto block_input_stream
+        = std::make_shared<AggHashTableToBlocksBlockInputStream<Method>>(*this, data_variants, method);
+    agg_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_input_stream, 0, is_cancelled);
     agg_spill_context->finishOneSpill(thread_num);
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
 
+    auto [max_block_rows, max_block_bytes] = block_input_stream->maxBlockRowAndBytes();
     LOG_TRACE(
         log,
         "Max size of temporary bucket blocks: {} rows, {:.3f} MiB.",
-        max_temporary_block_size_rows,
-        (max_temporary_block_size_bytes / 1048576.0));
+        max_block_rows,
+        (max_block_bytes / 1048576.0));
 }
 
 
