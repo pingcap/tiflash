@@ -85,8 +85,6 @@ private:
 
     using LACErrorInfo = std::unordered_map<String, std::exception_ptr>;
 
-    std::exception_ptr takeImpl(TaskPtr & task);
-
     // Update resource_group_infos, will reorder resource group by priority.
     LACErrorInfo updateResourceGroupInfosWithoutLock();
 

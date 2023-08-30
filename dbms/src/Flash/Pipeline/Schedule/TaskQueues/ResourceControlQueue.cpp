@@ -18,7 +18,6 @@
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include "Flash/Mpp/MPPTask.h"
 
 namespace DB
 {
@@ -110,24 +109,20 @@ typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceC
 template <typename NestedTaskQueueType>
 bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 {
-    std::exception_ptr exception_ptr = takeImpl(task);
-    if unlikely (exception_ptr)
-        task->onErrorOccurred(exception_ptr);
-    return task != nullptr;
-}
-
-template <typename NestedTaskQueueType>
-std::exception_ptr ResourceControlQueue<NestedTaskQueueType>::takeImpl(TaskPtr & task)
-{
     assert(!task);
+    std::exception_ptr exception_ptr;
+    SCOPE_EXIT({
+        if unlikely (exception_ptr)
+            task->onErrorOccurred(exception_ptr);
+    });
     std::unique_lock lock(mu);
     while (true)
     {
         if unlikely (is_finished)
-            return nullptr;
+            return false;
 
         if (popTask(cancel_task_queue, task))
-            return nullptr;
+            return true;
 
         auto error_resource_groups = updateResourceGroupInfosWithoutLock();
 
@@ -152,8 +147,10 @@ std::exception_ptr ResourceControlQueue<NestedTaskQueueType>::takeImpl(TaskPtr &
                 if likely (iter != error_resource_groups.end())
                 {
                     mustTakeTask(group_info.task_queue, task);
-                    assert(iter->second);
-                    return iter->second;
+                    exception_ptr = iter->second;
+                    assert(task);
+                    assert(exception_ptr);
+                    return true;
                 }
             }
 
@@ -162,7 +159,7 @@ std::exception_ptr ResourceControlQueue<NestedTaskQueueType>::takeImpl(TaskPtr &
             if (!ru_exhausted)
             {
                 mustTakeTask(group_info.task_queue, task);
-                return nullptr;
+                return true;
             }
         }
 
