@@ -363,12 +363,9 @@ public:
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
-        , thread_manager(newThreadManager())
     {
-        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::fetchGAC", [this] {
-            this->startBackgroudJob();
-        });
-        thread_manager->scheduleThenDetach(true, "LocalAdmissionController::watchGAC", [this] { this->watchGAC(); });
+        background_threads.emplace_back([this] { this->startBackgroudJob(); });
+        background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
     ~LocalAdmissionController() { stop(); }
@@ -432,7 +429,8 @@ public:
         stopped.store(true);
         watch_gac_grpc_context.TryCancel();
         cv.notify_all();
-        thread_manager->wait();
+        for (auto & thread : background_threads)
+            thread.join();
     }
 
 private:
@@ -455,18 +453,14 @@ private:
     ResourceGroupPtr findResourceGroup(const std::string & name)
     {
         std::lock_guard lock(mu);
-        for (const auto & group : resource_groups)
-        {
-            if (group.first == name)
-                return group.second;
-        }
-        return nullptr;
+        auto iter = resource_groups.find(name);
+        return iter == resource_groups.end() ? nullptr : iter->second;
     }
     ResourceGroupPtr findResourceGroupWithException(const std::string & name)
     {
         auto group = findResourceGroup(name);
         if unlikely (!group)
-            throw Exception("resource group {} not found, maybe it has been deleted", name);
+            throw Exception("resource group {} not found, it may have been deleted", name);
         return group;
     }
 
@@ -554,7 +548,7 @@ private:
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
     grpc::ClientContext watch_gac_grpc_context;
-    std::shared_ptr<ThreadManager> thread_manager;
+    std::vector<std::thread> background_threads;
 
     std::function<void()> refill_token_callback;
 
