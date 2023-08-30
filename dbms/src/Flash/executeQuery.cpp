@@ -102,12 +102,10 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     {
         dag_context.setAutoSpillMode();
         auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
-        auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
         auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
             memory_tracker,
             dag_context.getQueryOperatorSpillContexts(),
-            auto_spill_trigger_threshold,
-            auto_spill_target_threshold);
+            auto_spill_trigger_threshold);
         dag_context.setAutoSpillTrigger(auto_spill_trigger);
     }
 
@@ -181,12 +179,10 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
             context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
         };
         auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
-        auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
         auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
             memory_tracker,
             dag_context.getQueryOperatorSpillContexts(),
-            auto_spill_trigger_threshold,
-            auto_spill_target_threshold);
+            auto_spill_trigger_threshold);
         dag_context.setAutoSpillTrigger(auto_spill_trigger);
         executor = std::make_unique<PipelineExecutor>(
             memory_tracker,
