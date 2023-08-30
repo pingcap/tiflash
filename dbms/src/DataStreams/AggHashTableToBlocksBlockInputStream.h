@@ -19,11 +19,11 @@
 
 namespace DB
 {
-
 template <typename Method>
 class AggHashTableToBlocksBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "AggHashTableToBlocks";
+
 public:
     AggHashTableToBlocksBlockInputStream(
         Aggregator & aggregator_,
@@ -38,18 +38,21 @@ public:
         , total_bucket(Method::Data::NUM_BUCKETS)
     {}
 
-    Block getHeader() const override
-    {
-        return aggregator.getHeader(false);
-    }
+    Block getHeader() const override { return aggregator.getHeader(false); }
     String getName() const override { return NAME; }
     std::pair<size_t, size_t> maxBlockRowAndBytes() const { return {max_block_rows, max_block_bytes}; }
+
 protected:
     Block readImpl() override
     {
         if (current_bucket < total_bucket)
         {
-            auto block = aggregator.convertOneBucketToBlock(aggregated_data_variants, method, aggregated_data_variants.aggregates_pool, false, current_bucket++);
+            auto block = aggregator.convertOneBucketToBlock(
+                aggregated_data_variants,
+                method,
+                aggregated_data_variants.aggregates_pool,
+                false,
+                current_bucket++);
             size_t block_rows = block.rows();
             size_t block_bytes = block.bytes();
 
@@ -61,6 +64,7 @@ protected:
         }
         return {};
     }
+
 private:
     Aggregator & aggregator;
     AggregatedDataVariants & aggregated_data_variants;

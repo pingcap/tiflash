@@ -1021,7 +1021,8 @@ void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & meth
         agg_spill_context->getSpiller() != nullptr,
         "spiller must not be nullptr in Aggregator when spilling");
 
-    auto block_input_stream = std::make_shared<AggHashTableToBlocksBlockInputStream<Method>>(*this, data_variants, method);
+    auto block_input_stream
+        = std::make_shared<AggHashTableToBlocksBlockInputStream<Method>>(*this, data_variants, method);
     agg_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_input_stream, 0, is_cancelled);
     agg_spill_context->finishOneSpill(thread_num);
 
