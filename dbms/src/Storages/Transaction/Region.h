@@ -149,18 +149,15 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markCompactLog(UInt64 index);
-    Timepoint lastCompactLogTime() const;
     UInt64 lastCompactLogApplied() const;
     UInt64 lastRestartLogApplied() const;
     void setLastCompactLogApplied(UInt64 new_value) const;
-    void setLastRestartLogApplied(UInt64 new_value) const;
     // Must hold region lock.
     void updateLastCompactLogApplied() const;
 
     // Return <first_index, applied_index> of this Region
     std::pair<UInt64, UInt64> getRaftLogRange() const;
-    void updateRaftLogFirstIndex(UInt64 new_first_index);
+    void updateRaftLogEagerIndex(UInt64 new_first_index);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -262,7 +259,7 @@ private:
     RegionMeta meta;
     // A non-persisted truncated index that is used for eager removing
     // RaftLog in UniPS
-    UInt64 transient_truncated_index;
+    UInt64 eager_truncated_index;
 
     LoggerPtr log;
 
@@ -274,7 +271,6 @@ private:
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
     // Applied index since last persistence. Including all admin cmd.
     mutable std::atomic<uint64_t> last_compact_log_applied{0};
     // Applied index since last restart. Should only be set after restart.

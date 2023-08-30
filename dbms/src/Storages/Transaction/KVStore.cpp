@@ -339,7 +339,7 @@ void KVStore::applyRaftLogTaskRes(const RaftLogGcTasksRes & res) const
         auto region = getRegion(region_id);
         if (!region)
             continue;
-        region->updateRaftLogFirstIndex(log_index);
+        region->updateRaftLogEagerIndex(log_index);
     }
 }
 
@@ -529,36 +529,39 @@ bool KVStore::canFlushRegionDataImpl(
     bool can_flush = false;
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
+    // flush caused by rows
     if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
         can_flush = true;
     }
+    // flush caused by bytes
     if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
         can_flush = true;
     }
+    // flush caused by gap
     auto gap_threshold = region_compact_log_gap.load();
-    auto last_restart_log_applied = curr_region.lastRestartLogApplied();
+    const auto last_restart_log_applied = curr_region.lastRestartLogApplied();
     if (last_restart_log_applied + gap_threshold > index)
     {
         gap_threshold = std::max(gap_threshold / 2, 1);
     }
-    auto last_compact_log_applied = curr_region.lastCompactLogApplied();
-    auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
+    const auto last_compact_log_applied = curr_region.lastCompactLogApplied();
+    const auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
 
     // TODO We will use truncated_index once Proxy/TiKV supports.
-    // After restart, last_compact_log_applied is 0, we don't trigger immediately.
-    if (last_compact_log_applied && index > last_compact_log_applied + gap_threshold)
-    {
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
-        can_flush = true;
-    }
-    if (!last_compact_log_applied)
+    // When a Region is newly created in TiFlash, last_compact_log_applied is 0, we don't trigger immediately.
+    if (last_compact_log_applied == 0)
     {
         // We will set `last_compact_log_applied` to current applied_index if it is zero.
         curr_region.setLastCompactLogApplied(index);
+    }
+    else if (last_compact_log_applied > 0 && index > last_compact_log_applied + gap_threshold)
+    {
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
+        can_flush = true;
     }
 
     GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
@@ -620,7 +623,8 @@ bool KVStore::forceFlushRegionDataImpl(
 
     // flush cache in storage level is done, persist the region info
     persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
-    curr_region.markCompactLog(index);
+    // CompactLog will be done in proxy soon, we advance the eager truncate index in TiFlash
+    curr_region.updateRaftLogEagerIndex(index);
     curr_region.cleanApproxMemCacheInfo();
     GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
     return true;

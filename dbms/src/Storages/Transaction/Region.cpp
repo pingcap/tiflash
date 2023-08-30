@@ -23,6 +23,7 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
+#include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
@@ -42,7 +43,13 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
 
-const UInt32 Region::CURRENT_VERSION = 1;
+enum class RegionPersistVersion
+{
+    V1 = 1,
+    V2 = 2,
+};
+
+const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
 
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it)
 {
@@ -392,20 +399,35 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(
     meta.notifyAll();
 }
 
+namespace RegionPersistFormat
+{
+static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
+}
+
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
-    size_t total_size = writeBinary2(Region::CURRENT_VERSION, buf);
+    const auto binary_version = Region::CURRENT_VERSION;
+    size_t total_size = writeBinary2(binary_version, buf);
     UInt64 applied_index = -1;
 
     {
         std::shared_lock<std::shared_mutex> lock(mutex);
 
+        // serialize meta
+        const auto [meta_size, index] = meta.serialize(buf);
+        total_size += meta_size;
+        applied_index = index;
+
+        // try serialize extra flags
+        if (binary_version >= 2)
         {
-            auto [size, index] = meta.serialize(buf);
-            total_size += size;
-            applied_index = index;
+            static_assert(sizeof(eager_truncated_index) == sizeof(UInt64));
+            UInt32 flags = RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
+            total_size += writeBinary2(flags, buf);
+            total_size += writeBinary2(eager_truncated_index, buf);
         }
 
+        // serialize data
         total_size += data.serialize(buf);
     }
 
@@ -414,19 +436,37 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 
 RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
-    auto version = readBinary2<UInt32>(buf);
-    if (version != Region::CURRENT_VERSION)
+    const auto binary_version = readBinary2<UInt32>(buf);
+    if (binary_version != static_cast<UInt64>(RegionPersistVersion::V1)
+        && binary_version != static_cast<UInt64>(RegionPersistVersion::V2))
+    {
         throw Exception(
-            std::string(__PRETTY_FUNCTION__) + ": unexpected version: " + DB::toString(version)
-                + ", expected: " + DB::toString(CURRENT_VERSION),
-            ErrorCodes::UNKNOWN_FORMAT_VERSION);
+            ErrorCodes::UNKNOWN_FORMAT_VERSION,
+            "{}: unexpected version: {}, expected: {}",
+            binary_version,
+            __PRETTY_FUNCTION__,
+            CURRENT_VERSION);
+    }
 
-    auto meta = RegionMeta::deserialize(buf);
-    auto region = std::make_shared<Region>(std::move(meta), proxy_helper);
+    // deserialize meta
+    RegionPtr region = std::make_shared<Region>(RegionMeta::deserialize(buf), proxy_helper);
 
+    // try deserialize flags
+    if (binary_version >= 2)
+    {
+        auto flags = readBinary2<UInt32>(buf);
+        if ((flags & RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX) != 0)
+        {
+            region->eager_truncated_index = readBinary2<UInt64>(buf);
+        }
+    }
+
+    // deserialize data
     RegionData::deserialize(buf, region->data);
+
+    // restore other var according to meta
+    region->last_restart_log_applied = region->appliedIndex();
     region->setLastCompactLogApplied(region->appliedIndex());
-    region->setLastRestartLogApplied(region->appliedIndex());
     return region;
 }
 
@@ -510,30 +550,17 @@ std::string Region::dataInfo() const
     return buff.toString();
 }
 
-void Region::markCompactLog(UInt64 index)
-{
-    last_compact_log_time = Clock::now();
-
-    if (index > transient_truncated_index)
-        transient_truncated_index = index;
-}
-
 std::pair<UInt64, UInt64> Region::getRaftLogRange() const
 {
     std::unique_lock lock(mutex);
     auto applied_index = appliedIndex();
-    return {transient_truncated_index, applied_index};
+    return {eager_truncated_index, applied_index};
 }
 
-void Region::updateRaftLogFirstIndex(UInt64 new_first_index)
+void Region::updateRaftLogEagerIndex(UInt64 new_first_index)
 {
     std::unique_lock lock(mutex);
-    transient_truncated_index = new_first_index;
-}
-
-Timepoint Region::lastCompactLogTime() const
-{
-    return last_compact_log_time;
+    eager_truncated_index = new_first_index;
 }
 
 UInt64 Region::lastCompactLogApplied() const
@@ -551,10 +578,6 @@ void Region::setLastCompactLogApplied(UInt64 new_value) const
     last_compact_log_applied = new_value;
 }
 
-void Region::setLastRestartLogApplied(UInt64 new_value) const
-{
-    last_restart_log_applied = new_value;
-}
 
 void Region::updateLastCompactLogApplied() const
 {
@@ -703,7 +726,7 @@ void Region::assignRegion(Region && new_region)
     data.assignRegionData(std::move(new_region.data));
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
-    transient_truncated_index = meta.truncateIndex();
+    eager_truncated_index = meta.truncateIndex();
 }
 
 /// try to clean illegal data because of feature `compaction filter`
@@ -949,7 +972,7 @@ Region::Region(RegionMeta && meta_)
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
-    , transient_truncated_index(meta.truncateIndex())
+    , eager_truncated_index(meta.truncateIndex())
     , log(Logger::get())
     , keyspace_id(meta.getRange()->getKeyspaceID())
     , mapped_table_id(meta.getRange()->getMappedTableID())

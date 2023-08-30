@@ -70,9 +70,11 @@ public:
         : dir_path(TiFlashTestEnv::getTemporaryPath("RegionSeriTest"))
     {}
 
-    void SetUp() override { TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true); }
+    void SetUp() override { clearFileOnDisk(); }
 
-    std::string dir_path;
+    void clearFileOnDisk() { TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true); }
+
+    const std::string dir_path;
 };
 
 TEST_F(RegionSeriTest, peer)
@@ -117,17 +119,17 @@ CATCH
 TEST_F(RegionSeriTest, RegionMeta)
 try
 {
-    RegionMeta meta = createRegionMeta(888, 66);
     const auto path = dir_path + "/meta.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    RegionMeta meta = createRegionMeta(888, 66);
     auto size = std::get<0>(meta.serialize(write_buf));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(size, (size_t)Poco::File(path).getSize());
 
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    auto new_meta = RegionMeta::deserialize(read_buf);
-    ASSERT_EQ(new_meta, meta);
+    auto restored_meta = RegionMeta::deserialize(read_buf);
+    ASSERT_EQ(restored_meta, meta);
 }
 CATCH
 
@@ -141,6 +143,8 @@ try
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
+    region->updateRaftLogEagerIndex(1024);
+
     const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     size_t region_ser_size = std::get<0>(region->serialize(write_buf));
@@ -151,6 +155,10 @@ try
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     auto new_region = Region::deserialize(read_buf);
     ASSERT_REGION_EQ(*new_region, *region);
+    {
+        const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogRange();
+        ASSERT_EQ(eager_truncated_index, 1024);
+    }
 }
 CATCH
 
@@ -173,8 +181,12 @@ try
             region_state.mutable_merge_state()->set_min_index(777);
             *region_state.mutable_merge_state()->mutable_target()
                 = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
-        };
-        region = std::make_shared<Region>(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
+        }
+        region = std::make_shared<Region>(RegionMeta( //
+            createPeer(31, true),
+            apply_state,
+            5,
+            region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
