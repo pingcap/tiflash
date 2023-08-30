@@ -373,14 +373,13 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    // NOTE: getOrFetchResourceGroup may throw if resource group has been deleted.
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return;
 
-        ResourceGroupPtr group = getOrFetchResourceGroup(name);
+        ResourceGroupPtr group = findResourceGroupWithException(name);
         group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken())
         {
@@ -397,9 +396,13 @@ public:
         if (name.empty())
             return HIGHEST_RESOURCE_GROUP_PRIORITY;
 
-        ResourceGroupPtr group = getOrFetchResourceGroup(name);
+        ResourceGroupPtr group = findResourceGroupWithException(name);
         return group->getPriority(max_ru_per_sec.load());
     }
+
+    // Fetch resource group info from GAC and store in local cache.
+    // Throw exception if got error.
+    void checkResourceGroup(const std::string & name) { getOrFetchResourceGroup(name); }
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
@@ -458,6 +461,13 @@ private:
                 return group.second;
         }
         return nullptr;
+    }
+    ResourceGroupPtr findResourceGroupWithException(const std::string & name)
+    {
+        auto group = findResourceGroup(name);
+        if unlikely (!group)
+            throw Exception("resource group {} not found, maybe it has been deleted", name);
+        return group;
     }
 
     std::pair<ResourceGroupPtr, bool> addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
