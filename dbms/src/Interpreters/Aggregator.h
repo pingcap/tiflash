@@ -48,6 +48,8 @@ extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
 }
 
 class IBlockOutputStream;
+template <typename Method>
+class AggHashTableToBlocksBlockInputStream;
 
 
 /** Different data structures that can be used for aggregation
@@ -1374,6 +1376,9 @@ protected:
     void destroyImpl(Table & table) const;
 
     void destroyWithoutKey(AggregatedDataVariants & result) const;
+
+    template <typename Method>
+    friend class AggHashTableToBlocksBlockInputStream;
 };
 
 /** Get the aggregation variant by its type. */
