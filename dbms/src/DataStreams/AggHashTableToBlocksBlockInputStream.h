@@ -28,14 +28,12 @@ public:
     AggHashTableToBlocksBlockInputStream(
         Aggregator & aggregator_,
         AggregatedDataVariants & aggregated_data_variants_,
-        Method & method_,
-        size_t & max_block_rows_,
-        size_t & max_block_bytes_)
+        Method & method_)
         : aggregator(aggregator_)
         , aggregated_data_variants(aggregated_data_variants_)
         , method(method_)
-        , max_block_rows(max_block_rows_)
-        , max_block_bytes(max_block_bytes_)
+        , max_block_rows(0)
+        , max_block_bytes(0)
         , current_bucket(0)
         , total_bucket(Method::Data::NUM_BUCKETS)
     {}
@@ -45,6 +43,7 @@ public:
         return aggregator.getHeader(false);
     }
     String getName() const override { return NAME; }
+    std::pair<size_t, size_t> maxBlockRowAndBytes() const { return {max_block_rows, max_block_bytes}; }
 protected:
     Block readImpl() override
     {
@@ -66,8 +65,8 @@ private:
     Aggregator & aggregator;
     AggregatedDataVariants & aggregated_data_variants;
     Method & method;
-    size_t & max_block_rows;
-    size_t & max_block_bytes;
+    size_t max_block_rows;
+    size_t max_block_bytes;
     size_t current_bucket;
     size_t total_bucket;
 };

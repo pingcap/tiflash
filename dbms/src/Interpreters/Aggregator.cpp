@@ -1020,10 +1020,8 @@ void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & meth
     RUNTIME_ASSERT(
         agg_spill_context->getSpiller() != nullptr,
         "spiller must not be nullptr in Aggregator when spilling");
-    size_t max_temporary_block_size_rows = 0;
-    size_t max_temporary_block_size_bytes = 0;
 
-    auto block_input_stream = std::make_shared<AggHashTableToBlocksBlockInputStream<Method>>(*this, data_variants, method, max_temporary_block_size_rows, max_temporary_block_size_bytes);
+    auto block_input_stream = std::make_shared<AggHashTableToBlocksBlockInputStream<Method>>(*this, data_variants, method);
     agg_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_input_stream, 0, is_cancelled);
     agg_spill_context->finishOneSpill(thread_num);
 
@@ -1031,11 +1029,12 @@ void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & meth
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
 
+    auto [max_block_rows, max_block_bytes] = block_input_stream->maxBlockRowAndBytes();
     LOG_TRACE(
         log,
         "Max size of temporary bucket blocks: {} rows, {:.3f} MiB.",
-        max_temporary_block_size_rows,
-        (max_temporary_block_size_bytes / 1048576.0));
+        max_block_rows,
+        (max_block_bytes / 1048576.0));
 }
 
 
