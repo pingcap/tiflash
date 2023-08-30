@@ -26,6 +26,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -58,6 +59,7 @@ void prepareForExecute(Context & context)
         .addQuery(); /// NOTE Seems that when new time interval has come, first query is not accounted in number of queries.
     quota.checkExceeded(time(nullptr));
 }
+
 ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_context)
 {
     if (dag_context.isMPPTask())
@@ -200,6 +202,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
+    LocalAdmissionController::global_instance->checkResourceGroup(dag_context.getResourceGroupName());
     return {std::move(executor)};
 }
 

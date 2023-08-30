@@ -60,6 +60,7 @@ public:
     }
 
     uint64_t getPriority(const std::string & name) const { return get_priority_func(name); }
+    void checkResourceGroup(const std::string &) {}
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {

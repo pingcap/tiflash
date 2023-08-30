@@ -50,7 +50,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
 
     std::vector<std::pair<TaskPtr, std::exception_ptr>> error_task_infos;
     {
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
         for (auto & task : tasks)
         {
             try
