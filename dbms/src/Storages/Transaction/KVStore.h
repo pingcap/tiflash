@@ -117,7 +117,6 @@ class KVStore final : private boost::noncopyable
 public:
     explicit KVStore(Context & context);
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
-    void restoreRegionRaftLogRange(const UniversalPageStoragePtr & uni_ps);
 
     RegionPtr getRegion(RegionID region_id) const;
 
@@ -422,6 +421,9 @@ private:
 
     StoreMeta store;
 
+    // Eager RaftLog GC
+    const bool eager_raft_log_gc_enabled;
+    // The index hints for eager RaftLog GC tasks
     RaftLogEagerGcTasks raft_log_gc_hints;
 };
 

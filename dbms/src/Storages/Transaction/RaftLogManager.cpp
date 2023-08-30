@@ -30,9 +30,13 @@
 namespace DB
 {
 
-bool RaftLogEagerGcTasks::updateHint(RegionID region_id, UInt64 first_index, UInt64 applied_index, UInt64 threshold)
+bool RaftLogEagerGcTasks::updateHint(
+    RegionID region_id,
+    UInt64 eager_truncated_index,
+    UInt64 applied_index,
+    UInt64 threshold)
 {
-    if (applied_index - first_index < threshold)
+    if (applied_index < eager_truncated_index || applied_index - eager_truncated_index < threshold)
         return false;
 
     // Try to register a task for eager remove RaftLog to reduce the memory overhead of UniPS
@@ -43,19 +47,20 @@ bool RaftLogEagerGcTasks::updateHint(RegionID region_id, UInt64 first_index, UIn
             && applied_index - hint_iter->second.applied_index >= threshold)
         {
             // LOG_DEBUG(Logger::get(), "update hint, region_id={} applied_index={} hint_applied_index={} diff={}", region_id, applied_index, hint_iter->second.applied_index, applied_index - hint_iter->second.applied_index);
-            // task hint is updated
-            hint_iter->second.first_index = std::min(hint_iter->second.first_index, first_index);
+            // More updates after last GC task is built, merge it into the current GC task
+            hint_iter->second.eager_truncate_index
+                = std::min(hint_iter->second.eager_truncate_index, eager_truncated_index);
             hint_iter->second.applied_index = std::max(hint_iter->second.applied_index, applied_index);
             return true;
         }
-        // task hint is not changed
+        // No much updates after last GC task is built, let's just keep the task hint unchanged
         return false;
     }
 
-    // new task hint created
+    // New GC task hint is created
     // LOG_DEBUG(Logger::get(), "create hint, region_id={} first_index={} applied_index={}", region_id, first_index, applied_index);
     tasks[region_id] = RaftLogEagerGcHint{
-        .first_index = first_index,
+        .eager_truncate_index = eager_truncated_index,
         .applied_index = applied_index,
     };
     return true;
@@ -72,7 +77,7 @@ RaftLogEagerGcTasks::Hints RaftLogEagerGcTasks::getAndClearHints()
 struct RegionGcTask
 {
     bool skip;
-    UInt64 first_index;
+    UInt64 eager_truncate_index;
     UInt64 applied_index;
 };
 
@@ -85,21 +90,21 @@ RegionGcTask getRegionTask(
 {
     // LOG_DEBUG(logger, "Load persisted region apply state, region_id={} state={}", region_id, region_state.ShortDebugString());
     if (region_state.applied_index() <= 1)
-        return RegionGcTask{.skip = true, .first_index = 0, .applied_index = 0};
+        return RegionGcTask{.skip = true, .eager_truncate_index = 0, .applied_index = 0};
 
-    RegionGcTask task{.skip = false, .first_index = 0, .applied_index = 0};
-    task.first_index = hint.first_index;
+    RegionGcTask task{.skip = false, .eager_truncate_index = 0, .applied_index = 0};
+    task.eager_truncate_index = hint.eager_truncate_index;
     task.applied_index = region_state.applied_index() - 1;
-    if (task.applied_index <= task.first_index || task.applied_index - task.first_index <= threshold)
+    if (task.applied_index <= task.eager_truncate_index || task.applied_index - task.eager_truncate_index <= threshold)
     {
         LOG_DEBUG(
             logger,
-            "Skip eager gc, region_id={} persist_first_index={} persist_applied_index={} hint_first_index={} "
+            "Skip eager gc, region_id={} persist_first_index={} persist_applied_index={} hint_eager_truncate_index={} "
             "hint_applied_index={}",
             region_id,
             region_state.truncated_state().index(),
             region_state.applied_index(),
-            hint.first_index,
+            hint.eager_truncate_index,
             hint.applied_index);
         task.skip = true;
     }
@@ -140,7 +145,7 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
             continue;
         }
 
-        for (UInt64 log_index = region_task.first_index; log_index < region_task.applied_index; ++log_index)
+        for (UInt64 log_index = region_task.eager_truncate_index; log_index < region_task.applied_index; ++log_index)
         {
             del_batch.delPage(UniversalPageIdFormat::toRaftLogKey(region_id, log_index));
         }
@@ -148,13 +153,13 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
 
         // Then we should proceed the eager truncated index to the new applied_index
         eager_truncated_indexes[region_id] = region_task.applied_index;
-        size_t num_raft_log_removed = region_task.applied_index - region_task.first_index;
+        size_t num_raft_log_removed = region_task.applied_index - region_task.eager_truncate_index;
         total_num_raft_log_removed += num_raft_log_removed;
         LOG_INFO(
             logger,
-            "Eager raft log gc, region_id={} first_index={} applied_index={} n_removed={} cost={:.3f}s",
+            "Eager raft log gc, region_id={} eager_truncate_index={} applied_index={} n_removed={} cost={:.3f}s",
             region_id,
-            region_task.first_index,
+            region_task.eager_truncate_index,
             region_task.applied_index,
             num_raft_log_removed,
             watch.elapsedSecondsFromLastTime());

@@ -1608,7 +1608,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         return {};
     }
     auto * last_writer = buildWriteGroup(&w, apply_lock);
-    LOG_DEBUG(log, "WriteGroup: leader built, batch={}", w.edit->size());
     apply_lock.unlock();
     SYNC_FOR("before_PageDirectory::leader_apply");
 
@@ -1654,7 +1653,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     }
 
     auto ser_edit = Trait::Serializer::serializeTo(edit);
-    LOG_DEBUG(log, "WriteGroup: leader edit bytes={}", ser_edit.size());
     wal->apply(std::move(ser_edit), write_limiter);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
     watch.restart();

@@ -156,7 +156,7 @@ try
     auto new_region = Region::deserialize(read_buf);
     ASSERT_REGION_EQ(*new_region, *region);
     {
-        const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogRange();
+        const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
         ASSERT_EQ(eager_truncated_index, 1024);
     }
 }
@@ -182,11 +182,7 @@ try
             *region_state.mutable_merge_state()->mutable_target()
                 = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
         }
-        region = std::make_shared<Region>(RegionMeta( //
-            createPeer(31, true),
-            apply_state,
-            5,
-            region_state));
+        region = std::make_shared<Region>(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);

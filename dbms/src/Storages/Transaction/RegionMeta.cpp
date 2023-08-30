@@ -51,7 +51,6 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     auto apply_state = readApplyState(buf);
     auto applied_term = readBinary2<UInt64>(buf);
     auto region_state = readRegionLocalState(buf);
-
     return RegionMeta(std::move(peer), std::move(apply_state), applied_term, std::move(region_state));
 }
 

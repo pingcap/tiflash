@@ -155,8 +155,8 @@ public:
     // Must hold region lock.
     void updateLastCompactLogApplied() const;
 
-    // Return <first_index, applied_index> of this Region
-    std::pair<UInt64, UInt64> getRaftLogRange() const;
+    // Return <last_eager_truncated_index, applied_index> of this Region
+    std::pair<UInt64, UInt64> getRaftLogEagerGCRange() const;
     void updateRaftLogEagerIndex(UInt64 new_first_index);
 
     friend bool operator==(const Region & region1, const Region & region2)

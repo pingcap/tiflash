@@ -550,7 +550,7 @@ std::string Region::dataInfo() const
     return buff.toString();
 }
 
-std::pair<UInt64, UInt64> Region::getRaftLogRange() const
+std::pair<UInt64, UInt64> Region::getRaftLogEagerGCRange() const
 {
     std::unique_lock lock(mutex);
     auto applied_index = appliedIndex();

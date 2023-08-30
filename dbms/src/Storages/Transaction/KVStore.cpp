@@ -20,8 +20,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
-#include <Storages/Page/V3/Universal/RaftDataReader.h>
-#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -65,9 +63,11 @@ KVStore::KVStore(Context & context)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
+    // Eager RaftLog GC is only enabled under UniPS
+    , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
     // default config about compact-log: period 120s, rows 40k, bytes 32MB, gap 200.
-    LOG_INFO(log, "KVStore inited");
+    LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -106,24 +106,6 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
             auto str = msg.str();
             if (!str.empty())
                 LOG_INFO(log, "{}", str);
-        }
-    }
-}
-
-void KVStore::restoreRegionRaftLogRange(const UniversalPageStoragePtr & uni_ps)
-{
-    RaftDataReader reader(*uni_ps);
-    auto task_lock = genTaskLock();
-    auto manage_lock = genRegionMgrWriteLock(task_lock);
-    for (const auto & iter : manage_lock.regions)
-    {
-        const RegionID region_id = iter.first;
-        const auto scan_beg = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
-        // const auto scan_end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
-        auto lower_key = reader.getLowerBound(scan_beg);
-        if (lower_key && lower_key->size() == 1 + 1 + 1 + 8 + 1 + 8)
-        {
-            //
         }
     }
 }
@@ -307,16 +289,23 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
 
-        auto [first_index, applied_index] = region->getRaftLogRange();
-        if (bool need_persist
-            = raft_log_gc_hints.updateHint(region_id, first_index, applied_index, region_compact_log_gap.load());
-            need_persist)
+        if (eager_raft_log_gc_enabled)
         {
-            // Persist RegionMeta on the storage engine
-            tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
-            persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
-            // return "Persist" to proxy for persisting the RegionMeta
-            apply_res = EngineStoreApplyRes::Persist;
+            // When some peer is down, the TiKV compact log become quite slow and the truncated index
+            // is advanced slowly. Under disagg arch, too many RaftLog are stored in UniPS and makes TiFlash OOM.
+            // We apply eager RaftLog GC on TiFlash's UniPS.
+            auto [last_eager_truncated_index, applied_index] = region->getRaftLogEagerGCRange();
+            if (/*need_persist=*/
+                raft_log_gc_hints
+                    .updateHint(region_id, last_eager_truncated_index, applied_index, region_compact_log_gap.load()))
+            {
+                /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
+                // Persist RegionMeta on the storage engine
+                tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
+                persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
+                // return "Persist" to proxy for persisting the RegionMeta
+                apply_res = EngineStoreApplyRes::Persist;
+            }
         }
     }
     /// Safety:

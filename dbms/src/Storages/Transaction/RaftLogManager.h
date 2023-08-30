@@ -23,13 +23,14 @@ namespace DB
 
 struct RaftLogEagerGcHint
 {
-    UInt64 first_index;
+    UInt64 eager_truncate_index;
     UInt64 applied_index;
 };
 class RaftLogEagerGcTasks
 {
 public:
-    bool updateHint(RegionID region_id, UInt64 first_index, UInt64 applied_index, UInt64 threshold);
+    // Check whether a new eager GC task for given region_id will be created.
+    bool updateHint(RegionID region_id, UInt64 eager_truncated_index, UInt64 applied_index, UInt64 threshold);
 
     using Hints = std::map<RegionID, RaftLogEagerGcHint>;
     Hints getAndClearHints();
