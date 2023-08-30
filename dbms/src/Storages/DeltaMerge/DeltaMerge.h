@@ -28,6 +28,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int DT_DELTA_INDEX_ERROR;
+}
+
 namespace DM
 {
 /// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
@@ -236,11 +241,12 @@ private:
                         last_handle_pos);
 
                     throw Exception(
+                        ErrorCodes::DT_DELTA_INDEX_ERROR,
                         "DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
-                        + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                        + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
-                        + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
-                        + DB::toString(last_handle_pos) + "]");
+                            + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
+                            + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
+                            + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
+                            + DB::toString(last_handle_pos) + "]");
                 }
                 last_value_ref = rowkey_value;
                 last_version = version;
