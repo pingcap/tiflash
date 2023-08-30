@@ -512,6 +512,49 @@ try
 }
 CATCH
 
+TEST_F(SpillerTest, SpillFileNumberUsingBlockInputStream)
+try
+{
+    auto blocks = generateBlocks(50);
+    size_t total_block_size = 0;
+    size_t total_block_rows = 0;
+    for (const auto & block : blocks)
+    {
+        total_block_size += block.bytes();
+        total_block_rows += block.rows();
+    }
+
+    auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = total_block_size / 50;
+    spiller_config_with_small_max_spill_size.max_spilled_bytes_per_file = spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller;
+    spiller_config_with_small_max_spill_size.max_spilled_rows_per_file = total_block_rows / 50;
+
+    /// case 1, sorted spiller, only 1 file per spill
+    Spiller sorted_spiller(spiller_config_with_small_max_spill_size, true, 1, spiller_test_header, logger);
+    BlocksList block_list;
+    block_list.insert(block_list.end(), blocks.begin(), blocks.end());
+    auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
+    sorted_spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() {
+        return false;
+    });
+    sorted_spiller.finishSpill();
+    auto restore_streams = sorted_spiller.restoreBlocks(0);
+    ASSERT_TRUE(restore_streams.size() == 1);
+
+    /// case 2, non-sorted spiller, multiple file
+    Spiller non_sorted_spiller(spiller_config_with_small_max_spill_size, false, 1, spiller_test_header, logger);
+    block_list.clear();
+    block_list.insert(block_list.end(), blocks.begin(), blocks.end());
+    block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
+    non_sorted_spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() {
+        return false;
+    });
+    non_sorted_spiller.finishSpill();
+    restore_streams = non_sorted_spiller.restoreBlocks(0);
+    ASSERT_TRUE(restore_streams.size() > 1);
+}
+CATCH
+
 TEST_F(SpillerTest, SpillAndMeetCancelled)
 try
 {

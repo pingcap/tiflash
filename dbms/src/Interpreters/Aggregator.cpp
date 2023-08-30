@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThresholdUtils.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/AggHashTableToBlocksBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -1022,26 +1023,8 @@ void Aggregator::spillImpl(AggregatedDataVariants & data_variants, Method & meth
     size_t max_temporary_block_size_rows = 0;
     size_t max_temporary_block_size_bytes = 0;
 
-    auto update_max_sizes = [&](const Block & block) {
-        size_t block_size_rows = block.rows();
-        size_t block_size_bytes = block.bytes();
-
-        if (block_size_rows > max_temporary_block_size_rows)
-            max_temporary_block_size_rows = block_size_rows;
-        if (block_size_bytes > max_temporary_block_size_bytes)
-            max_temporary_block_size_bytes = block_size_bytes;
-    };
-
-    Blocks blocks;
-    for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
-    {
-        /// memory in hash table is released after `convertOneBucketToBlock`,
-        /// so the peak memory usage is not increased although we save all
-        /// the blocks before the actual spill
-        blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
-        update_max_sizes(blocks.back());
-    }
-    agg_spill_context->getSpiller()->spillBlocks(std::move(blocks), 0);
+    auto block_input_stream = std::make_shared<AggHashTableToBlocksBlockInputStream<Method>>(*this, data_variants, method, max_temporary_block_size_rows, max_temporary_block_size_bytes);
+    agg_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_input_stream, 0, is_cancelled);
     agg_spill_context->finishOneSpill(thread_num);
 
     /// Pass ownership of the aggregate functions states:
