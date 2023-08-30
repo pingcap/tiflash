@@ -891,7 +891,7 @@ bool Aggregator::executeOnBlock(
     /** Flush data to disk if too much RAM is consumed.
       */
     auto revocable_bytes = result.revocableBytes();
-    LOG_DEBUG(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
+    LOG_TRACE(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
     if (agg_spill_context->updatePerThreadRevocableMemory(revocable_bytes, thread_num))
     {
         result.tryMarkNeedSpill();
