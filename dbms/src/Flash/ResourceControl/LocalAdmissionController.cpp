@@ -490,12 +490,6 @@ std::string LocalAdmissionController::isGACRespValid(const resource_manager::Res
     return err_msg;
 }
 
-#ifdef DBMS_PUBLIC_GTEST
-std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_instance = nullptr;
-#else
-std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
-#endif
-
 // Defined in PD resource_manager_client.go.
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
 const std::string LocalAdmissionController::WATCH_GAC_ERR_PREFIX = "watch resource group event failed: ";

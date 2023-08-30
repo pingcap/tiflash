@@ -1548,10 +1548,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & tmt_context = global_context->getTMTContext();
     // Resource Control.
 #ifdef DBMS_PUBLIC_GTEST
-    LOG_WARNING(
-        log,
-        "Compiled with ENABLE_TESTS enabled, will use MockLocalAdmissionController, which means tiflash "
-        "ResourceControl will be disabled.");
+    LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
     LocalAdmissionController::global_instance
         = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
