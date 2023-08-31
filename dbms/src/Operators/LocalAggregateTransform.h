@@ -17,6 +17,8 @@
 #include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
+#include "Core/FineGrainedOperatorSpillContext.h"
+
 namespace DB
 {
 /// Only do build and convert at the current operator, no sharing of objects with other operators.
@@ -26,7 +28,8 @@ public:
     LocalAggregateTransform(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const Aggregator::Params & params_);
+        const Aggregator::Params & params_,
+        std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context);
 
     String getName() const override { return "LocalAggregateTransform"; }
 

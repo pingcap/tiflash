@@ -52,7 +52,7 @@ public:
         , log(log_)
     {}
     virtual ~OperatorSpillContext() = default;
-    bool isSpillEnabled() const;
+    virtual bool isSpillEnabled() const;
     bool supportSpill() const;
     void disableSpill() { enable_spill = false; }
     virtual bool supportFurtherSpill() const { return in_spillable_stage; }
