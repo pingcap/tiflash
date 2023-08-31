@@ -75,19 +75,48 @@ Int64 AggSpillContext::getTotalRevocableMemoryImpl()
     return ret;
 }
 
-Int64 AggSpillContext::triggerSpill(Int64 expected_released_memories)
+Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    if (!in_spillable_stage || !enable_spill)
-        return expected_released_memories;
-    RUNTIME_CHECK_MSG(operator_spill_threshold == 0, "The operator spill threshold should be 0 in auto spill mode");
-    auto total_revocable_memory = getTotalRevocableMemory();
-    if (total_revocable_memory >= MIN_SPILL_THRESHOLD)
+    size_t checked_thread = 0;
+    for (; checked_thread < per_thread_revocable_memories.size(); ++checked_thread)
     {
-        for (size_t i = 0; i < per_thread_revocable_memories.size() && expected_released_memories > 0; i++)
+        AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+        if (per_thread_auto_spill_status[checked_thread].compare_exchange_strong(
+                old_value,
+                AutoSpillStatus::NEED_AUTO_SPILL))
         {
-            AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-            per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
-            expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[i], 0);
+            LOG_DEBUG(
+                log,
+                "Mark thread {} to spill, expect to release {} bytes",
+                checked_thread,
+                per_thread_revocable_memories[checked_thread]);
+        }
+        expected_released_memories
+            = std::max(expected_released_memories - per_thread_revocable_memories[checked_thread], 0);
+        if (expected_released_memories == 0)
+            break;
+    }
+    if (spill_config.max_cached_data_bytes_in_spiller > 0)
+    {
+        auto spill_threshold = static_cast<Int64>(spill_config.max_cached_data_bytes_in_spiller);
+        for (size_t i = checked_thread + 1; i < per_thread_revocable_memories.size(); ++i)
+        {
+            /// unlike sort and hash join, the implementation of current agg spill does not support partial spill, that is to say,
+            /// once agg spill is triggered, all the data will be spilled in the end, so here to spill the data if memory usage is large enough
+            if (per_thread_revocable_memories[i] >= spill_threshold)
+            {
+                AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+                if (per_thread_auto_spill_status[i].compare_exchange_strong(
+                        old_value,
+                        AutoSpillStatus::NEED_AUTO_SPILL))
+                {
+                    LOG_DEBUG(
+                        log,
+                        "Mark thread {} to spill, expect to release {} bytes",
+                        i,
+                        per_thread_revocable_memories[i]);
+                }
+            }
         }
     }
     return expected_released_memories;

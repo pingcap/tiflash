@@ -178,7 +178,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
     bool need_final_spill = false;
     for (size_t i = 0; i < parent.many_data.size(); ++i)
     {
-        if (parent.aggregator.getAggSpillContext()->needFinalSpill(i))
+        if (parent.aggregator.getAggSpillContext()->isThreadMarkedForAutoSpill(i))
         {
             /// corner case, auto spill is triggered at the last time
             need_final_spill = true;

@@ -145,14 +145,35 @@ void PageDirectoryFactory<Trait>::restoreBlobStats(const PageDirectoryPtr & dir)
         // So we need to use `getLastEntry` instead of `getEntry(version)` here.
         if (auto entry = entries->getLastEntry(std::nullopt); entry)
         {
-            try
+            auto [success, details_msg] = blob_stats->restoreByEntry(*entry);
+            if (success)
+                continue;
+
+            // Restore entry to blob_stats fail, if the entry->size == 0,
+            // it is acceptable. Just ingore.
+            if (entry->size == 0)
             {
-                blob_stats->restoreByEntry(*entry);
+                // log down the page_id for tracing back
+                LOG_WARNING(
+                    Logger::get(),
+                    "Restore position from BlobStat ignore empty page"
+                    ", offset=0x{:X} blob_id={} page_id={} entry={}",
+                    entry->offset,
+                    entry->file_id,
+                    page_id,
+                    *entry);
             }
-            catch (DB::Exception & e)
+            else
             {
-                e.addMessage(fmt::format("(while restoring page_id={} entry={})", page_id, *entry));
-                e.rethrow();
+                LOG_ERROR(Logger::get(), details_msg);
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Restore position from BlobStat failed, the space/subspace is already being used"
+                    ", offset=0x{:X} blob_id={} page_id={} entry={}",
+                    entry->offset,
+                    entry->file_id,
+                    page_id,
+                    *entry);
             }
         }
     }

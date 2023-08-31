@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
@@ -99,6 +100,8 @@ private:
     // `delta_row_ids` is used to return the row id of delta.
     std::vector<UInt32> delta_row_ids;
 
+    const String tracing_id;
+
 public:
     DeltaMergeBlockInputStream(
         const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -107,7 +110,8 @@ public:
         const IndexIterator & delta_index_end_,
         const RowKeyRange rowkey_range_,
         size_t max_block_size_,
-        UInt64 stable_rows_)
+        UInt64 stable_rows_,
+        const String & tracing_id_)
         : stable_input_stream(stable_input_stream_)
         , delta_value_reader(delta_value_reader_)
         , delta_index_it(delta_index_start_)
@@ -117,6 +121,7 @@ public:
         , rowkey_column_size(rowkey_range.rowkey_column_size)
         , max_block_size(max_block_size_)
         , stable_rows(stable_rows_)
+        , tracing_id(tracing_id_)
     {
         if constexpr (skippable_place)
         {
@@ -217,6 +222,19 @@ private:
                 int cmp_result = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
+                    LOG_ERROR(
+                        Logger::get(tracing_id),
+                        "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
+                        "is expected >= last_handle[{}]last_version[{}]@read[{}]@pos[{}]",
+                        rowkey_value.toDebugString(),
+                        version,
+                        num_read,
+                        i,
+                        last_value_ref.toDebugString(),
+                        last_version,
+                        last_handle_read_num,
+                        last_handle_pos);
+
                     throw Exception(
                         "DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
                         + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)

@@ -58,7 +58,7 @@ extern const int CHECKSUM_DOESNT_MATCH;
 
 namespace FailPoints
 {
-extern const char force_change_all_blobs_to_read_only[];
+extern const char force_pick_all_blobs_to_full_gc[];
 extern const char exception_after_large_write_exceed[];
 } // namespace FailPoints
 
@@ -454,13 +454,39 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 break;
             }
             case WriteBatchWriteType::PUT:
-            case WriteBatchWriteType::UPSERT:
             case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "write batch have a invalid total size == 0 while this kind of entry exist, write_type={}",
-                    magic_enum::enum_name(write.type));
+            {
+                RUNTIME_CHECK(
+                    write.size == 0 && write.offsets.size() == 0,
+                    write.page_id,
+                    write.size,
+                    write.offsets.size());
+
+                ChecksumClass digest;
+                digest.update("", write.size);
+
+                auto [blob_id, offset_in_file] = getPosFromStats(0, page_type);
+                PageEntryV3 entry{
+                    .file_id = blob_id,
+                    .size = write.size,
+                    .padded_size = 0,
+                    .tag = write.tag,
+                    .offset = offset_in_file,
+                    .checksum = digest.checksum(),
+                };
+
+                if (write.type == WriteBatchWriteType::PUT)
+                {
+                    edit.put(wb.getFullPageId(write.page_id), entry);
+                }
+                else
+                {
+                    edit.updateRemote(wb.getFullPageId(write.page_id), entry);
+                }
                 break;
+            }
+            case WriteBatchWriteType::UPSERT:
+                throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
             }
         }
         return edit;
@@ -600,13 +626,12 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
         throw Exception(
-            fmt::format(
-                "write batch have a invalid total size, or something wrong in parse write batch "
-                "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
-                all_page_data_size,
-                (buffer_pos - buffer),
-                actually_allocated_size),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "write batch have a invalid total size, or something wrong in parse write batch "
+            "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
+            all_page_data_size,
+            (buffer_pos - buffer),
+            actually_allocated_size);
     }
 
     try
@@ -633,6 +658,12 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
     }
 
     return edit;
+}
+
+template <typename Trait>
+void BlobStore<Trait>::freezeBlobFiles()
+{
+    blob_stats.setAllToReadOnly();
 }
 
 template <typename Trait>
@@ -716,8 +747,9 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
     }();
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_choose_stat).Observe(watch.elapsedSeconds());
     watch.restart();
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_search_pos).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ //
+        GET_METRIC(tiflash_storage_page_write_duration_seconds, type_search_pos).Observe(watch.elapsedSeconds());
+    });
 
     // We need to assume that this insert will reduce max_cap.
     // Because other threads may also be waiting for BlobStats to chooseStat during this time.
@@ -734,16 +766,15 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
     // Can't insert into this spacemap
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
-        stat->smap->logDebugString();
+        LOG_ERROR(Logger::get(), stat->smap->toDebugString());
         throw Exception(
-            fmt::format(
-                "Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}] "
-                "[old_max_caps={}] [max_caps={}] [blob_id={}]",
-                size,
-                old_max_cap,
-                stat->sm_max_caps,
-                stat->id),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}] "
+            "[old_max_caps={}] [max_caps={}] [blob_id={}]",
+            size,
+            old_max_cap,
+            stat->sm_max_caps,
+            stat->id);
     }
 
     return std::make_pair(stat->id, offset);
@@ -1141,21 +1172,30 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats()
     PageTypeAndBlobIds blob_need_gc;
     BlobStoreGCInfo blobstore_gc_info;
 
-    fiu_do_on(FailPoints::force_change_all_blobs_to_read_only, {
+    fiu_do_on(FailPoints::force_pick_all_blobs_to_full_gc, {
         for (const auto & [path, stats] : stats_list)
         {
-            (void)path;
+            UNUSED(path);
             for (const auto & stat : stats)
             {
+                // Note that this failpoint will also pick the exisitng "ReadOnly" BlobFiles
+                // to run full gc
+                PageType page_type = PageTypeUtils::getPageType(stat->id);
+                if (blob_need_gc.find(page_type) == blob_need_gc.end())
+                {
+                    blob_need_gc.emplace(page_type, std::vector<BlobFileId>());
+                }
+                blob_need_gc[page_type].emplace_back(stat->id);
                 stat->changeToReadOnly();
             }
         }
-        LOG_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
+        LOG_WARNING(log, "failpoint force_pick_all_blobs_to_full_gc is enabled, all BlobStat are picked for full-gc");
+        return blob_need_gc;
     });
 
     for (const auto & [path, stats] : stats_list)
     {
-        (void)path;
+        UNUSED(path);
         for (const auto & stat : stats)
         {
             if (stat->isReadOnly())

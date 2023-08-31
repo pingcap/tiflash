@@ -395,6 +395,7 @@ extern const int UNKNOWN_WINDOW_FUNCTION = 449;
 extern const int UNSUPPORTED_URI_SCHEME = 450;
 extern const int UNACCEPTABLE_URL = 450;
 extern const int TOO_MANY_REDIRECTS = 450;
+extern const int ERROR_DURING_HASH_TABLE_OR_ARENA_RESIZE = 451;
 
 #if USE_QPL
 extern const int QPL_INIT_JOB_FAILED = 453;

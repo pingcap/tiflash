@@ -309,6 +309,10 @@ public:
     {
         auto_spill_trigger = auto_spill_trigger_;
     }
+    AutoSpillTrigger * getAutoSpillTrigger()
+    {
+        return auto_spill_trigger == nullptr ? nullptr : auto_spill_trigger.get();
+    }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
@@ -331,13 +335,17 @@ public:
 
     void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
     {
-        operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
+        if (in_auto_spill_mode)
+            operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
     }
 
     void registerTaskOperatorSpillContexts()
     {
         query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
     }
+
+    void setAutoSpillMode() { in_auto_spill_mode = true; }
+    bool isInAutoSpillMode() const { return in_auto_spill_mode; }
 
 public:
     DAGRequest dag_request;
@@ -390,6 +398,7 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    bool in_auto_spill_mode = false;
     std::shared_ptr<TaskOperatorSpillContexts> operator_spill_contexts;
     std::shared_ptr<QueryOperatorSpillContexts> query_operator_spill_contexts;
     std::shared_ptr<AutoSpillTrigger> auto_spill_trigger;

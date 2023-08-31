@@ -81,7 +81,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
     bool need_final_spill = false;
     for (size_t i = 0; i < aggregate_context->getBuildConcurrency(); ++i)
     {
-        if (aggregate_context->getAggSpillContext()->needFinalSpill(i))
+        if (aggregate_context->getAggSpillContext()->isThreadMarkedForAutoSpill(i))
         {
             need_final_spill = true;
             break;

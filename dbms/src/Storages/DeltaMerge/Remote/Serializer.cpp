@@ -166,7 +166,10 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     new_stable->setFiles(dmfiles, segment_range, &dm_context);
     auto stable_snap = new_stable->createSnapshot();
 
-    return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
+    return std::make_shared<SegmentSnapshot>(
+        std::move(delta_snap),
+        std::move(stable_snap),
+        Logger::get(dm_context.tracing_id));
 }
 
 RepeatedPtrField<RemotePb::ColumnFileRemote> Serializer::serializeTo(

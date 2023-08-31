@@ -15,41 +15,12 @@
 #pragma once
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionPersister.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 
 #include <optional>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
-#define ASSERT_CHECK(cond, res)                                  \
-    do                                                           \
-    {                                                            \
-        if (!(cond))                                             \
-        {                                                        \
-            std::cerr << __FILE__ << ":" << __LINE__ << ":"      \
-                      << " Assertion " << #cond << " failed.\n"; \
-            if ((res))                                           \
-            {                                                    \
-                (res) = false;                                   \
-            }                                                    \
-        }                                                        \
-    } while (0)
-
-#define ASSERT_CHECK_EQUAL(a, b, res)                                         \
-    do                                                                        \
-    {                                                                         \
-        if (!((a) == (b)))                                                    \
-        {                                                                     \
-            std::cerr << __FILE__ << ":" << __LINE__ << ":"                   \
-                      << " Assertion " << #a << " == " << #b << " failed.\n"; \
-            if ((res))                                                        \
-            {                                                                 \
-                (res) = false;                                                \
-            }                                                                 \
-        }                                                                     \
-    } while (0)
-
 
 inline metapb::Peer createPeer(UInt64 id, bool)
 {
@@ -80,10 +51,10 @@ inline metapb::Region createRegionInfo(
     }
     if (maybe_peers)
     {
-        auto & peers = maybe_peers.value();
-        for (auto it = peers.begin(); it != peers.end(); it++)
+        const auto & peers = maybe_peers.value();
+        for (const auto & peer : peers)
         {
-            *(region_info.mutable_peers()->Add()) = *it;
+            *(region_info.mutable_peers()->Add()) = peer;
         }
     }
     else
@@ -120,5 +91,4 @@ inline RegionPtr makeRegion(
         proxy_helper);
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

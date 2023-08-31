@@ -88,43 +88,39 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     prepareForExecute(context);
 
     ProcessList::EntryPtr process_list_entry;
+    /// query level memory tracker
+    MemoryTrackerPtr memory_tracker = nullptr;
     if (likely(!internal))
     {
         process_list_entry = getProcessListEntry(context, dag_context);
+        memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
         logQuery(dag.str(context.getSettingsRef().log_queries_cut_to_length), context, logger);
+    }
+
+    if (memory_tracker != nullptr && memory_tracker->getLimit() != 0
+        && context.getSettingsRef().auto_memory_revoke_trigger_threshold > 0)
+    {
+        dag_context.setAutoSpillMode();
+        auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
+        auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
+            memory_tracker,
+            dag_context.getQueryOperatorSpillContexts(),
+            auto_spill_trigger_threshold);
+        dag_context.setAutoSpillTrigger(auto_spill_trigger);
     }
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
     BlockIO res = interpreter->execute();
-    /// query level memory tracker
-    MemoryTrackerPtr memory_tracker;
-    if (likely(process_list_entry))
-    {
-        (*process_list_entry)->setQueryStreams(res);
-        memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
-    }
-
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
-    auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
-    auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
-    /// if query level memory tracker has a limit, then setup auto spill trigger
-    if likely (memory_tracker != nullptr)
+    /// if query is in auto spill mode, then setup auto spill trigger
+    if (dag_context.isInAutoSpillMode())
     {
-        if (memory_tracker->getLimit() != 0 && auto_spill_trigger_threshold > 0)
-        {
-            auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
-                memory_tracker,
-                dag_context.getQueryOperatorSpillContexts(),
-                auto_spill_trigger_threshold,
-                auto_spill_target_threshold);
-            dag_context.setAutoSpillTrigger(auto_spill_trigger);
-            auto * stream = dynamic_cast<IProfilingBlockInputStream *>(res.in.get());
-            RUNTIME_ASSERT(stream != nullptr);
-            stream->setAutoSpillTrigger(auto_spill_trigger.get());
-        }
+        auto * stream = dynamic_cast<IProfilingBlockInputStream *>(res.in.get());
+        RUNTIME_ASSERT(stream != nullptr);
+        stream->setAutoSpillTrigger(dag_context.getAutoSpillTrigger());
     }
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
@@ -170,22 +166,23 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(process_list_entry))
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
 
+    if (memory_tracker != nullptr && memory_tracker->getLimit() > 0
+        && context.getSettingsRef().auto_memory_revoke_trigger_threshold.get() > 0)
+        dag_context.setAutoSpillMode();
+
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     std::unique_ptr<PipelineExecutor> executor;
     /// if query level memory tracker has a limit, then setup auto spill trigger
-    if (memory_tracker != nullptr && memory_tracker->getLimit() != 0
-        && context.getSettingsRef().auto_memory_revoke_trigger_threshold.get() > 0)
+    if (dag_context.isInAutoSpillMode())
     {
         auto register_operator_spill_context = [&context](const OperatorSpillContextPtr & operator_spill_context) {
             context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
         };
         auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
-        auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
         auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
             memory_tracker,
             dag_context.getQueryOperatorSpillContexts(),
-            auto_spill_trigger_threshold,
-            auto_spill_target_threshold);
+            auto_spill_trigger_threshold);
         dag_context.setAutoSpillTrigger(auto_spill_trigger);
         executor = std::make_unique<PipelineExecutor>(
             memory_tracker,

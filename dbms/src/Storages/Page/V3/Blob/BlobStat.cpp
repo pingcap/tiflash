@@ -17,6 +17,7 @@
 #include <Storages/Page/V3/Blob/BlobStat.h>
 #include <Storages/PathPool.h>
 #include <boost_wrapper/string_split.h>
+#include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
 
@@ -41,21 +42,22 @@ BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig &
     , config(config_)
 {}
 
-void BlobStats::restoreByEntry(const PageEntryV3 & entry)
+std::tuple<bool, String> BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
     if (entry.file_id != INVALID_BLOBFILE_ID)
     {
         auto stat = blobIdToStat(entry.file_id);
-        stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
+        return stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
     }
     else
     {
         // It must be an entry point to remote data location
         RUNTIME_CHECK(entry.checkpoint_info.is_valid && entry.checkpoint_info.is_local_data_reclaimed);
+        return std::make_tuple(true, "");
     }
 }
 
-std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(String blob_name)
+std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(const String & blob_name)
 {
     String err_msg;
     if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
@@ -187,6 +189,20 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
     eraseStat(std::move(stat), lock);
 }
 
+void BlobStats::setAllToReadOnly()
+{
+    auto lock_stats = lock();
+    for (const auto & [path, stats] : stats_map)
+    {
+        UNUSED(path);
+        for (const auto & stat : stats)
+        {
+            LOG_INFO(log, "BlobStat is set to read only, blob_id={}", stat->id);
+            stat->changeToReadOnly();
+        }
+    }
+}
+
 std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(
     size_t buf_size,
     PageType page_type,
@@ -314,7 +330,7 @@ size_t BlobStats::BlobStat::removePosFromStat(
 {
     if (!smap->markFree(offset, buf_size))
     {
-        smap->logDebugString();
+        LOG_ERROR(Logger::get(), smap->toDebugString());
         throw Exception(
             fmt::format(
                 "Remove position from BlobStat failed, invalid position [offset={}] [buf_size={}] [blob_id={}]",
@@ -329,20 +345,15 @@ size_t BlobStats::BlobStat::removePosFromStat(
     return sm_valid_size;
 }
 
-void BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
+std::tuple<bool, String> BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size_t buf_size)
 {
-    if (!smap->markUsed(offset, buf_size))
+    bool success = smap->markUsed(offset, buf_size);
+    if (!success)
     {
-        smap->logDebugString();
-        throw Exception(
-            fmt::format(
-                "Restore position from BlobStat failed, the space/subspace is already being used [offset={}] "
-                "[buf_size={}] [blob_id={}]",
-                offset,
-                buf_size,
-                id),
-            ErrorCodes::LOGICAL_ERROR);
+        String msg = (buf_size == 0) ? "" : smap->toDebugString();
+        return std::make_tuple(success, msg);
     }
+    return std::make_tuple(success, "");
 }
 
 void BlobStats::BlobStat::recalculateSpaceMap()

@@ -64,15 +64,16 @@ protected:
         UInt64 count = 0;
 
         FmtBuffer fmt_buffer;
-        fmt_buffer.append("    STD-Map entries status: \n");
-
-        // Need use `count`,so can't use `joinStr` here.
-        for (auto it = free_map.begin(); it != free_map.end(); it++)
-        {
-            fmt_buffer.fmtAppend("      Space: {} start: {} size : {}\n", count, it->first, it->second);
-            count++;
-        }
-
+        fmt_buffer.append("SpaceMap entries: [");
+        fmt_buffer.joinStr(
+            free_map.begin(),
+            free_map.end(),
+            [&count](const auto & it, FmtBuffer & fb) {
+                fb.fmtAppend(R"({{"index":{},"start":{},"size":{}}})", count, it.first, it.second);
+                count += 1;
+            },
+            ",");
+        fmt_buffer.append("]");
         return fmt_buffer.toString();
     }
 
@@ -262,6 +263,12 @@ protected:
          * Because we alloc space from left to right.
          */
         if (it != free_map.end())
+        {
+            return true;
+        }
+
+        // for an empty blob, no new free block is created, just skip
+        if (length == 0)
         {
             return true;
         }
