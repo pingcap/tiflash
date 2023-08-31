@@ -397,9 +397,9 @@ public:
         return group->getPriority(max_ru_per_sec.load());
     }
 
-    // Fetch resource group info from GAC and store in local cache.
-    // Throw exception if got error.
-    void checkResourceGroup(const std::string & name) { getOrFetchResourceGroup(name); }
+    // Fetch resource group info from GAC if necessary and store in local cache.
+    // Throw exception if got error when fetching from GAC.
+    void warmupResourceGroupInfoCache(const std::string & name);
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
@@ -446,10 +446,9 @@ private:
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;
 
-    // getOrFetchResourceGroup() and findResourceGroup() should be private,
+    // findResourceGroup() should be private,
     // this is to avoid user call member function of ResourceGroup directly.
     // So we can avoid dead lock.
-    ResourceGroupPtr getOrFetchResourceGroup(const std::string & name);
     ResourceGroupPtr findResourceGroup(const std::string & name)
     {
         std::lock_guard lock(mu);
@@ -464,7 +463,7 @@ private:
         return group;
     }
 
-    std::pair<ResourceGroupPtr, bool> addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
+    void addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
         if (max_ru_per_sec.load() < user_ru_per_sec)
@@ -473,12 +472,11 @@ private:
         std::lock_guard lock(mu);
         auto iter = resource_groups.find(new_group_pb.name());
         if (iter != resource_groups.end())
-            return std::make_pair(iter->second, false);
+            return;
 
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
-        return std::make_pair(new_group, true);
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
@@ -518,7 +516,7 @@ private:
     // Utilities for fetch token from GAC.
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
-    static std::pair<bool, AcquireTokenInfo> tryBuildAcquireInfo(
+    static std::optional<AcquireTokenInfo> buildAcquireInfo(
         const ResourceGroupPtr & resource_group,
         bool is_periodically_fetch);
 

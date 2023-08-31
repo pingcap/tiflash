@@ -18,11 +18,11 @@
 
 namespace DB
 {
-ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::string & name)
+void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
 {
     ResourceGroupPtr group = findResourceGroup(name);
     if (group != nullptr)
-        return group;
+        return;
 
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
@@ -34,16 +34,16 @@ ResourceGroupPtr LocalAdmissionController::getOrFetchResourceGroup(const std::st
     }
     catch (...)
     {
-        auto err_msg = getCurrentExceptionMessage(false);
-        throw ::DB::Exception(fmt::format("getOrFetchResourceGroup({}) failed: {}", name, err_msg));
+        throw ::DB::Exception(
+            fmt::format("warmupResourceGroupInfoCache({}) failed: {}", name, getCurrentExceptionMessage(false)));
     }
 
-    RUNTIME_CHECK_MSG(!resp.has_error(), "getOrFetchResourceGroup({}) failed: {}", name, resp.error().message());
+    RUNTIME_CHECK_MSG(!resp.has_error(), "warmupResourceGroupInfoCache({}) failed: {}", name, resp.error().message());
 
     std::string err_msg = isGACRespValid(resp.group());
-    RUNTIME_CHECK_MSG(err_msg.empty(), "getOrFetchResourceGroup({}) failed: {}", name, err_msg);
+    RUNTIME_CHECK_MSG(err_msg.empty(), "warmupResourceGroupInfoCache({}) failed: {}", name, err_msg);
 
-    return addResourceGroup(resp.group()).first;
+    addResourceGroup(resp.group());
 }
 
 void LocalAdmissionController::startBackgroudJob()
@@ -107,9 +107,9 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
         {
-            auto [ok, acquire_info] = tryBuildAcquireInfo(resource_group.second, /*is_periodically_fetch=*/true);
-            if (ok)
-                acquire_infos.push_back(acquire_info);
+            auto acquire_info = buildAcquireInfo(resource_group.second, /*is_periodically_fetch=*/true);
+            if (acquire_info.has_value())
+                acquire_infos.push_back(acquire_info.value());
         }
     }
 
@@ -126,9 +126,9 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
             auto iter = resource_groups.find(name);
             if (iter != resource_groups.end())
             {
-                auto [ok, acquire_info] = tryBuildAcquireInfo(iter->second, /*is_periodically_fetch=*/false);
-                if (ok)
-                    acquire_infos.push_back(acquire_info);
+                auto acquire_info = buildAcquireInfo(iter->second, /*is_periodically_fetch=*/false);
+                if (acquire_info.has_value())
+                    acquire_infos.push_back(acquire_info.value());
             }
         }
         low_token_resource_groups.clear();
@@ -137,34 +137,32 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
     fetchTokensFromGAC(acquire_infos, "because of low token");
 }
 
-std::pair<bool, LocalAdmissionController::AcquireTokenInfo> LocalAdmissionController::tryBuildAcquireInfo(
+std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionController::buildAcquireInfo(
     const ResourceGroupPtr & resource_group,
     bool is_periodically_fetch)
 {
     if (resource_group->burstable)
-        return {false, {}};
+        return std::nullopt;
 
     // To avoid periodically_token_fetch after low_token_fetch immediately
     const auto now = std::chrono::steady_clock::now();
     if (is_periodically_fetch
         && !resource_group->needFetchTokenPeridically(now, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL)))
-        return {false, {}};
+        return std::nullopt;
 
     // During trickle mode, no need to fetch tokens from GAC.
     if (resource_group->inTrickleModeLease(now))
-        return {false, {}};
+        return std::nullopt;
 
     double token_need_from_gac = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
 
     if (token_need_from_gac <= 0.0)
-        return {false, {}};
+        return std::nullopt;
 
-    return {
-        true,
-        AcquireTokenInfo{
-            .resource_group_name = resource_group->name,
-            .acquire_tokens = token_need_from_gac,
-            .ru_consumption_delta = resource_group->getAndCleanConsumptionDelta()}};
+    return {AcquireTokenInfo{
+        .resource_group_name = resource_group->name,
+        .acquire_tokens = token_need_from_gac,
+        .ru_consumption_delta = resource_group->getAndCleanConsumptionDelta()}};
 }
 
 void LocalAdmissionController::fetchTokensFromGAC(

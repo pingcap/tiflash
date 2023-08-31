@@ -202,7 +202,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
-    LocalAdmissionController::global_instance->checkResourceGroup(dag_context.getResourceGroupName());
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dag_context.getResourceGroupName());
     return {std::move(executor)};
 }
 
