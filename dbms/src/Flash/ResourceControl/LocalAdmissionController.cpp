@@ -94,8 +94,7 @@ void LocalAdmissionController::startBackgroudJob()
         }
         catch (...)
         {
-            auto err_msg = getCurrentExceptionMessage(true);
-            handleBackgroundError(err_msg);
+            handleBackgroundError(getCurrentExceptionMessage(true));
         }
     }
 }
@@ -113,7 +112,8 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
         }
     }
 
-    fetchTokensFromGAC(acquire_infos, fmt::format("periodically({}sec)", DEFAULT_TOKEN_FETCH_ESAPSED));
+    static const std::string log_desc_str = fmt::format("periodically({}sec)", DEFAULT_TOKEN_FETCH_ESAPSED);
+    fetchTokensFromGAC(acquire_infos, log_desc_str);
 }
 
 void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
@@ -134,7 +134,8 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
         low_token_resource_groups.clear();
     }
 
-    fetchTokensFromGAC(acquire_infos, "because of low token");
+    static const std::string log_desc_str = "because of low token";
+    fetchTokensFromGAC(acquire_infos, log_desc_str);
 }
 
 std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionController::buildAcquireInfo(
@@ -155,7 +156,6 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         return std::nullopt;
 
     double token_need_from_gac = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
-
     if (token_need_from_gac <= 0.0)
         return std::nullopt;
 
