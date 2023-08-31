@@ -535,6 +535,7 @@ bool KVStore::canFlushRegionDataImpl(
     const auto last_restart_log_applied = curr_region.lastRestartLogApplied();
     if (last_restart_log_applied + gap_threshold > index)
     {
+        // Make it more likely to flush after restart to reduce memory consumption
         gap_threshold = std::max(gap_threshold / 2, 1);
     }
     const auto last_compact_log_applied = curr_region.lastCompactLogApplied();

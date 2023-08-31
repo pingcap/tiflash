@@ -573,10 +573,10 @@ std::pair<UInt64, UInt64> Region::getRaftLogEagerGCRange() const
     return {eager_truncated_index, applied_index};
 }
 
-void Region::updateRaftLogEagerIndex(UInt64 new_first_index)
+void Region::updateRaftLogEagerIndex(UInt64 new_truncate_index)
 {
     std::unique_lock lock(mutex);
-    eager_truncated_index = new_first_index;
+    eager_truncated_index = new_truncate_index;
 }
 
 UInt64 Region::lastCompactLogApplied() const
