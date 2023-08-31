@@ -81,11 +81,18 @@ Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
     for (; checked_thread < per_thread_revocable_memories.size(); ++checked_thread)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-        if (per_thread_auto_spill_status[checked_thread].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL))
+        if (per_thread_auto_spill_status[checked_thread].compare_exchange_strong(
+                old_value,
+                AutoSpillStatus::NEED_AUTO_SPILL))
         {
-            LOG_DEBUG(log, "Mark thread {} to spill, expect to release {} bytes", checked_thread, per_thread_revocable_memories[checked_thread]);
+            LOG_DEBUG(
+                log,
+                "Mark thread {} to spill, expect to release {} bytes",
+                checked_thread,
+                per_thread_revocable_memories[checked_thread]);
         }
-        expected_released_memories = std::max(expected_released_memories - per_thread_revocable_memories[checked_thread], 0);
+        expected_released_memories
+            = std::max(expected_released_memories - per_thread_revocable_memories[checked_thread], 0);
         if (expected_released_memories == 0)
             break;
     }
@@ -99,9 +106,15 @@ Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
             if (per_thread_revocable_memories[i] >= spill_threshold)
             {
                 AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-                if (per_thread_auto_spill_status[i].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL))
+                if (per_thread_auto_spill_status[i].compare_exchange_strong(
+                        old_value,
+                        AutoSpillStatus::NEED_AUTO_SPILL))
                 {
-                    LOG_DEBUG(log, "Mark thread {} to spill, expect to release {} bytes", i, per_thread_revocable_memories[i]);
+                    LOG_DEBUG(
+                        log,
+                        "Mark thread {} to spill, expect to release {} bytes",
+                        i,
+                        per_thread_revocable_memories[i]);
                 }
             }
         }

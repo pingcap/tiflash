@@ -96,7 +96,8 @@ try
 {
     auto agg_spill_config = *spill_config_ptr;
     /// unlimited cache bytes
-    std::vector<Int64> max_cached_bytes = {0, OperatorSpillContext::MIN_SPILL_THRESHOLD + 1, OperatorSpillContext::MIN_SPILL_THRESHOLD - 1};
+    std::vector<Int64> max_cached_bytes
+        = {0, OperatorSpillContext::MIN_SPILL_THRESHOLD + 1, OperatorSpillContext::MIN_SPILL_THRESHOLD - 1};
     std::vector<size_t> expected_spill_threads = {5, 5, 10};
     size_t threads = 10;
     for (size_t index = 0; index < max_cached_bytes.size(); ++index)
