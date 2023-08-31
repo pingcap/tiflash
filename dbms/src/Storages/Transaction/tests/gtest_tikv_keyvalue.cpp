@@ -101,25 +101,24 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
 
 TEST(TiKVKeyValueTest, PortedTests)
 {
-    bool res = true;
     {
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(101, 2), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2, 233), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3, 233), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 3) > RecordKVFormat::genKey(100, 2, 233), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2, 2) < RecordKVFormat::genKey(100, 3), res);
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(101, 2));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2, 233));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3, 233));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 3) > RecordKVFormat::genKey(100, 2, 233));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2, 2) < RecordKVFormat::genKey(100, 3));
     }
 
     {
         auto key = RecordKVFormat::genKey(2222, 123, 992134);
-        ASSERT_CHECK(2222 == RecordKVFormat::getTableId(key), res);
-        ASSERT_CHECK(123 == RecordKVFormat::getHandle(key), res);
-        ASSERT_CHECK(992134 == RecordKVFormat::getTs(key), res);
+        ASSERT_EQ(2222, RecordKVFormat::getTableId(key));
+        ASSERT_EQ(123, RecordKVFormat::getHandle(key));
+        ASSERT_EQ(992134, RecordKVFormat::getTs(key));
 
         auto bare_key = RecordKVFormat::truncateTs(key);
-        ASSERT_CHECK(key == RecordKVFormat::appendTs(bare_key, 992134), res);
+        ASSERT_EQ(key, RecordKVFormat::appendTs(bare_key, 992134));
     }
 
     {
@@ -440,8 +439,8 @@ TEST(TiKVKeyValueTest, PortedTests)
 
     {
         std::string s = "1234";
-        s[0] = char(1);
-        s[3] = char(111);
+        s[0] = static_cast<char>(1);
+        s[3] = static_cast<char>(111);
         const auto & key = TiKVKey(s.data(), s.size());
         ASSERT_EQ(key.toDebugString(), "0132336F");
     }
@@ -499,8 +498,6 @@ TEST(TiKVKeyValueTest, PortedTests)
             ASSERT_EQ(*tidb_pk, pk);
         }
     }
-
-    ASSERT_TRUE(res);
 }
 
 TEST(TiKVKeyValueTest, Redact)
