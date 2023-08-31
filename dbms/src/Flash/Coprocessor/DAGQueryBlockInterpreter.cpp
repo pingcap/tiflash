@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
@@ -51,8 +52,6 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include "Core/FineGrainedOperatorSpillContext.h"
 
 namespace DB
 {

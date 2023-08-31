@@ -14,10 +14,9 @@
 
 #pragma once
 
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
-
-#include "Core/FineGrainedOperatorSpillContext.h"
 
 namespace DB
 {

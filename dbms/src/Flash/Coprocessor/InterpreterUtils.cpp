@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThresholdUtils.h>
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
@@ -34,8 +35,6 @@
 #include <Operators/MergeSortTransformOp.h>
 #include <Operators/PartialSortTransformOp.h>
 #include <Operators/SharedQueue.h>
-
-#include "Core/FineGrainedOperatorSpillContext.h"
 
 namespace DB
 {

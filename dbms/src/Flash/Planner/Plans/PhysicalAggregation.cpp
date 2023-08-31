@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
@@ -29,8 +30,6 @@
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Interpreters/Context.h>
 #include <Operators/LocalAggregateTransform.h>
-
-#include "Core/FineGrainedOperatorSpillContext.h"
 
 namespace DB
 {

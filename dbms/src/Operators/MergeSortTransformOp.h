@@ -14,14 +14,13 @@
 
 #pragma once
 
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Core/SortDescription.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Operators/Operator.h>
-
-#include "Core/FineGrainedOperatorSpillContext.h"
 
 namespace DB
 {
