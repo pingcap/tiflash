@@ -142,27 +142,42 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
     const ResourceGroupPtr & resource_group,
     bool is_periodically_fetch)
 {
-    if (resource_group->burstable)
-        return std::nullopt;
+    double token_consumption = 0.0;
+    double acquire_tokens = 0.0;
 
-    // To avoid periodically_token_fetch after low_token_fetch immediately
-    const auto now = std::chrono::steady_clock::now();
-    if (is_periodically_fetch
-        && !resource_group->needFetchTokenPeridically(now, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL)))
-        return std::nullopt;
+    auto get_token_consumption = [&]() {
+        if (is_periodically_fetch)
+            token_consumption = resource_group->getAndCleanConsumptionDelta();
+    };
+    auto get_acquire_tokens = [&]() {
+        if (resource_group->burstable)
+            return;
 
-    // During trickle mode, no need to fetch tokens from GAC.
-    if (resource_group->inTrickleModeLease(now))
-        return std::nullopt;
+        // To avoid periodically_token_fetch after low_token_fetch immediately
+        const auto now = std::chrono::steady_clock::now();
+        if (is_periodically_fetch
+            && !resource_group->needFetchTokenPeridically(now, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL)))
+            return;
 
-    double token_need_from_gac = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
-    if (token_need_from_gac <= 0.0)
-        return std::nullopt;
+        // During trickle mode, no need to fetch tokens from GAC.
+        if (resource_group->inTrickleModeLease(now))
+            return;
 
-    return {AcquireTokenInfo{
-        .resource_group_name = resource_group->name,
-        .acquire_tokens = token_need_from_gac,
-        .ru_consumption_delta = resource_group->getAndCleanConsumptionDelta()}};
+        acquire_tokens = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
+        if (acquire_tokens < 0.0)
+            acquire_tokens = 0.0;
+    };
+
+    get_token_consumption();
+    get_acquire_tokens();
+
+    if (token_consumption == 0.0 && acquire_tokens == 0.0)
+        return std::nullopt;
+    else
+        return {AcquireTokenInfo{
+            .resource_group_name = resource_group->name,
+            .acquire_tokens = acquire_tokens,
+            .ru_consumption_delta = token_consumption}};
 }
 
 void LocalAdmissionController::fetchTokensFromGAC(
@@ -188,14 +203,20 @@ void LocalAdmissionController::fetchTokensFromGAC(
 
         auto * single_group_req = gac_req.add_requests();
         single_group_req->set_resource_group_name(info.resource_group_name);
-        auto * ru_items = single_group_req->mutable_ru_items();
-        auto * req_ru = ru_items->add_request_r_u();
-        req_ru->set_type(resource_manager::RequestUnitType::RU);
-        req_ru->set_value(info.acquire_tokens);
-
-        single_group_req->set_is_tiflash(true);
-        auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
-        tiflash_consumption->set_r_r_u(info.ru_consumption_delta);
+        assert(info.acquire_tokens > 0.0 || info.ru_consumption_delta > 0.0);
+        if (info.acquire_tokens > 0.0)
+        {
+            auto * ru_items = single_group_req->mutable_ru_items();
+            auto * req_ru = ru_items->add_request_r_u();
+            req_ru->set_type(resource_manager::RequestUnitType::RU);
+            req_ru->set_value(info.acquire_tokens);
+        }
+        if (info.ru_consumption_delta > 0.0)
+        {
+            single_group_req->set_is_tiflash(true);
+            auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
+            tiflash_consumption->set_r_r_u(info.ru_consumption_delta);
+        }
     }
 
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req);
@@ -209,30 +230,26 @@ void LocalAdmissionController::fetchTokensFromGAC(
 
     auto handled = handleTokenBucketsResp(resp);
     // not_found includes resource group names that appears in gac_req but not found in resp.
-    std::vector<std::string> not_found;
-    not_found.reserve(handled.size());
-    for (const auto & info : acquire_infos)
+    // This can happen when the resource group is deleted.
+    if unlikely (handled.size() != acquire_infos.size())
     {
-        bool found = false;
-        for (const auto & name : handled)
+        std::vector<std::string> not_found;
+        for (const auto & info : acquire_infos)
         {
-            if (info.resource_group_name == name)
-                found = true;
+            if (std::find(handled.begin(), handled.end(), info.resource_group_name) == std::end(handled))
+                not_found.emplace_back(info.resource_group_name);
         }
-        if unlikely (!found)
-            not_found.emplace_back(info.resource_group_name);
-    }
-    {
+
         std::lock_guard lock(mu);
         for (const auto & name : not_found)
         {
             auto erase_num = resource_groups.erase(name);
             LOG_INFO(
-                log,
-                "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
-                "it. erase_num: {}",
-                name,
-                erase_num);
+                    log,
+                    "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
+                    "it. erase_num: {}",
+                    name,
+                    erase_num);
         }
     }
 }
