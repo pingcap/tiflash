@@ -223,7 +223,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
         log,
-        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.tables={}",
+        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.num_tables={}",
         resp.has_error(),
         resp.store_id(),
         snapshot_id,
