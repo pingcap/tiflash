@@ -228,7 +228,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
         resp.store_id(),
         snapshot_id,
         batch_cop_task.store_addr,
-        resp.tables());
+        resp.tables_size());
 
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
     watch.restart();
