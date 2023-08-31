@@ -58,9 +58,8 @@ public:
     {
         consume_resource_func(name, ru, cpu_time_ns);
     }
-
     uint64_t getPriority(const std::string & name) const { return get_priority_func(name); }
-    void checkResourceGroup(const std::string &) {}
+    void warmupResourceGroupInfoCache(const std::string &) {}
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {

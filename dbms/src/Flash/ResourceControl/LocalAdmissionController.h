@@ -422,6 +422,7 @@ public:
         refill_token_callback = nullptr;
     }
 
+private:
     void stop()
     {
         if (stopped)
@@ -433,7 +434,6 @@ public:
             thread.join();
     }
 
-private:
     // Interval of fetch from GAC periodically.
     static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
     // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
