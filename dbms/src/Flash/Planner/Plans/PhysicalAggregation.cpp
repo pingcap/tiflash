@@ -122,8 +122,12 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     if (fine_grained_shuffle.enable())
     {
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_operator_spill_context;
-        if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode() && pipeline.hasMoreThanOneStream())
-            fine_grained_operator_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(context.getSettingsRef().max_bytes_before_external_group_by, "aggregation", log);
+        if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
+            && pipeline.hasMoreThanOneStream())
+            fine_grained_operator_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
+                context.getSettingsRef().max_bytes_before_external_group_by,
+                "aggregation",
+                log);
         /// For fine_grained_shuffle, just do aggregation in streams independently
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
@@ -211,7 +215,10 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     size_t concurrency = group_builder.concurrency();
     std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_operator_spill_context;
     if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode() && concurrency > 1)
-        fine_grained_operator_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(context.getSettingsRef().max_bytes_before_external_group_by, "aggregation", log);
+        fine_grained_operator_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
+            context.getSettingsRef().max_bytes_before_external_group_by,
+            "aggregation",
+            log);
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),
@@ -233,7 +240,11 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         is_final_agg,
         spill_config);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_context, log->identifier(), params, fine_grained_operator_spill_context));
+        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(
+            exec_context,
+            log->identifier(),
+            params,
+            fine_grained_operator_spill_context));
     });
     context.getDAGContext()->registerOperatorSpillContext(fine_grained_operator_spill_context);
 

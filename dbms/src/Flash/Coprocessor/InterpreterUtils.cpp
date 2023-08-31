@@ -196,8 +196,12 @@ void orderStreams(
     if (enable_fine_grained_shuffle)
     {
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
-        if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode() && pipeline.hasMoreThanOneStream())
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(settings.max_bytes_before_external_sort, "sort", log);
+        if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
+            && pipeline.hasMoreThanOneStream())
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
+                settings.max_bytes_before_external_sort,
+                "sort",
+                log);
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<MergeSortingBlockInputStream>(
                 stream,
@@ -290,8 +294,12 @@ void executeLocalSort(
         size_t max_bytes_before_external_sort
             = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
-        if (for_fine_grained_executor && context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode() && group_builder.concurrency() > 1)
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(settings.max_bytes_before_external_sort, "sort", log);
+        if (for_fine_grained_executor && context.getDAGContext() != nullptr
+            && context.getDAGContext()->isInAutoSpillMode() && group_builder.concurrency() > 1)
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
+                settings.max_bytes_before_external_sort,
+                "sort",
+                log);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),

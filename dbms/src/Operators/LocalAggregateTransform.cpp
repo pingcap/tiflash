@@ -41,7 +41,7 @@ LocalAggregateTransform::LocalAggregateTransform(
         params,
         local_concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
-        [&] (const OperatorSpillContextPtr & operator_spill_context) {
+        [&](const OperatorSpillContextPtr & operator_spill_context) {
             if (fine_grained_spill_context != nullptr)
                 fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
             else if (exec_context.getRegisterOperatorSpillContext() != nullptr)
