@@ -2049,12 +2049,13 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} "
-        "n_ranges_final={}",
+        "n_ranges_final={} segments={}",
         watch.elapsedMilliseconds(),
         sorted_ranges.size(),
         tasks_before_split,
         tasks.size(),
-        total_ranges);
+        total_ranges,
+        tasks);
 
     return tasks;
 }

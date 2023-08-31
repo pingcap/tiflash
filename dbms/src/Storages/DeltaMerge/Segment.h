@@ -24,7 +24,6 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefinesBase.h>
@@ -41,10 +40,14 @@ class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
+class PushDownFilter;
+using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 
 using SegmentPtr = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 using Segments = std::vector<SegmentPtr>;
+
+enum class ReadMode;
 
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot : private boost::noncopyable
@@ -52,12 +55,15 @@ struct SegmentSnapshot : private boost::noncopyable
     DeltaSnapshotPtr delta;
     StableSnapshotPtr stable;
 
-    SegmentSnapshot(DeltaSnapshotPtr && delta_, StableSnapshotPtr && stable_)
+    const LoggerPtr log;
+
+    SegmentSnapshot(DeltaSnapshotPtr && delta_, StableSnapshotPtr && stable_, const LoggerPtr & log_)
         : delta(std::move(delta_))
         , stable(std::move(stable_))
+        , log(log_)
     {}
 
-    SegmentSnapshotPtr clone() const { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
+    SegmentSnapshotPtr clone() const { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone(), log); }
 
     UInt64 getBytes() const { return delta->getBytes() + stable->getBytes(); }
     UInt64 getRows() const { return delta->getRows() + stable->getRows(); }
@@ -614,7 +620,7 @@ public:
     /// Returns <placed index, this index is fully indexed or not>
     std::pair<DeltaIndexPtr, bool> ensurePlace(
         const DMContext & dm_context,
-        const StableSnapshotPtr & stable_snap,
+        const SegmentSnapshotPtr & segment_snap,
         const DeltaValueReaderPtr & delta_reader,
         const RowKeyRanges & read_ranges,
         UInt64 max_version) const;
