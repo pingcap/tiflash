@@ -40,8 +40,7 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
 
     RUNTIME_CHECK_MSG(!resp.has_error(), "warmupResourceGroupInfoCache({}) failed: {}", name, resp.error().message());
 
-    std::string err_msg = isGACRespValid(resp.group());
-    RUNTIME_CHECK_MSG(err_msg.empty(), "warmupResourceGroupInfoCache({}) failed: {}", name, err_msg);
+    checkGACRespValid(resp.group());
 
     addResourceGroup(resp.group());
 }
@@ -245,19 +244,19 @@ void LocalAdmissionController::fetchTokensFromGAC(
         {
             auto erase_num = resource_groups.erase(name);
             LOG_INFO(
-                    log,
-                    "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
-                    "it. erase_num: {}",
-                    name,
-                    erase_num);
+                log,
+                "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
+                "it. erase_num: {}",
+                name,
+                erase_num);
         }
     }
 }
 
 void LocalAdmissionController::checkDegradeMode()
 {
-    std::lock_guard lock(mu);
     auto now = std::chrono::steady_clock::now();
+    std::lock_guard lock(mu);
     if (DEGRADE_MODE_DURATION != 0
         && (now - last_fetch_tokens_from_gac_timepoint) >= std::chrono::seconds(DEGRADE_MODE_DURATION))
     {
@@ -493,16 +492,13 @@ void LocalAdmissionController::handleBackgroundError(const std::string & err_msg
     LOG_ERROR(log, err_msg);
 }
 
-std::string LocalAdmissionController::isGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
+void LocalAdmissionController::checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
 {
-    String err_msg;
     if unlikely (new_group_pb.name().empty())
-        err_msg += "resource group name from GAC pb is empty.";
+        throw Exception("resource group name from GAC is empty");
 
     if unlikely (new_group_pb.mode() != resource_manager::GroupMode::RUMode)
-        err_msg += fmt::format(" expect RUMode, got {}", new_group_pb.mode());
-
-    return err_msg;
+        throw Exception("resource group is not RUMode");
 }
 
 #ifdef DBMS_PUBLIC_GTEST

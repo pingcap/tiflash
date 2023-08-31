@@ -483,7 +483,7 @@ private:
 
     void handleBackgroundError(const std::string & err_msg) const;
 
-    static std::string isGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
+    static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
     struct AcquireTokenInfo
     {
