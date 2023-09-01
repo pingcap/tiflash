@@ -285,7 +285,7 @@ private:
         bucket->reConfig(config);
         LOG_INFO(
             log,
-            "token bucket of rg {} reconfig to normal mode done: {}",
+            "token bucket of rg {} reconfig to degrade mode done: {}",
             name,
             ori_bucket_info,
             bucket->toString());
