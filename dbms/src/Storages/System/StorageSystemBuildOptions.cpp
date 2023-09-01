@@ -17,7 +17,6 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Settings.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
 
 namespace DB

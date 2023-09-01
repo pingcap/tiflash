@@ -19,7 +19,6 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Interpreters/Settings.h>
 
 #include <ext/collection_cast.h>
 #include <ext/range.h>
@@ -150,8 +149,11 @@ bool IExecutableFunction::defaultImplementationForConstantArguments(
     for (auto arg_num : arguments_to_remain_constants)
         if (arg_num < args.size() && !block.getByPosition(args[arg_num]).column->isColumnConst())
             throw Exception(
-                "Argument at index " + toString(arg_num) + " for function " + getName() + " must be constant",
-                ErrorCodes::ILLEGAL_COLUMN);
+                ErrorCodes::ILLEGAL_COLUMN,
+                "Argument at index {} for function {}"
+                " must be constant",
+                arg_num,
+                getName());
 
     if (args.empty() || !useDefaultImplementationForConstants() || !allArgumentsAreConstants(block, args))
         return false;
@@ -242,12 +244,11 @@ void IFunctionBuilder::checkNumberOfArguments(size_t number_of_arguments) const
 
     if (number_of_arguments != expected_number_of_arguments)
         throw Exception(
-            fmt::format(
-                "Number of arguments for function {} doesn't match: passed {} , should be {}",
-                getName(),
-                toString(number_of_arguments),
-                toString(expected_number_of_arguments)),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Number of arguments for function {} doesn't match: passed {} , should be {}",
+            getName(),
+            number_of_arguments,
+            expected_number_of_arguments);
 }
 
 FunctionBasePtr IFunctionBuilder::build(

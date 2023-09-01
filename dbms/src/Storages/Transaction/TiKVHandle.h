@@ -15,10 +15,12 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
 
+#include <magic_enum.hpp>
 #include <sstream>
 
 namespace DB
@@ -42,18 +44,6 @@ enum HandleIDType : UInt8
     NORMAL = 0,
     MAX = 1,
 };
-
-inline static const char * handleIDTypeToString(HandleIDType type)
-{
-    switch (type)
-    {
-    case NORMAL:
-        return "NORMAL";
-    case MAX:
-        return "MAX";
-    }
-    throw Exception("handleIDTypeToString fail", ErrorCodes::LOGICAL_ERROR);
-}
 
 template <bool isInt64>
 struct DummyIdentity
@@ -94,19 +84,14 @@ struct Handle
 
     bool operator>=(const Handle & handle) const { return !(*this < handle); }
 
-    void toString(std::stringstream & ss) const
-    {
-        if (type == HandleIDType::NORMAL)
-            ss << handle_id;
-        else
-            ss << "<" << handleIDTypeToString(type) << ">";
-    }
-
     String toString() const
     {
-        std::stringstream ss;
-        toString(ss);
-        return ss.str();
+        FmtBuffer buff;
+        if (type == HandleIDType::NORMAL)
+            buff.fmtAppend("{}", handle_id);
+        else
+            buff.fmtAppend("<{}>", magic_enum::enum_name(type));
+        return buff.toString();
     }
 
     // we can not transfer it into HandleType directly
