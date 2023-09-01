@@ -163,8 +163,7 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
             return;
 
         acquire_tokens = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
-        if (acquire_tokens < 0.0)
-            acquire_tokens = 0.0;
+        assert(acquire_tokens >= 0.0);
     };
 
     get_token_consumption();

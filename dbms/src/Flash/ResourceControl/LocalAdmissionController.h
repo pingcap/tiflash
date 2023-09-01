@@ -192,8 +192,8 @@ private:
         if (acquire_num == 0.0 && remaining_ru <= 0.0)
             acquire_num = base;
 
-        if (acquire_num > remaining_ru)
-            acquire_num -= remaining_ru;
+        acquire_num -= remaining_ru;
+        acquire_num = (acquire_num > 0.0 ? acquire_num : 0.0);
 
         LOG_TRACE(
             log,
