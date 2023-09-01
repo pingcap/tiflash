@@ -520,13 +520,10 @@ void DAGQueryBlockInterpreter::executeAggregation(
 
     if (enable_fine_grained_shuffle)
     {
-        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_operator_spill_context;
+        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
-            fine_grained_operator_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
-                settings.max_bytes_before_external_group_by,
-                "aggregation",
-                log);
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "aggregation", log);
         /// Go straight forward without merging phase when enable_fine_grained_shuffle
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
@@ -535,8 +532,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
                 true,
                 log->identifier(),
                 [&](const OperatorSpillContextPtr & operator_spill_context) {
-                    if (fine_grained_operator_spill_context != nullptr)
-                        fine_grained_operator_spill_context->addOperatorSpillContext(operator_spill_context);
+                    if (fine_grained_spill_context != nullptr)
+                        fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
                     else if (context.getDAGContext() != nullptr)
                     {
                         context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
@@ -544,8 +541,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
                 });
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
-        if (fine_grained_operator_spill_context != nullptr)
-            context.getDAGContext()->registerOperatorSpillContext(fine_grained_operator_spill_context);
+        if (fine_grained_spill_context != nullptr)
+            context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     else if (pipeline.streams.size() > 1)

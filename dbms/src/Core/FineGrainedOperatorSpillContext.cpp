@@ -26,19 +26,14 @@ bool FineGrainedOperatorSpillContext::supportFurtherSpill() const
     return false;
 }
 
-bool FineGrainedOperatorSpillContext::isSpillEnabled() const
-{
-    for (const auto & operator_spill_context : operator_spill_contexts)
-        if (operator_spill_context->isSpillEnabled())
-            return true;
-    return false;
-}
-
 void FineGrainedOperatorSpillContext::addOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
 {
     /// fine grained operator spill context only used in auto spill
-    operator_spill_context->setAutoSpillMode();
-    operator_spill_contexts.push_back(operator_spill_context);
+    if likely (operator_spill_context->supportSpill() && operator_spill_context->supportAutoTriggerSpill())
+    {
+        operator_spill_contexts.push_back(operator_spill_context);
+        operator_spill_context->setAutoSpillMode();
+    }
 }
 
 Int64 FineGrainedOperatorSpillContext::getTotalRevocableMemoryImpl()

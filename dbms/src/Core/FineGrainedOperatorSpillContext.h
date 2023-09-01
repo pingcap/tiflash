@@ -18,12 +18,12 @@
 
 namespace DB
 {
-/// FineGrainedOperatorSpillContext is a wrap for all the query spill contexts that belongs to a same executor
+/// FineGrainedOperatorSpillContext is a wrap for all the operator spill contexts that belongs to a same executor
 /// with fine grained shuffle enable. When fine grained shuffle is enabled, executors like sort and aggregation
 /// will have n independent operators in TiFlash side, each of them have their own operator spill context. However
-/// these n operators are not really independent: them shared a same source operator(exchange receiver), if one of
-/// the operator stop consuming data from exchange receiver(for example, begin spill data), all the others will
-/// be stuck because the exchange receiver has a bounded queue for all the operator, any of the operator stop
+/// these n operators are not really independent: they share the same source operator(exchange receiver), if any one
+/// of the operator stop consuming data from exchange receiver(for example, begin spill data), all the others will
+/// be stuck because the exchange receiver has a bounded queue for all the operators, any one of the operator stop
 /// consuming will make the queue full, and no other data can be pushed to exchange receiver. If all the n operator
 /// is triggered to spill serially, it will affects the overall performance seriously.
 /// FineGrainedOperatorSpillContext is used to make sure that all the operators belongs to the same executor
@@ -38,11 +38,14 @@ protected:
 public:
     FineGrainedOperatorSpillContext(UInt64 operator_spill_threshold, const String op_name, const LoggerPtr & log)
         : OperatorSpillContext(operator_spill_threshold, op_name, log)
-    {}
-    bool isSpillEnabled() const override;
+    {
+        auto_spill_mode = true;
+    }
     bool supportFurtherSpill() const override;
     bool supportAutoTriggerSpill() const override { return true; }
     Int64 triggerSpillImpl(Int64 expected_released_memories) override;
     void addOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context);
+    /// only for test
+    size_t getOperatorSpillCount() const { return operator_spill_contexts.size(); }
 };
 } // namespace DB

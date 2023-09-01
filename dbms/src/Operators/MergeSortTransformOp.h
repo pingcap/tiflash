@@ -35,7 +35,7 @@ public:
         size_t max_block_size_,
         size_t max_bytes_before_external_sort,
         const SpillConfig & spill_config,
-        std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_operator_spill_context)
+        const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_operator_spill_context)
         : TransformOp(exec_context_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)

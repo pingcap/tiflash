@@ -52,17 +52,12 @@ public:
         , log(log_)
     {}
     virtual ~OperatorSpillContext() = default;
-    virtual bool isSpillEnabled() const;
+    bool isSpillEnabled() const;
     bool supportSpill() const;
     void disableSpill() { enable_spill = false; }
     virtual bool supportFurtherSpill() const { return in_spillable_stage; }
     bool isInAutoSpillMode() const { return auto_spill_mode; }
-    void setAutoSpillMode()
-    {
-        auto_spill_mode = true;
-        /// once auto spill is enabled, operator_spill_threshold will be ignored
-        operator_spill_threshold = 0;
-    }
+    void setAutoSpillMode();
     Int64 getTotalRevocableMemory();
     UInt64 getOperatorSpillThreshold() const { return operator_spill_threshold; }
     void markSpilled();

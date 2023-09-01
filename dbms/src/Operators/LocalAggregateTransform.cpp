@@ -32,7 +32,7 @@ LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const Aggregator::Params & params_,
-    std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context)
+    const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context)
     : TransformOp(exec_context_, req_id)
     , params(params_)
     , agg_context(req_id)

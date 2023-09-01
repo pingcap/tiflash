@@ -197,10 +197,7 @@ void orderStreams(
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
-                settings.max_bytes_before_external_sort,
-                "sort",
-                log);
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "sort", log);
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<MergeSortingBlockInputStream>(
                 stream,
@@ -295,10 +292,7 @@ void executeLocalSort(
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (for_fine_grained_executor && context.getDAGContext() != nullptr
             && context.getDAGContext()->isInAutoSpillMode() && group_builder.concurrency() > 1)
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(
-                settings.max_bytes_before_external_sort,
-                "sort",
-                log);
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "sort", log);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
@@ -364,7 +358,6 @@ void executeFinalSort(
             settings.max_spilled_rows_per_file,
             settings.max_spilled_bytes_per_file,
             context.getFileProvider()};
-        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
                 exec_context,
@@ -374,7 +367,7 @@ void executeFinalSort(
                 settings.max_block_size,
                 settings.max_bytes_before_external_sort,
                 spill_config,
-                fine_grained_spill_context));
+                nullptr));
         });
     }
 }
