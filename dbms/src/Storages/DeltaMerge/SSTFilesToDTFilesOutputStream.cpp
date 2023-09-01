@@ -369,6 +369,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
         }
     }
     ingest_files.clear();
+    ingest_files_range.clear();
 }
 
 template <typename ChildStream>

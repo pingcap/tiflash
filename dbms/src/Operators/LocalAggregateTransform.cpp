@@ -51,7 +51,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         if unlikely (!block)
         {
             agg_context.getAggSpillContext()->finishSpillableStage();
-            return agg_context.hasSpilledData() || agg_context.getAggSpillContext()->needFinalSpill(0)
+            return agg_context.hasSpilledData() || agg_context.getAggSpillContext()->isThreadMarkedForAutoSpill(0)
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);
         }
