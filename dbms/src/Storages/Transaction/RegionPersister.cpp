@@ -19,7 +19,6 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/FileUsage.h>
-#include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
