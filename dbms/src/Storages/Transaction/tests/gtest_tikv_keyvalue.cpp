@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
@@ -381,60 +380,6 @@ TEST(TiKVKeyValueTest, PortedTests)
         ASSERT_TRUE(s.size() == 19);
         auto o2 = RecordKVFormat::getHandle(s);
         ASSERT_TRUE(o2 == o1);
-    }
-
-    {
-        auto [n, new_range]
-            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::normal_min});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(new_range[0].first == new_range[0].second);
-    }
-
-    {
-        auto [n, new_range]
-            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::max, TiKVRange::Handle::max});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(new_range[0].first == new_range[0].second);
-    }
-
-    {
-        // 100000... , -1 (111111...), 0, 011111... ==> 0 ~ 111111...
-        auto [n, new_range]
-            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::max});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::normal_min == new_range[0].first);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[0].second);
-    }
-
-    {
-        // 100000... , 111111...
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, -1});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(
-            CHTableHandle::UInt64TableHandle{static_cast<UInt64>(TiKVRange::Handle::normal_min.handle_id)}
-            == new_range[0].first);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[0].second);
-        ASSERT_TRUE(
-            (new_range[0].second.handle_id - new_range[0].first.handle_id)
-            == UInt64(-1 - TiKVRange::Handle::normal_min.handle_id));
-    }
-
-    {
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({{2333ll}, {2334ll}});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(UInt64{2333} == new_range[0].first);
-        ASSERT_TRUE(UInt64{2334} == new_range[0].second);
-    }
-
-    {
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({-1, 10});
-        ASSERT_TRUE(n == 2);
-
-        ASSERT_TRUE(UInt64{0} == new_range[0].first);
-        ASSERT_TRUE(UInt64{10} == new_range[0].second);
-
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[1].first);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[1].second);
     }
 
     {
