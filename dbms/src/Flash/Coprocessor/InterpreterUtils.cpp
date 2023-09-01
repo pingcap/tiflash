@@ -197,7 +197,7 @@ void orderStreams(
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "sort", log);
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<MergeSortingBlockInputStream>(
                 stream,
@@ -292,7 +292,7 @@ void executeLocalSort(
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (for_fine_grained_executor && context.getDAGContext() != nullptr
             && context.getDAGContext()->isInAutoSpillMode() && group_builder.concurrency() > 1)
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "sort", log);
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),

@@ -193,7 +193,7 @@ CATCH
 TEST_F(TestOperatorSpillContext, FineGrainedOperatorSpillContext)
 try
 {
-    auto fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "test", logger);
+    auto fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("test", logger);
     /// fine grained spill context should always support auto spill and spill
     ASSERT_TRUE(fine_grained_spill_context->supportAutoTriggerSpill() && fine_grained_spill_context->supportSpill());
 

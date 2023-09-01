@@ -523,7 +523,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
         if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
             && pipeline.hasMoreThanOneStream())
-            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>(0, "aggregation", log);
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("aggregation", log);
         /// Go straight forward without merging phase when enable_fine_grained_shuffle
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(

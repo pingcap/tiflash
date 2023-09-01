@@ -28,16 +28,17 @@ namespace DB
 /// is triggered to spill serially, it will affects the overall performance seriously.
 /// FineGrainedOperatorSpillContext is used to make sure that all the operators belongs to the same executor
 /// will be triggered to spill almost at the same time
-class FineGrainedOperatorSpillContext : public OperatorSpillContext
+class FineGrainedOperatorSpillContext final : public OperatorSpillContext
 {
-protected:
+private:
     std::vector<OperatorSpillContextPtr> operator_spill_contexts;
 
+protected:
     Int64 getTotalRevocableMemoryImpl() override;
 
 public:
-    FineGrainedOperatorSpillContext(UInt64 operator_spill_threshold, const String op_name, const LoggerPtr & log)
-        : OperatorSpillContext(operator_spill_threshold, op_name, log)
+    FineGrainedOperatorSpillContext(const String op_name, const LoggerPtr & log)
+        : OperatorSpillContext(0, op_name, log)
     {
         auto_spill_mode = true;
     }
