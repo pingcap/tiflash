@@ -20,6 +20,9 @@ namespace DB
 {
 void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
 {
+    if (name.empty())
+        return;
+
     ResourceGroupPtr group = findResourceGroup(name);
     if (group != nullptr)
         return;
