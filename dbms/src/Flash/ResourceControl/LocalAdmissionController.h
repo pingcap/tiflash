@@ -442,12 +442,10 @@ private:
     }
 
     // Interval of fetch from GAC periodically.
-    static constexpr uint64_t DEFAULT_FETCH_GAC_INTERVAL = 5;
-    // DEFAULT_TOKEN_FETCH_ESAPSED * token_avg_consumption_speed as token num to fetch from GAC.
-    static constexpr uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
-    static constexpr auto DEGRADE_MODE_DURATION = 120;
-    static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
+    static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
+    static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;

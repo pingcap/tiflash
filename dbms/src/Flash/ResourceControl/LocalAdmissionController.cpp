@@ -72,9 +72,7 @@ void LocalAdmissionController::startBackgroudJob()
             if (low_token_resource_groups.empty())
             {
                 fetch_token_periodically = true;
-                if (cv.wait_for(lock, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() {
-                        return stopped.load();
-                    }))
+                if (cv.wait_for(lock, DEFAULT_FETCH_GAC_INTERVAL, [this]() { return stopped.load(); }))
                     return;
             }
         }
@@ -114,7 +112,7 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
         }
     }
 
-    static const std::string log_desc_str = fmt::format("periodically({}sec)", DEFAULT_TOKEN_FETCH_ESAPSED);
+    static const std::string log_desc_str = fmt::format("periodically({}sec)", DEFAULT_FETCH_GAC_INTERVAL.count());
     fetchTokensFromGAC(acquire_infos, log_desc_str);
 }
 
@@ -157,15 +155,14 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
 
         // To avoid periodically_token_fetch after low_token_fetch immediately
         const auto now = std::chrono::steady_clock::now();
-        if (is_periodically_fetch
-            && !resource_group->needFetchTokenPeridically(now, std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL)))
+        if (is_periodically_fetch && !resource_group->needFetchTokenPeridically(now, DEFAULT_FETCH_GAC_INTERVAL))
             return;
 
         // During trickle mode, no need to fetch tokens from GAC.
         if (resource_group->inTrickleModeLease(now))
             return;
 
-        acquire_tokens = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
+        acquire_tokens = resource_group->getAcquireRUNum(DEFAULT_FETCH_GAC_INTERVAL.count(), ACQUIRE_RU_AMPLIFICATION);
         assert(acquire_tokens >= 0.0);
     };
 
@@ -195,7 +192,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
 
     resource_manager::TokenBucketsRequest gac_req;
     gac_req.set_client_unique_id(unique_client_id);
-    gac_req.set_target_request_period_ms(TARGET_REQUEST_PERIOD_MS);
+    gac_req.set_target_request_period_ms(TARGET_REQUEST_PERIOD_MS.count());
 
     FmtBuffer fmt_buf;
     for (const auto & info : acquire_infos)
@@ -259,8 +256,7 @@ void LocalAdmissionController::checkDegradeMode()
 {
     auto now = std::chrono::steady_clock::now();
     std::lock_guard lock(mu);
-    if (DEGRADE_MODE_DURATION != 0
-        && (now - last_fetch_tokens_from_gac_timepoint) >= std::chrono::seconds(DEGRADE_MODE_DURATION))
+    if ((now - last_fetch_tokens_from_gac_timepoint) >= DEGRADE_MODE_DURATION)
     {
         for (const auto & ele : resource_groups)
         {
@@ -354,7 +350,7 @@ void LocalAdmissionController::watchGAC()
         // 3. watch is cancel.
         // Will sleep and try again.
         std::unique_lock lock(mu);
-        if (cv.wait_for(lock, std::chrono::seconds(30), [this]() { return stopped.load(); }))
+        if (cv.wait_for(lock, std::chrono::seconds(10), [this]() { return stopped.load(); }))
             return;
     }
 }

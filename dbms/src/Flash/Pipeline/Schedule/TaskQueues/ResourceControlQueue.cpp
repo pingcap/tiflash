@@ -102,7 +102,10 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
     std::unordered_set<String> error_resource_groups;
     SCOPE_EXIT({
         if unlikely (!error_resource_groups.empty())
+        {
+            assert(task);
             task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
+        }
     });
     std::unique_lock lock(mu);
     while (true)
