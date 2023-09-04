@@ -590,15 +590,18 @@ void MPPTask::runImpl()
             runtime_statistics.blocks,
             runtime_statistics.bytes);
 
-        // For read_ru, only report it to GAC for now.
-        // Will not affect the execution process of this MPPTask(may affect other MPPTask of this resource group).
-        if unlikely (!LocalAdmissionController::global_instance
-                          ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0))
+        if (context->getSettingsRef().enable_pipeline && context->getSettingsRef().enable_resource_control)
         {
-            LOG_WARNING(
-                log,
-                "cannot consume read_ru for {}, maybe has been deleted. Just ignore",
-                dag_context->getResourceGroupName());
+            // For read_ru, only report it to GAC for now.
+            // Will not affect the execution process of this MPPTask(may affect other MPPTask of this resource group).
+            if unlikely (!LocalAdmissionController::global_instance
+                              ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0))
+            {
+                LOG_WARNING(
+                    log,
+                    "cannot consume read_ru for {}, maybe has been deleted. Just ignore",
+                    dag_context->getResourceGroupName());
+            }
         }
         result.verify();
     }

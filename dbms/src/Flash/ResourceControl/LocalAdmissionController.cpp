@@ -454,10 +454,12 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
         auto iter = resource_groups.find(name);
         if (iter == resource_groups.end())
         {
-            err_msg = fmt::format(
+            // It happens when query of this resource group has not came.
+            LOG_INFO(
+                log,
                 "trying to modify resource group config({}), but cannot find its info",
                 group_pb.DebugString());
-            return false;
+            return true;
         }
         else
         {

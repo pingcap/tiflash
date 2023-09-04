@@ -24,16 +24,9 @@ namespace DB
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
-    bool lac_ok = true;
     {
         std::lock_guard lock(mu);
-        lac_ok = submitWithoutLock(std::move(task));
-    }
-    if unlikely (!lac_ok)
-    {
-        assert(task); // NOLINT(bugprone-use-after-move)
-        task->onErrorOccurred( // NOLINT(bugprone-use-after-move)
-            fmt::format(error_template, task->getResourceGroupName()));
+        submitWithoutLock(std::move(task));
     }
     cv.notify_one();
 }
@@ -44,38 +37,30 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
     if (tasks.empty())
         return;
 
-    std::vector<TaskPtr> lac_error_tasks;
     {
         std::lock_guard lock(mu);
         for (auto & task : tasks)
         {
-            if unlikely (!submitWithoutLock(std::move(task)))
-                lac_error_tasks.emplace_back(std::move(task)); // NOLINT(bugprone-use-after-move)
+            submitWithoutLock(std::move(task));
+            cv.notify_one();
         }
     }
-    for (auto & task : lac_error_tasks)
-    {
-        assert(task); // NOLINT(bugprone-use-after-move)
-        task->onErrorOccurred( // NOLINT(bugprone-use-after-move)
-            fmt::format(error_template, task->getResourceGroupName()));
-    }
-    cv.notify_all();
 }
 
 template <typename NestedTaskQueueType>
-bool ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && task)
+void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && task)
 {
     if unlikely (is_finished)
     {
         FINALIZE_TASK(task);
-        return true;
+        return;
     }
 
     const auto & query_id = task->getQueryId();
     if unlikely (cancel_query_id_cache.contains(query_id))
     {
         cancel_task_queue.push_back(std::move(task));
-        return true;
+        return;
     }
 
     const String & name = task->getResourceGroupName();
@@ -85,7 +70,10 @@ bool ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
         auto task_queue = std::make_shared<NestedTaskQueueType>();
         auto priority = LocalAdmissionController::global_instance->getPriority(name);
         if unlikely (!priority.has_value())
-            return false;
+        {
+            error_task_queue.push_back(std::move(task));
+            return;
+        }
 
         resource_group_infos.push({name, priority.value(), task_queue});
         bool inserted = false;
@@ -94,16 +82,15 @@ bool ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     }
     assert(task);
     iter->second->submit(std::move(task));
-    return true;
 }
 
 template <typename NestedTaskQueueType>
 bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 {
     assert(!task);
-    std::unordered_set<String> error_resource_groups;
+    bool is_error_task = false;
     SCOPE_EXIT({
-        if unlikely (!error_resource_groups.empty())
+        if unlikely (is_error_task)
         {
             assert(task);
             task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
@@ -118,7 +105,13 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if (popTask(cancel_task_queue, task))
             return true;
 
-        error_resource_groups = updateResourceGroupInfosWithoutLock();
+        if unlikely (popTask(error_task_queue, task))
+        {
+            is_error_task = true;
+            return true;
+        }
+
+        auto error_resource_groups = updateResourceGroupInfosWithoutLock();
 
         if (!resource_group_infos.empty())
         {
@@ -140,6 +133,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 auto iter = error_resource_groups.find(group_info.name);
                 if likely (iter != error_resource_groups.end())
                 {
+                    is_error_task = true;
                     mustTakeTask(group_info.task_queue, task);
                     return true;
                 }
@@ -208,6 +202,9 @@ bool ResourceControlQueue<NestedTaskQueueType>::empty() const
     std::lock_guard lock(mu);
 
     if (!cancel_task_queue.empty())
+        return false;
+
+    if unlikely (!error_task_queue.empty())
         return false;
 
     if (resource_group_task_queues.empty())

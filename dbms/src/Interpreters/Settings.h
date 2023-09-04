@@ -317,7 +317,8 @@ struct Settings
     M(SettingUInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                    \
     M(SettingBool, enable_cop_stream_for_remote_read, true, "Enable cop stream for remote read")                                                                                                                                        \
     M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
-    M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")
+    M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")                                                       \
+    M(SettingBool, enable_resource_control, true, "Enable tiflash resource control")
 
 
 // clang-format on

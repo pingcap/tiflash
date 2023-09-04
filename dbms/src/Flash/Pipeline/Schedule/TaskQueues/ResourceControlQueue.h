@@ -62,8 +62,7 @@ private:
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
     using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
 
-    // Return false if cannot find cached resource group info in LAC, need cancel this task.
-    bool submitWithoutLock(TaskPtr && task);
+    void submitWithoutLock(TaskPtr && task);
 
     struct ResourceGroupInfo
     {
@@ -103,5 +102,9 @@ private:
 
     FIFOQueryIdCache cancel_query_id_cache;
     std::deque<TaskPtr> cancel_task_queue;
+
+    // Store tasks whose resource group info is not found in LAC,
+    // it will be cancelled in take().
+    std::deque<TaskPtr> error_task_queue;
 };
 } // namespace DB
