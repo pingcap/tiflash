@@ -31,7 +31,8 @@ constexpr size_t task_index = 0;
 LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
-    const Aggregator::Params & params_)
+    const Aggregator::Params & params_,
+    const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context)
     : TransformOp(exec_context_, req_id)
     , params(params_)
     , agg_context(req_id)
@@ -40,7 +41,12 @@ LocalAggregateTransform::LocalAggregateTransform(
         params,
         local_concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
-        exec_context.getRegisterOperatorSpillContext());
+        [&](const OperatorSpillContextPtr & operator_spill_context) {
+            if (fine_grained_spill_context != nullptr)
+                fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
+            else if (exec_context.getRegisterOperatorSpillContext() != nullptr)
+                exec_context.getRegisterOperatorSpillContext()(operator_spill_context);
+        });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)

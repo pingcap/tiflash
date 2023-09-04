@@ -17,7 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Encryption/RandomAccessFile.h>
-#include <Interpreters/Settings.h>
+#include <Interpreters/Settings_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/PathCapacityMetrics.h>
