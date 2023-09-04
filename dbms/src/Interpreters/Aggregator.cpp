@@ -616,14 +616,12 @@ template <typename Method>
 void NO_INLINE Aggregator::executeImpl(
     Method & method,
     Arena * aggregates_pool,
-    size_t rows,
-    ColumnRawPtrs & key_columns,
-    TiDB::TiDBCollators & collators,
-    AggregateFunctionInstruction * aggregate_instructions) const
+    AggProcessInfo & agg_process_info,
+    TiDB::TiDBCollators & collators) const
 {
-    typename Method::State state(key_columns, key_sizes, collators);
+    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
-    executeImplBatch(method, state, aggregates_pool, rows, aggregate_instructions);
+    executeImplBatch(method, state, aggregates_pool, agg_process_info);
 }
 
 template <typename Method>
@@ -631,8 +629,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
-    size_t rows,
-    AggregateFunctionInstruction * aggregate_instructions) const
+    AggProcessInfo & agg_process_info) const
 {
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
@@ -642,7 +639,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = 0; i < rows; ++i)
+        for (size_t i = 0; i < agg_process_info.end_row; ++i)
             state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
         return;
     }
@@ -650,10 +647,10 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Optimization for special case when aggregating by 8bit key.
     if constexpr (std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
     {
-        for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
+        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
         {
             inst->batch_that->addBatchLookupTable8(
-                rows,
+                agg_process_info.end_row,
                 reinterpret_cast<AggregateDataPtr *>(method.data.data()),
                 inst->state_offset,
                 [&](AggregateDataPtr & aggregate_data) {
@@ -670,9 +667,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
     /// Generic case.
 
-    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_process_info.end_row]);
 
-    for (size_t i = 0; i < rows; ++i)
+    for (size_t i = 0; i < agg_process_info.end_row; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
@@ -696,22 +693,21 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     }
 
     /// Add values to the aggregate functions.
-    for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
+    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
     {
-        inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+        inst->batch_that->addBatch(agg_process_info.end_row, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
     }
 }
 
 void NO_INLINE Aggregator::executeWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
-    size_t rows,
-    AggregateFunctionInstruction * aggregate_instructions,
+    AggProcessInfo & agg_process_info,
     Arena * arena)
 {
     /// Adding values
-    for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
+    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
     {
-        inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
+        inst->batch_that->addBatchSinglePlace(agg_process_info.end_row, res + inst->state_offset, inst->batch_arguments, arena);
     }
 }
 
@@ -766,6 +762,8 @@ void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
     if (prepare_for_agg_done)
         return;
     RUNTIME_CHECK_MSG(block, "Block must be set before execution aggregation");
+    start_row = 0;
+    end_row = block.rows();
     input_columns = block.getColumns();
     materialized_columns.reserve(aggregator->params.keys_size);
     key_columns.reserve(aggregator->params.keys_size);
@@ -790,6 +788,7 @@ void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
         aggregate_columns,
         materialized_columns,
         aggregate_functions_instructions);
+    prepare_for_agg_done = true;
 }
 
 bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
@@ -816,8 +815,6 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
     if (is_cancelled())
         return true;
 
-    size_t num_rows = agg_process_info.block.rows();
-
     if (result.type == AggregatedDataVariants::Type::without_key && !result.without_key)
     {
         AggregateDataPtr place
@@ -833,8 +830,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
     {
         executeWithoutKeyImpl(
             result.without_key,
-            num_rows,
-            agg_process_info.aggregate_functions_instructions.data(),
+            agg_process_info,
             result.aggregates_pool);
     }
     else
@@ -845,10 +841,8 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
         executeImpl(                                                       \
             *ToAggregationMethodPtr(NAME, result.aggregation_method_impl), \
             result.aggregates_pool,                                        \
-            num_rows,                                                      \
-            agg_process_info.key_columns,                                  \
-            params.collators,                                              \
-            agg_process_info.aggregate_functions_instructions.data());     \
+            agg_process_info,                                              \
+            params.collators);                                             \
         break;                                                             \
     }
 

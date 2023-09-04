@@ -1249,24 +1249,20 @@ protected:
     void executeImpl(
         Method & method,
         Arena * aggregates_pool,
-        size_t rows,
-        ColumnRawPtrs & key_columns,
-        TiDB::TiDBCollators & collators,
-        AggregateFunctionInstruction * aggregate_instructions) const;
+        AggProcessInfo & agg_process_info,
+        TiDB::TiDBCollators & collators) const;
 
     template <typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
-        size_t rows,
-        AggregateFunctionInstruction * aggregate_instructions) const;
+        AggProcessInfo & agg_process_info) const;
 
     /// For case when there are no keys (all aggregate into one row).
     static void executeWithoutKeyImpl(
         AggregatedDataWithoutKey & res,
-        size_t rows,
-        AggregateFunctionInstruction * aggregate_instructions,
+        AggProcessInfo & agg_process_info,
         Arena * arena);
 
     template <typename Method>
