@@ -16,7 +16,7 @@ After receiving a CompactLog command, there are three conditions that determine 
 2. The size of the data in the Region exceeds the corresponding threshold.
 3. The time since the last flush exceeds a random timeout.
 
-In scenarios where small transactions are replicated, the first two size-related conditions are not easily triggered. The flush frequency is determined only by the random timeout. Furthermore, if the writes are highly random, when a flush is triggered, only a small amount of data is to be written, which is a waste to our write bandwidth.
+In scenarios where small transactions are replicated, the first two size-related conditions can not be easily triggered. The flush frequency is only determined by the random timeout. Furthermore, if the writes are highly random, when a flush is triggered, only a small amount of data in a Region is to be written, which is a waste of write bandwidth.
 
 Therefore, we need to replace this random timeout condition.
 
