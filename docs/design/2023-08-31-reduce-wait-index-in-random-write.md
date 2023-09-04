@@ -22,7 +22,7 @@ Therefore, we need to replace this random timeout condition.
 
 ## Detailed Design
 
-When flushing each Region, the current `applied_index` is recorded into `last_flushed_applied_index`. Different from using random timeout, after the flush operation triggered by Split/Merge commands, `last_flushed_applied_index` also needs to be updated. After receiving the CompactLog command, the difference between the corresponding `applied_index` and `last_flushed_applied_index` is checked to see if it exceeds the log gap threshold configured. If it does, a flush is triggered; otherwise, the CompactLog is treated as an empty raft log entry.
+When flushing each Region, the current `applied_index` is recorded as `last_flushed_applied_index`. Each time the flush operation is triggered by Split/Merge commands, `last_flushed_applied_index` will be updated. Different from using a random timeout, after receiving the CompactLog command, the difference between the corresponding `applied_index` and `last_flushed_applied_index` is checked to see if it exceeds the log gap threshold configured. If it does, a flush is triggered; otherwise, the CompactLog is treated as an empty raft log entry.
 
 After TiFlash restarts, the `applied_index` recorded in the disk will be stored into `last_flushed_applied_index`. And because TiFlash needs to catch up on logs from TiKV after restarting, which could result in a significant number of active Regions even for highly random writes. Therefore, after startup, the threshold for triggering a flush based on the log gap will be reduced to half.
 
