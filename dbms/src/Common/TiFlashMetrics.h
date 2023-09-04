@@ -203,7 +203,8 @@ namespace DB
       "Total number processed in RaftLog eager GC",                                                                                 \
       Counter,                                                                                                                      \
       F(type_num_raft_logs, {"type", "num_raft_logs"}),                                                                             \
-      F(type_num_regions, {"type", "num_regions"}))                                                                                 \
+      F(type_num_skip_regions, {"type", "num_skip_regions"}),                                                                       \
+      F(type_num_process_regions, {"type", "num_process_regions"}))                                                                 \
     M(tiflash_syncing_data_freshness,                                                                                               \
       "The freshness of tiflash data with tikv data",                                                                               \
       Histogram,                                                                                                                    \

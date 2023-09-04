@@ -113,6 +113,31 @@ RegionGcTask getRegionGCTask(
     }
     return task;
 }
+
+void removeRaftLogs(
+    const UniversalPageStoragePtr & uni_ps,
+    RegionID region_id,
+    UInt64 log_begin,
+    UInt64 log_end,
+    size_t deletes_per_batch)
+{
+    UniversalWriteBatch del_batch;
+    UInt64 num_deleted = 0;
+    for (UInt64 log_index = log_begin; log_index < log_end; ++log_index)
+    {
+        del_batch.delPage(UniversalPageIdFormat::toRaftLogKey(region_id, log_index));
+        num_deleted += 1;
+        if (num_deleted % deletes_per_batch == 0)
+        {
+            uni_ps->write(std::move(del_batch), PageType::RaftData);
+            del_batch.clear();
+        }
+    }
+
+    if (!del_batch.empty())
+        uni_ps->write(std::move(del_batch), PageType::RaftData);
+}
+
 } // namespace details
 
 RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints)
@@ -127,7 +152,7 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
 
     Stopwatch watch;
     RaftLogGcTasksRes eager_truncated_indexes;
-    size_t num_skip = 0;
+    size_t num_skip_regions = 0;
     size_t total_num_raft_log_removed = 0;
 
     RaftDataReader raft_reader(*write_node_ps);
@@ -142,19 +167,19 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
             continue;
         }
 
-        UniversalWriteBatch del_batch;
         const auto region_task = details::getRegionGCTask(region_id, *region_state, hint, eager_gc_rows, logger);
         if (region_task.skip)
         {
-            num_skip += 1;
+            num_skip_regions += 1;
             continue;
         }
 
-        for (UInt64 log_index = region_task.eager_truncate_index; log_index < region_task.applied_index; ++log_index)
-        {
-            del_batch.delPage(UniversalPageIdFormat::toRaftLogKey(region_id, log_index));
-        }
-        write_node_ps->write(std::move(del_batch), PageType::RaftData);
+        details::removeRaftLogs(
+            write_node_ps,
+            region_id,
+            region_task.eager_truncate_index,
+            region_task.applied_index,
+            /*deletes_per_batch*/ 4096);
 
         // Then we should proceed the eager truncated index to the new applied_index
         eager_truncated_indexes[region_id] = region_task.applied_index;
@@ -175,10 +200,11 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
     }
 
     const double cost_seconds = watch.elapsedSeconds();
-    const size_t num_process_regions = hints.size() - num_skip;
+    const size_t num_process_regions = hints.size() - num_skip_regions;
     GET_METRIC(tiflash_raft_eager_gc_duration_seconds, type_run).Observe(cost_seconds);
     GET_METRIC(tiflash_raft_eager_gc_count, type_num_raft_logs).Increment(total_num_raft_log_removed);
-    GET_METRIC(tiflash_raft_eager_gc_count, type_num_regions).Increment(num_process_regions);
+    GET_METRIC(tiflash_raft_eager_gc_count, type_num_skip_regions).Increment(num_skip_regions);
+    GET_METRIC(tiflash_raft_eager_gc_count, type_num_process_regions).Increment(num_process_regions);
     LOG_INFO(
         logger,
         "Eager raft log gc round done, "
