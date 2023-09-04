@@ -65,7 +65,7 @@ void PhysicalWindowSort::buildPipelineExecGroupImpl(
     size_t /*concurrency*/)
 {
     if (fine_grained_shuffle.enable())
-        executeLocalSort(exec_context, group_builder, order_descr, {}, context, log);
+        executeLocalSort(exec_context, group_builder, order_descr, {}, true, context, log);
     else
         executeFinalSort(exec_context, group_builder, order_descr, {}, context, log);
 }
