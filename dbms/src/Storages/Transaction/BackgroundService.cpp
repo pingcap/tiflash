@@ -62,7 +62,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                     if (auto hints = kvstore->getRaftLogGcHints(); !hints.empty())
                     {
                         auto task_res = executeRaftLogGcTasks(tmt.getContext(), std::move(hints));
-                        kvstore->applyRaftLogTaskRes(task_res);
+                        kvstore->applyRaftLogGcTaskRes(task_res);
                         // If some Regions have execute eager gc, then run again immediatly.
                         // Else run in fixed interval.
                         return !task_res.empty();

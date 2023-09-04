@@ -322,7 +322,7 @@ RaftLogEagerGcTasks::Hints KVStore::getRaftLogGcHints()
     return raft_log_gc_hints.getAndClearHints();
 }
 
-void KVStore::applyRaftLogTaskRes(const RaftLogGcTasksRes & res) const
+void KVStore::applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const
 {
     for (const auto & [region_id, log_index] : res)
     {

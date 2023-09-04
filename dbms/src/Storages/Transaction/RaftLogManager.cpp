@@ -20,9 +20,9 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/RaftLogManager.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
-#include <TiDB/Raft/RaftLogManager.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <kvproto/raft_serverpb.pb.h>
@@ -74,6 +74,8 @@ RaftLogEagerGcTasks::Hints RaftLogEagerGcTasks::getAndClearHints()
     return hints;
 }
 
+namespace details
+{
 struct RegionGcTask
 {
     bool skip;
@@ -81,7 +83,7 @@ struct RegionGcTask
     UInt64 applied_index;
 };
 
-RegionGcTask getRegionTask(
+RegionGcTask getRegionGCTask(
     const RegionID region_id,
     const raft_serverpb::RaftApplyState & region_state,
     const RaftLogEagerGcHint & hint,
@@ -110,6 +112,7 @@ RegionGcTask getRegionTask(
     }
     return task;
 }
+} // namespace details
 
 RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints)
 {
@@ -138,7 +141,7 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
         }
 
         UniversalWriteBatch del_batch;
-        const auto region_task = getRegionTask(region_id, region_apply_state, hint, eager_gc_rows, logger);
+        const auto region_task = details::getRegionGCTask(region_id, region_apply_state, hint, eager_gc_rows, logger);
         if (region_task.skip)
         {
             num_skip += 1;

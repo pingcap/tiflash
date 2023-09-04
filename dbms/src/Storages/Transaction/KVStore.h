@@ -19,8 +19,8 @@
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/RaftLogManager.h>
 #include <Storages/Transaction/StorageEngineType.h>
-#include <TiDB/Raft/RaftLogManager.h>
 
 #include <magic_enum.hpp>
 
@@ -239,7 +239,7 @@ public:
         bool lock_held = true);
 
     RaftLogEagerGcTasks::Hints getRaftLogGcHints();
-    void applyRaftLogTaskRes(const RaftLogGcTasksRes & res) const;
+    void applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
