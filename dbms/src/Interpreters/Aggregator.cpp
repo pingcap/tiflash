@@ -698,16 +698,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Add values to the aggregate functions.
     for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
     {
-        if (inst->offsets)
-            inst->batch_that->addBatchArray(
-                rows,
-                places.get(),
-                inst->state_offset,
-                inst->batch_arguments,
-                inst->offsets,
-                aggregates_pool);
-        else
-            inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+        inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
     }
 }
 
@@ -720,14 +711,7 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
     /// Adding values
     for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
     {
-        if (inst->offsets)
-            inst->batch_that->addBatchSinglePlace(
-                inst->offsets[static_cast<ssize_t>(rows - 1)],
-                res + inst->state_offset,
-                inst->batch_arguments,
-                arena);
-        else
-            inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
+        inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
     }
 }
 
