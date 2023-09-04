@@ -31,8 +31,9 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
     }
     if unlikely (!lac_ok)
     {
-        assert(task);
-        task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
+        assert(task); // NOLINT(bugprone-use-after-move)
+        task->onErrorOccurred( // NOLINT(bugprone-use-after-move)
+            fmt::format(error_template, task->getResourceGroupName()));
     }
     cv.notify_one();
 }
@@ -49,13 +50,14 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
         for (auto & task : tasks)
         {
             if unlikely (!submitWithoutLock(std::move(task)))
-                lac_error_tasks.emplace_back(std::move(task));
+                lac_error_tasks.emplace_back(std::move(task)); // NOLINT(bugprone-use-after-move)
         }
     }
     for (auto & task : lac_error_tasks)
     {
-        assert(task);
-        task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
+        assert(task); // NOLINT(bugprone-use-after-move)
+        task->onErrorOccurred( // NOLINT(bugprone-use-after-move)
+            fmt::format(error_template, task->getResourceGroupName()));
     }
     cv.notify_all();
 }
