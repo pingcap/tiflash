@@ -431,7 +431,7 @@ void KVStore::persistRegion(
     case PersistRegionReason::EagerRaftGc:
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_eager_gc).Increment(1);
         break;
-    case PersistRegionReason::Debug:// ignore
+    case PersistRegionReason::Debug: // ignore
         break;
     }
 }
