@@ -428,7 +428,10 @@ void KVStore::persistRegion(
     case PersistRegionReason::IngestSst:
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_ingest_sst).Increment(1);
         break;
-    default:
+    case PersistRegionReason::EagerRaftGc:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_eager_gc).Increment(1);
+        break;
+    case PersistRegionReason::Debug:// ignore
         break;
     }
 }
@@ -556,7 +559,6 @@ bool KVStore::canFlushRegionDataImpl(
     }
 
     GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
-    // GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
     LOG_DEBUG(
         log,
         "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
@@ -587,7 +589,7 @@ bool KVStore::canFlushRegionDataImpl(
     else
     {
         GET_METRIC(tiflash_raft_region_flush_size, type_unflushed).Observe(size_bytes);
-        GET_METRIC(tiflash_raft_raft_log_lag_count, type_unflushed_applied_index).Observe(current_applied_gap);
+        GET_METRIC(tiflash_raft_raft_log_gap_count, type_unflushed_applied_index).Observe(current_applied_gap);
     }
     return can_flush;
 }

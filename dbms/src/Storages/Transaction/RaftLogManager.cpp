@@ -158,6 +158,10 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
         eager_truncated_indexes[region_id] = region_task.applied_index;
         size_t num_raft_log_removed = region_task.applied_index - region_task.eager_truncate_index;
         total_num_raft_log_removed += num_raft_log_removed;
+
+        // all logs between applied and truncated are removed, let's report a 0 here
+        GET_METRIC(tiflash_raft_raft_log_gap_count, type_eager_gc_applied_index).Observe(0);
+
         LOG_INFO(
             logger,
             "Eager raft log gc, region_id={} eager_truncate_index={} applied_index={} n_removed={} cost={:.3f}s",

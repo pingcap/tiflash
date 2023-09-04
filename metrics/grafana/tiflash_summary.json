@@ -10677,7 +10677,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_raft_log_lag_count_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"applied_index\"}[1m])) by (le, type)",
+              "expr": "sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"applied_index\"}[1m])) by (le, type)",
               "format": "heatmap",
               "interval": "",
               "intervalFactor": 2,
@@ -10686,7 +10686,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_raft_log_lag_count_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"compact_index\"}[1m])) by (le, type)",
+              "expr": "sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"compact_index\"}[1m])) by (le, type)",
               "hide": false,
               "interval": "",
               "legendFormat": "{{le}}",

@@ -597,12 +597,13 @@ void Region::setLastCompactLogApplied(UInt64 new_value) const
 
 void Region::updateLastCompactLogApplied() const
 {
-    uint64_t current_applied_index = appliedIndex();
+    const UInt64 current_applied_index = appliedIndex();
     if (last_compact_log_applied != 0)
     {
-        uint64_t gap
-            = current_applied_index > last_compact_log_applied ? current_applied_index - last_compact_log_applied : 0;
-        GET_METRIC(tiflash_raft_raft_log_lag_count, type_applied_index).Observe(gap);
+        UInt64 gap = current_applied_index > last_compact_log_applied //
+            ? current_applied_index - last_compact_log_applied
+            : 0;
+        GET_METRIC(tiflash_raft_raft_log_gap_count, type_applied_index).Observe(gap);
     }
     last_compact_log_applied = current_applied_index;
 }
