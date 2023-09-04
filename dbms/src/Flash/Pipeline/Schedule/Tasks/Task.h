@@ -89,7 +89,7 @@ public:
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 
-    void onErrorOccurred(const std::exception_ptr & exception_ptr) { exec_context.onErrorOccurred(exception_ptr); }
+    void onErrorOccurred(const String & err_msg) { exec_context.onErrorOccurred(err_msg); }
 
 public:
     LoggerPtr log;

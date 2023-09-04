@@ -590,12 +590,16 @@ void MPPTask::runImpl()
             runtime_statistics.blocks,
             runtime_statistics.bytes);
 
-        // Only report RU consumption to GAC for now.
+        // For read_ru, only report it to GAC for now.
         // Will not affect the execution process of this MPPTask(may affect other MPPTask of this resource group).
-        CATCH_AND_LOG(
-            LocalAdmissionController::global_instance
-                ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0),
-            log);
+        if unlikely (!LocalAdmissionController::global_instance
+                          ->consumeResource(dag_context->getResourceGroupName(), toRU(read_ru), 0))
+        {
+            LOG_WARNING(
+                log,
+                "cannot consume read_ru for {}, maybe has been deleted. Just ignore",
+                dag_context->getResourceGroupName());
+        }
         result.verify();
     }
     catch (...)

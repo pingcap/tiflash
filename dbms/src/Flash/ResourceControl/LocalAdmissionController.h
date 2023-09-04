@@ -370,13 +370,16 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    bool consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
-            return;
+            return true;
 
-        ResourceGroupPtr group = findResourceGroupWithException(name);
+        ResourceGroupPtr group = findResourceGroup(name);
+        if unlikely (!group)
+            return false;
+
         group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken())
         {
@@ -386,15 +389,19 @@ public:
             }
             cv.notify_one();
         }
+        return true;
     }
 
-    uint64_t getPriority(const std::string & name)
+    std::optional<uint64_t> getPriority(const std::string & name)
     {
         if (name.empty())
-            return HIGHEST_RESOURCE_GROUP_PRIORITY;
+            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
-        ResourceGroupPtr group = findResourceGroupWithException(name);
-        return group->getPriority(max_ru_per_sec.load());
+        ResourceGroupPtr group = findResourceGroup(name);
+        if unlikely (!group)
+            return std::nullopt;
+
+        return {group->getPriority(max_ru_per_sec.load())};
     }
 
     // Fetch resource group info from GAC if necessary and store in local cache.
@@ -454,13 +461,6 @@ private:
         std::lock_guard lock(mu);
         auto iter = resource_groups.find(name);
         return iter == resource_groups.end() ? nullptr : iter->second;
-    }
-    ResourceGroupPtr findResourceGroupWithException(const std::string & name)
-    {
-        auto group = findResourceGroup(name);
-        if unlikely (!group)
-            throw Exception("resource group {} not found, it may have been deleted", name);
-        return group;
     }
 
     void addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)

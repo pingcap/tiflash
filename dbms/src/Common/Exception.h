@@ -348,15 +348,4 @@ constexpr auto maybeStringLiteralExpr(const std::string_view sv)
             std::terminate();                                          \
         }                                                              \
     } while (false)
-
-#define CATCH_AND_LOG(stmt, log)                              \
-    try                                                       \
-    {                                                         \
-        (stmt);                                               \
-    }                                                         \
-    catch (...)                                               \
-    {                                                         \
-        LOG_WARNING((log), getCurrentExceptionMessage(true)); \
-    }
-
 } // namespace DB

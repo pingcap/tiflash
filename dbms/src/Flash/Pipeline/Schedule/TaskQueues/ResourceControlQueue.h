@@ -62,7 +62,8 @@ private:
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
     using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
 
-    typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr getSubmitTaskQueuWithoutLock(TaskPtr & task);
+    // Return false if cannot find cached resource group info in LAC, need cancel this task.
+    bool submitWithoutLock(TaskPtr && task);
 
     struct ResourceGroupInfo
     {
@@ -83,10 +84,10 @@ private:
         }
     };
 
-    using LACErrorInfo = std::unordered_map<String, std::exception_ptr>;
+    static constexpr const char * error_template = "resource group {} not found, maybe has been deleted";
 
     // Update resource_group_infos, will reorder resource group by priority.
-    LACErrorInfo updateResourceGroupInfosWithoutLock();
+    std::unordered_set<String> updateResourceGroupInfosWithoutLock();
 
     // Erase resource group info and task_queue.
     void mustEraseResourceGroupInfoWithoutLock(const String & name);

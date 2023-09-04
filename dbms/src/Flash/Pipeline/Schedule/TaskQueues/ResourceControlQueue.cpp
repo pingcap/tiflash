@@ -24,22 +24,17 @@ namespace DB
 template <typename NestedTaskQueueType>
 void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
 {
-    try
+    bool lac_ok = true;
     {
-        {
-            std::lock_guard lock(mu);
-            // May throw resource group not found exception.
-            NestedTaskQueuePtr task_queue = getSubmitTaskQueuWithoutLock(task);
-            if likely (task_queue)
-                task_queue->submit(std::move(task));
-        }
-        cv.notify_one();
+        std::lock_guard lock(mu);
+        lac_ok = submitWithoutLock(std::move(task));
     }
-    catch (...)
+    if unlikely (!lac_ok)
     {
         assert(task);
-        task->onErrorOccurred(std::current_exception());
+        task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
     }
+    cv.notify_one();
 }
 
 template <typename NestedTaskQueueType>
@@ -48,48 +43,37 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
     if (tasks.empty())
         return;
 
-    std::vector<std::pair<TaskPtr, std::exception_ptr>> error_task_infos;
+    std::vector<TaskPtr> lac_error_tasks;
     {
         std::lock_guard lock(mu);
         for (auto & task : tasks)
         {
-            try
-            {
-                // May throw resource group not found exception.
-                NestedTaskQueuePtr task_queue = getSubmitTaskQueuWithoutLock(task);
-                if likely (task_queue)
-                    task_queue->submit(std::move(task));
-            }
-            catch (...)
-            {
-                error_task_infos.emplace_back(std::move(task), std::current_exception());
-            }
+            if unlikely (!submitWithoutLock(std::move(task)))
+                lac_error_tasks.emplace_back(std::move(task));
         }
     }
-    for (auto & info : error_task_infos)
+    for (auto & task : lac_error_tasks)
     {
-        assert(info.first);
-        assert(info.second);
-        info.first->onErrorOccurred(info.second);
+        assert(task);
+        task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
     }
     cv.notify_all();
 }
 
 template <typename NestedTaskQueueType>
-typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceControlQueue<
-    NestedTaskQueueType>::getSubmitTaskQueuWithoutLock(TaskPtr & task)
+bool ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && task)
 {
     if unlikely (is_finished)
     {
         FINALIZE_TASK(task);
-        return nullptr;
+        return true;
     }
 
     const auto & query_id = task->getQueryId();
     if unlikely (cancel_query_id_cache.contains(query_id))
     {
         cancel_task_queue.push_back(std::move(task));
-        return nullptr;
+        return true;
     }
 
     const String & name = task->getResourceGroupName();
@@ -98,22 +82,27 @@ typename ResourceControlQueue<NestedTaskQueueType>::NestedTaskQueuePtr ResourceC
     {
         auto task_queue = std::make_shared<NestedTaskQueueType>();
         auto priority = LocalAdmissionController::global_instance->getPriority(name);
-        resource_group_infos.push({name, priority, task_queue});
+        if unlikely (!priority.has_value())
+            return false;
+
+        resource_group_infos.push({name, priority.value(), task_queue});
         bool inserted = false;
         std::tie(iter, inserted) = resource_group_task_queues.insert({name, task_queue});
         assert(inserted);
     }
-    return iter->second;
+    assert(task);
+    iter->second->submit(std::move(task));
+    return true;
 }
 
 template <typename NestedTaskQueueType>
 bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 {
     assert(!task);
-    std::exception_ptr exception_ptr;
+    std::unordered_set<String> error_resource_groups;
     SCOPE_EXIT({
-        if unlikely (exception_ptr)
-            task->onErrorOccurred(exception_ptr);
+        if unlikely (!error_resource_groups.empty())
+            task->onErrorOccurred(fmt::format(error_template, task->getResourceGroupName()));
     });
     std::unique_lock lock(mu);
     while (true)
@@ -124,7 +113,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if (popTask(cancel_task_queue, task))
             return true;
 
-        auto error_resource_groups = updateResourceGroupInfosWithoutLock();
+        error_resource_groups = updateResourceGroupInfosWithoutLock();
 
         if (!resource_group_infos.empty())
         {
@@ -147,9 +136,6 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 if likely (iter != error_resource_groups.end())
                 {
                     mustTakeTask(group_info.task_queue, task);
-                    exception_ptr = iter->second;
-                    assert(task);
-                    assert(exception_ptr);
                     return true;
                 }
             }
@@ -178,30 +164,28 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    CATCH_AND_LOG(LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value), logger);
+    if unlikely (!LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value))
+        LOG_WARNING(logger, "cannot consume ru for {}, maybe has been deleted. Just ignore", name);
 }
 
 template <typename NestedTaskQueueType>
-typename ResourceControlQueue<NestedTaskQueueType>::LACErrorInfo ResourceControlQueue<
-    NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
+std::unordered_set<String> ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
     std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
-    LACErrorInfo error_resource_groups;
+    std::unordered_set<String> error_resource_groups;
     while (!resource_group_infos.empty())
     {
         const ResourceGroupInfo & group_info = resource_group_infos.top();
         if (!group_info.task_queue->empty())
         {
-            uint64_t new_priority = LocalAdmissionController::HIGHEST_RESOURCE_GROUP_PRIORITY;
-            try
+            auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+            if unlikely (!new_priority.has_value())
             {
-                new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
+                // Set it as highest priority, so RCQ can handle this immediately.
+                new_priority = LocalAdmissionController::HIGHEST_RESOURCE_GROUP_PRIORITY;
+                error_resource_groups.insert(group_info.name);
             }
-            catch (...)
-            {
-                error_resource_groups.insert({group_info.name, std::current_exception()});
-            }
-            new_resource_group_infos.push({group_info.name, new_priority, group_info.task_queue});
+            new_resource_group_infos.push({group_info.name, new_priority.value(), group_info.task_queue});
             resource_group_infos.pop();
         }
         else
