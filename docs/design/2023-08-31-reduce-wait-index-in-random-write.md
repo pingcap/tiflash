@@ -10,7 +10,11 @@ Meanwhile, we will also deprecate the flush condition based on random timeout.
 
 ## Background
 
-After received a CompactLog command, there are three conditions that determine whether an actual flush will take place. Two of them are associated with the size of the actual data in the Region. When the number of rows or the size of the data in the Region exceeds the corresponding threshold, flushing to disk will be triggered. The other condition is a random timeout. If the time since the last flush exceeds this timeout, a flush will be performed.
+After receiving a CompactLog command, there are three conditions that determine whether an actual flush will take place: 
+
+1. The number of rows in the Region exceeds the corresponding threshold.
+2. The size of the data in the Region exceeds the corresponding threshold.
+3. The time since the last flush exceeds a random timeout.
 
 In scenarios where small transactions are replicated, the first two size-related conditions are not easily triggered. The flush frequency is determined only by the random timeout. Furthermore, if the writes are highly random, when a flush is triggered, only a small amount of data is to be written, which is a waste to our write bandwidth.
 
