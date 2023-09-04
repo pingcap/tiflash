@@ -16,6 +16,8 @@
 #include <etcd/rpc.pb.h>
 #include <pingcap/kv/Cluster.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
@@ -403,7 +405,7 @@ void LocalAdmissionController::doWatch()
                     handleBackgroundError(WATCH_GAC_ERR_PREFIX + err_msg);
                 break;
             default:
-                RUNTIME_ASSERT(false, log, "unexpected etcd event type: {}", event.type());
+                RUNTIME_ASSERT(false, log, "unexpect event type {}", magic_enum::enum_name(event.type()));
             }
         }
     }
