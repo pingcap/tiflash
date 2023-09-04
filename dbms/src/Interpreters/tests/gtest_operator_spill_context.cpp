@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Common/Logger.h>
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Interpreters/AggSpillContext.h>
@@ -228,7 +228,8 @@ try
     /// test auto spill trigger if only part of operators spill context inside fine grained spill context have at least OperatorSpillContext::MIN_SPILL_THRESHOLD
     spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     spill_context_3->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD - 1);
-    ASSERT_TRUE(fine_grained_spill_context->getTotalRevocableMemory() == 2 * OperatorSpillContext::MIN_SPILL_THRESHOLD - 1);
+    ASSERT_TRUE(
+        fine_grained_spill_context->getTotalRevocableMemory() == 2 * OperatorSpillContext::MIN_SPILL_THRESHOLD - 1);
     fine_grained_spill_context->triggerSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD);
     ASSERT_TRUE(spill_context_1->needFinalSpill());
     ASSERT_FALSE(spill_context_3->needFinalSpill());
