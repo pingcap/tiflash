@@ -414,6 +414,10 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 16}),                                                                \
       F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 16}))                                                            \
+    M(tiflash_raft_entry_size,                                                                                                      \
+      "Bucketed histogram entry size",                                                                                              \
+      Histogram,                                                                                                                    \
+      F(type_normal, {{"type", "normal"}}, EqualWidthBuckets{0, 10, 5}))                                                            \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \

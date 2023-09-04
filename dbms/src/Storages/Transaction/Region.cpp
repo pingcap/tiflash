@@ -740,6 +740,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     Stopwatch watch;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
+    if (cmds.len)
+    {
+        GET_METRIC(tiflash_raft_entry_size, type_normal).Observe(cmds.len);
+    }
 
     auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
 
