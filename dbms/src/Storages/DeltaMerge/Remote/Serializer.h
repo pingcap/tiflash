@@ -74,6 +74,7 @@ struct Serializer
     static SegmentSnapshotPtr deserializeSegmentSnapshotFrom(
         const DMContext & dm_context,
         StoreID remote_store_id,
+        KeyspaceID keyspace_id,
         TableID table_id,
         const RemotePb::RemoteSegment & proto);
 
