@@ -192,6 +192,7 @@ UniversalPageMap UniversalPageStorage::read(
     {
         auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_ids, snapshot);
         auto page_map = do_read(page_entries);
+        // Add invalid pages to the result for non-exist page_ids
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             page_map.emplace(page_id_not_found, Page::invalidPage());

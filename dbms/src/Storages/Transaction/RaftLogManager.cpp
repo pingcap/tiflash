@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
+#include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -128,20 +129,21 @@ RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTask
     RaftLogGcTasksRes eager_truncated_indexes;
     size_t num_skip = 0;
     size_t total_num_raft_log_removed = 0;
+
+    RaftDataReader raft_reader(*write_node_ps);
     for (const auto & [region_id, hint] : hints)
     {
-        // Read region apply_state from UniPS
-        auto region_apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
-        auto page = write_node_ps->read(region_apply_state_key);
-        raft_serverpb::RaftApplyState region_apply_state;
-        if (!region_apply_state.ParseFromString(String(page.data)))
+        // Read region apply_state from UniPS to ensure that we won't delete any RaftLog that
+        // may be read after restart.
+        auto region_state = raft_reader.readRegionApplyState(region_id);
+        if (!region_state)
         {
             LOG_INFO(logger, "Parse region apply state failed, skip. region_id={}", region_id);
             continue;
         }
 
         UniversalWriteBatch del_batch;
-        const auto region_task = details::getRegionGCTask(region_id, region_apply_state, hint, eager_gc_rows, logger);
+        const auto region_task = details::getRegionGCTask(region_id, *region_state, hint, eager_gc_rows, logger);
         if (region_task.skip)
         {
             num_skip += 1;

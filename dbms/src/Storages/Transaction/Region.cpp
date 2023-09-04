@@ -579,14 +579,14 @@ void Region::updateRaftLogEagerIndex(UInt64 new_truncate_index)
     eager_truncated_index = new_truncate_index;
 }
 
-UInt64 Region::lastCompactLogApplied() const
-{
-    return last_compact_log_applied;
-}
-
 UInt64 Region::lastRestartLogApplied() const
 {
     return last_restart_log_applied;
+}
+
+UInt64 Region::lastCompactLogApplied() const
+{
+    return last_compact_log_applied;
 }
 
 void Region::setLastCompactLogApplied(UInt64 new_value) const
@@ -594,8 +594,8 @@ void Region::setLastCompactLogApplied(UInt64 new_value) const
     last_compact_log_applied = new_value;
 }
 
-
-void Region::updateLastCompactLogApplied() const
+// Everytime the region is persisted, we update the `last_compact_log_applied`
+void Region::updateLastCompactLogApplied(const RegionTaskLock &) const
 {
     const UInt64 current_applied_index = appliedIndex();
     if (last_compact_log_applied != 0)
