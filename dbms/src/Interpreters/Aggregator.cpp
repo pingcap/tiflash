@@ -777,12 +777,38 @@ void Aggregator::prepareAggregateInstructions(
     }
 }
 
-bool Aggregator::executeOnBlock(
-    const Block & block,
-    AggregatedDataVariants & result,
-    ColumnRawPtrs & key_columns,
-    AggregateColumns & aggregate_columns,
-    size_t thread_num)
+void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
+{
+    if (prepare_for_agg_done)
+        return;
+    RUNTIME_CHECK_MSG(block, "Block must be set before execution aggregation");
+    input_columns = block.getColumns();
+    materialized_columns.reserve(aggregator->params.keys_size);
+    key_columns.reserve(aggregator->params.keys_size);
+    aggregate_columns.reserve(aggregator->params.aggregates_size);
+
+    /** Constant columns are not supported directly during aggregation.
+      * To make them work anyway, we materialize them.
+      */
+    for (size_t i = 0; i < aggregator->params.keys_size; ++i)
+    {
+        key_columns[i] = input_columns.at(aggregator->params.keys[i]).get();
+        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
+        {
+            /// Remember the columns we will work with
+            materialized_columns.push_back(converted);
+            key_columns[i] = materialized_columns.back().get();
+        }
+    }
+
+    aggregator->prepareAggregateInstructions(
+        input_columns,
+        aggregate_columns,
+        materialized_columns,
+        aggregate_functions_instructions);
+}
+
+bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num)
 {
     assert(!result.need_spill);
 
@@ -801,32 +827,12 @@ bool Aggregator::executeOnBlock(
         LOG_TRACE(log, "Aggregation method: `{}`", result.getMethodName());
     }
 
-    /** Constant columns are not supported directly during aggregation.
-      * To make them work anyway, we materialize them.
-      */
-    Columns columns = block.getColumns();
-    Columns materialized_columns;
-    materialized_columns.reserve(params.keys_size);
-
-    /// Remember the columns we will work with
-    for (size_t i = 0; i < params.keys_size; ++i)
-    {
-        key_columns[i] = columns.at(params.keys[i]).get();
-
-        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-        {
-            materialized_columns.push_back(converted);
-            key_columns[i] = materialized_columns.back().get();
-        }
-    }
-
-    AggregateFunctionInstructions aggregate_functions_instructions;
-    prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions);
+    agg_process_info.prepareForAgg(this);
 
     if (is_cancelled())
         return true;
 
-    size_t num_rows = block.rows();
+    size_t num_rows = agg_process_info.block.rows();
 
     if (result.type == AggregatedDataVariants::Type::without_key && !result.without_key)
     {
@@ -844,7 +850,7 @@ bool Aggregator::executeOnBlock(
         executeWithoutKeyImpl(
             result.without_key,
             num_rows,
-            aggregate_functions_instructions.data(),
+            agg_process_info.aggregate_functions_instructions.data(),
             result.aggregates_pool);
     }
     else
@@ -856,9 +862,9 @@ bool Aggregator::executeOnBlock(
             *ToAggregationMethodPtr(NAME, result.aggregation_method_impl), \
             result.aggregates_pool,                                        \
             num_rows,                                                      \
-            key_columns,                                                   \
+            agg_process_info.key_columns,                                  \
             params.collators,                                              \
-            aggregate_functions_instructions.data());                      \
+            agg_process_info.aggregate_functions_instructions.data());     \
         break;                                                             \
     }
 
@@ -1046,15 +1052,13 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     if (is_cancelled())
         return;
 
-    ColumnRawPtrs key_columns(params.keys_size);
-    AggregateColumns aggregate_columns(params.aggregates_size);
-
     LOG_TRACE(log, "Aggregating");
 
     Stopwatch watch;
 
     size_t src_rows = 0;
     size_t src_bytes = 0;
+    AggProcessInfo agg_process_info;
 
     /// Read all the data
     while (Block block = stream->read())
@@ -1064,8 +1068,9 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
         src_rows += block.rows();
         src_bytes += block.bytes();
+        agg_process_info.resetBlock(block);
 
-        if (!executeOnBlock(block, result, key_columns, aggregate_columns, thread_num))
+        if (!executeOnBlock(agg_process_info, result, thread_num))
             break;
         if (result.need_spill)
             spill(result, thread_num);
@@ -1075,7 +1080,8 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
     {
-        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, thread_num);
+        agg_process_info.resetBlock(stream->getHeader());
+        executeOnBlock(agg_process_info, result, thread_num);
         if (result.need_spill)
             spill(result, thread_num);
     }

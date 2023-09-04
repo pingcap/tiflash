@@ -1116,13 +1116,46 @@ public:
     using AggregateColumnsConstData = std::vector<const ColumnAggregateFunction::Container *>;
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
+    /** This array serves two purposes.
+      *
+      * Function arguments are collected side by side, and they do not need to be collected from different places. Also the array is made zero-terminated.
+      * The inner loop (for the case without_key) is almost twice as compact; performance gain of about 30%.
+      */
+    struct AggregateFunctionInstruction
+    {
+        const IAggregateFunction * that{};
+        IAggregateFunction::AddFunc func{};
+        size_t state_offset{};
+        const IColumn ** arguments{};
+        const IAggregateFunction * batch_that{};
+        const IColumn ** batch_arguments{};
+        const UInt64 * offsets{};
+    };
+
+    using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
+    struct AggProcessInfo
+    {
+        Block block;
+        size_t start_row = 0;
+        size_t end_row = 0;
+        bool prepare_for_agg_done = false;
+        Columns materialized_columns;
+        Columns input_columns;
+        ColumnRawPtrs key_columns;
+        AggregateColumns aggregate_columns;
+        AggregateFunctionInstructions aggregate_functions_instructions;
+        void prepareForAgg(Aggregator * aggregator);
+        void resetBlock(const Block & block_)
+        {
+            block = block_;
+            start_row = 0;
+            end_row = 0;
+            prepare_for_agg_done = false;
+        }
+    };
+
     /// Process one block. Return false if the processing should be aborted.
-    bool executeOnBlock(
-        const Block & block,
-        AggregatedDataVariants & result,
-        ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        size_t thread_num);
+    bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
 
     /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
       * Return nullptr if there are no non empty data_variant.
@@ -1170,24 +1203,6 @@ protected:
     Sizes key_sizes;
 
     AggregateFunctionsPlainPtrs aggregate_functions;
-
-    /** This array serves two purposes.
-      *
-      * Function arguments are collected side by side, and they do not need to be collected from different places. Also the array is made zero-terminated.
-      * The inner loop (for the case without_key) is almost twice as compact; performance gain of about 30%.
-      */
-    struct AggregateFunctionInstruction
-    {
-        const IAggregateFunction * that{};
-        IAggregateFunction::AddFunc func{};
-        size_t state_offset{};
-        const IColumn ** arguments{};
-        const IAggregateFunction * batch_that{};
-        const IColumn ** batch_arguments{};
-        const UInt64 * offsets{};
-    };
-
-    using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
 
     Sizes offsets_of_aggregate_states; /// The offset to the n-th aggregate function in a row of aggregate functions.
     size_t total_size_of_aggregate_states = 0; /// The total size of the row from the aggregate functions.
