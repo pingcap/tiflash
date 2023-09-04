@@ -297,43 +297,47 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         }
 
         handled_resource_group_names.emplace_back(one_resp.resource_group_name());
-        for (const resource_manager::GrantedRUTokenBucket & granted_token_bucket : one_resp.granted_r_u_tokens())
+
+        if unlikely (one_resp.granted_r_u_tokens().size() != 1)
         {
-            // For each granted token bucket.
-            if unlikely (granted_token_bucket.type() != resource_manager::RequestUnitType::RU)
-            {
-                handleBackgroundError("unexpected request type");
-                continue;
-            }
-
-            int64_t trickle_ms = granted_token_bucket.trickle_time_ms();
-            RUNTIME_CHECK(trickle_ms >= 0);
-
-            double added_tokens = granted_token_bucket.granted_tokens().tokens();
-            RUNTIME_CHECK(added_tokens >= 0);
-
-            int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
-
-            // Check GAC code, fill_rate is never setted.
-            RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
-
-            auto resource_group = findResourceGroup(one_resp.resource_group_name());
-
-            if (resource_group == nullptr)
-                continue;
-
-            if (trickle_ms == 0)
-            {
-                // GAC has enough tokens for LAC.
-                resource_group->updateNormalMode(added_tokens, capacity);
-            }
-            else
-            {
-                // GAC doesn't have enough tokens for LAC, start to trickle.
-                resource_group->updateTrickleMode(added_tokens, capacity, trickle_ms);
-            }
-            resource_group->updateFetchTokenTimepoint(now);
+            handleBackgroundError(fmt::format(
+                "expect resp.granted_r_u_tokens().size() is 1, but got {}",
+                one_resp.granted_r_u_tokens().size()));
+            continue;
         }
+        auto resource_group = findResourceGroup(one_resp.resource_group_name());
+        if (resource_group == nullptr)
+            continue;
+
+        const resource_manager::GrantedRUTokenBucket & granted_token_bucket = one_resp.granted_r_u_tokens()[0];
+        if unlikely (granted_token_bucket.type() != resource_manager::RequestUnitType::RU)
+        {
+            handleBackgroundError("unexpected request type");
+            continue;
+        }
+
+        int64_t trickle_ms = granted_token_bucket.trickle_time_ms();
+        RUNTIME_CHECK(trickle_ms >= 0);
+
+        double added_tokens = granted_token_bucket.granted_tokens().tokens();
+        RUNTIME_CHECK(added_tokens >= 0);
+
+        int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
+
+        // fill_rate should never be setted.
+        RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
+
+        if (trickle_ms == 0)
+        {
+            // GAC has enough tokens for LAC.
+            resource_group->updateNormalMode(added_tokens, capacity);
+        }
+        else
+        {
+            // GAC doesn't have enough tokens for LAC, start to trickle.
+            resource_group->updateTrickleMode(added_tokens, capacity, trickle_ms);
+        }
+        resource_group->updateFetchTokenTimepoint(now);
     }
     return handled_resource_group_names;
 }
@@ -388,19 +392,18 @@ void LocalAdmissionController::doWatch()
         {
             std::string err_msg;
             const mvccpb::KeyValue & kv = event.kv();
-            if (event.type() == mvccpb::Event_EventType_DELETE)
+            switch (event.type())
             {
+            case mvccpb::Event_EventType_DELETE:
                 if (!handleDeleteEvent(kv, err_msg))
                     handleBackgroundError(WATCH_GAC_ERR_PREFIX + err_msg);
-            }
-            else if (event.type() == mvccpb::Event_EventType_PUT)
-            {
+                break;
+            case mvccpb::Event_EventType_PUT:
                 if (!handlePutEvent(kv, err_msg))
                     handleBackgroundError(WATCH_GAC_ERR_PREFIX + err_msg);
-            }
-            else
-            {
-                __builtin_unreachable();
+                break;
+            default:
+                RUNTIME_ASSERT(false, log, "unexpected etcd event type: {}", event.type());
             }
         }
     }
@@ -492,11 +495,8 @@ void LocalAdmissionController::handleBackgroundError(const std::string & err_msg
 
 void LocalAdmissionController::checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
 {
-    if unlikely (new_group_pb.name().empty())
-        throw Exception("resource group name from GAC is empty");
-
-    if unlikely (new_group_pb.mode() != resource_manager::GroupMode::RUMode)
-        throw Exception("resource group is not RUMode");
+    RUNTIME_CHECK_MSG(!new_group_pb.name().empty(), "resource group name from GAC is empty");
+    RUNTIME_CHECK_MSG(new_group_pb.mode() == resource_manager::GroupMode::RUMode, "resource group is not RUMode");
 }
 
 #ifdef DBMS_PUBLIC_GTEST

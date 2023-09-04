@@ -34,6 +34,13 @@ namespace DB
 {
 class LocalAdmissionController;
 
+// gac_resp.burst_limit < 0: resource group is burstable, and will not use bucket at all.
+// gac_resp.burst_limit >= 0: resource group is not burstable, will use bucket to limit the speed of the resource group.
+//     1. normal_mode: bucket is static(a.k.a. bucket.fill_rate is zero), LAC will fetch tokens from GAC to fill bucket.
+//     2. degrade_mode: when lost connection with GAC for 120s, bucket will enter degrade_mode.
+//     3. trickle_mode: when tokens is running out of tokens, bucket will enter trickle_mode.
+//                      GAC will assign X tokens and Y trickle_ms. And the bucket fill rate should be X/Y.
+//                      bucket is dynamic(a.k.a. bucket.fill_rate is greater than zero) in degrade_mode and trickle_mode.
 // NOTE: Member function of ResourceGroup should only be called by LocalAdmissionController,
 // so we can make sure the lock order of LocalAdmissionController::mu is always before ResourceGroup::mu,
 // which helps to avoid dead lock.
@@ -76,6 +83,7 @@ private:
 
     void initStaticTokenBucket(int64_t capacity = std::numeric_limits<int64_t>::max())
     {
+        std::lock_guard lock(mu);
         // If token bucket is normal mode, it's static, so fill_rate is zero.
         const double init_fill_rate = 0.0;
         const double init_tokens = user_ru_per_sec;
@@ -147,6 +155,7 @@ private:
     // Only update meta, will not touch runtime state(like bucket remaining tokens).
     void resetResourceGroup(const resource_manager::ResourceGroup & group_pb_)
     {
+        std::lock_guard lock(mu);
         group_pb = group_pb_;
         user_priority = group_pb_.priority();
         const auto & setting = group_pb.r_u_settings().r_u().settings();
