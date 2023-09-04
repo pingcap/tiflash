@@ -24,9 +24,7 @@ UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
     if (unlikely(cpu_time_ns == 0))
         return 0;
 
-    double cpu_time_millisecond = static_cast<double>(cpu_time_ns) / 1'000'000L;
-    auto ceil_cpu_time_millisecond = ceil(cpu_time_millisecond);
-    return ceil_cpu_time_millisecond;
+    return static_cast<double>(cpu_time_ns) / 1'000'000L;
 }
 
 // 1 ru = 3 millisecond cpu time
