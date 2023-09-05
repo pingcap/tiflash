@@ -43,8 +43,7 @@ PipelineExecutor::PipelineExecutor(
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
-    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(
-        context.getDAGContext()->getResourceGroupName());
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
 }
 
 void PipelineExecutor::scheduleEvents()
@@ -114,7 +113,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
     // For read_ru, only report it to GAC for now.
     LocalAdmissionController::global_instance->consumeResource(
         exec_context.getResourceGroupName(),
-        context.getDAGContext()->getReadRU(),
+        dagContext().getReadRU(),
         0);
     return exec_context.toExecutionResult();
 }

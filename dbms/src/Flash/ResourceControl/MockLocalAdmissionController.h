@@ -48,10 +48,9 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
-    bool consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
         consume_resource_func(name, ru, cpu_time_ns);
-        return true;
     }
     std::optional<uint64_t> getPriority(const std::string & name) const { return {get_priority_func(name)}; }
     void warmupResourceGroupInfoCache(const std::string &) {}

@@ -153,8 +153,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
     auto ru = toRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    if unlikely (!LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value))
-        LOG_WARNING(logger, "cannot consume ru for {}, maybe has been deleted. Just ignore", name);
+    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
 }
 
 template <typename NestedTaskQueueType>
