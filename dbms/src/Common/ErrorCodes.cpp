@@ -444,6 +444,7 @@ extern const int REGION_LOCKED = 10019;
 extern const int S3_ERROR = 11000;
 extern const int CANNOT_SCHEDULE_TASK = 11001;
 extern const int S3_LOCK_CONFLICT = 11002;
+extern const int DT_DELTA_INDEX_ERROR = 11003;
 } // namespace ErrorCodes
 
 } // namespace DB
