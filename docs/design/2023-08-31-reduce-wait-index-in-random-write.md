@@ -26,6 +26,6 @@ When flushing each Region, the current `applied_index` is recorded as `last_flus
 
 After TiFlash restarts, the `applied_index` recorded in the disk will be stored into `last_flushed_applied_index`. And because TiFlash needs to catch up on logs from TiKV after restarting, which could result in a significant number of active Regions even for highly random writes. Therefore, after startup, the threshold for triggering a flush based on the log gap will be reduced to half.
 
-In the current architecture, reducing the frequency of flushes often increases memory overhead. This is because we need to cache more entries in the raft entry cache and more KV data in the KVStore. Choosing `applied_index` can more accurately reflect the size of memory, thus avoiding additional flushes.
+In the current architecture, reducing the frequency of flushes often increases memory overhead. This is because we need to cache more entries in the raft entry cache and more KV data in the KVStore. Instead of the random timeout mechanism, the gap from `last_flushed_applied_index` can more accurately reflect the memory overhead, thus avoiding additional flushes.
 
 The original random timeout based configuration will be ignored after upgrading.
