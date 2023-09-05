@@ -100,12 +100,13 @@ struct MPPGatherId
     String toString() const
     {
         return fmt::format(
-            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
+            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_gorup: {}>",
             gather_id,
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts);
+            query_id.start_ts,
+            query_id.resource_group_name);
     }
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
     bool operator==(const MPPGatherId & rid) const;
