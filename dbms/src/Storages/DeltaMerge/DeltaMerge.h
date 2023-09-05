@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/ProfileEvents.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
@@ -25,6 +26,11 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+
+namespace ProfileEvents
+{
+extern const Event DTDeltaIndexError;
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -227,6 +233,7 @@ private:
                 int cmp_result = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
+                    ProfileEvents::increment(ProfileEvents::DTDeltaIndexError);
                     LOG_ERROR(
                         Logger::get(tracing_id),
                         "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
