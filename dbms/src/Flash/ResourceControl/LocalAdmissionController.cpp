@@ -144,13 +144,9 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
     const ResourceGroupPtr & resource_group,
     bool is_periodically_fetch)
 {
-    double token_consumption = 0.0;
+    double token_consumption = resource_group->getAndCleanConsumptionDelta();
     double acquire_tokens = 0.0;
 
-    auto get_token_consumption = [&]() {
-        if (is_periodically_fetch)
-            token_consumption = resource_group->getAndCleanConsumptionDelta();
-    };
     auto get_acquire_tokens = [&]() {
         if (resource_group->burstable)
             return;
@@ -168,7 +164,6 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         assert(acquire_tokens >= 0.0);
     };
 
-    get_token_consumption();
     get_acquire_tokens();
 
     if (token_consumption == 0.0 && acquire_tokens == 0.0)

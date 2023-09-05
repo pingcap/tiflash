@@ -26,7 +26,6 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PlanQuerySource.h>
-#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -202,7 +201,6 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
-    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dag_context.getResourceGroupName());
     return {std::move(executor)};
 }
 

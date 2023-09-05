@@ -17,6 +17,7 @@
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -42,6 +43,8 @@ PipelineExecutor::PipelineExecutor(
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(
+        context.getDAGContext()->getResourceGroupName());
 }
 
 void PipelineExecutor::scheduleEvents()
@@ -107,6 +110,10 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         wait();
     }
     LOG_TRACE(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
+
+    // For read_ru, only report it to GAC for now.
+    auto read_ru = context.getDAGContext()->getReadRU();
+    LocalAdmissionController::global_instance->consumeResource(exec_context.getResourceGroupName(), toRU(read_ru), 0);
     return exec_context.toExecutionResult();
 }
 

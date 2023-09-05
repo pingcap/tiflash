@@ -397,7 +397,10 @@ public:
 
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
+        {
+            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted");
             return false;
+        }
 
         group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken())
@@ -421,7 +424,10 @@ public:
 
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
+        {
+            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted");
             return std::nullopt;
+        }
 
         return {group->getPriority(max_ru_per_sec.load())};
     }
