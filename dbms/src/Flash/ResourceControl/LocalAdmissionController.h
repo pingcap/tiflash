@@ -369,28 +369,18 @@ public:
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
-    // LAC is dummy when enable is false.
-    // Background thread will not start, and all member functions will return dummy value.
-    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_, bool enable = true)
-        : stopped(!enable)
-        , cluster(cluster_)
+    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
+        : cluster(cluster_)
         , etcd_client(etcd_client_)
     {
-        if (enable)
-        {
-            background_threads.emplace_back([this] { this->startBackgroudJob(); });
-            background_threads.emplace_back([this] { this->watchGAC(); });
-        }
-        LOG_INFO(log, "LocalAdmissionController init done, enable: {}", enable);
+        background_threads.emplace_back([this] { this->startBackgroudJob(); });
+        background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
     ~LocalAdmissionController() { stop(); }
 
     bool consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
-        if unlikely (stopped)
-            return true;
-
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return true;
@@ -416,9 +406,6 @@ public:
 
     std::optional<uint64_t> getPriority(const std::string & name)
     {
-        if unlikely (stopped)
-            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
-
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
@@ -447,15 +434,13 @@ public:
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
         std::lock_guard lock(mu);
-        RUNTIME_CHECK_MSG(!stopped && refill_token_callback == nullptr, "callback cannot be registered multiple times");
+        RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
     }
     void unregisterRefillTokenCallback()
     {
         std::lock_guard lock(mu);
-        RUNTIME_CHECK_MSG(
-            !stopped && refill_token_callback != nullptr,
-            "callback cannot be nullptr before unregistering");
+        RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
         refill_token_callback = nullptr;
     }
 
@@ -564,7 +549,7 @@ private:
     std::mutex mu;
     std::condition_variable cv;
 
-    std::atomic<bool> stopped;
+    std::atomic<bool> stopped = false;
 
     std::unordered_map<std::string, ResourceGroupPtr> resource_groups;
     std::unordered_set<std::string> low_token_resource_groups;

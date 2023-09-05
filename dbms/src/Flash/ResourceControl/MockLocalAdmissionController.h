@@ -35,13 +35,11 @@ inline uint64_t nopGetPriority(const std::string &)
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
-    explicit MockLocalAdmissionController(bool enable = true)
+    MockLocalAdmissionController()
         : consume_resource_func(nopConsumeResource)
         , get_priority_func(nopGetPriority)
-        , stopped(!enable)
     {
-        if (enable)
-            refill_token_thread = std::thread([&]() { refillTokenBucket(); });
+        refill_token_thread = std::thread([&]() { refillTokenBucket(); });
     }
 
     ~MockLocalAdmissionController() { stop(); }
@@ -96,7 +94,7 @@ public:
     GetPriorityFuncType get_priority_func;
 
     uint64_t max_ru_per_sec = 0;
-    bool stopped;
+    bool stopped = false;
 
     std::mutex call_back_mutex;
     std::function<void()> refill_token_callback{nullptr};

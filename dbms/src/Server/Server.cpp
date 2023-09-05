@@ -1546,15 +1546,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     auto & tmt_context = global_context->getTMTContext();
-    const bool enable_resource_control
-        = global_context->getSettingsRef().enable_pipeline && global_context->getSettingsRef().enable_resource_control;
 #ifdef DBMS_PUBLIC_GTEST
-    LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>(enable_resource_control);
+    LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-    LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
-        tmt_context.getKVCluster(),
-        tmt_context.getEtcdClient(),
-        enable_resource_control);
+    LocalAdmissionController::global_instance
+        = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
@@ -1565,12 +1561,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
 
-        TaskQueueType cpu_task_queue_type = settings.pipeline_cpu_task_thread_pool_queue_type;
-        if (!enable_resource_control)
-            cpu_task_queue_type = TaskQueueType::MLFQ;
-
         TaskSchedulerConfig config{
-            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), cpu_task_queue_type},
+            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+             settings.pipeline_cpu_task_thread_pool_queue_type},
             {get_pool_size(settings.pipeline_io_task_thread_pool_size),
              settings.pipeline_io_task_thread_pool_queue_type},
         };
