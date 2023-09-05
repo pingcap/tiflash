@@ -85,17 +85,14 @@ void LocalAdmissionController::startBackgroudJob()
         try
         {
             if (fetch_token_periodically)
-            {
                 fetchTokensForAllResourceGroups();
-                checkDegradeMode();
-            }
             else
-            {
                 fetchTokensForLowTokenResourceGroups();
-            }
 
             if (local_refill_token_callback)
                 local_refill_token_callback();
+
+            checkDegradeMode();
         }
         catch (...)
         {
