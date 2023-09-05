@@ -588,6 +588,7 @@ void MPPTask::runImpl()
             runtime_statistics.rows,
             runtime_statistics.blocks,
             runtime_statistics.bytes);
+
         result.verify();
     }
     catch (...)

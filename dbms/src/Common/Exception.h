@@ -348,4 +348,5 @@ constexpr auto maybeStringLiteralExpr(const std::string_view sv)
             std::terminate();                                          \
         }                                                              \
     } while (false)
+
 } // namespace DB
