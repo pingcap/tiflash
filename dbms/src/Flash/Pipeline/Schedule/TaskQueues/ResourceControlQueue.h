@@ -86,7 +86,8 @@ private:
     static constexpr const char * error_template = "resource group {} not found, maybe has been deleted";
 
     // Update resource_group_infos, will reorder resource group by priority.
-    std::unordered_set<String> updateResourceGroupInfosWithoutLock();
+    // Return true if got error resource group.
+    bool updateResourceGroupInfosWithoutLock();
 
     // Erase resource group info and task_queue.
     void mustEraseResourceGroupInfoWithoutLock(const String & name);

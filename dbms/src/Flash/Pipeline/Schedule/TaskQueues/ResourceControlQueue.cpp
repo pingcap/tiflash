@@ -111,7 +111,8 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             return true;
         }
 
-        auto error_resource_groups = updateResourceGroupInfosWithoutLock();
+        if unlikely (updateResourceGroupInfosWithoutLock())
+            continue;
 
         if (!resource_group_infos.empty())
         {
@@ -127,17 +128,6 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 ru_exhausted,
                 is_finished,
                 group_info.task_queue->empty());
-
-            if unlikely (!error_resource_groups.empty())
-            {
-                auto iter = error_resource_groups.find(group_info.name);
-                if likely (iter != error_resource_groups.end())
-                {
-                    is_error_task = true;
-                    mustTakeTask(group_info.task_queue, task);
-                    return true;
-                }
-            }
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
@@ -168,10 +158,10 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr &
 }
 
 template <typename NestedTaskQueueType>
-std::unordered_set<String> ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
+bool ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutLock()
 {
+    assert(error_task_queue.empty());
     std::priority_queue<ResourceGroupInfo> new_resource_group_infos;
-    std::unordered_set<String> error_resource_groups;
     while (!resource_group_infos.empty())
     {
         const ResourceGroupInfo & group_info = resource_group_infos.top();
@@ -180,12 +170,21 @@ std::unordered_set<String> ResourceControlQueue<NestedTaskQueueType>::updateReso
             auto new_priority = LocalAdmissionController::global_instance->getPriority(group_info.name);
             if unlikely (!new_priority.has_value())
             {
-                // Set it as highest priority, so RCQ can handle this immediately.
-                new_priority = LocalAdmissionController::HIGHEST_RESOURCE_GROUP_PRIORITY;
-                error_resource_groups.insert(group_info.name);
+                // resource group has been deleted, take all tasks and erase this group info.
+                TaskPtr task;
+                while (!group_info.task_queue->empty())
+                {
+                    RUNTIME_CHECK(group_info.task_queue->take(task));
+                    error_task_queue.push_back(std::move(task));
+                }
+                mustEraseResourceGroupInfoWithoutLock(group_info.name);
             }
-            new_resource_group_infos.push({group_info.name, new_priority.value(), group_info.task_queue});
-            resource_group_infos.pop();
+            else
+            {
+                // resource group ok, reorder group info by priority.
+                new_resource_group_infos.push({group_info.name, new_priority.value(), group_info.task_queue});
+                resource_group_infos.pop();
+            }
         }
         else
         {
@@ -193,7 +192,7 @@ std::unordered_set<String> ResourceControlQueue<NestedTaskQueueType>::updateReso
         }
     }
     resource_group_infos = new_resource_group_infos;
-    return error_resource_groups;
+    return !error_task_queue.empty();
 }
 
 template <typename NestedTaskQueueType>
