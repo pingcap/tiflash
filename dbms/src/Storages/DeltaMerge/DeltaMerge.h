@@ -249,11 +249,16 @@ private:
 
                     throw Exception(
                         ErrorCodes::DT_DELTA_INDEX_ERROR,
-                        "DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
-                            + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                            + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
-                            + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
-                            + DB::toString(last_handle_pos) + "]");
+                        "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
+                        "is expected >= last_handle[{}]last_version[{}]@read[{}]@pos[{}]",
+                        rowkey_value.toDebugString(),
+                        version,
+                        num_read,
+                        i,
+                        last_value_ref.toDebugString(),
+                        last_version,
+                        last_handle_read_num,
+                        last_handle_pos);
                 }
                 last_value_ref = rowkey_value;
                 last_version = version;
