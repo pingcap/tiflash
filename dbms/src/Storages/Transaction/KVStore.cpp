@@ -290,23 +290,14 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
 
-        if (eager_raft_log_gc_enabled)
+        if (tryRegisterEagerRaftLogGCTask(region, region_persist_lock))
         {
-            // When some peer is down, the TiKV compact log become quite slow and the truncated index
-            // is advanced slowly. Under disagg arch, too many RaftLog are stored in UniPS and makes TiFlash OOM.
-            // We apply eager RaftLog GC on TiFlash's UniPS.
-            auto [last_eager_truncated_index, applied_index] = region->getRaftLogEagerGCRange();
-            if (/*need_persist=*/
-                raft_log_gc_hints
-                    .updateHint(region_id, last_eager_truncated_index, applied_index, region_eager_gc_log_gap.load()))
-            {
-                /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
-                // Persist RegionMeta on the storage engine
-                tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
-                persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
-                // return "Persist" to proxy for persisting the RegionMeta
-                apply_res = EngineStoreApplyRes::Persist;
-            }
+            /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
+            // Persist RegionMeta on the storage engine
+            tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
+            persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
+            // return "Persist" to proxy for persisting the RegionMeta
+            apply_res = EngineStoreApplyRes::Persist;
         }
     }
     /// Safety:
@@ -315,6 +306,21 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
     /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
     // TODO(proactive flush)
     return apply_res;
+}
+
+bool KVStore::tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock & /*region_persist_lock*/)
+{
+    if (!eager_raft_log_gc_enabled)
+        return false;
+    const UInt64 threshold = region_eager_gc_log_gap.load();
+    if (threshold == 0) // disabled
+        return false;
+
+    // When some peer is down, the TiKV compact log become quite slow and the truncated index
+    // is advanced slowly. Under disagg arch, too many RaftLog are stored in UniPS and makes TiFlash OOM.
+    // We apply eager RaftLog GC on TiFlash's UniPS.
+    auto [last_eager_truncated_index, applied_index] = region->getRaftLogEagerGCRange();
+    return raft_log_gc_hints.updateHint(region->id(), last_eager_truncated_index, applied_index, threshold);
 }
 
 RaftLogEagerGcTasks::Hints KVStore::getRaftLogGcHints()

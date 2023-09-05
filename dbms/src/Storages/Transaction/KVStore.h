@@ -348,6 +348,8 @@ private:
         PersistRegionReason reason,
         const char * extra_msg) const;
 
+    bool tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock &);
+
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
