@@ -16,6 +16,7 @@
 
 #include <Common/LRUCache.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
+#include <Storages/Transaction/Types.h>
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
@@ -42,6 +43,7 @@ public:
     struct CacheKey
     {
         UInt64 store_id;
+        KeyspaceID keyspace_id;
         Int64 table_id;
         UInt64 segment_id;
         UInt64 segment_epoch;
@@ -49,8 +51,9 @@ public:
 
         bool operator==(const CacheKey & other) const
         {
-            return store_id == other.store_id && table_id == other.table_id && segment_id == other.segment_id
-                && segment_epoch == other.segment_epoch && delta_index_epoch == other.delta_index_epoch;
+            return store_id == other.store_id && keyspace_id == other.keyspace_id && table_id == other.table_id
+                && segment_id == other.segment_id && segment_epoch == other.segment_epoch
+                && delta_index_epoch == other.delta_index_epoch;
         }
     };
 
@@ -72,6 +75,7 @@ public:
             using std::hash;
 
             return hash<UInt64>()(k.store_id) ^ //
+                hash<UInt64>()(k.keyspace_id) ^ //
                 hash<Int64>()(k.table_id) ^ //
                 hash<UInt64>()(k.segment_id) ^ //
                 hash<UInt64>()(k.segment_epoch) ^ //
