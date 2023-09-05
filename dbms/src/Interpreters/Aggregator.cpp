@@ -639,8 +639,9 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = 0; i < agg_process_info.end_row; ++i)
+        for (size_t i = agg_process_info.start_row; i < agg_process_info.end_row; ++i)
             state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
+        agg_process_info.start_row = agg_process_info.end_row;
         return;
     }
 
@@ -650,7 +651,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
         {
             inst->batch_that->addBatchLookupTable8(
-                agg_process_info.end_row,
+                agg_process_info.start_row,
+                agg_process_info.end_row - agg_process_info.start_row,
                 reinterpret_cast<AggregateDataPtr *>(method.data.data()),
                 inst->state_offset,
                 [&](AggregateDataPtr & aggregate_data) {
@@ -662,14 +664,15 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
                 inst->batch_arguments,
                 aggregates_pool);
         }
+        agg_process_info.start_row = agg_process_info.end_row;
         return;
     }
 
     /// Generic case.
 
-    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_process_info.end_row]);
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_process_info.end_row - agg_process_info.start_row]);
 
-    for (size_t i = 0; i < agg_process_info.end_row; ++i)
+    for (size_t i = agg_process_info.start_row; i < agg_process_info.end_row; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
@@ -689,14 +692,15 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         else
             aggregate_data = emplace_result.getMapped();
 
-        places[i] = aggregate_data;
+        places[i - agg_process_info.start_row] = aggregate_data;
     }
 
     /// Add values to the aggregate functions.
     for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
     {
-        inst->batch_that->addBatch(agg_process_info.end_row, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+        inst->batch_that->addBatch(agg_process_info.start_row, agg_process_info.end_row - agg_process_info.start_row, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
     }
+    agg_process_info.start_row = agg_process_info.end_row;
 }
 
 void NO_INLINE Aggregator::executeWithoutKeyImpl(
@@ -707,8 +711,9 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
     /// Adding values
     for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
     {
-        inst->batch_that->addBatchSinglePlace(agg_process_info.end_row, res + inst->state_offset, inst->batch_arguments, arena);
+        inst->batch_that->addBatchSinglePlace(agg_process_info.start_row, agg_process_info.end_row - agg_process_info.start_row, res + inst->state_offset, inst->batch_arguments, arena);
     }
+    agg_process_info.start_row = agg_process_info.end_row;
 }
 
 
@@ -825,6 +830,9 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
 
     /// We select one of the aggregation methods and call it.
 
+    /// todo support non-zero start_row
+    assert(agg_process_info.start_row == 0 && agg_process_info.end_row == agg_process_info.block.rows());
+    assert(agg_process_info.start_row <= agg_process_info.end_row);
     /// For the case when there are no keys (all aggregate into one row).
     if (result.type == AggregatedDataVariants::Type::without_key)
     {

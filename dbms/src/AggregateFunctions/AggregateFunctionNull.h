@@ -399,6 +399,7 @@ public:
     }
 
     void addBatchSinglePlace( // NOLINT(google-default-arguments)
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -415,6 +416,7 @@ public:
             const UInt8 * null_map = column->getNullMapData().data();
 
             this->nested_function->addBatchSinglePlaceNotNull(
+                start_offset,
                 batch_size,
                 this->nestedPlace(place),
                 &nested_column,
@@ -423,13 +425,13 @@ public:
                 if_argument_pos);
 
             if constexpr (result_is_nullable)
-                if (!mem_utils::memoryIsByte(null_map, batch_size, std::byte{1}))
+                if (!mem_utils::memoryIsByte(null_map + start_offset, batch_size, std::byte{1}))
                     this->setFlag(place);
         }
         else
         {
             this->nested_function
-                ->addBatchSinglePlace(batch_size, this->nestedPlace(place), columns, arena, if_argument_pos);
+                ->addBatchSinglePlace(start_offset, batch_size, this->nestedPlace(place), columns, arena, if_argument_pos);
             this->setFlag(place);
         }
     }
