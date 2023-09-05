@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThresholdUtils.h>
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
@@ -193,6 +194,10 @@ void orderStreams(
 
     if (enable_fine_grained_shuffle)
     {
+        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
+        if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
+            && pipeline.hasMoreThanOneStream())
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<MergeSortingBlockInputStream>(
                 stream,
@@ -209,13 +214,15 @@ void orderStreams(
                     context.getFileProvider()),
                 log->identifier(),
                 [&](const OperatorSpillContextPtr & operator_spill_context) {
-                    if (context.getDAGContext() != nullptr)
-                    {
+                    if (fine_grained_spill_context != nullptr)
+                        fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
+                    else if (context.getDAGContext() != nullptr)
                         context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
-                    }
                 });
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
+        if (fine_grained_spill_context != nullptr)
+            context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
     }
     else
     {
@@ -252,6 +259,7 @@ void executeLocalSort(
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
+    bool for_fine_grained_executor,
     const Context & context,
     const LoggerPtr & log)
 {
@@ -281,6 +289,10 @@ void executeLocalSort(
         const Settings & settings = context.getSettingsRef();
         size_t max_bytes_before_external_sort
             = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
+        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
+        if (for_fine_grained_executor && context.getDAGContext() != nullptr
+            && context.getDAGContext()->isInAutoSpillMode() && group_builder.concurrency() > 1)
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
@@ -296,8 +308,11 @@ void executeLocalSort(
                 limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
                 settings.max_block_size,
                 max_bytes_before_external_sort,
-                spill_config));
+                spill_config,
+                fine_grained_spill_context));
         });
+        if (fine_grained_spill_context != nullptr)
+            exec_context.registerOperatorSpillContext(fine_grained_spill_context);
     }
 }
 
@@ -336,7 +351,6 @@ void executeFinalSort(
         const Settings & settings = context.getSettingsRef();
         executeUnion(exec_context, group_builder, settings.max_buffered_bytes_in_executor, log);
 
-        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, 1);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
@@ -351,8 +365,9 @@ void executeFinalSort(
                 order_descr,
                 limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
                 settings.max_block_size,
-                max_bytes_before_external_sort,
-                spill_config));
+                settings.max_bytes_before_external_sort,
+                spill_config,
+                nullptr));
         });
     }
 }
