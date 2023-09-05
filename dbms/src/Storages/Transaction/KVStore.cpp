@@ -374,7 +374,13 @@ void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, U
     region_compact_log_gap = gap;
     region_eager_gc_log_gap = eager_gc_gap;
 
-    LOG_INFO(log, "Region compact log thresholds, rows={} bytes={} gap={} eager_gc_gap={}", rows, bytes, gap, eager_gc_gap);
+    LOG_INFO(
+        log,
+        "Region compact log thresholds, rows={} bytes={} gap={} eager_gc_gap={}",
+        rows,
+        bytes,
+        gap,
+        eager_gc_gap);
 }
 
 void KVStore::persistRegion(
