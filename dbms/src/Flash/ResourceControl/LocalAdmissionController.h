@@ -388,7 +388,7 @@ public:
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
         {
-            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted");
+            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
             return false;
         }
 
@@ -412,7 +412,7 @@ public:
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
         {
-            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted");
+            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted", name);
             return std::nullopt;
         }
 
