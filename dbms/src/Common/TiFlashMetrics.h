@@ -671,7 +671,8 @@ namespace DB
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
-    M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))
+    M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"})) \
+    M(tiflash_lru_cache_memory_usage, "", Counter)
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
