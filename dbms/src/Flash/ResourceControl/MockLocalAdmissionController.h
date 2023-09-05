@@ -30,22 +30,18 @@ inline uint64_t nopGetPriority(const std::string &)
 {
     return 1.0;
 }
-inline bool nopIsResourceGroupThrottled(const std::string &)
-{
-    return false;
-}
-
 
 // This is only for ResourceControlQueue gtest.
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
-    MockLocalAdmissionController()
+    explicit MockLocalAdmissionController(bool enable = true)
         : consume_resource_func(nopConsumeResource)
         , get_priority_func(nopGetPriority)
-        , is_resource_group_throttled_func(nopIsResourceGroupThrottled)
+        , stopped(!enable)
     {
-        refill_token_thread = std::thread([&]() { refillTokenBucket(); });
+        if (enable)
+            refill_token_thread = std::thread([&]() { refillTokenBucket(); });
     }
 
     ~MockLocalAdmissionController() { stop(); }
@@ -84,7 +80,8 @@ public:
             stopped = true;
             cv.notify_all();
         }
-        refill_token_thread.join();
+        if (refill_token_thread.joinable())
+            refill_token_thread.join();
     }
 
     void refillTokenBucket();
@@ -97,10 +94,9 @@ public:
 
     ConsumeResourceFuncType consume_resource_func;
     GetPriorityFuncType get_priority_func;
-    IsResourceGroupThrottledFuncType is_resource_group_throttled_func;
 
     uint64_t max_ru_per_sec = 0;
-    bool stopped = false;
+    bool stopped;
 
     std::mutex call_back_mutex;
     std::function<void()> refill_token_callback{nullptr};

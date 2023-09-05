@@ -213,16 +213,13 @@ try
 
     auto cpu_ru = query_executor->collectRequestUnit();
     auto read_ru = dag_context.getReadRU();
-    if (context.getSettingsRef().enable_pipeline && context.getSettingsRef().enable_resource_control)
+    if unlikely (!LocalAdmissionController::global_instance
+                      ->consumeResource(dag_context.getResourceGroupName(), toRU(read_ru), 0))
     {
-        if unlikely (!LocalAdmissionController::global_instance
-                          ->consumeResource(dag_context.getResourceGroupName(), toRU(read_ru), 0))
-        {
-            LOG_WARNING(
-                log,
-                "cannot consume read_ru for {}, maybe has been deleted. Just ignore",
-                dag_context.getResourceGroupName());
-        }
+        LOG_WARNING(
+            log,
+            "cannot consume read_ru for {}, maybe has been deleted. Just ignore",
+            dag_context.getResourceGroupName());
     }
     if constexpr (Kind == DAGRequestKind::Cop)
     {
