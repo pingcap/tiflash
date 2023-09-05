@@ -186,8 +186,8 @@ public:
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
 
-    void setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap);
-    UInt64 getRaftLogEagerGCRows() const { return region_compact_log_gap.load(); }
+    void setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap);
+    UInt64 getRaftLogEagerGCRows() const { return region_eager_gc_log_gap.load(); }
 
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
@@ -401,10 +401,15 @@ private:
 
     LoggerPtr log;
 
-    std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;
     std::atomic<UInt64> region_compact_log_min_bytes;
     std::atomic<UInt64> region_compact_log_gap;
+    // `region_eager_gc_log_gap` is checked after each write command applied,
+    // It should be large enough to avoid unnecessary flushes and also not
+    // too large to control the memory when there are down peers.
+    // The 99% of passive flush is 512, so we use it as default value.
+    // 0 means eager gc is disabled.
+    std::atomic<UInt64> region_eager_gc_log_gap;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;

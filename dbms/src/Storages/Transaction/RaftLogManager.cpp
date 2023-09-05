@@ -44,14 +44,13 @@ bool RaftLogEagerGcTasks::updateHint(
     std::unique_lock lock(mtx_tasks);
     if (auto hint_iter = tasks.find(region_id); hint_iter != tasks.end())
     {
-        if (applied_index > hint_iter->second.applied_index
-            && applied_index - hint_iter->second.applied_index >= threshold)
+        auto & gc_hint = hint_iter->second;
+        if (applied_index > gc_hint.applied_index && applied_index - gc_hint.applied_index >= threshold)
         {
-            // LOG_DEBUG(Logger::get(), "update hint, region_id={} applied_index={} hint_applied_index={} diff={}", region_id, applied_index, hint_iter->second.applied_index, applied_index - hint_iter->second.applied_index);
+            // LOG_DEBUG(Logger::get(), "update hint, region_id={} applied_index={} hint_applied_index={} gap={}", region_id, applied_index, gc_hint.applied_index, applied_index - gc_hint.applied_index);
             // More updates after last GC task is built, merge it into the current GC task
-            hint_iter->second.eager_truncate_index
-                = std::min(hint_iter->second.eager_truncate_index, eager_truncated_index);
-            hint_iter->second.applied_index = std::max(hint_iter->second.applied_index, applied_index);
+            gc_hint.eager_truncate_index = std::min(gc_hint.eager_truncate_index, eager_truncated_index);
+            gc_hint.applied_index = applied_index;
             return true;
         }
         // No much updates after last GC task is built, let's just keep the task hint unchanged

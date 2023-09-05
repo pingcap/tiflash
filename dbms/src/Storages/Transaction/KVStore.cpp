@@ -59,10 +59,10 @@ KVStore::KVStore(Context & context)
             : std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
-    , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
+    , region_eager_gc_log_gap(512)
     // Eager RaftLog GC is only enabled under UniPS
     , eager_raft_log_gc_enabled(context.getSettingsRef().enable_eager_raft_log_gc)
 // , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
@@ -298,7 +298,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             auto [last_eager_truncated_index, applied_index] = region->getRaftLogEagerGCRange();
             if (/*need_persist=*/
                 raft_log_gc_hints
-                    .updateHint(region_id, last_eager_truncated_index, applied_index, region_compact_log_gap.load()))
+                    .updateHint(region_id, last_eager_truncated_index, applied_index, region_eager_gc_log_gap.load()))
             {
                 /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
                 // Persist RegionMeta on the storage engine
@@ -367,14 +367,14 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap)
+void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)
 {
-    region_compact_log_period = sec;
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
     region_compact_log_gap = gap;
+    region_eager_gc_log_gap = eager_gc_gap;
 
-    LOG_INFO(log, "threshold config: period {}, rows {}, bytes {}, gap {}", sec, rows, bytes, gap);
+    LOG_INFO(log, "Region compact log thresholds, rows={} bytes={} gap={} eager_gc_gap={}", rows, bytes, gap, eager_gc_gap);
 }
 
 void KVStore::persistRegion(
