@@ -1149,6 +1149,7 @@ public:
             block = block_;
             start_row = 0;
             end_row = 0;
+            materialized_columns.clear();
             prepare_for_agg_done = false;
         }
     };

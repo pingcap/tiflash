@@ -771,8 +771,8 @@ void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
     end_row = block.rows();
     input_columns = block.getColumns();
     materialized_columns.reserve(aggregator->params.keys_size);
-    key_columns.reserve(aggregator->params.keys_size);
-    aggregate_columns.reserve(aggregator->params.aggregates_size);
+    key_columns.resize(aggregator->params.keys_size);
+    aggregate_columns.resize(aggregator->params.aggregates_size);
 
     /** Constant columns are not supported directly during aggregation.
       * To make them work anyway, we materialize them.
