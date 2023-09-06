@@ -150,6 +150,7 @@ protected:
      * For example, if you have changed the settings, you should grab a new DMContext.
      */
     void reloadDMContext();
+    std::unique_ptr<DMContext> createDMContext();
 
     std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageIdU64 segment_id);
 
