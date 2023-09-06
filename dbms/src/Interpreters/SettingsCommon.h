@@ -165,7 +165,7 @@ public:
 
     static UInt64 getAutoValue()
     {
-        static auto res = getNumberOfPhysicalCPUCores();
+        static auto res = getNumberOfLogicalCPUCores();
         return res;
     }
 
