@@ -16,7 +16,6 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/TiFlashMetrics.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -329,7 +328,6 @@ private:
         }
 
         cell.value = mapped;
-        // cell.size = cell.value ? weight_function(*cell.value) : 0;
         cell.size = cell.value ? weight_function(key, *cell.value) : 0;
         current_weight += cell.size;
 
