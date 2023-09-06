@@ -1146,6 +1146,7 @@ public:
         void prepareForAgg(Aggregator * aggregator);
         void resetBlock(const Block & block_)
         {
+            RUNTIME_CHECK_MSG(start_row == end_row, "Previous block is not processed yet");
             block = block_;
             start_row = 0;
             end_row = 0;

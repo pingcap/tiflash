@@ -146,7 +146,6 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
 {
     auto & data = *parent.many_data[thread_num];
     auto & agg_process_info = parent.threads_data[thread_num].agg_process_info;
-    RUNTIME_CHECK_MSG(agg_process_info.start_row == agg_process_info.end_row, "Previous block is not processed yet");
     agg_process_info.resetBlock(block);
     parent.aggregator.executeOnBlock(agg_process_info, data, thread_num);
     if (data.need_spill)
@@ -270,9 +269,6 @@ void ParallelAggregatingBlockInputStream::execute()
     {
         auto & data = *many_data[0];
         auto & agg_process_info = threads_data[0].agg_process_info;
-        RUNTIME_CHECK_MSG(
-            agg_process_info.start_row == agg_process_info.end_row,
-            "Previous block is not processed yet");
         agg_process_info.resetBlock(children.at(0)->getHeader());
         aggregator.executeOnBlock(agg_process_info, data, 0);
         if (data.need_spill)

@@ -47,7 +47,6 @@ void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
 {
     assert(status.load() == AggStatus::build);
     auto & agg_process_info = threads_data[task_index]->agg_process_info;
-    RUNTIME_CHECK_MSG(agg_process_info.start_row == agg_process_info.end_row, "Previous block is not processed yet");
     agg_process_info.resetBlock(block);
     aggregator->executeOnBlock(agg_process_info, *many_data[task_index], task_index);
     threads_data[task_index]->src_bytes += block.bytes();
@@ -136,9 +135,6 @@ void AggregateContext::initConvergentPrefix()
     if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
     {
         auto & agg_process_info = threads_data[0]->agg_process_info;
-        RUNTIME_CHECK_MSG(
-            agg_process_info.start_row == agg_process_info.end_row,
-            "Previous block is not processed yet");
         agg_process_info.resetBlock(this->getHeader());
         aggregator->executeOnBlock(agg_process_info, *many_data[0], 0);
         /// Since this won't consume a lot of memory,
