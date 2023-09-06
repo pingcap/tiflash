@@ -417,7 +417,7 @@ namespace DB
     M(tiflash_raft_entry_size,                                                                                                      \
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
-      F(type_normal, {{"type", "normal"}}, EqualWidthBuckets{0, 30, 5}))                                                            \
+      F(type_normal, {{"type", "normal"}}, EqualWidthBuckets{0, 50, 5}))                                                            \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
