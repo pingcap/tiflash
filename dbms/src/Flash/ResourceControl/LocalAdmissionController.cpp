@@ -236,7 +236,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
         for (const auto & name : not_found)
         {
             auto erase_num = resource_groups.erase(name);
-            LOG_INFO(
+            LOG_DEBUG(
                 log,
                 "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
                 "it. erase_num: {}",
@@ -340,7 +340,14 @@ void LocalAdmissionController::watchGAC()
 {
     while (true)
     {
-        doWatch();
+        try
+        {
+            doWatch();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "watchGAC failed: {}, retry 10sec later", getCurrentExceptionMessage(false));
+        }
 
         // Got here when:
         // 1. grpc stream write error.
@@ -425,7 +432,7 @@ bool LocalAdmissionController::handleDeleteEvent(const mvccpb::KeyValue & kv, st
         std::lock_guard lock(mu);
         erase_num = resource_groups.erase(name);
     }
-    LOG_INFO(log, "delete resource group {}, erase_num: {}", name, erase_num);
+    LOG_DEBUG(log, "delete resource group {}, erase_num: {}", name, erase_num);
     return true;
 }
 
@@ -447,7 +454,7 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
         if (iter == resource_groups.end())
         {
             // It happens when query of this resource group has not came.
-            LOG_INFO(
+            LOG_DEBUG(
                 log,
                 "trying to modify resource group config({}), but cannot find its info",
                 group_pb.DebugString());
@@ -458,7 +465,7 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
             iter->second->resetResourceGroup(group_pb);
         }
     }
-    LOG_INFO(log, "modify resource group to: {}", group_pb.DebugString());
+    LOG_DEBUG(log, "modify resource group to: {}", group_pb.DebugString());
     return true;
 }
 

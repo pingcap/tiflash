@@ -235,7 +235,7 @@ private:
         config.fill_rate = 0;
         config.capacity = new_capacity;
         bucket->reConfig(config);
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
             name,
@@ -270,7 +270,7 @@ private:
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(TokenBucket::TokenBucketConfig(bucket->peek(), new_fill_rate, new_capacity));
         stop_trickle_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(trickle_ms);
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
             name,
@@ -401,7 +401,6 @@ public:
             }
             cv.notify_one();
         }
-        return;
     }
 
     std::optional<uint64_t> getPriority(const std::string & name)
