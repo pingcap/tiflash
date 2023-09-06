@@ -738,8 +738,16 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     }
     auto & context = tmt.getContext();
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
+
+    size_t put_key_count = 0;
+    size_t del_key_count = 0;
+
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_raft_raft_frequent_events_count, type_write).Increment(1);
+        GET_METRIC(tiflash_raft_process_keys, type_write_put).Increment(put_key_count);
+        GET_METRIC(tiflash_raft_process_keys, type_write_del).Increment(del_key_count);
+    });
     if (cmds.len)
     {
         GET_METRIC(tiflash_raft_entry_size, type_normal).Observe(cmds.len);
@@ -756,6 +764,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         {
             auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
             auto tikv_value = TiKVValue(cmds.vals[i].data, cmds.vals[i].len);
+            if (cf == ColumnFamilyType::Write)
+            {
+                put_key_count++;
+            }
             try
             {
                 if (is_v2)
@@ -785,6 +797,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         case WriteCmdType::Del:
         {
             auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
+            if (cf == ColumnFamilyType::Write)
+            {
+                del_key_count++;
+            }
             try
             {
                 doRemove(cf, tikv_key);

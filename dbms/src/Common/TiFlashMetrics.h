@@ -374,6 +374,8 @@ namespace DB
     M(tiflash_raft_process_keys,                                                                                                    \
       "Total number of keys processed in some types of Raft commands",                                                              \
       Counter,                                                                                                                      \
+      F(type_write_put, {"type", "write_put"}),                                                                                     \
+      F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
       F(type_ingest_sst, {"type", "ingest_sst"}))                                                                                   \
     M(tiflash_raft_apply_write_command_duration_seconds,                                                                            \
