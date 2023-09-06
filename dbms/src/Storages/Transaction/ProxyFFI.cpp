@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/TiFlashMetrics.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
@@ -475,8 +475,7 @@ void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
         auto & kvstore = server->tmt->getKVStore();
         Stopwatch watch;
         kvstore->handleDestroy(region_id, *server->tmt);
-        GET_METRIC(tiflash_raft_command_duration_seconds, type_remove_peer)
-            .Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_raft_command_duration_seconds, type_remove_peer).Observe(watch.elapsedSeconds());
     }
     catch (...)
     {

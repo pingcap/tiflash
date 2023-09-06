@@ -641,29 +641,31 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
 {
     Stopwatch watch;
     auto type = request.cmd_type();
-    SCOPE_EXIT(
-        { 
-            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds()); 
-            switch (type)
-            {
-                case raft_cmdpb::AdminCmdType::ChangePeer:
-                case raft_cmdpb::AdminCmdType::ChangePeerV2:
-                    GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_change_peer).Observe(watch.elapsedSeconds()); 
-                    break;
-                case raft_cmdpb::AdminCmdType::BatchSplit:
-                    GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_batch_split).Observe(watch.elapsedSeconds()); 
-                    break;
-                case raft_cmdpb::AdminCmdType::PrepareMerge:
-                    GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_prepare_merge).Observe(watch.elapsedSeconds()); 
-                    break;
-                case raft_cmdpb::AdminCmdType::CommitMerge:
-                    GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_commit_merge).Observe(watch.elapsedSeconds()); 
-                    break;
-                default:
-                    break;
-            }
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
+        switch (type)
+        {
+        case raft_cmdpb::AdminCmdType::ChangePeer:
+        case raft_cmdpb::AdminCmdType::ChangePeerV2:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_change_peer)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::BatchSplit:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_batch_split)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::PrepareMerge:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_prepare_merge)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::CommitMerge:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_commit_merge)
+                .Observe(watch.elapsedSeconds());
+            break;
+        default:
+            break;
         }
-    );
+    });
     switch (type)
     {
     // CompactLog | VerifyHash | ComputeHash won't change region meta, there is no need to occupy task lock of kvstore.
