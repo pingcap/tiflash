@@ -229,7 +229,7 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = start_offset; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
             {
                 if (flags[i] && places[i - start_offset])
                     static_cast<const Derived *>(this)->add(places[i - start_offset] + place_offset, columns, i, arena);
@@ -237,7 +237,7 @@ public:
         }
         else
         {
-            for (size_t i = start_offset; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
                 if (places[i - start_offset])
                     static_cast<const Derived *>(this)->add(places[i - start_offset] + place_offset, columns, i, arena);
         }
@@ -266,7 +266,7 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = start_offset; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
             {
                 if (flags[i])
                     static_cast<const Derived *>(this)->add(place, columns, i, arena);
@@ -274,7 +274,7 @@ public:
         }
         else
         {
-            for (size_t i = start_offset; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
                 static_cast<const Derived *>(this)->add(place, columns, i, arena);
         }
     }
@@ -291,13 +291,13 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = start_offset; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
                 if (!null_map[i] && flags[i])
                     static_cast<const Derived *>(this)->add(place, columns, i, arena);
         }
         else
         {
-            for (size_t i = start_offset; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
                 if (!null_map[i])
                     static_cast<const Derived *>(this)->add(place, columns, i, arena);
         }
@@ -337,7 +337,7 @@ public:
         size_t i = start_offset;
 
         size_t batch_size_unrolled = batch_size / UNROLL_COUNT * UNROLL_COUNT;
-        for (; i < batch_size_unrolled; i += UNROLL_COUNT)
+        for (; i < start_offset + batch_size_unrolled; i += UNROLL_COUNT)
         {
             AggregateDataPtr places[UNROLL_COUNT];
             for (size_t j = 0; j < UNROLL_COUNT; ++j)
@@ -353,7 +353,7 @@ public:
                 static_cast<const Derived *>(this)->add(places[j] + place_offset, columns, i + j, arena);
         }
 
-        for (; i < batch_size; ++i)
+        for (; i < start_offset + batch_size; ++i)
         {
             AggregateDataPtr & place = map[key[i]];
             if (unlikely(!place))
@@ -538,7 +538,7 @@ public:
         /// Aggregate data into different lookup tables.
 
         size_t batch_size_unrolled = batch_size / UNROLL_COUNT * UNROLL_COUNT;
-        for (; i < batch_size_unrolled; i += UNROLL_COUNT)
+        for (; i < start_offset + batch_size_unrolled; i += UNROLL_COUNT)
         {
             for (size_t j = 0; j < UNROLL_COUNT; ++j)
             {
@@ -572,7 +572,7 @@ public:
 
         /// Process tails and add directly to the final destination.
 
-        for (; i < batch_size; ++i)
+        for (; i < start_offset + batch_size; ++i)
         {
             size_t k = key[i];
             AggregateDataPtr & place = map[k];
