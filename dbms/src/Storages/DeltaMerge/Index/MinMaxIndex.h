@@ -60,6 +60,9 @@ public:
 
     size_t byteSize() const
     {
+        // we add 3 * sizeof(PaddedPODArray<UInt8>)
+        // because has_null_marks/ has_value_marks / minmaxes are all use PaddedPODArray
+        // Thus we need to add the structual memory cost of PaddedPODArray for each of them
         return sizeof(UInt8) * has_null_marks->size() + sizeof(UInt8) * has_value_marks->size() + minmaxes->byteSize()
             + 3 * sizeof(PaddedPODArray<UInt8>);
     }
