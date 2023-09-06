@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Transaction/KVStoreCommon.h>
 #include <Storages/Transaction/RegionState.h>
 
 #include <condition_variable>
@@ -85,7 +86,7 @@ public:
 
     std::string toString(bool dump_status = true) const;
 
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf, const PersistRegionState * state) const;
 
     static RegionMeta deserialize(ReadBuffer & buf);
 

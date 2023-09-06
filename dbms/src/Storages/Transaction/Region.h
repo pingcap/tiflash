@@ -129,7 +129,7 @@ public:
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf, const PersistRegionState * state) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     RegionID id() const;
@@ -157,6 +157,11 @@ public:
     void setLastRestartLogApplied(UInt64 new_value) const;
     // Must hold region lock.
     void updateLastCompactLogApplied() const;
+    // An async persist region operation can't be performed with a index before some unreplayable index.
+    // In v1, all unreplayable index will cause a flush, which means there is no unreplayable cmd between [lastCompactLogApplied, appliedIndex].
+    // In eager gc mode, all entries prior to `eager_truncate_index` is not replayable.
+    // TODO(raftstore-v2)
+    UInt64 unreplayableIndex() const;
 
     friend bool operator==(const Region & region1, const Region & region2)
     {

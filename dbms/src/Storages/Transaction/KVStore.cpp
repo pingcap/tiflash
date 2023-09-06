@@ -358,11 +358,12 @@ void KVStore::persistRegion(
             region.toString(true),
             region.dataSize(),
             caller);
-        region_persister->persist(region, *region_task_lock.value());
+        region_persister->persist(region, *region_task_lock.value(), nullptr);
         LOG_DEBUG(log, "Persist {} done", region.toString(false));
     }
     else
     {
+        // Only happens in tests.
         LOG_INFO(log, "Try to persist {}", region.toString(false));
         region_persister->persist(region);
         LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
@@ -392,6 +393,38 @@ void KVStore::persistRegion(
     default:
         break;
     }
+}
+
+bool KVStore::persistRegionAtState(
+    Region & region,
+    const PersistRegionState & persist_state,
+    const RegionTaskLock * region_task_lock,
+    PersistRegionReason reason,
+    const char * extra_msg) const 
+{
+    auto unreplayable_index = region.unreplayableIndex();
+    if(persist_state.index <= unreplayable_index) {
+        LOG_INFO(log, "persistRegionAtState failed for {} <= {}, region_id={}", persist_state.index, unreplayable_index, region.id());
+        return false;
+    }
+    // The region will be locked in Region::serialize.
+    region_persister->persist(region, *region_task_lock, &persist_state);
+    auto reason_id = magic_enum::enum_underlying(reason);
+    std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
+    switch (reason)
+    {
+    case PersistRegionReason::Flush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
+        break;
+    case PersistRegionReason::ProactiveFlush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_proactive).Increment(1);
+        break;
+    default:
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't persistRegionAtState for {}, region_id={}", caller, region.id());
+        break;
+    }
+    LOG_INFO(log, "persistRegionAtState sucess for {} at {} {}, region_id={}", caller, persist_state.index, persist_state.term, region.id());
+    return true;
 }
 
 bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)

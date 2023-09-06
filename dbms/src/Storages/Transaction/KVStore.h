@@ -20,6 +20,7 @@
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/KVStoreCommon.h>
 
 #include <magic_enum.hpp>
 
@@ -332,6 +333,14 @@ private:
     void persistRegion(
         const Region & region,
         std::optional<const RegionTaskLock *> region_task_lock,
+        PersistRegionReason reason,
+        const char * extra_msg) const;
+
+    // If `persistRegionAtState` is called with a stale applied_index, We must ask Proxy not to persist.
+    bool persistRegionAtState(
+        Region & region,
+        const PersistRegionState & persist_state,
+        const RegionTaskLock * region_task_lock,
         PersistRegionReason reason,
         const char * extra_msg) const;
 

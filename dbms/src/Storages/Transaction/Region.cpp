@@ -392,7 +392,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(
     meta.notifyAll();
 }
 
-std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf, const PersistRegionState * state) const
 {
     size_t total_size = writeBinary2(Region::CURRENT_VERSION, buf);
     UInt64 applied_index = -1;
@@ -401,7 +401,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
         std::shared_lock<std::shared_mutex> lock(mutex);
 
         {
-            auto [size, index] = meta.serialize(buf);
+            auto [size, index] = meta.serialize(buf, state);
             total_size += size;
             applied_index = index;
         }
@@ -528,6 +528,15 @@ UInt64 Region::lastCompactLogApplied() const
 UInt64 Region::lastRestartLogApplied() const
 {
     return last_restart_log_applied;
+}
+
+UInt64 Region::unreplayableIndex() const {
+    if(!lastCompactLogApplied()) {
+        return UINT64_MAX;
+    }
+    UInt64 index = lastCompactLogApplied();
+    // TODO(eager gc) Can't replay before eager gc truncated index.
+    return index;
 }
 
 void Region::setLastCompactLogApplied(UInt64 new_value) const
