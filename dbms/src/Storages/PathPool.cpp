@@ -474,8 +474,8 @@ String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exis
 
 void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
 {
-    path.remove_suffix(
-        1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
+    // remove '/stable' added in listPathsForStable/getDTFilePath
+    path.remove_suffix(1 + strlen(StoragePathPool::STABLE_FOLDER_NAME));
     std::lock_guard lock{pool.mutex};
     if (auto iter = pool.dt_file_path_map.find(file_id); unlikely(iter != pool.dt_file_path_map.end()))
     {

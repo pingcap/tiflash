@@ -330,7 +330,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
     , received_message_queue(
-          max_buffer_size,
+          CapacityLimits(max_buffer_size, settings.max_buffered_bytes_in_executor.get()),
           exc_log,
           &data_size_in_queue,
           enable_fine_grained_shuffle_flag,

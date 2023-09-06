@@ -99,7 +99,15 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
 
     if (memory_tracker != nullptr && memory_tracker->getLimit() != 0
         && context.getSettingsRef().auto_memory_revoke_trigger_threshold > 0)
+    {
         dag_context.setAutoSpillMode();
+        auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
+        auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
+            memory_tracker,
+            dag_context.getQueryOperatorSpillContexts(),
+            auto_spill_trigger_threshold);
+        dag_context.setAutoSpillTrigger(auto_spill_trigger);
+    }
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
@@ -110,17 +118,9 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     /// if query is in auto spill mode, then setup auto spill trigger
     if (dag_context.isInAutoSpillMode())
     {
-        auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
-        auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
-        auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
-            memory_tracker,
-            dag_context.getQueryOperatorSpillContexts(),
-            auto_spill_trigger_threshold,
-            auto_spill_target_threshold);
-        dag_context.setAutoSpillTrigger(auto_spill_trigger);
         auto * stream = dynamic_cast<IProfilingBlockInputStream *>(res.in.get());
         RUNTIME_ASSERT(stream != nullptr);
-        stream->setAutoSpillTrigger(auto_spill_trigger.get());
+        stream->setAutoSpillTrigger(dag_context.getAutoSpillTrigger());
     }
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
@@ -179,12 +179,10 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
             context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
         };
         auto auto_spill_trigger_threshold = context.getSettingsRef().auto_memory_revoke_trigger_threshold.get();
-        auto auto_spill_target_threshold = context.getSettingsRef().auto_memory_revoke_target_threshold.get();
         auto auto_spill_trigger = std::make_shared<AutoSpillTrigger>(
             memory_tracker,
             dag_context.getQueryOperatorSpillContexts(),
-            auto_spill_trigger_threshold,
-            auto_spill_target_threshold);
+            auto_spill_trigger_threshold);
         dag_context.setAutoSpillTrigger(auto_spill_trigger);
         executor = std::make_unique<PipelineExecutor>(
             memory_tracker,

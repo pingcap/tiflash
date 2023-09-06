@@ -184,6 +184,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
                 context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
             }
         },
+        context.getDAGContext() != nullptr ? context.getDAGContext()->getAutoSpillTrigger() : nullptr,
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
