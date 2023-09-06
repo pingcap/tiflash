@@ -430,8 +430,13 @@ public:
         }
         else
         {
-            this->nested_function
-                ->addBatchSinglePlace(start_offset, batch_size, this->nestedPlace(place), columns, arena, if_argument_pos);
+            this->nested_function->addBatchSinglePlace(
+                start_offset,
+                batch_size,
+                this->nestedPlace(place),
+                columns,
+                arena,
+                if_argument_pos);
             this->setFlag(place);
         }
     }

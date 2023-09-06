@@ -648,7 +648,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Optimization for special case when aggregating by 8bit key.
     if constexpr (std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
     {
-        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
+        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+             ++inst)
         {
             inst->batch_that->addBatchLookupTable8(
                 agg_process_info.start_row,
@@ -670,7 +671,8 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
     /// Generic case.
 
-    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_process_info.end_row - agg_process_info.start_row]);
+    std::unique_ptr<AggregateDataPtr[]> places(
+        new AggregateDataPtr[agg_process_info.end_row - agg_process_info.start_row]);
 
     for (size_t i = agg_process_info.start_row; i < agg_process_info.end_row; ++i)
     {
@@ -696,22 +698,33 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     }
 
     /// Add values to the aggregate functions.
-    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
+    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+         ++inst)
     {
-        inst->batch_that->addBatch(agg_process_info.start_row, agg_process_info.end_row - agg_process_info.start_row, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+        inst->batch_that->addBatch(
+            agg_process_info.start_row,
+            agg_process_info.end_row - agg_process_info.start_row,
+            places.get(),
+            inst->state_offset,
+            inst->batch_arguments,
+            aggregates_pool);
     }
     agg_process_info.start_row = agg_process_info.end_row;
 }
 
-void NO_INLINE Aggregator::executeWithoutKeyImpl(
-    AggregatedDataWithoutKey & res,
-    AggProcessInfo & agg_process_info,
-    Arena * arena)
+void NO_INLINE
+Aggregator::executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena)
 {
     /// Adding values
-    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that; ++inst)
+    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+         ++inst)
     {
-        inst->batch_that->addBatchSinglePlace(agg_process_info.start_row, agg_process_info.end_row - agg_process_info.start_row, res + inst->state_offset, inst->batch_arguments, arena);
+        inst->batch_that->addBatchSinglePlace(
+            agg_process_info.start_row,
+            agg_process_info.end_row - agg_process_info.start_row,
+            res + inst->state_offset,
+            inst->batch_arguments,
+            arena);
     }
     agg_process_info.start_row = agg_process_info.end_row;
 }
@@ -836,10 +849,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
     /// For the case when there are no keys (all aggregate into one row).
     if (result.type == AggregatedDataVariants::Type::without_key)
     {
-        executeWithoutKeyImpl(
-            result.without_key,
-            agg_process_info,
-            result.aggregates_pool);
+        executeWithoutKeyImpl(result.without_key, agg_process_info, result.aggregates_pool);
     }
     else
     {

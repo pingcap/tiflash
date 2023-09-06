@@ -1262,10 +1262,7 @@ protected:
         AggProcessInfo & agg_process_info) const;
 
     /// For case when there are no keys (all aggregate into one row).
-    static void executeWithoutKeyImpl(
-        AggregatedDataWithoutKey & res,
-        AggProcessInfo & agg_process_info,
-        Arena * arena);
+    static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);
 
     template <typename Method>
     void spillImpl(AggregatedDataVariants & data_variants, Method & method, size_t thread_num);

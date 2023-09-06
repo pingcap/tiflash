@@ -380,7 +380,10 @@ public:
         else
         {
             const auto & column = assert_cast<const ColVecType &>(*columns[0]);
-            this->data(place).addManyNotNull(column.getData().data() + start_offset, null_map + start_offset, batch_size);
+            this->data(place).addManyNotNull(
+                column.getData().data() + start_offset,
+                null_map + start_offset,
+                batch_size);
         }
     }
 

@@ -108,7 +108,8 @@ public:
         Arena * arena,
         ssize_t) const override
     {
-        nested_func->addBatchSinglePlaceNotNull(start_offset, batch_size, place, columns, null_map, arena, num_arguments - 1);
+        nested_func
+            ->addBatchSinglePlaceNotNull(start_offset, batch_size, place, columns, null_map, arena, num_arguments - 1);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override

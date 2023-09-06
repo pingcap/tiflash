@@ -514,15 +514,8 @@ public:
 
         if (func.allocatesMemoryInArena() || sizeof(Data) > 16 || func.sizeOfData() != sizeof(Data))
         {
-            IAggregateFunctionHelper<Derived>::addBatchLookupTable8(
-                start_offset,
-                batch_size,
-                map,
-                place_offset,
-                init,
-                key,
-                columns,
-                arena);
+            IAggregateFunctionHelper<
+                Derived>::addBatchLookupTable8(start_offset, batch_size, map, place_offset, init, key, columns, arena);
             return;
         }
 
