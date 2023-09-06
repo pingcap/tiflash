@@ -67,7 +67,7 @@ KVStore::KVStore(Context & context)
     , eager_raft_log_gc_enabled(context.getSettingsRef().enable_eager_raft_log_gc)
 // , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
-    // default config about compact-log: period 120s, rows 40k, bytes 32MB, gap 200.
+    // default config about compact-log: rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
 }
 
