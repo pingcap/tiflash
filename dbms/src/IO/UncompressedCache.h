@@ -37,7 +37,10 @@ struct UncompressedCacheCell
 
 struct UncompressedSizeWeightFunction
 {
-    size_t operator()(const UncompressedCacheCell & x) const { return x.data.size(); }
+    size_t operator()(const UInt128 key, const UncompressedCacheCell & x) const
+    {
+        return sizeof(decltype(key)) + x.data.size();
+    }
 };
 
 

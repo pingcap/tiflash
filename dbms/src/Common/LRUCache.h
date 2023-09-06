@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -23,14 +24,12 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
-#include <common/logger_useful.h>
-#include <Common/TiFlashMetrics.h>
 namespace DB
 {
-template <typename T>
+template <typename K, typename T>
 struct TrivialWeightFunction
 {
-    size_t operator()(const T &) const { return 1; }
+    size_t operator()(const K &, const T &) const { return 1; }
 };
 
 
@@ -43,7 +42,7 @@ template <
     typename TKey,
     typename TMapped,
     typename HashFunction = std::hash<TKey>,
-    typename WeightFunction = TrivialWeightFunction<TMapped>>
+    typename WeightFunction = TrivialWeightFunction<TKey, TMapped>>
 class LRUCache
 {
 public:
@@ -330,18 +329,16 @@ private:
         }
 
         cell.value = mapped;
-        cell.size = cell.value ? weight_function(*cell.value) : 0;
+        // cell.size = cell.value ? weight_function(*cell.value) : 0;
+        cell.size = cell.value ? weight_function(key, *cell.value) : 0;
         current_weight += cell.size;
 
-        auto memory_usage = getMemoryUsageChange(key, cell);
-        memory_usage -= removeOverflow();
-        GET_METRIC(tiflash_lru_cache_memory_usage).Increment(memory_usage);
+        removeOverflow();
     }
 
-    int64_t removeOverflow()
+    void removeOverflow()
     {
         size_t current_weight_lost = 0;
-        auto memory_usage = 0;
         size_t queue_size = cells.size();
 
         while ((current_weight > max_weight || (max_elements_size != 0 && queue_size > max_elements_size))
@@ -351,8 +348,6 @@ private:
 
             auto it = cells.find(key);
             RUNTIME_ASSERT(it != cells.end(), "LRUCache became inconsistent. There must be a bug in it.");
-
-            memory_usage += getMemoryUsageChange(key, it->second);
 
             const auto & cell = it->second;
             current_weight -= cell.size;
@@ -367,32 +362,10 @@ private:
 
         // check for underflow
         RUNTIME_ASSERT(current_weight < (1ull << 63), "LRUCache became inconsistent. There must be a bug in it.");
-        return memory_usage * -1;
     }
 
     /// Override this method if you want to track how much weight was lost in removeOverflow method.
     virtual void onRemoveOverflowWeightLoss(size_t /*weight_loss*/) {}
-
-    int64_t getMemoryUsageChange(const Key & key, const Cell & value) {
-        // calculate size
-        int64_t memory_usage = 0;
-        // 1. the memory cost of value part
-        memory_usage += value->allocated_bytes(); // marksInCompressedFile 
-        memory_usage += sizeof(decltype(value));  // Cells struct memory cost
-        memory_usage += sizeof(decltype(value.value)); // PODArray struct memory cost
-        // 2. the memory cost of key part
-        memory_usage += key.size(); // key_len
-        memory_usage += sizeof(decltype(key)); // String struct memory cost
-        // 3. the memory cost of hash table
-        memory_usage += 28; // hash table struct approximate memory cost
-        // 4. the memory cost of LRUQueue
-        memory_usage += key.size(); // key_len
-        memory_usage += sizeof(decltype(key)); // String struct memory cost
-        memory_usage += sizeof(std::list<decltype(key)>); // list struct memory cost
-
-        LOG_INFO(Logger::get("hyy"), "memory usage change total is {}, value->allocated_bytes() is {}, cells cost {}, PODArray cost {}, key size is {}, string cost {}, list cost {}", memory_usage, value->allocated_bytes(), sizeof(decltype(value)), sizeof(decltype(value.value)), key.size(), sizeof(decltype(key)), sizeof(std::list<decltype(key)>));
-        return memory_usage;
-    }
 };
 
 

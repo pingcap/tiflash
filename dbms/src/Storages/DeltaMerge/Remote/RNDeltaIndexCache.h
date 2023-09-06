@@ -81,7 +81,7 @@ public:
 
     struct CacheValueWeight
     {
-        size_t operator()(const CacheValue & v) const { return v.bytes; }
+        size_t operator()(const CacheKey & /*key*/, const CacheValue & v) const { return v.bytes; }
     };
 
     /**
