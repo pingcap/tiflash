@@ -69,11 +69,29 @@ public:
         }
     };
 
+<<<<<<< HEAD
+=======
+    struct CacheValueWeight
+    {
+        size_t operator()(const CacheKey & key, const CacheValue & v) const { return sizeof(key) + v.bytes; }
+    };
+
+>>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
     /**
      * Returns a cached or newly created delta index, which is assigned to the specified segment(at)epoch.
      */
     DeltaIndexPtr getDeltaIndex(const CacheKey & key);
 
+<<<<<<< HEAD
+=======
+    // `setDeltaIndex` will updated cache size and remove overflows if necessary.
+    void setDeltaIndex(const DeltaIndexPtr & delta_index);
+
+    size_t getCacheWeight() const { return cache.weight(); }
+    size_t getCacheCount() const { return cache.count(); }
+
+
+>>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
 private:
     LRUCache<CacheKey, DeltaIndex, CacheKeyHasher> cache;
 };

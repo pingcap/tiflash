@@ -34,9 +34,30 @@ namespace DB
 /// Estimate of number of bytes in cache for marks.
 struct MarksWeightFunction
 {
+<<<<<<< HEAD
     size_t operator()(const MarksInCompressedFile & marks) const
     {
         return marks.allocated_bytes();
+=======
+    size_t operator()(const String & key, const MarksInCompressedFile & marks) const
+    {
+        auto mark_memory_usage = marks.allocated_bytes(); // marksInCompressedFile
+        auto cells_memory_usage = 32; // Cells struct memory cost
+        auto pod_array_memory_usage = sizeof(decltype(marks)); // PODArray struct memory cost
+
+        // 2. the memory cost of key part
+        auto str_len = key.size(); // key_len
+        auto key_memory_usage = sizeof(String); // String struct memory cost
+
+        // 3. the memory cost of hash table
+        auto unordered_map_memory_usage = 28; // hash table struct approximate memory cost
+
+        // 4. the memory cost of LRUQueue
+        auto list_memory_usage = sizeof(std::list<String>); // list struct memory cost
+
+        return mark_memory_usage + cells_memory_usage + pod_array_memory_usage + str_len * 2 + key_memory_usage * 2
+            + unordered_map_memory_usage + list_memory_usage;
+>>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
     }
 };
 
