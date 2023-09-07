@@ -807,7 +807,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         GET_METRIC(tiflash_raft_process_keys, type_write_put).Increment(put_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_write_del).Increment(del_key_count);
     });
-    
+
     if (cmds.len)
     {
         GET_METRIC(tiflash_raft_entry_size, type_normal).Observe(cmds.len);

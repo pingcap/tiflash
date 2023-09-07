@@ -426,8 +426,7 @@ namespace DB
       F(type_flush_log_gap, {{"type", "flush_log_gap"}}),                                                                           \
       F(type_flush_size, {{"type", "flush_size"}}),                                                                                 \
       F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                         \
-      F(type_flush_eager_gc, {{"type", "flush_eager_gc"}}),                                                                         \
-      F(type_exec_compact, {{"type", "exec_compact"}}))                                                                             \
+      F(type_flush_eager_gc, {{"type", "flush_eager_gc"}}))                                                                         \
     M(tiflash_raft_raft_frequent_events_count,                                                                                      \
       "Raft frequent event counter",                                                                                                \
       Counter,                                                                                                                      \
@@ -435,8 +434,8 @@ namespace DB
     M(tiflash_raft_region_flush_size,                                                                                               \
       "Bucketed histogram of region flushed size",                                                                                  \
       Histogram,                                                                                                                    \
-      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 16}),                                                                \
-      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 16}))                                                            \
+      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 22}),                                                                \
+      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 22}))                                                            \
     M(tiflash_raft_entry_size,                                                                                                      \
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
