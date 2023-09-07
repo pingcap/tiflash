@@ -37,18 +37,11 @@ struct TrivialWeightFunction
 /// of that value.
 /// Cache starts to evict entries when their total weight exceeds max_size.
 /// Value weight should not change after insertion.
-<<<<<<< HEAD
-template <typename TKey,
-          typename TMapped,
-          typename HashFunction = std::hash<TKey>,
-          typename WeightFunction = TrivialWeightFunction<TMapped>>
-=======
 template <
     typename TKey,
     typename TMapped,
     typename HashFunction = std::hash<TKey>,
     typename WeightFunction = TrivialWeightFunction<TKey, TMapped>>
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
 class LRUCache
 {
 public:

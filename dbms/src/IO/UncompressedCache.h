@@ -37,14 +37,7 @@ struct UncompressedCacheCell
 
 struct UncompressedSizeWeightFunction
 {
-<<<<<<< HEAD
-    size_t operator()(const UncompressedCacheCell & x) const
-    {
-        return x.data.size();
-    }
-=======
     size_t operator()(const UInt128 key, const UncompressedCacheCell & x) const { return sizeof(key) + x.data.size(); }
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
 };
 
 

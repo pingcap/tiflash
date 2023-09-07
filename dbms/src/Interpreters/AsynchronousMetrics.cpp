@@ -214,15 +214,6 @@ void AsynchronousMetrics::update()
         }
     }
 
-    {
-        if (auto rn_delta_index_cache = context.getSharedContextDisagg()->rn_delta_index_cache)
-        {
-            set("RNDeltaIndexCacheBytes", rn_delta_index_cache->getCacheWeight());
-            set("RNDeltaIndexFiles", rn_delta_index_cache->getCacheCount());
-        }
-    }
-
-
     set("Uptime", context.getUptimeSeconds());
 
     {

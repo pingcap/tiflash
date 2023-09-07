@@ -7850,19 +7850,11 @@
               "refId": "L"
             },
             {
-              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexFiles{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "legendFormat": "minmax_index_cache_{{instance}}",
               "interval": "",
               "exemplar": true,
               "refId": "A",
-              "hide": false
-            },
-            {
-              "expr": "tiflash_system_asynchronous_metric_RNDeltaIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "legendFormat": "rn_delta_index_cache_{{instance}}",
-              "interval": "",
-              "exemplar": true,
-              "refId": "B",
               "hide": false
             }
           ],
