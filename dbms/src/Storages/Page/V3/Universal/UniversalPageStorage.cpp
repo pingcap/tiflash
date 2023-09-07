@@ -67,6 +67,18 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     return storage;
 }
 
+UniversalPageStorage::UniversalPageStorage(
+    String name,
+    PSDiskDelegatorPtr delegator_,
+    const PageStorageConfig & config_,
+    const FileProviderPtr & file_provider_)
+    : storage_name(std::move(name))
+    , delegator(std::move(delegator_))
+    , config(config_)
+    , file_provider(file_provider_)
+    , log(Logger::get(storage_name))
+{}
+
 void UniversalPageStorage::restore()
 {
     blob_store->registerPaths();
