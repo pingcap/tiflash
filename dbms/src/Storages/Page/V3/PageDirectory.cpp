@@ -1563,6 +1563,7 @@ typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(
         auto * w = *iter;
         first->edit->merge(std::move(*(w->edit)));
         last_writer = w;
+        w->edit->clear(); // free the memory after `moved`
     }
     return last_writer;
 }
@@ -1654,8 +1655,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
     watch.restart();
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ //
+        GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds());
+    });
 
     SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;

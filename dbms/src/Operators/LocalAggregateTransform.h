@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
@@ -26,7 +27,8 @@ public:
     LocalAggregateTransform(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const Aggregator::Params & params_);
+        const Aggregator::Params & params_,
+        const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context);
 
     String getName() const override { return "LocalAggregateTransform"; }
 

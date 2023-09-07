@@ -37,7 +37,7 @@ class BackgroundService : boost::noncopyable
 public:
     explicit BackgroundService(TMTContext &);
 
-    void shutdown();
+    void shutdown() noexcept;
 
     ~BackgroundService();
 
@@ -49,6 +49,7 @@ private:
 
     BackgroundProcessingPool::TaskHandle single_thread_task_handle;
     BackgroundProcessingPool::TaskHandle storage_gc_handle;
+    BackgroundProcessingPool::TaskHandle eager_raft_log_gc_handle;
 };
 
 } // namespace DB

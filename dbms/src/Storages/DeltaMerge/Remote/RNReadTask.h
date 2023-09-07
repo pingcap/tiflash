@@ -112,7 +112,11 @@ public:
         return input_stream;
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     explicit RNReadSegmentTask(const RNReadSegmentMeta & meta_)
         : meta(meta_)
     {}
