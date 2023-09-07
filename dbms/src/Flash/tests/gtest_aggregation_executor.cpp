@@ -237,7 +237,7 @@ public:
 };
 
 #define WRAP_FOR_AGG_PARTIAL_BLOCK_START                                              \
-    std::vector<bool> partial_blocks{false, true};                                    \
+    std::vector<bool> partial_blocks{true, false};                                    \
     for (auto partial_block : partial_blocks)                                         \
     {                                                                                 \
         if (partial_block)                                                            \

@@ -853,8 +853,6 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
 
     /// We select one of the aggregation methods and call it.
 
-    /// todo support non-zero start_row
-    //assert(agg_process_info.start_row == 0 && agg_process_info.end_row == agg_process_info.block.rows());
     assert(agg_process_info.start_row <= agg_process_info.end_row);
     /// For the case when there are no keys (all aggregate into one row).
     if (result.type == AggregatedDataVariants::Type::without_key)
