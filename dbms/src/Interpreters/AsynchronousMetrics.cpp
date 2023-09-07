@@ -166,7 +166,6 @@ void AsynchronousMetrics::update()
         }
     }
 
-
     set("Uptime", context.getUptimeSeconds());
 
     {
