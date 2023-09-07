@@ -83,6 +83,16 @@ size_t countBytesInFilter(const UInt8 * filt, size_t sz)
     return CountBytesInFilter(filt, 0, sz);
 }
 
+size_t countBytesInFilter(const UInt8 * filt, size_t start, size_t sz)
+{
+    return CountBytesInFilter(filt, start, start + sz);
+}
+
+size_t countBytesInFilter(const IColumn::Filter & filt, size_t start, size_t sz)
+{
+    return CountBytesInFilter(filt.data(), start, start + sz);
+}
+
 size_t countBytesInFilter(const IColumn::Filter & filt)
 {
     return CountBytesInFilter(filt.data(), 0, filt.size());
@@ -130,6 +140,11 @@ static inline size_t CountBytesInFilterWithNull(
 size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map)
 {
     return CountBytesInFilterWithNull(filt, null_map, 0, filt.size());
+}
+
+size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map, size_t start, size_t sz)
+{
+    return CountBytesInFilterWithNull(filt, null_map, start, start + sz);
 }
 
 std::vector<size_t> countColumnsSizeInSelector(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector)
