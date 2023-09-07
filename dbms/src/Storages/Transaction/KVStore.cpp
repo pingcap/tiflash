@@ -64,8 +64,7 @@ KVStore::KVStore(Context & context)
     , region_compact_log_gap(200)
     , region_eager_gc_log_gap(512)
     // Eager RaftLog GC is only enabled under UniPS
-    , eager_raft_log_gc_enabled(context.getSettingsRef().enable_eager_raft_log_gc)
-// , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
+    , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
