@@ -45,14 +45,14 @@ std::optional<raft_serverpb::RaftApplyState> RaftDataReader::readRegionApplyStat
     if (auto iter = page_map.find(keys[0]); iter != page_map.end() && iter->second.isValid())
     {
         // try to read by raft key
-        if (!region_apply_state.ParseFromString(String(iter->second.data)))
+        if (!region_apply_state.ParseFromArray(iter->second.data.data(), iter->second.data.size()))
             return std::nullopt;
         return region_apply_state;
     }
     else if (auto iter = page_map.find(keys[1]); iter != page_map.end() && iter->second.isValid())
     {
         // try to read by kv key
-        if (!region_apply_state.ParseFromString(String(iter->second.data)))
+        if (!region_apply_state.ParseFromArray(iter->second.data.data(), iter->second.data.size()))
             return std::nullopt;
         return region_apply_state;
     }
