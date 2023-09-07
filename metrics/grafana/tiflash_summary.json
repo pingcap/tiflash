@@ -6969,31 +6969,21 @@
         },
         {
           "aliasColors": {},
-<<<<<<< HEAD
           "bars": false,
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The information of read thread scheduling and data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
-=======
-          "dashLength": 10,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The memory usage of mark cache and minmax index cache",
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
           "fieldConfig": {
             "defaults": {},
             "overrides": []
           },
-<<<<<<< HEAD
           "fill": 0,
           "fillGradient": 0,
-=======
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
-<<<<<<< HEAD
             "y": 64
           },
           "hiddenSeries": false,
@@ -7008,29 +6998,10 @@
             "show": true,
             "total": false,
             "values": false
-=======
-            "y": 117
-          },
-          "id": 238,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": 250,
-            "sort": "max",
-            "sortDesc": true,
-            "total": false,
-            "values": true
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
           },
           "lines": true,
           "linewidth": 1,
           "links": [],
-<<<<<<< HEAD
           "nullPointMode": "null as zero",
           "options": {
             "alertThreshold": true
@@ -7091,54 +7062,6 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "Read Thread and Data Sharing",
-=======
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/limit/",
-              "color": "#F2495C",
-              "hideTooltip": true,
-              "legend": false,
-              "linewidth": 2
-            }
-          ],
-          "spaceLength": 10,
-          "targets": [
-            {
-              "expr": "tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "legendFormat": "mark_cache_{{instance}}",
-              "interval": "",
-              "exemplar": true,
-              "hide": false,
-              "refId": "L"
-            },
-            {
-              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexFiles{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "legendFormat": "minmax_index_cache_{{instance}}",
-              "interval": "",
-              "exemplar": true,
-              "refId": "A",
-              "hide": false
-            },
-            {
-              "expr": "tiflash_system_asynchronous_metric_RNDeltaIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "legendFormat": "rn_delta_index_cache_{{instance}}",
-              "interval": "",
-              "exemplar": true,
-              "refId": "B",
-              "hide": false
-            }
-          ],
-          "thresholds": [],
-          "timeRegions": [],
-          "title": "Mark Cache and Minmax Index Cache Memory Usage",
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -7154,12 +7077,8 @@
           },
           "yaxes": [
             {
-<<<<<<< HEAD
               "decimals": null,
               "format": "ops",
-=======
-              "format": "bytes",
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
               "label": null,
               "logBase": 1,
               "max": null,
@@ -7167,42 +7086,125 @@
               "show": true
             },
             {
-<<<<<<< HEAD
               "format": "percentunit",
               "label": null,
               "logBase": 1,
               "max": null,
               "min": "0",
               "show": true
-=======
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
             }
           ],
           "yaxis": {
             "align": false,
             "alignLevel": null
-<<<<<<< HEAD
           }
-=======
+        },
+        {
+          "type": "graph",
+          "title": "Mark Cache and Minmax Index Cache Memory Usage",
+          "gridPos": {
+            "x": 12,
+            "y": 64,
+            "w": 12,
+            "h": 8
           },
-          "bars": false,
-          "dashes": false,
-          "fill": 0,
+          "id": 23763571993,
+          "targets": [
+            {
+              "expr": "tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "legendFormat": "mark_cache_{{instance}}",
+              "interval": "",
+              "exemplar": true,
+              "refId": "A",
+              "queryType": "randomWalk",
+              "hide": false
+            },
+            {
+              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}﻿",
+              "legendFormat": "minmax_index_cache_{{instance}}",
+              "interval": "",
+              "exemplar": true,
+              "refId": "B",
+              "hide": true
+            },
+            {
+              "refId": "C",
+              "hide": false
+            }
+          ],
+          "options": {
+            "alertThreshold": true
+          },
+          "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "pluginVersion": "7.5.11",
+          "renderer": "flot",
+          "yaxes": [
+            {
+              "label": null,
+              "show": true,
+              "logBase": 1,
+              "min": null,
+              "max": null,
+              "format": "short"
+            },
+            {
+              "label": null,
+              "show": true,
+              "logBase": 1,
+              "min": null,
+              "max": null,
+              "format": "short"
+            }
+          ],
+          "xaxis": {
+            "show": true,
+            "mode": "time",
+            "name": null,
+            "values": [],
+            "buckets": null
+          },
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          },
+          "lines": true,
+          "fill": 1,
+          "linewidth": 1,
+          "dashLength": 10,
+          "spaceLength": 10,
+          "pointradius": 2,
+          "legend": {
+            "show": true,
+            "values": false,
+            "min": false,
+            "max": false,
+            "current": false,
+            "total": false,
+            "avg": false
+          },
+          "nullPointMode": "null",
+          "tooltip": {
+            "value_type": "individual",
+            "shared": true,
+            "sort": 0
+          },
+          "aliasColors": {},
+          "seriesOverrides": [],
+          "thresholds": [],
+          "timeRegions": [],
           "fillGradient": 0,
+          "dashes": false,
           "hiddenSeries": false,
-          "percentage": false,
           "points": false,
+          "bars": false,
           "stack": false,
+          "percentage": false,
           "steppedLine": false,
-          "timeFrom": null,
-          "timeShift": null
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
+          "description": "The memory usage of mark cache and minmax index cache"
         }
       ],
       "repeat": null,

@@ -34,12 +34,6 @@ namespace DB
 /// Estimate of number of bytes in cache for marks.
 struct MarksWeightFunction
 {
-<<<<<<< HEAD
-    size_t operator()(const MarksInCompressedFile & marks) const
-    {
-        /// NOTE Could add extra 100 bytes for overhead of std::vector, cache structures and allocator.
-        return marks.size() * sizeof(MarkInCompressedFile);
-=======
     size_t operator()(const String & key, const MarksInCompressedFile & marks) const
     {
         auto mark_memory_usage = marks.allocated_bytes(); // marksInCompressedFile
@@ -58,7 +52,6 @@ struct MarksWeightFunction
 
         return mark_memory_usage + cells_memory_usage + pod_array_memory_usage + str_len * 2 + key_memory_usage * 2
             + unordered_map_memory_usage + list_memory_usage;
->>>>>>> 8094739b96 (Update the weight function for Mark Cache and Min Max Index Cache (#8058))
     }
 };
 
