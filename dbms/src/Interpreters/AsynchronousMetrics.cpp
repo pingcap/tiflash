@@ -151,6 +151,14 @@ void AsynchronousMetrics::update()
     }
 
     {
+        if (auto min_max_cache = context.getMinMaxIndexCache())
+        {
+            set("MinMaxIndexCacheBytes", min_max_cache->weight());
+            set("MinMaxIndexFiles", min_max_cache->count());
+        }
+    }
+
+    {
         if (auto uncompressed_cache = context.getUncompressedCache())
         {
             set("UncompressedCacheBytes", uncompressed_cache->weight());
