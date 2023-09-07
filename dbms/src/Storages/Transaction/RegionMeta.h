@@ -55,7 +55,7 @@ public:
     RegionMeta(
         metapb::Peer peer_,
         raft_serverpb::RaftApplyState apply_state_,
-        const UInt64 applied_term_,
+        UInt64 applied_term_,
         raft_serverpb::RegionLocalState region_state_);
 
     RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_);
@@ -68,6 +68,7 @@ public:
 
     UInt64 appliedIndex() const;
     UInt64 appliedIndexTerm() const;
+    UInt64 truncateIndex() const;
 
     ImutRegionRangePtr getRange() const;
 
@@ -86,11 +87,10 @@ public:
     std::string toString(bool dump_status = true) const;
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-
     static RegionMeta deserialize(ReadBuffer & buf);
 
     raft_serverpb::PeerState peerState() const;
-    void setPeerState(const raft_serverpb::PeerState peer_state_);
+    void setPeerState(const raft_serverpb::PeerState & peer_state_);
 
     void assignRegionMeta(RegionMeta && rhs);
 
@@ -186,8 +186,8 @@ class MetaRaftCommandDelegate
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request,
         const raft_cmdpb::AdminResponse & response,
-        const UInt64 index,
-        const UInt64 term);
+        UInt64 index,
+        UInt64 term);
 
 public:
     static RegionMergeResult computeRegionMergeResult(

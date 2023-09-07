@@ -54,6 +54,7 @@ struct TiFlashRaftProxyHelper;
 class RegionMockTest;
 struct ReadIndexResult;
 enum class RaftstoreVer : uint8_t;
+class RegionTaskLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 class Region : public std::enable_shared_from_this<Region>
@@ -149,14 +150,14 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markCompactLog();
-    Timepoint lastCompactLogTime() const;
-    UInt64 lastCompactLogApplied() const;
     UInt64 lastRestartLogApplied() const;
+    UInt64 lastCompactLogApplied() const;
     void setLastCompactLogApplied(UInt64 new_value) const;
-    void setLastRestartLogApplied(UInt64 new_value) const;
-    // Must hold region lock.
-    void updateLastCompactLogApplied() const;
+    void updateLastCompactLogApplied(const RegionTaskLock &) const;
+
+    // Return <last_eager_truncated_index, applied_index> of this Region
+    std::pair<UInt64, UInt64> getRaftLogEagerGCRange() const;
+    void updateRaftLogEagerIndex(UInt64 new_truncate_index);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -256,6 +257,8 @@ private:
     mutable std::shared_mutex mutex;
     RegionData data;
     RegionMeta meta;
+    // Eager truncated index that is used for eager RaftLog GC Task
+    UInt64 eager_truncated_index;
 
     LoggerPtr log;
 
@@ -267,11 +270,10 @@ private:
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
     // Applied index since last persistence. Including all admin cmd.
-    mutable std::atomic<uint64_t> last_compact_log_applied{0};
+    mutable std::atomic<UInt64> last_compact_log_applied{0};
     // Applied index since last restart. Should only be set after restart.
-    mutable uint64_t last_restart_log_applied{0};
+    UInt64 last_restart_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };

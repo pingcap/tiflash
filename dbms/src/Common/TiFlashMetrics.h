@@ -195,6 +195,16 @@ namespace DB
       "Bucketed histogram of raft wait index duration",                                                                             \
       Histogram,                                                                                                                    \
       F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.001, 2, 20}))                       \
+    M(tiflash_raft_eager_gc_duration_seconds,                                                                                       \
+      "Bucketed histogram of RaftLog eager",                                                                                        \
+      Histogram,                                                                                                                    \
+      F(type_run, {{"type", "run"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
+    M(tiflash_raft_eager_gc_count,                                                                                                  \
+      "Total number processed in RaftLog eager GC",                                                                                 \
+      Counter,                                                                                                                      \
+      F(type_num_raft_logs, {"type", "num_raft_logs"}),                                                                             \
+      F(type_num_skip_regions, {"type", "num_skip_regions"}),                                                                       \
+      F(type_num_process_regions, {"type", "num_process_regions"}))                                                                 \
     M(tiflash_syncing_data_freshness,                                                                                               \
       "The freshness of tiflash data with tikv data",                                                                               \
       Histogram,                                                                                                                    \
@@ -390,10 +400,11 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}),                                                              \
       F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                \
-    M(tiflash_raft_raft_log_lag_count,                                                                                              \
-      "Bucketed histogram raft index lag",                                                                                          \
+    M(tiflash_raft_raft_log_gap_count,                                                                                              \
+      "Bucketed histogram raft index gap between applied and truncated index",                                                      \
       Histogram,                                                                                                                    \
       F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 100, 10}),                                            \
+      F(type_eager_gc_applied_index, {{"type", "eager_gc_applied_index"}}, EqualWidthBuckets{0, 100, 10}),                          \
       F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 100, 10}))                        \
     M(tiflash_raft_raft_events_count,                                                                                               \
       "Raft event counter",                                                                                                         \
@@ -408,6 +419,7 @@ namespace DB
       F(type_flush_log_gap, {{"type", "flush_log_gap"}}),                                                                           \
       F(type_flush_size, {{"type", "flush_size"}}),                                                                                 \
       F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                         \
+      F(type_flush_eager_gc, {{"type", "flush_eager_gc"}}),                                                                         \
       F(type_exec_compact, {{"type", "exec_compact"}}))                                                                             \
     M(tiflash_raft_region_flush_size,                                                                                               \
       "Bucketed histogram of region flushed size",                                                                                  \

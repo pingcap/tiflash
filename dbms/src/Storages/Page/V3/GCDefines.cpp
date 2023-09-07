@@ -144,8 +144,12 @@ bool ExternalPageCallbacksManager<Trait>::gc(
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
-    const GCTimeStatistics statistics
-        = doGC(blob_store, page_directory, write_limiter, read_limiter, remote_valid_sizes);
+    const GCTimeStatistics statistics = doGC( //
+        blob_store,
+        page_directory,
+        write_limiter,
+        read_limiter,
+        remote_valid_sizes);
     assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
     LOG_IMPL(log, statistics.getLoggingLevel(), statistics.toLogging());
 
