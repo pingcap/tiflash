@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1694096314380,
+  "iteration": 1694098045746,
   "links": [],
   "panels": [
     {
@@ -10547,7 +10547,7 @@
             "y": 30
           },
           "hiddenSeries": false,
-          "id": 241,
+          "id": 242,
           "legend": {
             "alignAsTable": true,
             "avg": false,
@@ -10584,9 +10584,8 @@
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": " 99%-{{type}}",
-              "metric": "",
-              "refId": "A",
+              "legendFormat": "99%-{{type}}",
+              "refId": "D",
               "step": 4
             }
           ],
@@ -11033,7 +11032,7 @@
             "y": 51
           },
           "hiddenSeries": false,
-          "id": 242,
+          "id": 241,
           "legend": {
             "alignAsTable": false,
             "avg": false,
@@ -11233,24 +11232,18 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_region_flush_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"flushed\"}[1m])) by (le, type)",
-              "hide": true,
-              "interval": "",
-              "legendFormat": "{{le}}",
-              "refId": "A"
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_region_flush_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"unflushed\"}[1m])) by (le, type)",
+              "expr": "sum(delta(tiflash_raft_entry_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"normal\"}[1m])) by (le, type)",
+              "format": "heatmap",
               "hide": false,
               "interval": "",
+              "intervalFactor": 2,
               "legendFormat": "{{le}}",
               "refId": "B"
             }
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "\bRegion Size Heatmap",
+          "title": "Raft Entry Batch Size Heatmap",
           "tooltip": {
             "show": true,
             "showHistogram": true
@@ -11263,7 +11256,7 @@
           "xBucketSize": null,
           "yAxis": {
             "decimals": 0,
-            "format": "bytes",
+            "format": "none",
             "logBase": 1,
             "max": null,
             "min": null,
@@ -11312,16 +11305,28 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_entry_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"normal\"}[1m])) by (le, type)",
+              "expr": "sum(delta(tiflash_raft_region_flush_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"unflushed\"}[1m])) by (le, type)",
+              "format": "heatmap",
               "hide": false,
               "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_region_flush_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"flushed\"}[1m])) by (le, type)",
+              "format": "heatmap",
+              "hide": true,
+              "interval": "",
+              "intervalFactor": 2,
               "legendFormat": "{{le}}",
               "refId": "A"
             }
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Raft Log Entry Size",
+          "title": "Region Size Heatmap",
           "tooltip": {
             "show": true,
             "showHistogram": true
@@ -11334,7 +11339,7 @@
           "xBucketSize": null,
           "yAxis": {
             "decimals": 0,
-            "format": "none",
+            "format": "bytes",
             "logBase": 1,
             "max": null,
             "min": null,
