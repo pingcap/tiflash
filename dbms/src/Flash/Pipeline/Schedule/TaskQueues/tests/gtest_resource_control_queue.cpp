@@ -105,18 +105,12 @@ uint64_t dynamicGetPriority(const std::string & name)
     return priority;
 }
 
-bool dynamicIsResourceGroupThrottled(const std::string &)
-{
-    return false;
-}
-
 void setupNopLAC()
 {
     LocalAdmissionController::global_instance.reset();
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
     LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
     LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
-    LocalAdmissionController::global_instance->is_resource_group_throttled_func = nopIsResourceGroupThrottled;
 }
 
 void setupMockLAC(const std::vector<ResourceGroupPtr> & resource_groups)
@@ -125,7 +119,6 @@ void setupMockLAC(const std::vector<ResourceGroupPtr> & resource_groups)
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
     LocalAdmissionController::global_instance->consume_resource_func = dynamicConsumeResource;
     LocalAdmissionController::global_instance->get_priority_func = dynamicGetPriority;
-    LocalAdmissionController::global_instance->is_resource_group_throttled_func = dynamicIsResourceGroupThrottled;
 
     uint64_t max_ru_per_sec = 0;
     for (const auto & resource_group : resource_groups)
