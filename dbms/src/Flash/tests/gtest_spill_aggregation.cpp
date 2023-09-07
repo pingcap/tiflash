@@ -33,7 +33,7 @@ public:
 };
 
 #define WRAP_FOR_AGG_PARTIAL_BLOCK_START                                              \
-    std::vector<bool> partial_blocks{false, true};                                    \
+    std::vector<bool> partial_blocks{true, false};                                    \
     for (auto partial_block : partial_blocks)                                         \
     {                                                                                 \
         if (partial_block)                                                            \
@@ -44,7 +44,7 @@ public:
 #define WRAP_FOR_AGG_PARTIAL_BLOCK_END }
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
-    std::vector<bool> pipeline_bools{true, false}; \
+    std::vector<bool> pipeline_bools{false, true}; \
     for (auto enable_pipeline : pipeline_bools)    \
     {                                              \
         enablePipeline(enable_pipeline);
