@@ -64,7 +64,7 @@ try
     std::shared_ptr<TaskOperatorSpillContexts> task_operator_spill_contexts
         = std::make_shared<TaskOperatorSpillContexts>();
     task_operator_spill_contexts->registerOperatorSpillContext(sort_spill_context);
-    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0), 0);
+    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""), 0);
     ASSERT_TRUE(query_operator_spill_contexts.getTaskOperatorSpillContextsCount() == 0);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts);
     ASSERT_TRUE(query_operator_spill_contexts.getTaskOperatorSpillContextsCount() == 1);
@@ -87,7 +87,7 @@ try
     task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_2);
     task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_3);
 
-    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0), 0);
+    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""), 0);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_1);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_2);
 
@@ -145,7 +145,9 @@ try
     task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_3);
 
     UInt64 min_check_interval = 1000;
-    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0), min_check_interval);
+    QueryOperatorSpillContexts query_operator_spill_contexts(
+        MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""),
+        min_check_interval);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_1);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_2);
 
