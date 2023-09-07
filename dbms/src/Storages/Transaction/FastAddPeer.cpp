@@ -178,6 +178,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
 
     RaftApplyState apply_state;
     {
+        // TODO: use `RaftDataReader::readRegionApplyState`?
         auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
         auto page = checkpoint_data_holder->getUniversalPageStorage()
                         ->read(apply_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
