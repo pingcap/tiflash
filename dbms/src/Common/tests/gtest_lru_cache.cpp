@@ -62,7 +62,7 @@ TEST(LRUCacheTest, get)
 
 struct ValueWeight
 {
-    size_t operator()(const size_t & x) const { return x; }
+    size_t operator()(const int & /*key*/, const size_t & x) const { return x; }
 };
 
 TEST(LRUCacheTest, evictOnSize)
