@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
@@ -101,25 +100,24 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
 
 TEST(TiKVKeyValueTest, PortedTests)
 {
-    bool res = true;
     {
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(101, 2), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2, 233), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3, 233), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 3) > RecordKVFormat::genKey(100, 2, 233), res);
-        ASSERT_CHECK(RecordKVFormat::genKey(100, 2, 2) < RecordKVFormat::genKey(100, 3), res);
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(101, 2));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) <= RecordKVFormat::genKey(100, 2, 233));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2) < RecordKVFormat::genKey(100, 3, 233));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 3) > RecordKVFormat::genKey(100, 2, 233));
+        ASSERT_TRUE(RecordKVFormat::genKey(100, 2, 2) < RecordKVFormat::genKey(100, 3));
     }
 
     {
         auto key = RecordKVFormat::genKey(2222, 123, 992134);
-        ASSERT_CHECK(2222 == RecordKVFormat::getTableId(key), res);
-        ASSERT_CHECK(123 == RecordKVFormat::getHandle(key), res);
-        ASSERT_CHECK(992134 == RecordKVFormat::getTs(key), res);
+        ASSERT_EQ(2222, RecordKVFormat::getTableId(key));
+        ASSERT_EQ(123, RecordKVFormat::getHandle(key));
+        ASSERT_EQ(992134, RecordKVFormat::getTs(key));
 
         auto bare_key = RecordKVFormat::truncateTs(key);
-        ASSERT_CHECK(key == RecordKVFormat::appendTs(bare_key, 992134), res);
+        ASSERT_EQ(key, RecordKVFormat::appendTs(bare_key, 992134));
     }
 
     {
@@ -385,63 +383,9 @@ TEST(TiKVKeyValueTest, PortedTests)
     }
 
     {
-        auto [n, new_range]
-            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::normal_min});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(new_range[0].first == new_range[0].second);
-    }
-
-    {
-        auto [n, new_range]
-            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::max, TiKVRange::Handle::max});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(new_range[0].first == new_range[0].second);
-    }
-
-    {
-        // 100000... , -1 (111111...), 0, 011111... ==> 0 ~ 111111...
-        auto [n, new_range]
-            = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::max});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::normal_min == new_range[0].first);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[0].second);
-    }
-
-    {
-        // 100000... , 111111...
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, -1});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(
-            CHTableHandle::UInt64TableHandle{static_cast<UInt64>(TiKVRange::Handle::normal_min.handle_id)}
-            == new_range[0].first);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[0].second);
-        ASSERT_TRUE(
-            (new_range[0].second.handle_id - new_range[0].first.handle_id)
-            == UInt64(-1 - TiKVRange::Handle::normal_min.handle_id));
-    }
-
-    {
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({{2333ll}, {2334ll}});
-        ASSERT_TRUE(n == 1);
-        ASSERT_TRUE(UInt64{2333} == new_range[0].first);
-        ASSERT_TRUE(UInt64{2334} == new_range[0].second);
-    }
-
-    {
-        auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({-1, 10});
-        ASSERT_TRUE(n == 2);
-
-        ASSERT_TRUE(UInt64{0} == new_range[0].first);
-        ASSERT_TRUE(UInt64{10} == new_range[0].second);
-
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[1].first);
-        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[1].second);
-    }
-
-    {
         std::string s = "1234";
-        s[0] = char(1);
-        s[3] = char(111);
+        s[0] = static_cast<char>(1);
+        s[3] = static_cast<char>(111);
         const auto & key = TiKVKey(s.data(), s.size());
         ASSERT_EQ(key.toDebugString(), "0132336F");
     }
@@ -499,8 +443,6 @@ TEST(TiKVKeyValueTest, PortedTests)
             ASSERT_EQ(*tidb_pk, pk);
         }
     }
-
-    ASSERT_TRUE(res);
 }
 
 TEST(TiKVKeyValueTest, Redact)

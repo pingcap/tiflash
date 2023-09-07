@@ -79,7 +79,7 @@ void PhysicalTopN::buildPipelineExecGroupImpl(
     // TODO find a suitable threshold is necessary; 10000 is just a value picked without much consideration.
     if (group_builder.concurrency() * limit <= 10000)
     {
-        executeLocalSort(exec_context, group_builder, order_descr, limit, context, log);
+        executeLocalSort(exec_context, group_builder, order_descr, limit, false, context, log);
     }
     else
     {

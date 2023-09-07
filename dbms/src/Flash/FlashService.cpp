@@ -35,6 +35,7 @@
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
+#include <IO/IOThreadPools.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -52,6 +53,7 @@
 #include <grpcpp/support/status_code_enum.h>
 #include <kvproto/disaggregated.pb.h>
 
+#include <chrono>
 #include <ext/scope_guard.h>
 
 namespace DB
@@ -157,6 +159,8 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
         std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
+        std::make_pair("tiflash_mem_quota_query_per_node", "max_memory_usage"),
+        std::make_pair("tiflash_query_spill_ratio", "auto_memory_revoke_trigger_threshold"),
     };
     for (const auto & names : tidb_varname_to_tiflash_varname)
     {
@@ -901,8 +905,15 @@ grpc::Status FlashService::EstablishDisaggTask(
 
     try
     {
-        handler->prepare(request);
-        handler->execute(response);
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&handler, &request, &response, deadline = grpc_context->deadline()]() {
+                auto current = std::chrono::system_clock::now();
+                RUNTIME_CHECK(current < deadline, current, deadline);
+                handler->prepare(request);
+                handler->execute(response);
+            });
+        WNEstablishDisaggTaskPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        task->get_future().get();
     }
     catch (const RegionException & e)
     {

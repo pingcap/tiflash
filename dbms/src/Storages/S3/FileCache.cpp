@@ -20,6 +20,7 @@
 #include <Common/escapeForFileName.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <IO/IOThreadPools.h>
+#include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>

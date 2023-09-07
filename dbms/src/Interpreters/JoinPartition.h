@@ -102,6 +102,7 @@ public:
     void insertBlockForProbe(Block && block);
     size_t getRowCount();
     size_t getHashMapAndPoolByteCount();
+    void setResizeCallbackIfNeeded();
     void updateHashMapAndPoolMemoryUsage();
     size_t getHashMapAndPoolMemoryUsage() const { return hash_table_pool_memory_usage; }
     RowsNotInsertToMap * getRowsNotInsertedToMap()

@@ -309,6 +309,10 @@ public:
     {
         auto_spill_trigger = auto_spill_trigger_;
     }
+    AutoSpillTrigger * getAutoSpillTrigger()
+    {
+        return auto_spill_trigger == nullptr ? nullptr : auto_spill_trigger.get();
+    }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 

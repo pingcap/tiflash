@@ -495,6 +495,10 @@ try
         auto file_path = file_id_to_path[file.id];
         ASSERT_FALSE(Poco::File(file_path).exists());
     }
+
+    // It should be empty
+    auto output_files = stream->outputFiles();
+    ASSERT_TRUE(output_files.empty());
 }
 CATCH
 

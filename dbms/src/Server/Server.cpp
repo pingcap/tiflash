@@ -802,6 +802,14 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
     }
+
+    if (disaggregated_mode == DisaggregatedMode::Storage)
+    {
+        WNEstablishDisaggTaskPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
 }
 
 void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
@@ -842,6 +850,15 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
         RNWritePageCachePool::instance->setMaxThreads(max_io_thread_count);
         RNWritePageCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
         RNWritePageCachePool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+
+    size_t max_cpu_thread_count = std::ceil(settings.cpu_thread_count_scale * logical_cores);
+    if (WNEstablishDisaggTaskPool::instance)
+    {
+        // Tasks of EstablishDisaggTask is computation-intensive.
+        WNEstablishDisaggTaskPool::instance->setMaxThreads(max_cpu_thread_count);
+        WNEstablishDisaggTaskPool::instance->setMaxFreeThreads(max_cpu_thread_count / 2);
+        WNEstablishDisaggTaskPool::instance->setQueueSize(max_cpu_thread_count * 2);
     }
 }
 

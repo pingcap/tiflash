@@ -156,6 +156,27 @@ static size_t getByteCountImpl(const Maps & maps, JoinMapMethod method)
 }
 
 template <typename Maps>
+static void setResizeCallbackImpl(const Maps & maps, JoinMapMethod method, const ResizeCallback & resize_callback)
+{
+    switch (method)
+    {
+    case JoinMapMethod::EMPTY:
+    case JoinMapMethod::CROSS:
+        return;
+#define M(NAME)                                            \
+    case JoinMapMethod::NAME:                              \
+        if (maps.NAME)                                     \
+            maps.NAME->setResizeCallback(resize_callback); \
+        return;
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+}
+
+template <typename Maps>
 static size_t clearMaps(Maps & maps, JoinMapMethod method)
 {
     size_t ret = 0;
@@ -208,6 +229,23 @@ size_t JoinPartition::getHashMapAndPoolByteCount()
     ret += getByteCountImpl(maps_all_full_with_row_flag, join_map_method);
     ret += pool->size();
     return ret;
+}
+
+void JoinPartition::setResizeCallbackIfNeeded()
+{
+    if (hash_join_spill_context->isSpillEnabled() && hash_join_spill_context->isInAutoSpillMode())
+    {
+        auto resize_callback = [this]() {
+            return !hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index);
+        };
+        assert(pool != nullptr);
+        pool->setResizeCallback(resize_callback);
+        setResizeCallbackImpl(maps_any, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_all, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_any_full, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_all_full, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_all_full_with_row_flag, join_map_method, resize_callback);
+    }
 }
 
 void JoinPartition::initMap()
@@ -574,13 +612,13 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
 
 #define INSERT_TO_MAP(join_partition, segment_index)          \
     auto & current_map = (join_partition)->getHashMap<Map>(); \
-    for (auto & i : (segment_index))                          \
+    for (auto & s_i : (segment_index))                        \
     {                                                         \
         Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
             current_map,                                      \
             key_getter,                                       \
             stored_block,                                     \
-            i,                                                \
+            s_i,                                              \
             pool,                                             \
             sort_key_containers);                             \
     }

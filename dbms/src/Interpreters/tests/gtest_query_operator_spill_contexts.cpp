@@ -162,6 +162,11 @@ try
     ASSERT_TRUE(
         query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3)
         == OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);
+    ASSERT_TRUE(
+        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3, true) == 0);
+    ASSERT_TRUE(
+        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3)
+        == OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);
     std::this_thread::sleep_for(std::chrono::milliseconds(2 * min_check_interval));
     ASSERT_TRUE(query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3) == 0);
     sort_spill_context_1->finishOneSpill();

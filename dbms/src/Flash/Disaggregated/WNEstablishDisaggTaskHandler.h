@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/QueryExecutor.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <kvproto/disaggregated.pb.h>
@@ -47,5 +48,6 @@ private:
     std::unique_ptr<DAGContext> dag_context;
     QueryExecutorHolder query_executor_holder;
     const LoggerPtr log;
+    MemTrackerWrapper mem_tracker_wrapper;
 };
 } // namespace DB

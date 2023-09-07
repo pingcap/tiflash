@@ -77,6 +77,11 @@ public:
     {}
 
     ~RNWorkerPrepareStreams() override { wait(); }
+
+    bool initInputStream(const RNReadSegmentTaskPtr & task, bool enable_delta_index_error_fallback);
+
+    // Only use in unit-test.
+    RNReadSegmentTaskPtr testDoWork(const RNReadSegmentTaskPtr & task) { return doWork(task); }
 };
 
 } // namespace DB::DM::Remote

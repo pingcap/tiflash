@@ -34,6 +34,7 @@ namespace DB
 WNEstablishDisaggTaskHandler::WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id)
     : context(std::move(context_))
     , log(Logger::get(task_id))
+    , mem_tracker_wrapper(fetch_pages_mem_tracker.get())
 {}
 
 // Some preparation
@@ -98,7 +99,7 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
 
     using DM::Remote::Serializer;
     snap->iterateTableSnapshots([&](const DM::Remote::DisaggPhysicalTableReadSnapshotPtr & snap) {
-        response->add_tables(Serializer::serializeTo(snap, task_id).SerializeAsString());
+        response->add_tables(Serializer::serializeTo(snap, task_id, mem_tracker_wrapper).SerializeAsString());
     });
 }
 
