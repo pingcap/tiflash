@@ -16,6 +16,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -52,10 +53,30 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
             log,
             "Start background storage gc worker with interval {} seconds.",
             global_settings.dt_bg_gc_check_interval);
+
+        if (global_context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
+        {
+            eager_raft_log_gc_handle = background_pool.addTask(
+                [this] {
+                    auto kvstore = tmt.getKVStore();
+                    if (auto hints = kvstore->getRaftLogGcHints(); !hints.empty())
+                    {
+                        auto task_res = executeRaftLogGcTasks(tmt.getContext(), std::move(hints));
+                        kvstore->applyRaftLogGcTaskRes(task_res);
+                        // If some Regions have execute eager gc, then run again immediatly.
+                        // Else run at fixed interval.
+                        return !task_res.empty();
+                    }
+                    // no tasks, run at fixed interval
+                    return false;
+                },
+                false,
+                /*interval_ms=*/60 * 1000);
+        }
     }
 }
 
-void BackgroundService::shutdown()
+void BackgroundService::shutdown() noexcept
 {
     if (single_thread_task_handle)
     {
@@ -67,6 +88,12 @@ void BackgroundService::shutdown()
     {
         background_pool.removeTask(storage_gc_handle);
         storage_gc_handle = nullptr;
+    }
+
+    if (eager_raft_log_gc_handle)
+    {
+        background_pool.removeTask(eager_raft_log_gc_handle);
+        eager_raft_log_gc_handle = nullptr;
     }
 }
 

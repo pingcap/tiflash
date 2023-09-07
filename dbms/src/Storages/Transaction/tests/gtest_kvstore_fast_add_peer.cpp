@@ -218,6 +218,7 @@ try
 
         RaftApplyState apply_state;
         {
+            // TODO: use `RaftDataReader::readRegionApplyState`?
             auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
             auto page = checkpoint_data_holder->getUniversalPageStorage()->read(apply_state_key);
             apply_state.ParseFromArray(page.data.begin(), page.data.size());
