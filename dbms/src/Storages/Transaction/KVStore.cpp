@@ -430,6 +430,8 @@ bool KVStore::tryFlushRegionData(
         return true;
     }
 
+    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
+
     if (!force_persist)
     {
         // try to flush RegionData according to the mem cache rows/bytes/interval
@@ -512,7 +514,6 @@ bool KVStore::canFlushRegionDataImpl(
         curr_region.setLastCompactLogApplied(index);
     }
 
-    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
     // GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
     LOG_DEBUG(
         log,
@@ -525,7 +526,6 @@ bool KVStore::canFlushRegionDataImpl(
 
     if (can_flush && flush_if_possible)
     {
-        GET_METRIC(tiflash_raft_raft_events_count, type_exec_compact).Increment(1);
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
         LOG_INFO(
             log,
@@ -608,6 +608,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
+        // Relate to type_flush_passive.
+        GET_METRIC(tiflash_raft_raft_events_count, type_exec_compact).Increment(1);
         // Before CompactLog, we ought to make sure all data of this region are persisted.
         // So proxy will firstly call an FFI `fn_try_flush_data` to trigger a attempt to flush data on TiFlash's side.
         // The advance of apply index aka `handleWriteRaftCmd` is executed in `fn_try_flush_data`.

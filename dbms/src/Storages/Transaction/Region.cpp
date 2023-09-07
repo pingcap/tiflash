@@ -744,6 +744,8 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     SCOPE_EXIT({
         GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+        // Relate to tiflash_system_profile_event_DMWriteBlock, but with uncommitted writes.
+        // Relate to tikv_storage_command_total, which is not available on proxy.
         GET_METRIC(tiflash_raft_raft_frequent_events_count, type_write).Increment(1);
         GET_METRIC(tiflash_raft_process_keys, type_write_put).Increment(put_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_write_del).Increment(del_key_count);
