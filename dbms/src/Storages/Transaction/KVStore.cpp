@@ -484,10 +484,9 @@ bool KVStore::tryFlushRegionData(
         return true;
     }
 
-    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
-
     if (!force_persist)
     {
+        GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
         // try to flush RegionData according to the mem cache rows/bytes/interval
         return canFlushRegionDataImpl(
             curr_region_ptr,
