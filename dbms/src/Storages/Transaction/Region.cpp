@@ -857,7 +857,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         case WriteCmdType::Del:
         {
             auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
-            if (cf == ColumnFamilyType::Write)
+            if (unlikely(cf == ColumnFamilyType::Write))
             {
                 del_key_count++;
             }
