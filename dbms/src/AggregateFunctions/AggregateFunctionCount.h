@@ -53,6 +53,7 @@ public:
     }
 
     void addBatchSinglePlace(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -62,7 +63,7 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            data(place).count += countBytesInFilter(flags);
+            data(place).count += countBytesInFilter(flags, start_offset, batch_size);
         }
         else
         {
@@ -71,6 +72,7 @@ public:
     }
 
     void addBatchSinglePlaceNotNull(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -81,11 +83,11 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            data(place).count += countBytesInFilterWithNull(flags, null_map);
+            data(place).count += countBytesInFilterWithNull(flags, null_map, start_offset, batch_size);
         }
         else
         {
-            data(place).count += batch_size - countBytesInFilter(null_map, batch_size);
+            data(place).count += batch_size - countBytesInFilter(null_map, start_offset, batch_size);
         }
     }
 
