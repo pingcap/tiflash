@@ -23,14 +23,12 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
-
-
 namespace DB
 {
-template <typename T>
+template <typename K, typename T>
 struct TrivialWeightFunction
 {
-    size_t operator()(const T &) const { return 1; }
+    size_t operator()(const K &, const T &) const { return 1; }
 };
 
 
@@ -43,7 +41,7 @@ template <
     typename TKey,
     typename TMapped,
     typename HashFunction = std::hash<TKey>,
-    typename WeightFunction = TrivialWeightFunction<TMapped>>
+    typename WeightFunction = TrivialWeightFunction<TKey, TMapped>>
 class LRUCache
 {
 public:
@@ -330,7 +328,7 @@ private:
         }
 
         cell.value = mapped;
-        cell.size = cell.value ? weight_function(*cell.value) : 0;
+        cell.size = cell.value ? weight_function(key, *cell.value) : 0;
         current_weight += cell.size;
 
         removeOverflow();
