@@ -19,6 +19,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_agg_on_partial_block[];
+} // namespace FailPoints
+
 namespace tests
 {
 class SpillAggregationTestRunner : public DB::tests::ExecutorTest
@@ -26,6 +31,17 @@ class SpillAggregationTestRunner : public DB::tests::ExecutorTest
 public:
     void initializeContext() override { ExecutorTest::initializeContext(); }
 };
+
+#define WRAP_FOR_AGG_PARTIAL_BLOCK_START                                              \
+    std::vector<bool> partial_blocks{false, true};                                    \
+    for (auto partial_block : partial_blocks)                                         \
+    {                                                                                 \
+        if (partial_block)                                                            \
+            FailPointHelper::enableFailPoint(FailPoints::force_agg_on_partial_block); \
+        else                                                                          \
+            FailPointHelper::disableFailPoint(FailPoints::force_agg_on_partial_block);
+
+#define WRAP_FOR_AGG_PARTIAL_BLOCK_END }
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
     std::vector<bool> pipeline_bools{false, true}; \
@@ -75,6 +91,7 @@ try
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
     WRAP_FOR_SPILL_TEST_BEGIN
+    WRAP_FOR_AGG_PARTIAL_BLOCK_START
     context.context->setSetting(
         "max_bytes_before_external_group_by",
         Field(static_cast<UInt64>(total_data_size / 200)));
@@ -108,6 +125,7 @@ try
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
     ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+    WRAP_FOR_AGG_PARTIAL_BLOCK_END
     WRAP_FOR_SPILL_TEST_END
 }
 CATCH
@@ -226,6 +244,7 @@ try
                         Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
+                    WRAP_FOR_AGG_PARTIAL_BLOCK_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -250,6 +269,7 @@ try
                             vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                             false));
                     }
+                    WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     WRAP_FOR_SPILL_TEST_END
                 }
             }
@@ -377,6 +397,7 @@ try
                         Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
+                    WRAP_FOR_AGG_PARTIAL_BLOCK_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -401,6 +422,7 @@ try
                             vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                             false));
                     }
+                    WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     WRAP_FOR_SPILL_TEST_END
                 }
             }
@@ -474,7 +496,9 @@ try
         /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
         auto request = gen_request(exchange_concurrency);
         WRAP_FOR_SPILL_TEST_BEGIN
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
         ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
         WRAP_FOR_SPILL_TEST_END
     }
 }
@@ -482,6 +506,8 @@ CATCH
 
 #undef WRAP_FOR_SPILL_TEST_BEGIN
 #undef WRAP_FOR_SPILL_TEST_END
+#undef WRAP_FOR_AGG_PARTIAL_BLOCK_START
+#undef WRAP_FOR_AGG_PARTIAL_BLOCK_END
 
 } // namespace tests
 } // namespace DB

@@ -41,6 +41,7 @@ namespace FailPoints
 {
 extern const char random_aggregate_create_state_failpoint[];
 extern const char random_aggregate_merge_failpoint[];
+extern const char force_agg_on_partial_block[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
@@ -633,15 +634,20 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 {
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
+    size_t agg_size = agg_process_info.end_row - agg_process_info.start_row;
+    fiu_do_on(FailPoints::force_agg_on_partial_block, {
+        if (agg_size > 0 && agg_process_info.start_row == 0)
+            agg_size = std::max(agg_size / 2, 1);
+    });
 
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.end_row; ++i)
+        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
             state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
-        agg_process_info.start_row = agg_process_info.end_row;
+        agg_process_info.start_row += agg_size;
         return;
     }
 
@@ -653,7 +659,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         {
             inst->batch_that->addBatchLookupTable8(
                 agg_process_info.start_row,
-                agg_process_info.end_row - agg_process_info.start_row,
+                agg_size,
                 reinterpret_cast<AggregateDataPtr *>(method.data.data()),
                 inst->state_offset,
                 [&](AggregateDataPtr & aggregate_data) {
@@ -665,16 +671,15 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
                 inst->batch_arguments,
                 aggregates_pool);
         }
-        agg_process_info.start_row = agg_process_info.end_row;
+        agg_process_info.start_row += agg_size;
         return;
     }
 
     /// Generic case.
 
-    std::unique_ptr<AggregateDataPtr[]> places(
-        new AggregateDataPtr[agg_process_info.end_row - agg_process_info.start_row]);
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_size]);
 
-    for (size_t i = agg_process_info.start_row; i < agg_process_info.end_row; ++i)
+    for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
@@ -703,30 +708,35 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         inst->batch_that->addBatch(
             agg_process_info.start_row,
-            agg_process_info.end_row - agg_process_info.start_row,
+            agg_size,
             places.get(),
             inst->state_offset,
             inst->batch_arguments,
             aggregates_pool);
     }
-    agg_process_info.start_row = agg_process_info.end_row;
+    agg_process_info.start_row += agg_size;
 }
 
 void NO_INLINE
 Aggregator::executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena)
 {
+    size_t agg_size = agg_process_info.end_row - agg_process_info.start_row;
+    fiu_do_on(FailPoints::force_agg_on_partial_block, {
+        if (agg_size > 0)
+            agg_size = std::max(agg_size / 2, 1);
+    });
     /// Adding values
     for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
          ++inst)
     {
         inst->batch_that->addBatchSinglePlace(
             agg_process_info.start_row,
-            agg_process_info.end_row - agg_process_info.start_row,
+            agg_size,
             res + inst->state_offset,
             inst->batch_arguments,
             arena);
     }
-    agg_process_info.start_row = agg_process_info.end_row;
+    agg_process_info.start_row += agg_size;
 }
 
 
@@ -844,7 +854,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
     /// We select one of the aggregation methods and call it.
 
     /// todo support non-zero start_row
-    assert(agg_process_info.start_row == 0 && agg_process_info.end_row == agg_process_info.block.rows());
+    //assert(agg_process_info.start_row == 0 && agg_process_info.end_row == agg_process_info.block.rows());
     assert(agg_process_info.start_row <= agg_process_info.end_row);
     /// For the case when there are no keys (all aggregate into one row).
     if (result.type == AggregatedDataVariants::Type::without_key)
@@ -1059,17 +1069,26 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     /// Read all the data
     while (Block block = stream->read())
     {
-        if (is_cancelled())
-            return;
+        agg_process_info.resetBlock(block);
+        bool should_stop = false;
+        do
+        {
+            if (is_cancelled())
+                return;
+            if (!executeOnBlock(agg_process_info, result, thread_num))
+            {
+                should_stop = true;
+                break;
+            }
+            if (result.need_spill)
+                spill(result, thread_num);
+        } while (agg_process_info.start_row < agg_process_info.end_row);
+
+        if (should_stop)
+            break;
 
         src_rows += block.rows();
         src_bytes += block.bytes();
-        agg_process_info.resetBlock(block);
-
-        if (!executeOnBlock(agg_process_info, result, thread_num))
-            break;
-        if (result.need_spill)
-            spill(result, thread_num);
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
@@ -1080,6 +1099,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         executeOnBlock(agg_process_info, result, thread_num);
         if (result.need_spill)
             spill(result, thread_num);
+        assert(agg_process_info.start_row == agg_process_info.end_row);
     }
 
     double elapsed_seconds = watch.elapsedSeconds();
