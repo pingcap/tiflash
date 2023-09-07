@@ -47,7 +47,7 @@ void AggregateContext::buildOnLocalData(size_t task_index)
 {
     auto & agg_process_info = threads_data[task_index]->agg_process_info;
     aggregator->executeOnBlock(agg_process_info, *many_data[task_index], task_index);
-    if likely (agg_process_info.start_row == agg_process_info.end_row)
+    if likely (agg_process_info.allBlockDataHandled())
     {
         threads_data[task_index]->src_bytes += agg_process_info.block.bytes();
         threads_data[task_index]->src_rows += agg_process_info.block.rows();
@@ -57,7 +57,7 @@ void AggregateContext::buildOnLocalData(size_t task_index)
 
 bool AggregateContext::hasLocalDataToBuild(size_t task_index)
 {
-    return threads_data[task_index]->agg_process_info.start_row < threads_data[task_index]->agg_process_info.end_row;
+    return !threads_data[task_index]->agg_process_info.allBlockDataHandled();
 }
 
 void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
@@ -156,7 +156,7 @@ void AggregateContext::initConvergentPrefix()
         /// even if it triggers marking need spill due to a low threshold setting,
         /// it's still reasonable not to spill disk.
         many_data[0]->need_spill = false;
-        assert(agg_process_info.start_row == agg_process_info.end_row);
+        assert(agg_process_info.allBlockDataHandled());
         RUNTIME_CHECK(!aggregator->hasSpilledData());
     }
 }

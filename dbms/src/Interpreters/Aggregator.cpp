@@ -1080,7 +1080,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
             }
             if (result.need_spill)
                 spill(result, thread_num);
-        } while (agg_process_info.start_row < agg_process_info.end_row);
+        } while (!agg_process_info.allBlockDataHandled());
 
         if (should_stop)
             break;

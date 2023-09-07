@@ -152,7 +152,7 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
         parent.aggregator.executeOnBlock(agg_process_info, data, thread_num);
         if (data.need_spill)
             parent.aggregator.spill(data, thread_num);
-    } while (agg_process_info.start_row < agg_process_info.end_row);
+    } while (!agg_process_info.allBlockDataHandled());
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -276,7 +276,7 @@ void ParallelAggregatingBlockInputStream::execute()
         aggregator.executeOnBlock(agg_process_info, data, 0);
         if (data.need_spill)
             aggregator.spill(data, 0);
-        assert(agg_process_info.start_row == agg_process_info.end_row);
+        assert(agg_process_info.allBlockDataHandled());
     }
 }
 

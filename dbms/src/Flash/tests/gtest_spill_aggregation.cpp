@@ -91,7 +91,6 @@ try
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
     WRAP_FOR_SPILL_TEST_BEGIN
-    WRAP_FOR_AGG_PARTIAL_BLOCK_START
     context.context->setSetting(
         "max_bytes_before_external_group_by",
         Field(static_cast<UInt64>(total_data_size / 200)));
@@ -99,9 +98,11 @@ try
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// test single thread aggregation
+    WRAP_FOR_AGG_PARTIAL_BLOCK_START
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     /// test parallel aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    WRAP_FOR_AGG_PARTIAL_BLOCK_END
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
     /// test single thread aggregation
@@ -125,7 +126,6 @@ try
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
     ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
-    WRAP_FOR_AGG_PARTIAL_BLOCK_END
     WRAP_FOR_SPILL_TEST_END
 }
 CATCH
