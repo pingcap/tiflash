@@ -181,6 +181,7 @@ private:
     std::mutex mtx_camaign;
     State state = State::Init;
     std::condition_variable cv_camaign;
+    std::unique_ptr<grpc::ClientContext> campaing_ctx;
 
     // A thread for running camaign logic
     std::thread th_camaign;

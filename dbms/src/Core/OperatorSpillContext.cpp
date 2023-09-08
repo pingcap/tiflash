@@ -21,10 +21,12 @@ bool OperatorSpillContext::isSpillEnabled() const
 {
     return enable_spill && (auto_spill_mode || operator_spill_threshold > 0);
 }
+
 bool OperatorSpillContext::supportSpill() const
 {
     return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0);
 }
+
 Int64 OperatorSpillContext::getTotalRevocableMemory()
 {
     assert(isSpillEnabled());
@@ -33,6 +35,7 @@ Int64 OperatorSpillContext::getTotalRevocableMemory()
     else
         return 0;
 }
+
 void OperatorSpillContext::markSpilled()
 {
     bool init_value = false;
@@ -41,11 +44,13 @@ void OperatorSpillContext::markSpilled()
         LOG_INFO(log, "Begin spill in {}", op_name);
     }
 }
+
 void OperatorSpillContext::finishSpillableStage()
 {
     LOG_INFO(log, "Operator finish spill stage");
     in_spillable_stage = false;
 }
+
 Int64 OperatorSpillContext::triggerSpill(Int64 expected_released_memories)
 {
     assert(isSpillEnabled());
@@ -55,5 +60,13 @@ Int64 OperatorSpillContext::triggerSpill(Int64 expected_released_memories)
     if (getTotalRevocableMemory() >= MIN_SPILL_THRESHOLD)
         return triggerSpillImpl(expected_released_memories);
     return expected_released_memories;
+}
+
+void OperatorSpillContext::setAutoSpillMode()
+{
+    RUNTIME_CHECK_MSG(supportAutoTriggerSpill(), "Only operator that support auto spill can be set in auto spill mode");
+    auto_spill_mode = true;
+    /// once auto spill is enabled, operator_spill_threshold will be ignored
+    operator_spill_threshold = 0;
 }
 } // namespace DB

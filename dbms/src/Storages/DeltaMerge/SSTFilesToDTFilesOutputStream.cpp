@@ -105,8 +105,9 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
 
     LOG_INFO(
         log,
-        "Transformed snapshot in SSTFile to DTFiles, region={} job_type={} cost_ms={} rows={} bytes={} bytes_on_disk={}"
-        "write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
+        "Transformed snapshot in SSTFile to DTFiles,"
+        " region={} job_type={} cost_ms={} rows={} bytes={} bytes_on_disk={}"
+        " write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
         child->getRegion()->toString(true),
         magic_enum::enum_name(job_type),
         watch.elapsedMilliseconds(),

@@ -115,6 +115,7 @@ RemotePb::RemoteSegment Serializer::serializeTo(
 SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     const DMContext & dm_context,
     StoreID remote_store_id,
+    KeyspaceID keyspace_id,
     TableID table_id,
     const RemotePb::RemoteSegment & proto)
 {
@@ -140,6 +141,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     {
         delta_snap->shared_delta_index = delta_index_cache->getDeltaIndex({
             .store_id = remote_store_id,
+            .keyspace_id = keyspace_id,
             .table_id = table_id,
             .segment_id = proto.segment_id(),
             .segment_epoch = proto.segment_epoch(),

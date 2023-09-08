@@ -75,7 +75,8 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         nullptr,
         nullptr);
 
-    auto segment_snap = Serializer::deserializeSegmentSnapshotFrom(*dm_context, store_id, physical_table_id, proto);
+    auto segment_snap
+        = Serializer::deserializeSegmentSnapshotFrom(*dm_context, store_id, keyspace_id, physical_table_id, proto);
 
     // Note: At this moment, we still cannot read from `task->segment_snap`,
     // because they are constructed using ColumnFileDataProviderNop.

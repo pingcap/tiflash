@@ -102,7 +102,7 @@ try
             auto [indexc, termc]
                 = proxy_instance->adminCommand(region_id, std::move(req), std::move(res), std::nullopt);
             // Reject compact log.
-            kvs.setRegionCompactLogConfig(10000000, 10000000, 10000000, 10000000);
+            kvs.setRegionCompactLogConfig(10000000, 10000000, 10000000, 0);
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, indexc);
             ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
         }

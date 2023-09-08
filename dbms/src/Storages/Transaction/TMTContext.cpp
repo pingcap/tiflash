@@ -160,10 +160,10 @@ TMTContext::TMTContext(
 {
     startMonitorMPPTaskThread(mpp_task_manager);
 
+    etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
     if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
         && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
@@ -370,10 +370,11 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
-    static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
+    // static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period"; // disabled
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * COMPACT_LOG_MIN_GAP = "flash.compact_log_min_gap";
+    static constexpr const char * EAGER_GC_LOG_GAP = "flash.eager_gc_log_gap";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
@@ -381,10 +382,10 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
     getKVStore()->setRegionCompactLogConfig(
-        std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1),
-        std::max(config.getUInt64(COMPACT_LOG_MIN_GAP, 200), 1));
+        std::max(config.getUInt64(COMPACT_LOG_MIN_GAP, 200), 1),
+        config.getUInt64(EAGER_GC_LOG_GAP, 512));
     {
         batch_read_index_timeout_ms
             = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);

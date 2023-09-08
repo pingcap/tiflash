@@ -19,6 +19,7 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -67,6 +68,7 @@ void ExecutorTest::SetUp()
 {
     initializeContext();
     initializeClientInfo();
+    DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
     TaskSchedulerConfig config{8, 8};
     assert(!TaskScheduler::instance);
     TaskScheduler::instance = std::make_unique<TaskScheduler>(config);

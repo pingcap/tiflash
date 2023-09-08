@@ -30,10 +30,10 @@ void MockLocalAdmissionController::refillTokenBucket()
                 auto & rg = ele.second;
                 if (rg->bucket->isStatic())
                 {
-                    auto [_, ori_fill_rate, ori_cap] = rg->bucket->getCurrentConfig();
+                    auto config = rg->bucket->getConfig();
                     // Use capacity as new token, because for static token bucket, its fill rate is zero.
-                    const double new_token = rg->bucket->peek() + ori_cap;
-                    rg->bucket->reConfig(new_token, ori_fill_rate, ori_cap);
+                    config.tokens += config.capacity;
+                    rg->bucket->reConfig(config);
                 }
             }
         }
@@ -51,7 +51,11 @@ std::string MockLocalAdmissionController::dump() const
     for (const auto & ele : resource_groups)
     {
         const auto & rg = ele.second;
-        fmt_buf.fmtAppend("rg: {}, remaining ru: {}, cpu usage: {};", rg->name, rg->bucket->peek(), rg->cpu_time_in_ns);
+        fmt_buf.fmtAppend(
+            "rg: {}, cpu usage: {}, token bucket: {};",
+            rg->name,
+            rg->cpu_time_in_ns,
+            rg->bucket->toString());
     }
     return fmt_buf.toString();
 }

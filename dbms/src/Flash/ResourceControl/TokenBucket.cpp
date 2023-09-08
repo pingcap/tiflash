@@ -41,15 +41,15 @@ double TokenBucket::peek(const TokenBucket::TimePoint & timepoint) const
     return tokens + getDynamicTokens(timepoint);
 }
 
-void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_capacity)
+void TokenBucket::reConfig(const TokenBucketConfig & config)
 {
-    RUNTIME_CHECK(new_fill_rate >= 0.0);
-    RUNTIME_CHECK(new_capacity >= 0.0);
+    RUNTIME_CHECK(config.fill_rate >= 0.0);
+    RUNTIME_CHECK(config.capacity >= 0.0);
 
     auto now = std::chrono::steady_clock::now();
-    tokens = new_tokens;
-    fill_rate = new_fill_rate;
-    capacity = new_capacity;
+    tokens = config.tokens;
+    fill_rate = config.fill_rate;
+    capacity = config.capacity;
 
     compact(now);
     // Update because token number may increase, which may cause token_changed be negative.
@@ -73,6 +73,13 @@ double TokenBucket::getAvgSpeedPerSec()
         last_get_avg_speed_tokens = tokens;
         last_get_avg_speed_timepoint = now;
     }
+    LOG_TRACE(
+        log,
+        "getAvgSpeedPerSec dura: {}, last_get_avg_speed_tokens: {}, cur tokens: {}, avg_speed_per_sec: {}",
+        dura.count(),
+        last_get_avg_speed_tokens,
+        tokens,
+        avg_speed_per_sec);
     return avg_speed_per_sec;
 }
 
