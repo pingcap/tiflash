@@ -50,7 +50,10 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 }
 
-void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer, const PersistRegionState * state)
+void RegionPersister::computeRegionWriteBuffer(
+    const Region & region,
+    RegionCacheWriteElement & region_write_buffer,
+    const PersistRegionState * state)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 

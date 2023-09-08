@@ -400,11 +400,17 @@ bool KVStore::persistRegionAtState(
     const PersistRegionState & persist_state,
     const RegionTaskLock * region_task_lock,
     PersistRegionReason reason,
-    const char * extra_msg) const 
+    const char * extra_msg) const
 {
     auto unreplayable_index = region.unreplayableIndex();
-    if(persist_state.index <= unreplayable_index) {
-        LOG_INFO(log, "persistRegionAtState failed for {} <= {}, region_id={}", persist_state.index, unreplayable_index, region.id());
+    if (persist_state.index <= unreplayable_index)
+    {
+        LOG_INFO(
+            log,
+            "persistRegionAtState failed for {} <= {}, region_id={}",
+            persist_state.index,
+            unreplayable_index,
+            region.id());
         return false;
     }
     // The region will be locked in Region::serialize.
@@ -420,10 +426,20 @@ bool KVStore::persistRegionAtState(
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_proactive).Increment(1);
         break;
     default:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't persistRegionAtState for {}, region_id={}", caller, region.id());
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can't persistRegionAtState for {}, region_id={}",
+            caller,
+            region.id());
         break;
     }
-    LOG_INFO(log, "persistRegionAtState sucess for {} at {} {}, region_id={}", caller, persist_state.index, persist_state.term, region.id());
+    LOG_INFO(
+        log,
+        "persistRegionAtState success for {} at {} {}, region_id={}",
+        caller,
+        persist_state.index,
+        persist_state.term,
+        region.id());
     return true;
 }
 
@@ -593,21 +609,60 @@ bool KVStore::forceFlushRegionDataImpl(
     Stopwatch watch;
     if (index)
     {
-        // We set actual index when handling CompactLog.
+        // We advance index when pre exec CompactLog.
         curr_region.handleWriteRaftCmd({}, index, term, tmt);
     }
 
+    // Region lock should be held here to prevent further writes, expecially admin cmds.
     if (!tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
         return false;
     }
 
-    // flush cache in storage level is done, persist the region info
+    // Flush cache in DeltaMerge level is done, persist the region info.
     persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
     curr_region.markCompactLog();
     curr_region.cleanApproxMemCacheInfo();
     GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
     return true;
+}
+
+PersistRegionState KVStore::getPersistRegionState(RegionID region_id) const
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Try get persist region state of a non-exesting region {}",
+            region_id);
+    }
+    return getPersistRegionState(curr_region_ptr, region_task_lock);
+}
+
+PersistRegionState KVStore::getPersistRegionState(RegionPtr region, const RegionTaskLock &) const
+{
+    return PersistRegionState{region->appliedIndex(), region->appliedIndexTerm()};
+}
+
+bool KVStore::doFlushRegionDataWithState(
+    Region & curr_region,
+    const RegionTaskLock & region_task_lock,
+    const PersistRegionState & state) const
+{
+    Stopwatch watch;
+    bool suc = persistRegionAtState(curr_region, state, &region_task_lock, PersistRegionReason::Flush, "");
+    if (suc)
+    {
+        curr_region.markCompactLog();
+        curr_region.cleanApproxMemCacheInfo();
+        // "async" here means flushing DeltaCache is async, persist region is still sync.
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_async_flush_region)
+            .Observe(watch.elapsedSeconds());
+        return true;
+    }
+    return false;
 }
 
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(

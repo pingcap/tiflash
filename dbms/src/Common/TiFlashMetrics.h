@@ -380,6 +380,7 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
       F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+      F(type_async_flush_region, {{"type", "async_flush_region"}}, ExpBuckets{0.0005, 2, 20}),                                      \
       F(type_flush_region, {{"type", "flush_region"}}, ExpBuckets{0.0005, 2, 20}))                                                  \
     M(tiflash_raft_upstream_latency,                                                                                                \
       "The latency that tikv sends raft log to tiflash.",                                                                           \

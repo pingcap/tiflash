@@ -35,12 +35,15 @@ std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf, const Persis
 
     size_t size = 0;
     size += writeBinary2(peer, buf);
-    if (state) {
+    if (state)
+    {
         auto apply_state_override = apply_state;
         apply_state_override.set_applied_index(state->index);
         size += writeBinary2(apply_state, buf);
         size += writeBinary2(state->term, buf);
-    } else {
+    }
+    else
+    {
         size += writeBinary2(apply_state, buf);
         size += writeBinary2(applied_term, buf);
     }

@@ -120,7 +120,7 @@ try
     RegionMeta meta = createRegionMeta(888, 66);
     const auto path = dir_path + "/meta.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    auto size = std::get<0>(meta.serialize(write_buf));
+    auto size = std::get<0>(meta.serialize(write_buf, nullptr));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(size, (size_t)Poco::File(path).getSize());
@@ -143,7 +143,7 @@ try
 
     const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf, nullptr));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -184,7 +184,7 @@ try
 
     const auto path = dir_path + "/region_state.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf, nullptr));
     write_buf.next();
 
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());

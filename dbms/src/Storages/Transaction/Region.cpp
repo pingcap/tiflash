@@ -530,8 +530,10 @@ UInt64 Region::lastRestartLogApplied() const
     return last_restart_log_applied;
 }
 
-UInt64 Region::unreplayableIndex() const {
-    if(!lastCompactLogApplied()) {
+UInt64 Region::unreplayableIndex() const
+{
+    if (!lastCompactLogApplied())
+    {
         return UINT64_MAX;
     }
     UInt64 index = lastCompactLogApplied();

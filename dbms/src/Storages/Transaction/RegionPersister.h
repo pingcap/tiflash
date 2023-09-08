@@ -51,7 +51,10 @@ public:
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
-    static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer, const PersistRegionState * state);
+    static void computeRegionWriteBuffer(
+        const Region & region,
+        RegionCacheWriteElement & region_write_buffer,
+        const PersistRegionState * state);
 
     PageStorageConfig getPageStorageSettings() const;
 

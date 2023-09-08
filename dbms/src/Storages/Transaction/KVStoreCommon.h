@@ -14,9 +14,11 @@
 
 #pragma once
 
-namespace DB {
-struct PersistRegionState {
+namespace DB
+{
+struct PersistRegionState
+{
     uint64_t index;
     uint64_t term;
 };
-}
+} // namespace DB

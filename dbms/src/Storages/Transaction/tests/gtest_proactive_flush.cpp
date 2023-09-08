@@ -87,6 +87,50 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTest, KVStoreStalePassiveFlush)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        MockRaftStoreProxy::FailCond cond;
+
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        ASSERT_NE(r1, nullptr);
+        ASSERT_NE(kvr1, nullptr);
+
+        auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto k3 = RecordKVFormat::genKey(table_id, 3, 111);
+        auto && [index, term] = proxy_instance->rawWrite(
+            region_id,
+            {k3, k3},
+            {value_default, value_write},
+            {WriteCmdType::Put, WriteCmdType::Put},
+            {ColumnFamilyType::Default, ColumnFamilyType::Write},
+            std::nullopt);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+
+        kvr1->markCompactLog();
+        kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+        auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
+        auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));
+        ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term2, 0, 0));
+    }
+}
+CATCH
+
 // TODO(proactive flush)
 
 } // namespace tests

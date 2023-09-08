@@ -16,11 +16,11 @@
 
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Transaction/KVStoreCommon.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/KVStoreCommon.h>
 
 #include <magic_enum.hpp>
 
@@ -343,6 +343,13 @@ private:
         const RegionTaskLock * region_task_lock,
         PersistRegionReason reason,
         const char * extra_msg) const;
+
+    PersistRegionState getPersistRegionState(RegionID region_id) const;
+    PersistRegionState getPersistRegionState(RegionPtr region, const RegionTaskLock & region_task_lock) const;
+    bool doFlushRegionDataWithState(
+        Region & curr_region,
+        const RegionTaskLock & region_task_lock,
+        const PersistRegionState & state) const;
 
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
