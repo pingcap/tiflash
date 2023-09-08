@@ -58,6 +58,9 @@ TiFlashMetrics::TiFlashMetrics()
                                                       .Name("tiflash_storage_sync_replica_ru")
                                                       .Help("RU for synchronous replica of keyspace")
                                                       .Register(*registry);
+
+    registered_resource_group_family
+        = &prometheus::BuildGauge().Name("tiflash_resource_group").Help("resource group info").Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
@@ -88,6 +91,20 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     }
     registered_keyspace_sync_replica_ru_family->Remove(itr->second);
     registered_keyspace_sync_replica_ru.erase(itr);
+}
+
+prometheus::Gauge * TiFlashMetrics::getOrCreateResourceGroupGauge(
+    const String & resource_group_name,
+    const String & type)
+{
+    const String key = resource_group_name + "_" + type;
+    auto iter = registered_resource_group.find(key);
+    if likely (iter != registered_resource_group.end())
+    {
+        return iter->second;
+    }
+    return registered_resource_group[key]
+        = &registered_resource_group_family->Add({{"resource_group", resource_group_name}, {"type", type}});
 }
 
 } // namespace DB

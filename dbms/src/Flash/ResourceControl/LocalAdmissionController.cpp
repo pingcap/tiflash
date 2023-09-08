@@ -105,6 +105,7 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
         {
+            resource_group.second->collectMetrics();
             auto acquire_info = buildAcquireInfo(resource_group.second, /*is_periodically_fetch=*/true);
             if (acquire_info.has_value())
                 acquire_infos.push_back(acquire_info.value());
@@ -364,7 +365,7 @@ void LocalAdmissionController::doWatch()
 {
     auto stream = etcd_client->watch(&watch_gac_grpc_context);
     auto watch_req = setupWatchReq();
-    LOG_DEBUG(log, "watch req: {}", watch_req.DebugString());
+    LOG_DEBUG(log, "watchGAC req: {}", watch_req.DebugString());
     const bool write_ok = stream->Write(watch_req);
     if (!write_ok)
     {

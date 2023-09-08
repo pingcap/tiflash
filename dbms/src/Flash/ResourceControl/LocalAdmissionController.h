@@ -27,6 +27,7 @@
 #include <pingcap/kv/Cluster.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 
@@ -172,12 +173,15 @@ private:
         return !burstable && bucket->lowToken();
     }
 
+<<<<<<< HEAD
+=======
     double getRU() const
     {
         std::lock_guard lock(mu);
         return bucket->peek();
     }
 
+>>>>>>> 9dff56452f7dc7824cc6cd3d017e16ec05733680
     // Return how many tokens should acquire from GAC for the next n seconds.
     double getAcquireRUNum(uint32_t n, double amplification) const
     {
@@ -305,6 +309,7 @@ private:
         std::lock_guard lock(mu);
         auto ori = ru_consumption_delta;
         ru_consumption_delta = 0.0;
+        total_consumption += ori;
         return ori;
     }
 
@@ -320,12 +325,30 @@ private:
         std::lock_guard lock(mu);
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
         last_fetch_tokens_from_gac_timepoint = tp;
+        ++fetch_tokens_from_gac_count;
     }
 
     bool inTrickleModeLease(const std::chrono::steady_clock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
+    }
+
+    static prometheus::Gauge * getMetric(const std::string & name, const std::string & type)
+    {
+        return TiFlashMetrics::instance().getOrCreateResourceGroupGauge(name, type);
+    }
+
+    void collectMetrics() const
+    {
+        std::lock_guard lock(mu);
+        const auto & config = bucket->getConfig();
+        getMetric(name, "remaining_tokens")->Set(config.tokens);
+        getMetric(name, "avg_speed")->Set(bucket->getAvgSpeedPerSec());
+        getMetric(name, "total_consumption")->Set(total_consumption);
+        getMetric(name, "bucket_fill_rate")->Set(config.fill_rate);
+        getMetric(name, "bucket_capacity")->Set(config.capacity);
+        getMetric(name, "fetch_tokens_from_gac_count")->Set(fetch_tokens_from_gac_count);
     }
 
     const std::string name;
@@ -354,6 +377,8 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
         = std::chrono::steady_clock::now();
     std::chrono::time_point<std::chrono::steady_clock> stop_trickle_timepoint = std::chrono::steady_clock::now();
+    uint64_t fetch_tokens_from_gac_count = 0;
+    double total_consumption = 0.0;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -489,7 +514,11 @@ private:
         if (iter != resource_groups.end())
             return;
 
+<<<<<<< HEAD
+        LOG_INFO(log, "add resource group, info: {}", new_group_pb.DebugString());
+=======
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
+>>>>>>> 9dff56452f7dc7824cc6cd3d017e16ec05733680
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
     }
