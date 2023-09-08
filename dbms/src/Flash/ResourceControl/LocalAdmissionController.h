@@ -173,15 +173,6 @@ private:
         return !burstable && bucket->lowToken();
     }
 
-<<<<<<< HEAD
-=======
-    double getRU() const
-    {
-        std::lock_guard lock(mu);
-        return bucket->peek();
-    }
-
->>>>>>> 9dff56452f7dc7824cc6cd3d017e16ec05733680
     // Return how many tokens should acquire from GAC for the next n seconds.
     double getAcquireRUNum(uint32_t n, double amplification) const
     {
@@ -514,11 +505,7 @@ private:
         if (iter != resource_groups.end())
             return;
 
-<<<<<<< HEAD
-        LOG_INFO(log, "add resource group, info: {}", new_group_pb.DebugString());
-=======
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
->>>>>>> 9dff56452f7dc7824cc6cd3d017e16ec05733680
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
     }
