@@ -16,7 +16,7 @@
 
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ReadIndexWorker.h>
+#include <Storages/Transaction/Raftstore/ReadIndexWorker.h>
 #include <kvproto/raft_serverpb.pb.h>
 #include <raft_cmdpb.pb.h>
 

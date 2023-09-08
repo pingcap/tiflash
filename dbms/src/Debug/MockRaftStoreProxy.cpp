@@ -23,8 +23,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/Decode/RowCodec.h>
+#include <Storages/Transaction/FFI/ProxyFFICommon.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Raftstore/RegionMeta.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>

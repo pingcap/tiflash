@@ -27,10 +27,10 @@
 #include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/Decode/PartitionStreams.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>

@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
-#include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/FFI/ProxyFFICommon.h>
 
 namespace DB
 {

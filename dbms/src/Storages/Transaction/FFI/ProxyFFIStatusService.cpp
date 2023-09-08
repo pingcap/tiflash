@@ -16,9 +16,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFICommon.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>

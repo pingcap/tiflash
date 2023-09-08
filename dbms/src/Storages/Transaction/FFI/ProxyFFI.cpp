@@ -20,10 +20,10 @@
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/Transaction/FileEncryption.h>
+#include <Storages/Transaction/FFI/FileEncryption.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/ReadIndexWorker.h>
+#include <Storages/Transaction/Raftstore/ReadIndexWorker.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/diagnosticspb.pb.h>

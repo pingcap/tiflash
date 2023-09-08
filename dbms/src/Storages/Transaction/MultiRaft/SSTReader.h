@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/Raftstore/RegionState.h>
 
 namespace DB

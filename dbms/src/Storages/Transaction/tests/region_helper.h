@@ -15,7 +15,7 @@
 #pragma once
 #include <Storages/Transaction/Decode/TiKVRecordFormat.h>
 #include <Storages/Transaction/Raftstore/RegionMeta.h>
-#include <Storages/Transaction/RegionPersister.h>
+#include <Storages/Transaction/Raftstore/RegionPersister.h>
 
 #include <optional>
 

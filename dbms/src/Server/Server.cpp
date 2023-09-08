@@ -85,11 +85,11 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
-#include <Storages/Transaction/FileEncryption.h>
+#include <Storages/Transaction/FFI/FileEncryption.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKV/PDTiKVClient.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>

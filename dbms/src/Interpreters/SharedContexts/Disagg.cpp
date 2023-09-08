@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/Raftstore/FastAddPeer.h>
+#include <Storages/Transaction/Raftstore/Disagg/FastAddPeer.h>
 
 namespace DB
 {

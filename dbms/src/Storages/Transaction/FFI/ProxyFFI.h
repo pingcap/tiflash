@@ -18,7 +18,7 @@
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <RaftStoreProxyFFI/VersionCheck.h>
-#include <Storages/Transaction/ColumnFamily.h>
+#include <Storages/Transaction/FFI/ColumnFamily.h>
 
 #include <atomic>
 #include <memory>

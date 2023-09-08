@@ -31,9 +31,9 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/CheckpointInfo.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/FastAddPeerCache.h>
+#include <Storages/Transaction/Raftstore/Disagg/CheckpointInfo.h>
+#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerCache.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>

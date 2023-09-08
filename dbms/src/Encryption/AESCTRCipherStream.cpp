@@ -16,7 +16,7 @@
 #include <Common/TiFlashException.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/KeyManager.h>
-#include <Storages/Transaction/FileEncryption.h>
+#include <Storages/Transaction/FFI/FileEncryption.h>
 
 #include <cassert>
 #include <ext/scope_guard.h>

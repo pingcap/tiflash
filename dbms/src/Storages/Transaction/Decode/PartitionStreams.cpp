@@ -24,7 +24,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/Decode/PartitionStreams.h>
 #include <Storages/Transaction/Decode/TiKVRange.h>
-#include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/Raftstore/LockException.h>
 #include <Storages/Transaction/Raftstore/RegionBlockReader.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>

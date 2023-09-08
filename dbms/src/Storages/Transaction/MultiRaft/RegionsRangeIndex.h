@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/Raftstore/RegionRangeKeys.h>
 #include <Storages/Transaction/Types.h>
 
 #include <map>

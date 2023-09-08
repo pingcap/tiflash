@@ -52,7 +52,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/FastAddPeerCache.h>
+#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerCache.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>

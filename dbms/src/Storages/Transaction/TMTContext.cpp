@@ -23,7 +23,7 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/RegionExecutionResult.h>
+#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Etcd/Client.h>
 #include <TiDB/OwnerInfo.h>

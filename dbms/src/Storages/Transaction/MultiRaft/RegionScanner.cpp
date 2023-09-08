@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 
 namespace DB

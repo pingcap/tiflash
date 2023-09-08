@@ -19,11 +19,11 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/Decode/DatumCodec.h>
 #include <Storages/Transaction/Decode/RowCodec.h>
 #include <Storages/Transaction/Decode/TiDB.h>
 #include <Storages/Transaction/Decode/TiKVRange.h>
+#include <Storages/Transaction/FFI/ColumnFamily.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>

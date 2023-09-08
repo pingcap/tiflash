@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/Raftstore/RegionDataRead.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 

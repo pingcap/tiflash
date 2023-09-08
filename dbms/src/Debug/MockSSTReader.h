@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/SSTReader.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
+#include <Storages/Transaction/Raftstore/SSTReader.h>
 
 #include <map>
 

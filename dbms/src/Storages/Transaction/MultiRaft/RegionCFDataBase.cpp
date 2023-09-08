@@ -15,7 +15,7 @@
 #include <Storages/Transaction/Raftstore/RegionCFDataBase.h>
 #include <Storages/Transaction/Raftstore/RegionCFDataTrait.h>
 #include <Storages/Transaction/Raftstore/RegionData.h>
-#include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/Raftstore/RegionRangeKeys.h>
 
 namespace DB
 {

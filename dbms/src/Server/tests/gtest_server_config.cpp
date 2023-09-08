@@ -33,9 +33,9 @@
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/Raftstore/RegionManager.h>
+#include <Storages/Transaction/Raftstore/RegionPersister.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionManager.h>
-#include <Storages/Transaction/RegionPersister.h>
 #include <TestUtils/ConfigTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 

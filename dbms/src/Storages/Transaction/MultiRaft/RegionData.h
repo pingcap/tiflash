@@ -16,7 +16,7 @@
 
 #include <Storages/Transaction/Raftstore/RegionCFDataBase.h>
 #include <Storages/Transaction/Raftstore/RegionCFDataTrait.h>
-#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/Raftstore/RegionDataRead.h>
 
 namespace DB
 {

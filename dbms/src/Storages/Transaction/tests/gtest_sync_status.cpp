@@ -27,8 +27,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFICommon.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/tests/region_helper.h>

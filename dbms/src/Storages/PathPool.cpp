@@ -24,7 +24,7 @@
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>

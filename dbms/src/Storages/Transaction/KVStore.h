@@ -16,10 +16,10 @@
 
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/Transaction/RaftLogManager.h>
-#include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/RegionManager.h>
-#include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/Raftstore/Disagg/RaftLogManager.h>
+#include <Storages/Transaction/Raftstore/RegionDataRead.h>
+#include <Storages/Transaction/Raftstore/RegionManager.h>
+#include <Storages/Transaction/Raftstore/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 #include <magic_enum.hpp>

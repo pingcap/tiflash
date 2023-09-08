@@ -14,8 +14,8 @@
 
 #include <Common/FmtUtils.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
 #include <Storages/Transaction/Raftstore/RegionMeta.h>
-#include <Storages/Transaction/RegionExecutionResult.h>
 #include <common/types.h>
 #include <fmt/core.h>
 

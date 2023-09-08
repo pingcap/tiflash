@@ -19,11 +19,11 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/Transaction/CheckpointInfo.h>
 #include <Storages/Transaction/Decode/TiKVRange.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Raftstore/Disagg/CheckpointInfo.h>
+#include <Storages/Transaction/Raftstore/RegionManager.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>

@@ -19,7 +19,7 @@
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/Raftstore/RegionDataRead.h>
 
 namespace DB
 {

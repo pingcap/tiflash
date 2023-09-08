@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
 #include <common/logger_useful.h>

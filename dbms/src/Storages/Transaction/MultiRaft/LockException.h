@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/RegionLockInfo.h>
+#include <Storages/Transaction/Raftstore/RegionLockInfo.h>
 #include <pingcap/kv/RegionCache.h>
 
 namespace DB

@@ -51,7 +51,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/Decode/TypeMapping.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/Raftstore/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>

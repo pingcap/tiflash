@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/Raftstore/RegionDataRead.h>
 
 namespace DB
 {

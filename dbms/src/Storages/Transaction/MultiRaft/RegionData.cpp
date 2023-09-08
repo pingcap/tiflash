@@ -14,9 +14,9 @@
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Transaction/ColumnFamily.h>
+#include <Storages/Transaction/FFI/ColumnFamily.h>
 #include <Storages/Transaction/Raftstore/RegionData.h>
-#include <Storages/Transaction/RegionLockInfo.h>
+#include <Storages/Transaction/Raftstore/RegionLockInfo.h>
 
 namespace DB
 {

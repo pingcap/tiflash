@@ -16,10 +16,10 @@
 
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/GCManager.h>
-#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/TiKV/PDTiKVClient.h>
 
 namespace DB
 {

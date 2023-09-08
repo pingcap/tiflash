@@ -21,12 +21,12 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Message.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/LearnerRead.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/RegionExecutionResult.h>
+#include <Storages/Transaction/Raftstore/LearnerRead.h>
+#include <Storages/Transaction/Raftstore/LockException.h>
+#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>

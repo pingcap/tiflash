@@ -19,9 +19,9 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/ReadIndexWorker.h>
+#include <Storages/Transaction/Raftstore/ReadIndexWorker.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/chrono.h>
 

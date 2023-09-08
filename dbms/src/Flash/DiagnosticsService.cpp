@@ -19,8 +19,8 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Path.h>
+#include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/ranges.h>
 
