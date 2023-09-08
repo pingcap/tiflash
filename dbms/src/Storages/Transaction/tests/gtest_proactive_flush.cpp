@@ -121,7 +121,6 @@ try
             std::nullopt);
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
 
-        kvr1->markCompactLog();
         kvs.setRegionCompactLogConfig(0, 0, 0, 0);
         auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
         auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));

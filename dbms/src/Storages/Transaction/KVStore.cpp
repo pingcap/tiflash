@@ -712,7 +712,6 @@ bool KVStore::doFlushRegionDataWithState(
     bool suc = persistRegionAtState(curr_region, state, &region_task_lock, PersistRegionReason::Flush, "");
     if (suc)
     {
-        curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
         // "async" here means flushing DeltaCache is async, persist region is still sync.
         GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_async_flush_region)

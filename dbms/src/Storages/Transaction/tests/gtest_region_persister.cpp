@@ -155,7 +155,7 @@ try
     FailPointHelper::enableFailPoint(
         FailPoints::force_region_persist_version,
         /*version*/ static_cast<UInt64>(1)); // format version = 1
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf, nullptr));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
