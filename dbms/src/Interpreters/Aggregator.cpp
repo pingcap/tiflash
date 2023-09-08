@@ -1097,7 +1097,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         executeOnBlock(agg_process_info, result, thread_num);
         if (result.need_spill)
             spill(result, thread_num);
-        assert(agg_process_info.start_row == agg_process_info.end_row);
+        assert(agg_process_info.allBlockDataHandled());
     }
 
     double elapsed_seconds = watch.elapsedSeconds();
