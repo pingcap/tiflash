@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
 
 #include <list>
 

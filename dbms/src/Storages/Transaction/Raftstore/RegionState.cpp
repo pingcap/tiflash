@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/RegionState.h>
-#include <Storages/Transaction/TiKVRange.h>
+#include <Storages/Transaction/Decode/TiKVRange.h>
+#include <Storages/Transaction/Raftstore/RegionState.h>
 
 namespace DB
 {

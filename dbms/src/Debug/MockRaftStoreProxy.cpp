@@ -25,8 +25,8 @@
 #include <Storages/Transaction/Decode/RowCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/Raftstore/RegionMeta.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>

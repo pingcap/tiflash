@@ -16,7 +16,7 @@
 #include <IO/Operators.h>
 #include <Storages/Transaction/Decode/DatumCodec.h>
 #include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/TiKVVarInt.h>
+#include <Storages/Transaction/Decode/TiKVVarInt.h>
 #include <Storages/Transaction/Utils/JsonBinary.h>
 
 namespace DB

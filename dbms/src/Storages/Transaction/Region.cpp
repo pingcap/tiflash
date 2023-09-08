@@ -18,15 +18,15 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/Transaction/Decode/TiKVRange.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiKVRange.h>
+#include <Storages/Transaction/Utils/SerializationHelper.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>

@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Storages/Transaction/Decode/TableRowIDMinMax.h>
-#include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/Transaction/Decode/TiKVHandle.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
+#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
 #include <common/likely.h>
 
 namespace DB

@@ -39,9 +39,9 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Decode/TiKVRange.h>
+#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 

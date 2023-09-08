@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Transaction/Decode/TiKVHelper.h>
+#include <Storages/Transaction/Decode/TiKVRange.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TiKVHelper.h>
-#include <Storages/Transaction/TiKVRange.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include "region_helper.h"

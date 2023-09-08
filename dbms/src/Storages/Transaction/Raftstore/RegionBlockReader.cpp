@@ -23,8 +23,8 @@
 #include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Decode/RowCodec.h>
 #include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Raftstore/RegionBlockReader.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB

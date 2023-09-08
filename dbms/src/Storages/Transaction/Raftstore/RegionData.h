@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Storages/Transaction/RegionCFDataBase.h>
-#include <Storages/Transaction/RegionCFDataTrait.h>
+#include <Storages/Transaction/Raftstore/RegionCFDataBase.h>
+#include <Storages/Transaction/Raftstore/RegionCFDataTrait.h>
 #include <Storages/Transaction/RegionDataRead.h>
 
 namespace DB

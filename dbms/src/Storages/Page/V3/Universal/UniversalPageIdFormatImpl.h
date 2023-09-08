@@ -20,7 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
+#include <Storages/Transaction/Decode/TiKVKeyspaceIDImpl.h>
 #include <fmt/format.h>
 
 namespace DB

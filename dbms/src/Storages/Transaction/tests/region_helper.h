@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #pragma once
-#include <Storages/Transaction/RegionMeta.h>
+#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
+#include <Storages/Transaction/Raftstore/RegionMeta.h>
 #include <Storages/Transaction/RegionPersister.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 
 #include <optional>
 

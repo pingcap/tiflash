@@ -14,7 +14,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/Decode/DatumCodec.h>
-#include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/Raftstore/RegionBlockReader.h>
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
 

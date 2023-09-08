@@ -20,9 +20,9 @@
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/Transaction/Decode/PartitionStreams.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>

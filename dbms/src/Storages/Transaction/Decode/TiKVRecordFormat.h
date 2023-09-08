@@ -20,9 +20,9 @@
 #include <IO/WriteBufferFromString.h>
 #include <Storages/Transaction/Decode/Datum.h>
 #include <Storages/Transaction/Decode/DatumCodec.h>
-#include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/TiKVVarInt.h>
+#include <Storages/Transaction/Decode/TiKVHandle.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
+#include <Storages/Transaction/Decode/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
 

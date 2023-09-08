@@ -21,10 +21,10 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>

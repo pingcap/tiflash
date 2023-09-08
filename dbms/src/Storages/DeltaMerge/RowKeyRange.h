@@ -21,9 +21,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/Transaction/Decode/DatumCodec.h>
 #include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
+#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB::DM

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
+#include <Storages/Transaction/Decode/TiKVKeyspaceIDImpl.h>
 
 namespace DB
 {

@@ -20,8 +20,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/TiKVHandle.h>
 #include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
 
 

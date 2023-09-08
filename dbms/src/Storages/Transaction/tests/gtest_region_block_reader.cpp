@@ -18,11 +18,11 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/Decode/DatumCodec.h>
 #include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/PartitionStreams.h>
 #include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/PartitionStreams.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
+#include <Storages/Transaction/Raftstore/RegionBlockReader.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/tests/RowCodecTestUtils.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>

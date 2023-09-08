@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/FastAddPeerCache.h>
+#include <Storages/Transaction/Raftstore/FastAddPeerCache.h>
 
 namespace DB
 {

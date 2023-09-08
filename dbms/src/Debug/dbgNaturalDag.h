@@ -16,9 +16,9 @@
 
 #include <Flash/Coprocessor/RegionInfo.h>
 #include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/RegionMeta.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/Raftstore/RegionMeta.h>
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/mpp.pb.h>
 

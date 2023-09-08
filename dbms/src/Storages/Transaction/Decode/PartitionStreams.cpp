@@ -22,13 +22,13 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/Decode/PartitionStreams.h>
+#include <Storages/Transaction/Decode/TiKVRange.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/PartitionStreams.h>
+#include <Storages/Transaction/Raftstore/RegionBlockReader.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>

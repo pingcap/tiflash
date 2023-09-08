@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
 
 #include <map>
 

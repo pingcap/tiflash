@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <map>
 

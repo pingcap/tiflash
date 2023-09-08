@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/RegionState.h>
+#include <Storages/Transaction/Raftstore/RegionState.h>
 
 #include <condition_variable>
 

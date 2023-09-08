@@ -16,8 +16,8 @@
 
 #include <Common/RedactHelpers.h>
 #include <Common/nocopyable.h>
-#include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/Utils/SerializationHelper.h>
 
 namespace DB
 {

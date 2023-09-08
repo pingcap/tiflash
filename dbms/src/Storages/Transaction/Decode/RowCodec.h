@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/Decode/TiKVKeyValue.h>
 
 namespace DB
 {

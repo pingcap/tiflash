@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/RegionCFDataBase.h>
-#include <Storages/Transaction/RegionCFDataTrait.h>
-#include <Storages/Transaction/RegionData.h>
+#include <Storages/Transaction/Raftstore/RegionCFDataBase.h>
+#include <Storages/Transaction/Raftstore/RegionCFDataTrait.h>
+#include <Storages/Transaction/Raftstore/RegionData.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 
 namespace DB

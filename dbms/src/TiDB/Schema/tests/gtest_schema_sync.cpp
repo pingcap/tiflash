@@ -23,7 +23,7 @@
 #include <Parsers/IAST.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/Raftstore/RegionBlockReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/registerStorages.h>

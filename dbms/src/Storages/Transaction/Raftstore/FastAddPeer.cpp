@@ -28,11 +28,11 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/Transaction/CheckpointInfo.h>
-#include <Storages/Transaction/FastAddPeerAsyncTasksImpl.h>
-#include <Storages/Transaction/FastAddPeerCache.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/Raftstore/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/Transaction/Raftstore/FastAddPeerCache.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>

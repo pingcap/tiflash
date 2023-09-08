@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <IO/Endian.h>
+#include <Storages/Transaction/Decode/TiKVKeyspaceIDImpl.h>
 #include <Storages/Transaction/KeyspaceSnapshot.h>
-#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 
 namespace DB
 {

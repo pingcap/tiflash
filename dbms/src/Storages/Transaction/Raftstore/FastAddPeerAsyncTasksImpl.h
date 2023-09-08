@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/UniThreadPool.h>
-#include <Storages/Transaction/FastAddPeer.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/Raftstore/FastAddPeer.h>
 
 #include <future>
 
