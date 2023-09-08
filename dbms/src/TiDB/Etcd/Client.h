@@ -74,6 +74,7 @@ public:
     grpc::Status leaseRevoke(LeaseID lease_id);
 
     std::tuple<v3electionpb::LeaderKey, grpc::Status> campaign(
+        grpc::ClientContext * grpc_context,
         const String & name,
         const String & value,
         LeaseID lease_id);
