@@ -16,6 +16,7 @@
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -181,6 +182,7 @@ public:
 
     static void submitAndWait(std::vector<TaskPtr> & tasks, PipelineExecutorContext & exec_context)
     {
+        DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
         TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
@@ -238,6 +240,7 @@ try
     auto do_test = [&](size_t task_thread_pool_size, size_t task_num) {
         PipelineExecutorContext exec_context;
         {
+            DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
             TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
             TaskScheduler task_scheduler{config};
             std::vector<TaskPtr> tasks;
