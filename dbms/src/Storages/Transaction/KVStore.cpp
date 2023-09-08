@@ -594,12 +594,12 @@ bool KVStore::canFlushRegionDataImpl(
             truncated_term,
             current_applied_gap,
             gap_threshold);
-        GET_METRIC(tiflash_raft_region_flush_size, type_flushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     else
     {
-        GET_METRIC(tiflash_raft_region_flush_size, type_unflushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_region_flush_bytes, type_unflushed).Observe(size_bytes);
         GET_METRIC(tiflash_raft_raft_log_gap_count, type_unflushed_applied_index).Observe(current_applied_gap);
     }
     return can_flush;

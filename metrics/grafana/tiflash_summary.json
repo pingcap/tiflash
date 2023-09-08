@@ -11305,7 +11305,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_region_flush_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"unflushed\"}[1m])) by (le, type)",
+              "expr": "sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"unflushed\"}[1m])) by (le, type)",
               "format": "heatmap",
               "hide": false,
               "interval": "",
@@ -11315,7 +11315,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_region_flush_size_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"flushed\"}[1m])) by (le, type)",
+              "expr": "sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"flushed\"}[1m])) by (le, type)",
               "format": "heatmap",
               "hide": true,
               "interval": "",

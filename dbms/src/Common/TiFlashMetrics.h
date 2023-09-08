@@ -431,8 +431,8 @@ namespace DB
       "Raft frequent event counter",                                                                                                \
       Counter,                                                                                                                      \
       F(type_write, {{"type", "write"}}))                                                                                           \
-    M(tiflash_raft_region_flush_size,                                                                                               \
-      "Bucketed histogram of region flushed size",                                                                                  \
+    M(tiflash_raft_region_flush_bytes,                                                                                              \
+      "Bucketed histogram of region flushed bytes",                                                                                 \
       Histogram,                                                                                                                    \
       F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 22}),                                                                \
       F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 22}))                                                            \
