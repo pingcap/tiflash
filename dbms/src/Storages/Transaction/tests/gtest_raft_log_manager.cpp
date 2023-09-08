@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/dbgTools.h>
-#include <Storages/Transaction/tests/kvstore_helper.h>
+#include <Storages/Transaction/RaftLogManager.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests
 {
@@ -54,10 +54,12 @@ try
             tasks.updateHint(region_id, /*eager_truncated_index=*/10, /*applied_index=*/10000, /*threshold=*/512));
         // the applied index advance, and merged into the hints
         ASSERT_TRUE(
-            tasks.updateHint(region_id, /*eager_truncated_index=*/10, /*applied_index=*/10000 + 523, /*threshold=*/512));
+            tasks
+                .updateHint(region_id, /*eager_truncated_index=*/10, /*applied_index=*/10000 + 523, /*threshold=*/512));
         // applied index rollback, just ignore
         ASSERT_FALSE(
-            tasks.updateHint(region_id, /*eager_truncated_index=*/10, /*applied_index=*/10000 + 500, /*threshold=*/512));
+            tasks
+                .updateHint(region_id, /*eager_truncated_index=*/10, /*applied_index=*/10000 + 500, /*threshold=*/512));
         auto hints = tasks.getAndClearHints();
         ASSERT_EQ(hints.size(), 1);
         ASSERT_TRUE(hints.contains(region_id));
@@ -71,7 +73,8 @@ try
             tasks.updateHint(region_id, /*eager_truncated_index=*/10, /*applied_index=*/10000, /*threshold=*/512));
         // the applied index and truncated index advance, and merged into the hints
         ASSERT_TRUE(
-            tasks.updateHint(region_id, /*eager_truncated_index=*/30, /*applied_index=*/10000 + 523, /*threshold=*/512));
+            tasks
+                .updateHint(region_id, /*eager_truncated_index=*/30, /*applied_index=*/10000 + 523, /*threshold=*/512));
         auto hints = tasks.getAndClearHints();
         ASSERT_EQ(hints.size(), 1);
         ASSERT_TRUE(hints.contains(region_id));

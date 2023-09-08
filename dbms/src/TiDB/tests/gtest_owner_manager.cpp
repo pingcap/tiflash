@@ -451,7 +451,7 @@ try
         EXPECT_EQ(owner_info.status, OwnerType::IsOwner) << magic_enum::enum_name(owner_info.status);
     });
 
-    auto th_non_owner = std::async([&]{
+    auto th_non_owner = std::async([&] {
         const String id = "owner_1";
 
         LOG_INFO(log, "waiting for owner0 elected");
@@ -463,7 +463,7 @@ try
         owner1->campaignOwner(); // this will block
     });
 
-    auto th_cancel_non_owner = std::async([&]{
+    auto th_cancel_non_owner = std::async([&] {
         while (!owner0_elected)
             ;
 
