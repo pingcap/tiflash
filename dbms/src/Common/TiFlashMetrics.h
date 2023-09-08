@@ -373,6 +373,7 @@ namespace DB
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
+      F(type_remove_peer, {{"type", "remove_peer"}}, ExpBuckets{0.05, 2, 10}),                                                      \
       F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                        \
       F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
@@ -383,6 +384,8 @@ namespace DB
     M(tiflash_raft_process_keys,                                                                                                    \
       "Total number of keys processed in some types of Raft commands",                                                              \
       Counter,                                                                                                                      \
+      F(type_write_put, {"type", "write_put"}),                                                                                     \
+      F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
       F(type_ingest_sst, {"type", "ingest_sst"}))                                                                                   \
     M(tiflash_raft_apply_write_command_duration_seconds,                                                                            \
@@ -390,6 +393,10 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
       F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+      F(type_admin_batch_split, {{"type", "admin_batch_split"}}, ExpBuckets{0.0005, 2, 20}),                                        \
+      F(type_admin_prepare_merge, {{"type", "admin_prepare_merge"}}, ExpBuckets{0.0005, 2, 20}),                                    \
+      F(type_admin_commit_merge, {{"type", "admin_commit_merge"}}, ExpBuckets{0.0005, 2, 20}),                                      \
+      F(type_admin_change_peer, {{"type", "admin_change_peer"}}, ExpBuckets{0.0005, 2, 20}),                                        \
       F(type_flush_region, {{"type", "flush_region"}}, ExpBuckets{0.0005, 2, 20}))                                                  \
     M(tiflash_raft_upstream_latency,                                                                                                \
       "The latency that tikv sends raft log to tiflash.",                                                                           \
@@ -419,13 +426,20 @@ namespace DB
       F(type_flush_log_gap, {{"type", "flush_log_gap"}}),                                                                           \
       F(type_flush_size, {{"type", "flush_size"}}),                                                                                 \
       F(type_flush_rowcount, {{"type", "flush_rowcount"}}),                                                                         \
-      F(type_flush_eager_gc, {{"type", "flush_eager_gc"}}),                                                                         \
-      F(type_exec_compact, {{"type", "exec_compact"}}))                                                                             \
-    M(tiflash_raft_region_flush_size,                                                                                               \
-      "Bucketed histogram of region flushed size",                                                                                  \
+      F(type_flush_eager_gc, {{"type", "flush_eager_gc"}}))                                                                         \
+    M(tiflash_raft_raft_frequent_events_count,                                                                                      \
+      "Raft frequent event counter",                                                                                                \
+      Counter,                                                                                                                      \
+      F(type_write, {{"type", "write"}}))                                                                                           \
+    M(tiflash_raft_region_flush_bytes,                                                                                              \
+      "Bucketed histogram of region flushed bytes",                                                                                 \
       Histogram,                                                                                                                    \
-      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 16}),                                                                \
-      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 16}))                                                            \
+      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 21}),                                                                \
+      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 21}))                                                            \
+    M(tiflash_raft_entry_size,                                                                                                      \
+      "Bucketed histogram entry size",                                                                                              \
+      Histogram,                                                                                                                    \
+      F(type_normal, {{"type", "normal"}}, ExpBuckets{1, 2, 13}))                                                                   \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
