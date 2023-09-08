@@ -338,6 +338,7 @@ public:
 
     /// Vectorized version when there is no GROUP BY keys.
     void addBatchSinglePlace(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -347,7 +348,7 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
             {
                 if (flags[i])
                     add(place, columns, i, arena);
@@ -356,11 +357,12 @@ public:
         else
         {
             const auto & column = assert_cast<const ColVecType &>(*columns[0]);
-            this->data(place).addMany(column.getData().data(), batch_size);
+            this->data(place).addMany(column.getData().data() + start_offset, batch_size);
         }
     }
 
     void addBatchSinglePlaceNotNull(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -371,14 +373,17 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = start_offset; i < start_offset + batch_size; ++i)
                 if (!null_map[i] && flags[i])
                     add(place, columns, i, arena);
         }
         else
         {
             const auto & column = assert_cast<const ColVecType &>(*columns[0]);
-            this->data(place).addManyNotNull(column.getData().data(), null_map, batch_size);
+            this->data(place).addManyNotNull(
+                column.getData().data() + start_offset,
+                null_map + start_offset,
+                batch_size);
         }
     }
 

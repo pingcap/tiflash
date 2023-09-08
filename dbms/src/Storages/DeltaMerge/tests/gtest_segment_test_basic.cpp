@@ -843,7 +843,12 @@ SegmentPtr SegmentTestBasic::reload(
 
 void SegmentTestBasic::reloadDMContext()
 {
-    dm_context = std::make_unique<DMContext>(
+    dm_context = createDMContext();
+}
+
+std::unique_ptr<DMContext> SegmentTestBasic::createDMContext()
+{
+    return std::make_unique<DMContext>(
         *db_context,
         storage_path_pool,
         storage_pool,

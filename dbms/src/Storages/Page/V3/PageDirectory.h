@@ -639,7 +639,7 @@ UInt64 getMaxSequenceForRecord(const String & record)
 {
     auto edit = Trait::Serializer::deserializeFrom(record, nullptr);
     const auto & records = edit.getRecords();
-    RUNTIME_CHECK(!records.empty());
+    RUNTIME_CHECK(!records.empty(), record.size());
     return records.back().version.sequence;
 }
 } // namespace details

@@ -35,6 +35,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_region_persist_version[];
+} // namespace FailPoints
 
 namespace tests
 {
@@ -70,9 +74,11 @@ public:
         : dir_path(TiFlashTestEnv::getTemporaryPath("RegionSeriTest"))
     {}
 
-    void SetUp() override { TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true); }
+    void SetUp() override { clearFileOnDisk(); }
 
-    std::string dir_path;
+    void clearFileOnDisk() { TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true); }
+
+    const std::string dir_path;
 };
 
 TEST_F(RegionSeriTest, peer)
@@ -117,17 +123,53 @@ CATCH
 TEST_F(RegionSeriTest, RegionMeta)
 try
 {
-    RegionMeta meta = createRegionMeta(888, 66);
     const auto path = dir_path + "/meta.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    RegionMeta meta = createRegionMeta(888, 66);
     auto size = std::get<0>(meta.serialize(write_buf, nullptr));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(size, (size_t)Poco::File(path).getSize());
 
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    auto new_meta = RegionMeta::deserialize(read_buf);
-    ASSERT_EQ(new_meta, meta);
+    auto restored_meta = RegionMeta::deserialize(read_buf);
+    ASSERT_EQ(restored_meta, meta);
+}
+CATCH
+
+TEST_F(RegionSeriTest, RegionOldFormatVersion)
+try
+{
+    TableID table_id = 100;
+    auto region = std::make_shared<Region>(createRegionMeta(1001, table_id));
+    TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
+    region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+    region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+    region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+    region->updateRaftLogEagerIndex(1024);
+
+    const auto path = dir_path + "/region.test";
+    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_region_persist_version,
+        /*version*/ static_cast<UInt64>(1)); // format version = 1
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    write_buf.next();
+    write_buf.sync();
+    ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+
+    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    auto new_region = Region::deserialize(read_buf);
+    ASSERT_REGION_EQ(*new_region, *region);
+    {
+        // For the region restored with binary_version == 1, the eager_truncated_index is equals to
+        // truncated_index
+        const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
+        ASSERT_EQ(new_region->mutMeta().truncateIndex(), 5);
+        ASSERT_EQ(eager_truncated_index, 5);
+    }
 }
 CATCH
 
@@ -141,6 +183,8 @@ try
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
+    region->updateRaftLogEagerIndex(1024);
+
     const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     size_t region_ser_size = std::get<0>(region->serialize(write_buf, nullptr));
@@ -151,6 +195,10 @@ try
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     auto new_region = Region::deserialize(read_buf);
     ASSERT_REGION_EQ(*new_region, *region);
+    {
+        const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
+        ASSERT_EQ(eager_truncated_index, 1024);
+    }
 }
 CATCH
 
@@ -173,7 +221,7 @@ try
             region_state.mutable_merge_state()->set_min_index(777);
             *region_state.mutable_merge_state()->mutable_target()
                 = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
-        };
+        }
         region = std::make_shared<Region>(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
     }
 

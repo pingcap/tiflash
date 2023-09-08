@@ -45,7 +45,6 @@ try
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
 
-            kvr1->markCompactLog();
             kvs.setRegionCompactLogConfig(0, 0, 0, 0);
             auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
             auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));

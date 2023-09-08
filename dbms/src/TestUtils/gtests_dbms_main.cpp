@@ -27,7 +27,6 @@
 #include <gtest/gtest.h>
 #include <signal.h>
 
-
 namespace DB::FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];

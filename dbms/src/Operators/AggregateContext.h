@@ -27,14 +27,7 @@ struct ThreadData
     size_t src_rows = 0;
     size_t src_bytes = 0;
 
-    ColumnRawPtrs key_columns;
-    Aggregator::AggregateColumns aggregate_columns;
-
-    ThreadData(size_t keys_size, size_t aggregates_size)
-    {
-        key_columns.resize(keys_size);
-        aggregate_columns.resize(aggregates_size);
-    }
+    Aggregator::AggProcessInfo agg_process_info{};
 };
 
 /// Aggregated data shared between AggBuild and AggConvergent Pipeline.

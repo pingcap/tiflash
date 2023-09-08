@@ -94,7 +94,7 @@ void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lo
 
 void RegionPersister::doPersist(
     RegionCacheWriteElement & region_write_buffer,
-    const RegionTaskLock &,
+    const RegionTaskLock & region_task_lock,
     const Region & region)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
@@ -117,7 +117,7 @@ void RegionPersister::doPersist(
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 
-    region.updateLastCompactLogApplied();
+    region.updateLastCompactLogApplied(region_task_lock);
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)

@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/ProfileEvents.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
@@ -26,8 +27,18 @@
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
+namespace ProfileEvents
+{
+extern const Event DTDeltaIndexError;
+} // namespace ProfileEvents
+
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int DT_DELTA_INDEX_ERROR;
+}
+
 namespace DM
 {
 /// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
@@ -222,6 +233,7 @@ private:
                 int cmp_result = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
+                    ProfileEvents::increment(ProfileEvents::DTDeltaIndexError);
                     LOG_ERROR(
                         Logger::get(tracing_id),
                         "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
@@ -236,11 +248,17 @@ private:
                         last_handle_pos);
 
                     throw Exception(
-                        "DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
-                        + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                        + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
-                        + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
-                        + DB::toString(last_handle_pos) + "]");
+                        ErrorCodes::DT_DELTA_INDEX_ERROR,
+                        "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
+                        "is expected >= last_handle[{}]last_version[{}]@read[{}]@pos[{}]",
+                        rowkey_value.toDebugString(),
+                        version,
+                        num_read,
+                        i,
+                        last_value_ref.toDebugString(),
+                        last_version,
+                        last_handle_read_num,
+                        last_handle_pos);
                 }
                 last_value_ref = rowkey_value;
                 last_version = version;

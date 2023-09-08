@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/KVStoreCommon.h>
+#include <Storages/Transaction/RaftLogManager.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
@@ -81,6 +82,8 @@ class PathPool;
 class RegionPersister;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 enum class PersistRegionReason
 {
@@ -91,18 +94,21 @@ enum class PersistRegionReason
     ProactiveFlush,
     ApplySnapshotPrevRegion,
     ApplySnapshotCurRegion,
-    IngestSst
+    IngestSst,
+    EagerRaftGc,
 };
 
-constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()]
-    = {"debug",
-       "admin cmd useless",
-       "admin raft cmd",
-       "tryFlushRegionData",
-       "ProactiveFlush",
-       "save previous region before apply",
-       "save current region after apply",
-       "ingestsst"};
+constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()] = {
+    "debug",
+    "admin cmd useless",
+    "admin raft cmd",
+    "tryFlushRegionData",
+    "ProactiveFlush",
+    "save previous region before apply",
+    "save current region after apply",
+    "ingestsst",
+    "eager raft log gc",
+};
 
 static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistRegionReasonMap) / sizeof(const char *));
 
@@ -180,7 +186,10 @@ public:
     void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogConfig(UInt64, UInt64, UInt64, UInt64);
+
+    void setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap);
+    UInt64 getRaftLogEagerGCRows() const { return region_eager_gc_log_gap.load(); }
+
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
@@ -229,6 +238,10 @@ public:
         UInt64 compact_term,
         bool is_background,
         bool lock_held = true);
+
+    RaftLogEagerGcTasks::Hints getRaftLogGcHints();
+    void applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const;
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -350,6 +363,7 @@ private:
         Region & curr_region,
         const RegionTaskLock & region_task_lock,
         const PersistRegionState & state) const;
+    bool tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock &);
 
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
@@ -404,10 +418,15 @@ private:
 
     LoggerPtr log;
 
-    std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;
     std::atomic<UInt64> region_compact_log_min_bytes;
     std::atomic<UInt64> region_compact_log_gap;
+    // `region_eager_gc_log_gap` is checked after each write command applied,
+    // It should be large enough to avoid unnecessary flushes and also not
+    // too large to control the memory when there are down peers.
+    // The 99% of passive flush is 512, so we use it as default value.
+    // 0 means eager gc is disabled.
+    std::atomic<UInt64> region_eager_gc_log_gap;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
@@ -423,6 +442,11 @@ private:
     PreHandlingTrace prehandling_trace;
 
     StoreMeta store;
+
+    // Eager RaftLog GC
+    const bool eager_raft_log_gc_enabled;
+    // The index hints for eager RaftLog GC tasks
+    RaftLogEagerGcTasks raft_log_gc_hints;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

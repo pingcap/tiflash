@@ -13,9 +13,13 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
+#include <common/types.h>
 #include <fmt/core.h>
+
+#include <mutex>
 
 
 #pragma GCC diagnostic push
@@ -129,6 +133,12 @@ UInt64 RegionMeta::appliedIndexTerm() const
     return applied_term;
 }
 
+UInt64 RegionMeta::truncateIndex() const
+{
+    std::lock_guard lock(mutex);
+    return apply_state.truncated_state().index();
+}
+
 RegionMeta::RegionMeta(RegionMeta && rhs)
     : region_id(rhs.regionId())
 {
@@ -170,14 +180,16 @@ raft_serverpb::PeerState RegionMeta::peerState() const
     return region_state.getState();
 }
 
-void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
+void RegionMeta::setPeerState(const raft_serverpb::PeerState & peer_state_)
 {
     std::lock_guard lock(mutex);
     region_state.setState(peer_state_);
 }
 
-WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running)
-    const
+WaitIndexResult RegionMeta::waitIndex( //
+    UInt64 index,
+    const UInt64 timeout_ms,
+    std::function<bool(void)> && check_running) const
 {
     std::unique_lock lock(mutex);
     WaitIndexResult status = WaitIndexResult::Finished;

@@ -1773,7 +1773,7 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
             PageStorageConfig config;
             shared->ps_write = UniversalPageStorageService::create( //
                 *this,
-                "write",
+                "uni_write",
                 path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
                 config);
             LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
