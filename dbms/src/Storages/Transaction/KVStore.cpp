@@ -427,6 +427,7 @@ void KVStore::persistRegion(
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_useful_admin).Increment(1);
         break;
     case PersistRegionReason::Flush:
+        // It used to be type_exec_compact.
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
         break;
     case PersistRegionReason::ProactiveFlush:
@@ -485,6 +486,7 @@ bool KVStore::tryFlushRegionData(
 
     if (!force_persist)
     {
+        GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
         // try to flush RegionData according to the mem cache rows/bytes/interval
         return canFlushRegionDataImpl(
             curr_region_ptr,
@@ -569,7 +571,6 @@ bool KVStore::canFlushRegionDataImpl(
         can_flush = true;
     }
 
-    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
     LOG_DEBUG(
         log,
         "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
@@ -581,7 +582,6 @@ bool KVStore::canFlushRegionDataImpl(
 
     if (can_flush && flush_if_possible)
     {
-        GET_METRIC(tiflash_raft_raft_events_count, type_exec_compact).Increment(1);
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
         LOG_INFO(
             log,
@@ -594,12 +594,12 @@ bool KVStore::canFlushRegionDataImpl(
             truncated_term,
             current_applied_gap,
             gap_threshold);
-        GET_METRIC(tiflash_raft_region_flush_size, type_flushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     else
     {
-        GET_METRIC(tiflash_raft_region_flush_size, type_unflushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_region_flush_bytes, type_unflushed).Observe(size_bytes);
         GET_METRIC(tiflash_raft_raft_log_gap_count, type_unflushed_applied_index).Observe(current_applied_gap);
     }
     return can_flush;
@@ -616,7 +616,7 @@ bool KVStore::forceFlushRegionDataImpl(
     Stopwatch watch;
     if (index)
     {
-        // We set actual index when handling CompactLog.
+        // We advance index when pre exec CompactLog.
         curr_region.handleWriteRaftCmd({}, index, term, tmt);
     }
 
@@ -698,11 +698,33 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
     TMTContext & tmt)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ //
-        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
-    });
     auto type = request.cmd_type();
-    switch (request.cmd_type())
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
+        switch (type)
+        {
+        case raft_cmdpb::AdminCmdType::ChangePeer:
+        case raft_cmdpb::AdminCmdType::ChangePeerV2:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_change_peer)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::BatchSplit:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_batch_split)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::PrepareMerge:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_prepare_merge)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::CommitMerge:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_commit_merge)
+                .Observe(watch.elapsedSeconds());
+            break;
+        default:
+            break;
+        }
+    });
+    switch (type)
     {
     // CompactLog | VerifyHash | ComputeHash won't change region meta, there is no need to occupy task lock of kvstore.
     case raft_cmdpb::AdminCmdType::CompactLog:
