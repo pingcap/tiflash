@@ -46,6 +46,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
@@ -138,8 +139,7 @@
             mi_option_set(NAME, value);              \
         }                                            \
         catch (...)                                  \
-        {                                            \
-        }                                            \
+        {}                                           \
     }
 
 void loadMiConfig(Logger * log)
@@ -191,8 +191,7 @@ namespace
             target = result;
         }
         catch (...)
-        {
-        }
+        {}
     }
 }
 } // namespace
@@ -1563,6 +1562,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     });
 
+    auto & tmt_context = global_context->getTMTContext();
+#ifdef DBMS_PUBLIC_GTEST
+    LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+#else
+    LocalAdmissionController::global_instance
+        = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+#endif
+
     // For test mode, TaskScheduler is controlled by test case.
     bool is_prod = !global_context->isTest();
     if (is_prod)
@@ -1666,7 +1673,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         SessionCleaner session_cleaner(*global_context);
 
-        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
             // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.

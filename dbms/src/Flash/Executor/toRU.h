@@ -18,7 +18,7 @@
 
 namespace DB
 {
-using RU = UInt64;
+using RU = double;
 
 // Convert cpu time nanoseconds to cpu time millisecond, and round up.
 UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns);
