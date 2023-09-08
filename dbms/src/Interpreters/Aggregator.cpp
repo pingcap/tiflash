@@ -722,7 +722,7 @@ Aggregator::executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo
 {
     size_t agg_size = agg_process_info.end_row - agg_process_info.start_row;
     fiu_do_on(FailPoints::force_agg_on_partial_block, {
-        if (agg_size > 0)
+        if (agg_size > 0 && agg_process_info.start_row == 0)
             agg_size = std::max(agg_size / 2, 1);
     });
     /// Adding values
