@@ -43,6 +43,6 @@ private:
 // RegionID -> truncated index
 using RaftLogGcTasksRes = std::unordered_map<RegionID, UInt64>;
 
-RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints);
+[[nodiscard]] RaftLogGcTasksRes executeRaftLogGcTasks(Context & global_ctx, RaftLogEagerGcTasks::Hints && hints);
 
 } // namespace DB

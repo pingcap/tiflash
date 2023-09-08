@@ -37,7 +37,8 @@ bool RaftLogEagerGcTasks::updateHint(
     UInt64 applied_index,
     UInt64 threshold)
 {
-    if (applied_index < eager_truncated_index || applied_index - eager_truncated_index < threshold)
+    if (threshold == 0 //
+        || applied_index < eager_truncated_index || applied_index - eager_truncated_index < threshold)
         return false;
 
     // Try to register a task for eager remove RaftLog to reduce the memory overhead of UniPS
