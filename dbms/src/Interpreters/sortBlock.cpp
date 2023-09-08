@@ -16,8 +16,8 @@
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/sortBlock.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collator/CollatorUtils.h>
 #include <common/defines.h>
 
 #if defined(APPLY_FOR_TYPE) || defined(M) || defined(CONCAT)

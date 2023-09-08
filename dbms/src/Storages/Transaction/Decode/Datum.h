@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Field.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 
 #include <optional>
 

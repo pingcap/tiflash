@@ -18,7 +18,7 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
 #include <Interpreters/Expand.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collator/Collator.h>
 
 #include <unordered_map>
 #include <unordered_set>

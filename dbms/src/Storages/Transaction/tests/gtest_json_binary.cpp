@@ -14,7 +14,7 @@
 
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <Storages/Transaction/JsonBinary.cpp>
+#include <Storages/Transaction/Utils/JsonBinary.cpp>
 
 namespace DB
 {

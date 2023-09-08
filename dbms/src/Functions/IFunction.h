@@ -19,7 +19,7 @@
 #include <Core/Field.h>
 #include <Core/Names.h>
 #include <DataTypes/IDataType.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collator/Collator.h>
 
 #include <memory>
 

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Storages/IManageableStorage.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {

@@ -32,8 +32,8 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 
 #include <queue>
 

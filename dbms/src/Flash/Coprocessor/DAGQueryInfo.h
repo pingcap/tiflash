@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Interpreters/TimezoneInfo.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
 #include <google/protobuf/repeated_ptr_field.h>
 #include <tipb/expression.pb.h>
 

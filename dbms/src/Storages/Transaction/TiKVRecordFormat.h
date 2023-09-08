@@ -18,8 +18,8 @@
 #include <Core/Types.h>
 #include <IO/Endian.h>
 #include <IO/WriteBufferFromString.h>
-#include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/Decode/Datum.h>
+#include <Storages/Transaction/Decode/DatumCodec.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>

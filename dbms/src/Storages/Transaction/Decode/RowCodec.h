@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 namespace DB

@@ -20,7 +20,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 
 namespace DB
 {

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/JsonBinary.h>
-#include <Storages/Transaction/JsonPathExpr.h>
-#include <Storages/Transaction/JsonPathExprRef.h>
+#include <Storages/Transaction/Utils/JsonBinary.h>
+#include <Storages/Transaction/Utils/JsonPathExpr.h>
+#include <Storages/Transaction/Utils/JsonPathExprRef.h>
 
 namespace DB
 {

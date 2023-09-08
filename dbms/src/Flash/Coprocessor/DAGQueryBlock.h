@@ -20,7 +20,7 @@
 #pragma GCC diagnostic pop
 
 #include <Interpreters/IQuerySource.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
 

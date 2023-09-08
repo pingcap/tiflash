@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/RowCodec.h>
+#include <Storages/Transaction/Decode/RowCodec.h>
 #include <gtest/gtest.h>
 
 #include "RowCodecTestUtils.h"

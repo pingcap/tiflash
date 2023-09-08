@@ -14,7 +14,7 @@
 
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <Storages/Transaction/JsonPathExpr.cpp>
+#include <Storages/Transaction/Utils/JsonPathExpr.cpp>
 
 namespace DB
 {

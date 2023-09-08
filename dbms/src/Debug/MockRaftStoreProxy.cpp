@@ -22,12 +22,12 @@
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/Transaction/Decode/RowCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #pragma once
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/RowCodec.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/RowCodec.h>
+#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Decode/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB::tests

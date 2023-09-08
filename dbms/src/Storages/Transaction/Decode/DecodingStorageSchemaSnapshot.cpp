@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeString.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
 
 namespace DB
 {

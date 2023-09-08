@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Decode/TypeMapping.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB

@@ -21,7 +21,7 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemDatabases.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 

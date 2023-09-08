@@ -23,9 +23,9 @@
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/JsonBinary.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/Transaction/Utils/JsonBinary.h>
+#include <TiDB/Collator/Collator.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 

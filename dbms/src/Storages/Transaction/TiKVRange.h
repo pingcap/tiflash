@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/TableRowIDMinMax.h>
+#include <Storages/Transaction/Decode/TableRowIDMinMax.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>

@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Storages/Transaction/JsonBinary.h>
-#include <Storages/Transaction/JsonPathExpr.h>
+#include <Storages/Transaction/Utils/JsonBinary.h>
+#include <Storages/Transaction/Utils/JsonPathExpr.h>
 
 namespace DB
 {

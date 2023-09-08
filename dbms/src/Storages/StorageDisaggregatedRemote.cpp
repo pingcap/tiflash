@@ -45,9 +45,9 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <kvproto/disaggregated.pb.h>
 #include <kvproto/kvrpcpb.pb.h>

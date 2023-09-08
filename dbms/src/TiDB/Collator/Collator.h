@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Columns/Collator.h>
-#include <Storages/Transaction/CollatorCompare.h>
+#include <TiDB/Collator/CollatorCompare.h>
 #include <common/StringRef.h>
 
 #include <memory>

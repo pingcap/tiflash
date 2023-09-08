@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/Decode/DatumCodec.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>

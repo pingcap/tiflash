@@ -14,8 +14,8 @@
 
 #include <Functions/CollationStringSearch.h>
 #include <Functions/CollationStringSearchOptimized.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collator/CollatorUtils.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests

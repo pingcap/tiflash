@@ -21,7 +21,7 @@
 #include <Common/SipHash.h>
 #include <Common/WeakHash.h>
 #include <Core/Field.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collator/Collator.h>
 #include <common/StringRef.h>
 #include <fmt/core.h>
 

@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Poco/String.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collator/CollatorUtils.h>
 
 #include <cassert>
 #include <unordered_map>

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
-#include <Storages/Transaction/JsonBinary.h>
+#include <Storages/Transaction/Utils/JsonBinary.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 

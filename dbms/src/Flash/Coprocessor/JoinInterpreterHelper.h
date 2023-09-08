@@ -22,7 +22,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collator/Collator.h>
 #include <tipb/executor.pb.h>
 
 #include <functional>

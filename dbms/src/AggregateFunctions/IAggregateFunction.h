@@ -21,7 +21,7 @@
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collator/Collator.h>
 
 #include <cstddef>
 #include <memory>

@@ -18,13 +18,13 @@
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/Datum.h>
+#include <Storages/Transaction/Decode/DatumCodec.h>
+#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Decode/RowCodec.h>
+#include <Storages/Transaction/Decode/TiDB.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/RowCodec.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB

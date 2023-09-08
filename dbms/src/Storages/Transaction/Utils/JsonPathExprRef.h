@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Storages/Transaction/JsonPathExpr.h>
+#include <Storages/Transaction/Utils/JsonPathExpr.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 
