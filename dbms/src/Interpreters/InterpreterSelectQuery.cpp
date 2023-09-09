@@ -54,8 +54,8 @@
 #include <Storages/IStorage.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/Decode/TiKVRange.h>
-#include <Storages/Transaction/Raftstore/LearnerRead.h>
-#include <Storages/Transaction/Raftstore/RegionRangeKeys.h>
+#include <Storages/Transaction/MultiRaft/LearnerRead.h>
+#include <Storages/Transaction/MultiRaft/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/ITableFunction.h>

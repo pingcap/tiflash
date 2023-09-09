@@ -23,8 +23,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/Raftstore/RegionManager.h>
-#include <Storages/Transaction/Raftstore/RegionPersister.h>
+#include <Storages/Transaction/MultiRaft/RegionManager.h>
+#include <Storages/Transaction/MultiRaft/RegionPersister.h>
 #include <Storages/Transaction/Region.h>
 #include <common/logger_useful.h>
 

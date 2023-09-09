@@ -39,7 +39,7 @@
 #include <Storages/Transaction/Decode/TiKVRange.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/RegionBlockReader.h>
+#include <Storages/Transaction/MultiRaft/RegionBlockReader.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>

@@ -16,7 +16,7 @@
 #include <Common/setThreadName.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/ReadIndexWorker.h>
+#include <Storages/Transaction/MultiRaft/ReadIndexWorker.h>
 #include <fmt/chrono.h>
 
 #include <queue>

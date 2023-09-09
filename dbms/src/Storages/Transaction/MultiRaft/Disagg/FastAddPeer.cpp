@@ -30,9 +30,9 @@
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/FFI/ProxyFFICommon.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/Disagg/CheckpointInfo.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerAsyncTasksImpl.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerCache.h>
+#include <Storages/Transaction/MultiRaft/Disagg/CheckpointInfo.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>

@@ -26,8 +26,8 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
-#include <Storages/Transaction/Raftstore/LearnerRead.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/MultiRaft/LearnerRead.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>

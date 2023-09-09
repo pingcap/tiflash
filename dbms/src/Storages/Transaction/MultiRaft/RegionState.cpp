@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Transaction/Decode/TiKVRange.h>
-#include <Storages/Transaction/Raftstore/RegionState.h>
+#include <Storages/Transaction/MultiRaft/RegionState.h>
 
 namespace DB
 {

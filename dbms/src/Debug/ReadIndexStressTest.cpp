@@ -21,7 +21,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/ReadIndexWorker.h>
+#include <Storages/Transaction/MultiRaft/ReadIndexWorker.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/chrono.h>
 

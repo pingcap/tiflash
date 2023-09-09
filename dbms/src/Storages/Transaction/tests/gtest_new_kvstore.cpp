@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/Raftstore/LearnerRead.h>
+#include <Storages/Transaction/MultiRaft/LearnerRead.h>
 
 #include "kvstore_helper.h"
 

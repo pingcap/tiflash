@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/Raftstore/SSTReader.h>
+#include <Storages/Transaction/MultiRaft/SSTReader.h>
 
 #include <map>
 

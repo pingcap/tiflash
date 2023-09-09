@@ -37,8 +37,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Poco/Net/NetException.h>
 #include <Storages/StorageMemory.h>
-#include <Storages/Transaction/Raftstore/LockException.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/MultiRaft/LockException.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>

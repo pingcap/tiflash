@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
 #include <Storages/Transaction/Types.h>
 
 #include <boost/noncopyable.hpp>

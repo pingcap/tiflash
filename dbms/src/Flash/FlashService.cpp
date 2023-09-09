@@ -45,8 +45,8 @@
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/Raftstore/LockException.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/MultiRaft/LockException.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>

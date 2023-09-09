@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/Raftstore/RegionRangeKeys.h>
+#include <Storages/Transaction/MultiRaft/RegionRangeKeys.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

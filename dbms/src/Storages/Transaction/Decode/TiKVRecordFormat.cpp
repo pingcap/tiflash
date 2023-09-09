@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Storages/Transaction/Decode/TiKVRecordFormat.h>
-#include <Storages/Transaction/Raftstore/RegionCFDataBase.h>
-#include <Storages/Transaction/Raftstore/RegionCFDataTrait.h>
+#include <Storages/Transaction/MultiRaft/RegionCFDataBase.h>
+#include <Storages/Transaction/MultiRaft/RegionCFDataTrait.h>
 
 namespace DB
 {

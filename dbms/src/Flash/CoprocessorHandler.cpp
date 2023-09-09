@@ -24,8 +24,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/Raftstore/LockException.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/MultiRaft/LockException.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 

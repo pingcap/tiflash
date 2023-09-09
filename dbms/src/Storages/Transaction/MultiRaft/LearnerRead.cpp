@@ -23,10 +23,10 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/LearnerRead.h>
-#include <Storages/Transaction/Raftstore/LockException.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
-#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
+#include <Storages/Transaction/MultiRaft/LearnerRead.h>
+#include <Storages/Transaction/MultiRaft/LockException.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
+#include <Storages/Transaction/MultiRaft/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>

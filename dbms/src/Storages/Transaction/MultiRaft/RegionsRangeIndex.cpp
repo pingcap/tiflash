@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/Raftstore/RegionsRangeIndex.h>
+#include <Storages/Transaction/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/Transaction/Region.h>
 
 namespace DB

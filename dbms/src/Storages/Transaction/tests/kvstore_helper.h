@@ -29,7 +29,7 @@
 #include <Storages/Transaction/Decode/PartitionStreams.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
+#include <Storages/Transaction/MultiRaft/RegionExecutionResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>

@@ -21,7 +21,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/Disagg/RaftLogManager.h>
+#include <Storages/Transaction/MultiRaft/Disagg/RaftLogManager.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <common/defines.h>

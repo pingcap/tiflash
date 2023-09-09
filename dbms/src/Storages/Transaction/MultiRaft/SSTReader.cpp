@@ -13,7 +13,7 @@
 // limitations under the License.
 
 
-#include <Storages/Transaction/Raftstore/SSTReader.h>
+#include <Storages/Transaction/MultiRaft/SSTReader.h>
 
 #include <magic_enum.hpp>
 #include <vector>

@@ -16,7 +16,7 @@
 
 #include <Common/UniThreadPool.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeer.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeer.h>
 
 #include <future>
 

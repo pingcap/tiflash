@@ -25,9 +25,9 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/ReadIndexWorker.h>
-#include <Storages/Transaction/Raftstore/RegionExecutionResult.h>
-#include <Storages/Transaction/Raftstore/RegionPersister.h>
+#include <Storages/Transaction/MultiRaft/ReadIndexWorker.h>
+#include <Storages/Transaction/MultiRaft/RegionExecutionResult.h>
+#include <Storages/Transaction/MultiRaft/RegionPersister.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>

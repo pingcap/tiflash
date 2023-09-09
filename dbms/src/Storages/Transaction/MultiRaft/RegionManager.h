@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/Raftstore/RegionsRangeIndex.h>
+#include <Storages/Transaction/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
 

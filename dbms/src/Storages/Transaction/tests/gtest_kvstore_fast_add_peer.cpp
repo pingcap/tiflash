@@ -19,9 +19,9 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeer.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerAsyncTasksImpl.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerCache.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/Transaction/tests/kvstore_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>

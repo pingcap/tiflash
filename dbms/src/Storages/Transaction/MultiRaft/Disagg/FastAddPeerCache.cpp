@@ -28,8 +28,8 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Raftstore/Disagg/CheckpointInfo.h>
-#include <Storages/Transaction/Raftstore/Disagg/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/Transaction/MultiRaft/Disagg/CheckpointInfo.h>
+#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>

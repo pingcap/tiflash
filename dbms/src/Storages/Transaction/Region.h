@@ -17,8 +17,8 @@
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/Decode/TiKVKeyValue.h>
-#include <Storages/Transaction/Raftstore/RegionData.h>
-#include <Storages/Transaction/Raftstore/RegionMeta.h>
+#include <Storages/Transaction/MultiRaft/RegionData.h>
+#include <Storages/Transaction/MultiRaft/RegionMeta.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>

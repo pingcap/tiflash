@@ -26,8 +26,8 @@
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
-#include <Storages/Transaction/Raftstore/LockException.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
+#include <Storages/Transaction/MultiRaft/LockException.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
 #include <pingcap/Exception.h>
 
 namespace DB

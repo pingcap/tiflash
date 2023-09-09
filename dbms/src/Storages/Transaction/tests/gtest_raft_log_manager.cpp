@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/RaftLogManager.h>
+#include <Storages/Transaction/MultiRaft/Disagg/RaftLogManager.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests

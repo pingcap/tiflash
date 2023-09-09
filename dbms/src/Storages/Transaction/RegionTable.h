@@ -20,9 +20,9 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/Decode/TiKVHandle.h>
-#include <Storages/Transaction/Raftstore/RegionDataRead.h>
-#include <Storages/Transaction/Raftstore/RegionException.h>
-#include <Storages/Transaction/Raftstore/RegionLockInfo.h>
+#include <Storages/Transaction/MultiRaft/RegionDataRead.h>
+#include <Storages/Transaction/MultiRaft/RegionException.h>
+#include <Storages/Transaction/MultiRaft/RegionLockInfo.h>
 #include <Storages/Transaction/Region.h>
 #include <common/logger_useful.h>
 
