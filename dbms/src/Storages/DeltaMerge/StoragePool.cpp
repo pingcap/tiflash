@@ -34,6 +34,7 @@ namespace CurrentMetrics
 extern const Metric StoragePoolV2Only;
 extern const Metric StoragePoolV3Only;
 extern const Metric StoragePoolMixMode;
+extern const Metric StoragePoolUniPS;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -787,12 +788,12 @@ PageStorageRunMode StoragePool::restore()
         max_log_page_id = uni_ps->getMaxIdAfterRestart();
         max_data_page_id = uni_ps->getMaxIdAfterRestart();
         max_meta_page_id = uni_ps->getMaxIdAfterRestart();
+
+        storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolUniPS};
         break;
     }
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
     LOG_TRACE(
         logger,
@@ -851,9 +852,7 @@ void StoragePool::startup(ExternalPageCallbacks && callbacks)
         break;
     }
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
@@ -898,13 +897,11 @@ void StoragePool::shutdown()
         break;
     }
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
-bool StoragePool::doV2Gc(const Settings & settings)
+bool StoragePool::doV2Gc(const Settings & settings) const
 {
     bool done_anything = false;
     auto write_limiter = global_context.getWriteLimiter();

@@ -178,7 +178,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    bool doV2Gc(const Settings & settings);
+    bool doV2Gc(const Settings & settings) const;
 
     void forceTransformMetaV2toV3();
     void forceTransformDataV2toV3();
