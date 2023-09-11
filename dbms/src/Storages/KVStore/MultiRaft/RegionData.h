@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
-#include <Storages/KVStore/MultiRaft/RegionDataRead.h>
 
 namespace DB
 {

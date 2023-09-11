@@ -17,8 +17,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/MultiRaft/RegionDataRead.h>
 #include <Storages/TableLockHolder.h>
 
 namespace DB

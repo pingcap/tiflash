@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/KVStore/MultiRaft/RegionDataRead.h>
+#include <Storages/KVStore/Decode/RegionDataRead.h>
 
 namespace DB
 {

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/KVStore/MultiRaft/RegionDataRead.h>
+#include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
