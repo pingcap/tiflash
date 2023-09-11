@@ -12,7 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory (System)
-add_subdirectory (Page)
-add_subdirectory (DeltaMerge)
-add_subdirectory (Transaction)
+add_headers_and_sources(kvstore .)
+add_headers_and_sources(kvstore ./FFI)
+add_headers_and_sources(kvstore ./MultiRaft)
+add_headers_and_sources(kvstore ./MultiRaft/Disagg)
+add_headers_and_sources(kvstore ./Utils)
+add_headers_and_sources(kvstore ./TiKV)
+add_headers_and_sources(kvstore ./Decode)
+
+add_library(kvstore ${kvstore_headers} ${kvstore_sources})
+target_link_libraries(kvstore PRIVATE dbms)
+
+if (ENABLE_TESTS)
+    add_headers_and_sources(kvstore tests)
+endif ()
