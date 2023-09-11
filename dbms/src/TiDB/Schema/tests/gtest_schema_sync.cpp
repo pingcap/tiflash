@@ -23,7 +23,7 @@
 #include <Parsers/IAST.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/KVStore/MultiRaft/RegionBlockReader.h>
+#include <Storages/KVStore/Read/RegionBlockReader.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/registerStorages.h>

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/MultiRaft/RegionException.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Types.h>
 
 #include <boost/noncopyable.hpp>

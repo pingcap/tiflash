@@ -22,15 +22,15 @@
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
-#include <Storages/KVStore/Decode/RowCodec.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/Region.h>
-#include <Storages/KVStore/RegionTable.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <google/protobuf/text_format.h>
 

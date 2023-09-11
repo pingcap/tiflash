@@ -19,9 +19,9 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
 

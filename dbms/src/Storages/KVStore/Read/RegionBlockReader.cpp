@@ -18,14 +18,14 @@
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/KVStore/Decode/Datum.h>
-#include <Storages/KVStore/Decode/DatumCodec.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/KVStore/Decode/RowCodec.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/MultiRaft/RegionBlockReader.h>
+#include <Storages/KVStore/Read/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/RowCodec.h>
 
 namespace DB
 {

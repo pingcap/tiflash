@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/MultiRaft/ReadIndexWorker.h>
+#include <Storages/KVStore/Read/ReadIndexWorker.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <kvproto/raft_serverpb.pb.h>
 #include <raft_cmdpb.pb.h>
 

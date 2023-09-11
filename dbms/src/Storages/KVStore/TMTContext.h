@@ -16,7 +16,7 @@
 
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/GCManager.h>
-#include <Storages/KVStore/RegionTable.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/TiKV/PDTiKVClient.h>

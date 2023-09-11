@@ -14,8 +14,8 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

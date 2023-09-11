@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Storages/KVStore/Decode/Datum.h>
-#include <Storages/KVStore/Decode/DatumCodec.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
+#include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 using TiDB::DatumBumpy;
 using TiDB::DatumFlat;

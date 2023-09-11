@@ -20,18 +20,18 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
-#include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/KVStore/BackgroundService.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/MultiRaft/ReadIndexWorker.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
+#include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <Storages/KVStore/Region.h>
-#include <Storages/KVStore/RegionTable.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <common/likely.h>
 
 #include <mutex>

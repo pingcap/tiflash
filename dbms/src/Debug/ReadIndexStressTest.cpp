@@ -21,7 +21,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/MultiRaft/ReadIndexWorker.h>
+#include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <fmt/chrono.h>
 

@@ -19,9 +19,9 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Collator/Collator.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>

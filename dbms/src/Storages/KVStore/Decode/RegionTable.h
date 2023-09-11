@@ -21,8 +21,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/MultiRaft/RegionDataRead.h>
-#include <Storages/KVStore/MultiRaft/RegionException.h>
-#include <Storages/KVStore/MultiRaft/RegionLockInfo.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/Read/RegionLockInfo.h>
 #include <Storages/KVStore/Region.h>
 #include <common/logger_useful.h>
 

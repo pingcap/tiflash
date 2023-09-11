@@ -14,9 +14,9 @@
 
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/MutableSupport.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
+#include <Storages/MutableSupport.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

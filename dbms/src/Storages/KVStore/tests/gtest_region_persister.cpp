@@ -19,13 +19,13 @@
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/PathPool.h>
-#include <Storages/KVStore/Decode/TiKVRecordFormat.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
 #include <Storages/KVStore/tests/region_helper.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>

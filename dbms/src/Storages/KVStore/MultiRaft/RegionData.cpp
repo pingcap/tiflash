@@ -16,7 +16,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
-#include <Storages/KVStore/MultiRaft/RegionLockInfo.h>
+#include <Storages/KVStore/Read/RegionLockInfo.h>
 
 namespace DB
 {

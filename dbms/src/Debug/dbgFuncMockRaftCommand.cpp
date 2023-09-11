@@ -20,10 +20,10 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/KVStore/Decode/TiKVRecordFormat.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
 #include <fmt/core.h>
 
 #include "dbgTools.h"

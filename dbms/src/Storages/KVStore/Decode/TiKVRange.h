@@ -17,7 +17,7 @@
 #include <Storages/KVStore/Decode/TableRowIDMinMax.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Decode/TiKVKeyValue.h>
-#include <Storages/KVStore/Decode/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
 #include <common/likely.h>
 
 namespace DB

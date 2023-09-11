@@ -17,15 +17,15 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/Region.h>
-#include <Storages/KVStore/RegionTable.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
 namespace DB

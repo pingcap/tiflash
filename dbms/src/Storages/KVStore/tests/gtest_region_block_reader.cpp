@@ -16,17 +16,17 @@
 #include <Core/Field.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/KVStore/Decode/DatumCodec.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/Decode/TiDB.h>
 #include <Storages/KVStore/Decode/TiKVKeyValue.h>
-#include <Storages/KVStore/MultiRaft/RegionBlockReader.h>
+#include <Storages/KVStore/Read/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/tests/RowCodecTestUtils.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/DatumCodec.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 

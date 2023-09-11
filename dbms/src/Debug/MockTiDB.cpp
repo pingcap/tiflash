@@ -28,9 +28,9 @@
 #include <Parsers/ASTLiteral.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 #include <mutex>
 

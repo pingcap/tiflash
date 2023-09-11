@@ -15,9 +15,9 @@
 #include <Columns/IColumn.h>
 #include <IO/Endian.h>
 #include <IO/Operators.h>
-#include <Storages/KVStore/Decode/Datum.h>
-#include <Storages/KVStore/Decode/DatumCodec.h>
-#include <Storages/KVStore/Decode/RowCodec.h>
+#include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/RowCodec.h>
 
 
 namespace DB

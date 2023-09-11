@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Storages/KVStore/MultiRaft/RegionLockInfo.h>
+#include <Storages/KVStore/Read/RegionLockInfo.h>
 #include <pingcap/kv/RegionCache.h>
 
 namespace DB

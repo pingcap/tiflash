@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Storages/KVStore/Decode/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
 
 namespace DB
 {

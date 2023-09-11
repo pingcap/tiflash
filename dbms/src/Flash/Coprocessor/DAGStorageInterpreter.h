@@ -23,13 +23,13 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
+#include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTStorages.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
-#include <Storages/KVStore/MultiRaft/LearnerRead.h>
-#include <Storages/KVStore/MultiRaft/RegionException.h>
-#include <Storages/KVStore/TMTStorages.h>
-#include <Storages/KVStore/Types.h>
 #include <pingcap/coprocessor/Client.h>
 
 #include <vector>

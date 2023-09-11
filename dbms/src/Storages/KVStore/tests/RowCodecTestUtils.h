@@ -14,10 +14,10 @@
 
 #pragma once
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/KVStore/Decode/RowCodec.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB::tests
 {

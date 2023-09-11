@@ -18,8 +18,8 @@
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

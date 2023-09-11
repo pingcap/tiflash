@@ -32,7 +32,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 #include <type_traits>
 
