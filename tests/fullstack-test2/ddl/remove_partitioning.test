@@ -28,7 +28,6 @@ mysql> insert into test.t select a+1000000,a+1000000,-(a+1000000) from test.t;
 
 func> wait_table test t
 
-mysql> set @@global.tidb_allow_mpp = 0;
 # check table info in tiflash
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_name─┐
