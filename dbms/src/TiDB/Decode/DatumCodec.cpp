@@ -15,7 +15,7 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/Operators.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Decode/TiKVVarInt.h>
+#include <Storages/KVStore/TiKV/TiKVVarInt.h>
 #include <Storages/KVStore/Utils/JsonBinary.h>
 #include <TiDB/Decode/DatumCodec.h>
 

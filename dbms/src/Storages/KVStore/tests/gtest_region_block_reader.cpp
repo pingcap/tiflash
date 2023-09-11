@@ -18,9 +18,9 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Decode/TiDB.h>
 #include <Storages/KVStore/Decode/TiKVKeyValue.h>
-#include <Storages/KVStore/Read/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/tests/RowCodecTestUtils.h>
 #include <Storages/KVStore/tests/region_helper.h>

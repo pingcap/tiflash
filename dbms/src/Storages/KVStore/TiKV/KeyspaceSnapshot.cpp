@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <IO/Endian.h>
-#include <Storages/KVStore/Decode/TiKVKeyspaceIDImpl.h>
-#include <Storages/KVStore/MultiRaft/Disagg/KeyspaceSnapshot.h>
+#include <Storages/KVStore/TiKV/KeyspaceSnapshot.h>
+#include <Storages/KVStore/TiKV/TiKVKeyspaceIDImpl.h>
 
 namespace DB
 {

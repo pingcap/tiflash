@@ -22,10 +22,10 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Read/LockException.h>
-#include <Storages/KVStore/Read/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils.h>

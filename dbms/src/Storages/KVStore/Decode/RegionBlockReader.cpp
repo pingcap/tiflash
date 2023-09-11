@@ -19,8 +19,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Read/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/Datum.h>

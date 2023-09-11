@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/KVStore/Read/RegionBlockReader.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
