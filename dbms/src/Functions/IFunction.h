@@ -248,8 +248,7 @@ protected:
     virtual FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const TiDB::TiDBCollatorPtr & collator) const
-        = 0;
+        const TiDB::TiDBCollatorPtr & collator) const = 0;
 };
 
 using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;

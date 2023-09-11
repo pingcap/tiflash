@@ -109,7 +109,8 @@ void TCPHandler::runImpl()
             sendException(e);
         }
         catch (...)
-        {}
+        {
+        }
 
         throw;
     }
