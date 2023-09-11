@@ -359,6 +359,7 @@ private:
 
     PersistRegionState getPersistRegionState(RegionID region_id) const;
     PersistRegionState getPersistRegionState(RegionPtr region, const RegionTaskLock & region_task_lock) const;
+    bool doFlushRegionDataWithState(RegionID region_id, const PersistRegionState & state) const;
     bool doFlushRegionDataWithState(
         Region & curr_region,
         const RegionTaskLock & region_task_lock,

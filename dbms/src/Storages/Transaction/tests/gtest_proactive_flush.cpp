@@ -86,12 +86,48 @@ try
 }
 CATCH
 
+std::tuple<uint64_t, uint64_t> mockTableWrite(std::unique_ptr<MockRaftStoreProxy> & proxy_instance, KVStore & kvs, TMTContext & tmt, TableID table_id, RegionID region_id, HandleID handle_id, Timestamp ts) {
+    auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(ts, 999);
+    auto k3 = RecordKVFormat::genKey(table_id, handle_id, ts);
+    auto && [index, term] = proxy_instance->rawWrite(
+        region_id,
+        {k3, k3},
+        {value_default, value_write},
+        {WriteCmdType::Put, WriteCmdType::Put},
+        {ColumnFamilyType::Default, ColumnFamilyType::Write},
+        std::nullopt);
+    MockRaftStoreProxy::FailCond cond;
+    proxy_instance->doApply(kvs, tmt, cond, region_id, index);
+    return std::make_tuple(index, term);
+}
+
+void mockTableBatchSplit(std::unique_ptr<MockRaftStoreProxy> & proxy_instance, KVStore & kvs, TMTContext & tmt, TableID table_id, RegionID region_id, RegionID region_id2, uint64_t split) {
+    auto source_region = kvs.getRegion(region_id);
+    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
+    const auto & ori_source_range = source_region->getRange()->comparableKeys();
+    auto start_key = TiKVKey::copyFrom(ori_source_range.first.key);
+    auto end_key = TiKVKey::copyFrom(ori_source_range.second.key);
+    RegionRangeKeys::RegionRange new_source_range
+        = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(table_id, split), std::move(end_key));
+    RegionRangeKeys::RegionRange new_target_range
+        = RegionRangeKeys::makeComparableKeys(std::move(start_key), RecordKVFormat::genKey(table_id, split));
+    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit(
+        {region_id, region_id2},
+        regionRangeToEncodeKeys(new_source_range, new_target_range),
+        old_epoch);
+    auto [indexc, termc]
+        = proxy_instance->adminCommand(region_id, std::move(request), std::move(response), std::nullopt);
+    MockRaftStoreProxy::FailCond cond;
+    proxy_instance->doApply(kvs, tmt, cond, region_id, indexc);
+}
+
 TEST_F(RegionKVStoreTest, KVStoreStalePassiveFlush)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     UInt64 region_id = 1;
     TableID table_id;
+    PersistRegionState persist_state;
     {
         initStorages();
         KVStore & kvs = getKVS();
@@ -103,28 +139,22 @@ try
             ctx.getTMTContext(),
             region_id,
             std::make_pair(start.toString(), end.toString()));
-        MockRaftStoreProxy::FailCond cond;
 
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
         ASSERT_NE(r1, nullptr);
         ASSERT_NE(kvr1, nullptr);
 
-        auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-        auto k3 = RecordKVFormat::genKey(table_id, 3, 111);
-        auto && [index, term] = proxy_instance->rawWrite(
-            region_id,
-            {k3, k3},
-            {value_default, value_write},
-            {WriteCmdType::Put, WriteCmdType::Put},
-            {ColumnFamilyType::Default, ColumnFamilyType::Write},
-            std::nullopt);
-        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        mockTableWrite(proxy_instance, kvs, ctx.getTMTContext(), table_id, region_id, 3, 100);
 
-        kvs.setRegionCompactLogConfig(0, 0, 0, 0);
-        auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
-        auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));
-        ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term2, 0, 0));
+        persist_state = kvs.getPersistRegionState(region_id);
+        mockTableWrite(proxy_instance, kvs, ctx.getTMTContext(), table_id, region_id, 3, 112);
+        mockTableBatchSplit(proxy_instance, kvs, ctx.getTMTContext(), table_id, region_id, 7, 5);
+    }
+    {
+        KVStore & kvs2 = reloadKVSFromDisk();
+        // Failed due to a split command.
+        ASSERT_FALSE(kvs2.doFlushRegionDataWithState(region_id, persist_state));
     }
 }
 CATCH

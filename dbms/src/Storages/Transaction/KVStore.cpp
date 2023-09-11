@@ -703,6 +703,19 @@ PersistRegionState KVStore::getPersistRegionState(RegionPtr region, const Region
     return PersistRegionState{region->appliedIndex(), region->appliedIndexTerm()};
 }
 
+bool KVStore::doFlushRegionDataWithState(RegionID region_id, const PersistRegionState & state) const {
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Try persist of a non-exesting region {} by state",
+            region_id);
+    }
+    return doFlushRegionDataWithState(*curr_region_ptr, region_task_lock, state);
+}
+
 bool KVStore::doFlushRegionDataWithState(
     Region & curr_region,
     const RegionTaskLock & region_task_lock,
