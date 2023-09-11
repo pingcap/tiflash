@@ -62,14 +62,23 @@ void LocalAdmissionController::startBackgroudJob()
         std::terminate();
     }
 
+    auto last_metric_time_point = std::chrono::steady_clock::now();
     while (!stopped.load())
     {
         std::function<void()> local_refill_token_callback = nullptr;
-        bool fetch_token_periodically = false;
+        bool fetch_token_periodically = true;
 
         {
             std::unique_lock<std::mutex> lock(mu);
             local_refill_token_callback = refill_token_callback;
+
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_metric_time_point >= METRIC_INTERVAL)
+            {
+                last_metric_time_point = now;
+                for (const auto & resource_group : resource_groups)
+                    resource_group.second->collectMetrics();
+            }
 
             if (low_token_resource_groups.empty())
             {
