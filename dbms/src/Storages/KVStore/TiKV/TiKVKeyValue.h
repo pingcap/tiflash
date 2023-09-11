@@ -12,7 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace DB {
+#pragma once
+
+
+#include <Common/RedactHelpers.h>
+#include <Common/nocopyable.h>
+#include <Storages/KVStore/Utils/SerializationHelper.h>
+
+namespace DB
+{
 template <bool is_key>
 struct StringObject : std::string
 {

@@ -14,10 +14,8 @@
 
 #pragma once
 
-#include <Common/RedactHelpers.h>
-#include <Common/nocopyable.h>
+#include <Storages/KVStore/TiKV/TiKVKeyValue.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/Utils/SerializationHelper.h>
 
 namespace DB
 {
