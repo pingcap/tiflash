@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1694151861724,
+  "iteration": 1694430080744,
   "links": [],
   "panels": [
     {
@@ -9492,6 +9492,7 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
+            "hideZero": true,
             "max": false,
             "min": false,
             "rightSide": true,
@@ -9525,7 +9526,7 @@
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "{{instance}}-OnlyV2",
+              "legendFormat": "{{instance}}-V2",
               "refId": "A",
               "step": 10
             },
@@ -9534,7 +9535,7 @@
               "expr": "sum(tiflash_system_current_metric_StoragePoolV3Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-OnlyV3",
+              "legendFormat": "{{instance}}-V3",
               "refId": "B"
             },
             {
@@ -9544,6 +9545,14 @@
               "interval": "",
               "legendFormat": "{{instance}}-MixMode",
               "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolUniPS{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-UniPS",
+              "refId": "D"
             }
           ],
           "thresholds": [],
