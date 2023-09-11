@@ -22,7 +22,7 @@
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Collator/Collator.h>
 #include <TiDB/Decode/JsonBinary.h>

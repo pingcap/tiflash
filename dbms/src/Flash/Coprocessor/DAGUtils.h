@@ -18,7 +18,7 @@
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Collator/Collator.h>
 #include <TiDB/Decode/TypeMapping.h>

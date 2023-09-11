@@ -17,7 +17,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
 

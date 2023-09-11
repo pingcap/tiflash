@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/TypeMapping.h>

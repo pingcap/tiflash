@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

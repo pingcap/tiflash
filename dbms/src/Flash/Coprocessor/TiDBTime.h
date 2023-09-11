@@ -21,7 +21,7 @@
 
 #include <Common/MyTime.h>
 #include <Core/Types.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

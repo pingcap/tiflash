@@ -16,7 +16,7 @@
 
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/expression.pb.h>

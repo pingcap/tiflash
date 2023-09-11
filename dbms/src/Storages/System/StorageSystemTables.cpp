@@ -25,7 +25,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/System/StorageSystemTables.h>

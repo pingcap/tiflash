@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/ColumnsDescription.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/SchemaSyncer.h>

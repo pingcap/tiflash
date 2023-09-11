@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Storages/IManageableStorage.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/TMTStorages.h>
 
 namespace DB

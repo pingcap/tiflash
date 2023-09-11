@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Storages/KVStore/Decode/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/mpp.pb.h>
 
 namespace DB
