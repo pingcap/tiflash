@@ -25,13 +25,13 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/MutableSupport.h>
-#include <Storages/StorageDeltaMerge.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/tests/region_helper.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>

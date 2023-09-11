@@ -14,15 +14,15 @@
 
 #include <Debug/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
-#include <Storages/S3/CheckpointManifestS3Set.h>
-#include <Storages/S3/S3Common.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
+#include <Storages/S3/CheckpointManifestS3Set.h>
+#include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>

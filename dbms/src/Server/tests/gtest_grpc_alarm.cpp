@@ -27,12 +27,12 @@
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/Page/V2/PageStorage.h>
-#include <Storages/PathCapacityMetrics.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <TestUtils/ConfigTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 

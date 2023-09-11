@@ -17,15 +17,15 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/KVStore/MultiRaft/RegionManager.h>
+#include <Storages/KVStore/MultiRaft/RegionPersister.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
-#include <Storages/KVStore/MultiRaft/RegionManager.h>
-#include <Storages/KVStore/MultiRaft/RegionPersister.h>
-#include <Storages/KVStore/Region.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>

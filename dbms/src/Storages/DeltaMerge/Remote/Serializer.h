@@ -22,8 +22,8 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
-#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
 {

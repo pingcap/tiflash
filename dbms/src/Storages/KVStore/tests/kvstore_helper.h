@@ -24,8 +24,6 @@
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
-#include <Storages/PathPool.h>
-#include <Storages/StorageDeltaMerge.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
@@ -34,6 +32,8 @@
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/tests/region_helper.h>
+#include <Storages/PathPool.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>

@@ -29,11 +29,11 @@
 #include <Storages/DeltaMerge/workload/KeyGenerator.h>
 #include <Storages/DeltaMerge/workload/Options.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <cpptoml.h>

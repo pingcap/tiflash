@@ -18,10 +18,10 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/PathPool.h>
-#include <Storages/StorageDeltaMerge.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/tests/region_helper.h>
+#include <Storages/PathPool.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>

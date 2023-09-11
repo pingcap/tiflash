@@ -23,8 +23,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Storages/TableLockHolder.h>
 #include <Storages/KVStore/Decode/TiDB.h>
+#include <Storages/TableLockHolder.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"

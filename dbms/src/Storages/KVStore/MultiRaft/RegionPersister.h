@@ -16,11 +16,11 @@
 
 #include <Common/Logger.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/WriteBatchImpl.h>
-#include <Storages/KVStore/Types.h>
 
 namespace DB
 {

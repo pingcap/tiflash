@@ -22,6 +22,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
@@ -29,7 +30,6 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
-#include <Storages/KVStore/Types.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/S3Client.h>

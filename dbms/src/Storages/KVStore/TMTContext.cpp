@@ -19,12 +19,12 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/S3/S3Common.h>
-#include <Storages/S3/S3GCManager.h>
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3GCManager.h>
 #include <TiDB/Etcd/Client.h>
 #include <TiDB/OwnerInfo.h>
 #include <TiDB/OwnerManager.h>

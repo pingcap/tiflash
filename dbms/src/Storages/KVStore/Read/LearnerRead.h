@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Storages/RegionQueryInfo.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/RegionQueryInfo.h>
 
 #include <unordered_map>
 #include <vector>

@@ -16,11 +16,11 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/Page/PageConstants.h>
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/Page/PageConstants.h>
 
 namespace DB
 {

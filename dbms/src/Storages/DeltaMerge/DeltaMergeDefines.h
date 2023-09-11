@@ -22,8 +22,8 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
-#include <Storages/MutableSupport.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/MutableSupport.h>
 
 #include <limits>
 #include <memory>

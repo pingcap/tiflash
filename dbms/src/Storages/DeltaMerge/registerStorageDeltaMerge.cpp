@@ -17,9 +17,9 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/KVStore/Decode/TiDB.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/KVStore/Decode/TiDB.h>
 
 namespace DB
 {
