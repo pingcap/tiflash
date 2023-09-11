@@ -23,7 +23,7 @@
 #include <pingcap/kv/Snapshot.h>
 #pragma GCC diagnostic pop
 
-#include <Storages/KVStore/Decode/TiKVKeyValue.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Types.h>
 #include <pingcap/kv/Scanner.h>
 

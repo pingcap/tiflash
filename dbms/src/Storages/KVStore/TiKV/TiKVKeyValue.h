@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/RedactHelpers.h>
-#include <Common/nocopyable.h>
-#include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/Utils/SerializationHelper.h>
-
-namespace DB
-{
+namespace DB {
 template <bool is_key>
 struct StringObject : std::string
 {
@@ -81,75 +73,6 @@ private:
 using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
-
-struct DecodedTiKVKey
-    : std::string
-    , private boost::noncopyable
-{
-    using Base = std::string;
-    DecodedTiKVKey(Base && str_)
-        : Base(std::move(str_))
-    {}
-    DecodedTiKVKey() = default;
-    DecodedTiKVKey(DecodedTiKVKey && obj)
-        : Base((Base &&) obj)
-    {}
-    DecodedTiKVKey & operator=(DecodedTiKVKey && obj)
-    {
-        if (this == &obj)
-            return *this;
-
-        (Base &)* this = (Base &&) obj;
-        return *this;
-    }
-
-    KeyspaceID getKeyspaceID() const;
-    std::string_view getUserKey() const;
-    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
-    std::string toDebugString() const;
-    static std::string makeKeyspacePrefix(KeyspaceID keyspace_id);
-};
-
-static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
-
-struct RawTiDBPK : private std::shared_ptr<const std::string>
-{
-    using Base = std::shared_ptr<const std::string>;
-
-    struct Hash
-    {
-        size_t operator()(const RawTiDBPK & x) const { return std::hash<std::string>()(*x); }
-    };
-
-    bool operator==(const RawTiDBPK & y) const { return (**this) == (*y); }
-    bool operator!=(const RawTiDBPK & y) const { return !((*this) == y); }
-    bool operator<(const RawTiDBPK & y) const { return (**this) < (*y); }
-    bool operator>(const RawTiDBPK & y) const { return (**this) > (*y); }
-    const std::string * operator->() const { return get(); }
-    const std::string & operator*() const { return *get(); }
-
-    RawTiDBPK(const Base & o)
-        : Base(o)
-        , handle(o->size() == 8 ? getHandleID() : 0)
-    {}
-
-    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
-    std::string toDebugString() const
-    {
-        auto & p = *this;
-        return Redact::keyToDebugString(p->data(), p->size());
-    }
-
-    // Make this struct can be casted into HandleID implicitly.
-    operator HandleID() const { return handle; }
-
-private:
-    HandleID getHandleID() const;
-
-private:
-    HandleID handle;
-};
-
 } // namespace DB
 
 namespace std

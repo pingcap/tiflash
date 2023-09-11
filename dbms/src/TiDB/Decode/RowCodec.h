@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/KVStore/Decode/TiKVKeyValue.h>
 
 namespace DB
 {

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/Decode/TiKVKeyValue.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 
 #include <map>
