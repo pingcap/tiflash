@@ -775,9 +775,7 @@ void MockRaftStoreProxy::doApply(
             }
         }
     }
-    else if (cmd.has_admin_request())
-    {
-    }
+    else if (cmd.has_admin_request()) {}
 
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE)
         return;

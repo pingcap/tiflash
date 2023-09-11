@@ -192,7 +192,8 @@ public:
         Arena & arena,
         char const *& begin,
         const TiDB::TiDBCollatorPtr & collator,
-        String & sort_key_container) const = 0;
+        String & sort_key_container) const
+        = 0;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
     {
         return serializeValueIntoArena(n, arena, begin, nullptr, TiDB::dummy_sort_key_contaner);
@@ -223,7 +224,8 @@ public:
         size_t n,
         SipHash & hash,
         const TiDB::TiDBCollatorPtr & collator,
-        String & sort_key_container) const = 0;
+        String & sort_key_container) const
+        = 0;
     void updateHashWithValue(size_t n, SipHash & hash) const
     {
         updateHashWithValue(n, hash, nullptr, TiDB::dummy_sort_key_contaner);
@@ -233,7 +235,8 @@ public:
     virtual void updateHashWithValues(
         HashValues & hash_values,
         const TiDB::TiDBCollatorPtr & collator,
-        String & sort_key_container) const = 0;
+        String & sort_key_container) const
+        = 0;
     void updateHashWithValues(HashValues & hash_values) const
     {
         updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);
@@ -245,7 +248,8 @@ public:
     virtual void updateWeakHash32(
         WeakHash32 & hash,
         const TiDB::TiDBCollatorPtr & collator,
-        String & sort_key_container) const = 0;
+        String & sort_key_container) const
+        = 0;
     void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Removes elements that don't match the filter.
