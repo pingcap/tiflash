@@ -23,7 +23,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <fmt/core.h>
 
 #include "dbgTools.h"

@@ -15,7 +15,7 @@
 #pragma once
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
-#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
 #include <optional>
 

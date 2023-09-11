@@ -19,7 +19,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTStorages.h>
-#include <Storages/KVStore/TiKV/PDTiKVClient.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 
 namespace DB
 {

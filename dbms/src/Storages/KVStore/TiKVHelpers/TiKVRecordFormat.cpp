@@ -14,7 +14,7 @@
 
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
-#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
 namespace DB
 {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
-#include <Storages/KVStore/TiKV/TiKVKeyspaceIDImpl.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 
 namespace DB
 {

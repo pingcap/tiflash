@@ -20,7 +20,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
-#include <Storages/KVStore/TiKV/TiKVVarInt.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVVarInt.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/DatumCodec.h>

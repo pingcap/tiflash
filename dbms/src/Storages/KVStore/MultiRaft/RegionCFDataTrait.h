@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/TiKV/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
 #include <map>
 
