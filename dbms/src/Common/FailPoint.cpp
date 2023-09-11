@@ -101,7 +101,8 @@ namespace DB
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
-    M(exception_when_fetch_disagg_pages)
+    M(exception_when_fetch_disagg_pages)                     \
+    M(force_agg_on_partial_block)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
