@@ -16,7 +16,7 @@
 #include <Common/RedactHelpers.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <raft_serverpb.pb.h>
 
 namespace DB

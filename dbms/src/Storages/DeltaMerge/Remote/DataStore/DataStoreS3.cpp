@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <aws/core/utils/DateTime.h>
 #include <common/logger_useful.h>
 

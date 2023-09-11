@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
-#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/KVStore/Decode/TiDB.h>
 
 namespace DB::mock
 {

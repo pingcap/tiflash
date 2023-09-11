@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/StoragePool_fwd.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <atomic>
 #include <chrono>

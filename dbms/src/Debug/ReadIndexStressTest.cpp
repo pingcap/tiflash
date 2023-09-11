@@ -19,10 +19,10 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/MultiRaft/ReadIndexWorker.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ReadIndexWorker.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <fmt/chrono.h>
 
 

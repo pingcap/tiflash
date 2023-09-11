@@ -35,14 +35,14 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/Decode/PartitionStreams.h>
-#include <Storages/Transaction/Decode/TiKVRange.h>
-#include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/MultiRaft/RegionBlockReader.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/RegionBlockReader.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 

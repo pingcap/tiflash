@@ -32,8 +32,8 @@
 #include <Storages/Page/PageConstants.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <cpptoml.h>

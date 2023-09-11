@@ -38,10 +38,10 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/Decode/TiKVRange.h>
-#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
-#include <Storages/Transaction/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/Decode/TiDB.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/Decode/TiKVRecordFormat.h>
+#include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 

@@ -19,7 +19,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
-#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/KVStore/Decode/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>

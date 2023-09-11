@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <limits>
 #include <memory>

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/TiDBColumn.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 
 namespace DB
 {

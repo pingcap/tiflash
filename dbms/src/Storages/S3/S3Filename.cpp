@@ -17,7 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>

@@ -64,8 +64,8 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/BackgroundService.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/BackgroundService.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>

@@ -27,8 +27,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TMTStorages.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>

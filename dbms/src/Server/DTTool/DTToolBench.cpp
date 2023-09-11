@@ -27,7 +27,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <pingcap/Config.h>
 
 #include <boost/program_options.hpp>

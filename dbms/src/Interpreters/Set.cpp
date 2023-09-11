@@ -29,7 +29,7 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 
 
 namespace DB

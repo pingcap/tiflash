@@ -17,7 +17,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/KVStore/Decode/TiDB.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>

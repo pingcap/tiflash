@@ -20,7 +20,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <aws/s3/S3Client.h>
 
 

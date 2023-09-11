@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <kvproto/disaggregated.pb.h>
 
 #pragma GCC diagnostic push

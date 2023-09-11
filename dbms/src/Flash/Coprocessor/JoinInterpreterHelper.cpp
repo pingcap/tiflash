@@ -22,7 +22,7 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Join.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 

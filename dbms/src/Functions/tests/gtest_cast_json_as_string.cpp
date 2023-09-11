@@ -16,7 +16,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Storages/Transaction/Utils/JsonBinary.h>
+#include <Storages/KVStore/Utils/JsonBinary.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 

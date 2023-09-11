@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/MultiRaft/Disagg/KeyspaceSnapshot.h>
+#include <Storages/KVStore/Decode/TiDB.h>
+#include <Storages/KVStore/MultiRaft/Disagg/KeyspaceSnapshot.h>
 #include <common/logger_useful.h>
 
 #include <optional>

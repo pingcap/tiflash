@@ -27,8 +27,8 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/Decode/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/Decode/TiDB.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/Decode/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
 

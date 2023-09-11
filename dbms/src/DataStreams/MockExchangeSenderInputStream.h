@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <tipb/executor.pb.h>
 
 namespace DB

@@ -206,6 +206,7 @@ target_link_libraries (dbms
     dtpb
     RemoteTaskProto
     PSCheckpointProto
+    kvstore
 )
 
 # always add GmSSL include dir to the include path for static analysis

@@ -20,8 +20,8 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>

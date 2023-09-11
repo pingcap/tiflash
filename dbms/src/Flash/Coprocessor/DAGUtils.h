@@ -18,9 +18,9 @@
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
-#include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/TiDB.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
+#include <Storages/KVStore/Types.h>
 #include <TiDB/Collator/Collator.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>

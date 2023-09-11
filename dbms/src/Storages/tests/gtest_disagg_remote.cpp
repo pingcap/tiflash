@@ -15,7 +15,7 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/disaggregated.pb.h>

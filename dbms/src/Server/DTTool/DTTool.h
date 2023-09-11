@@ -27,8 +27,8 @@
 #include <Server/CLIService.h>
 #include <Server/IServer.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <daemon/BaseDaemon.h>
 #include <pingcap/Config.h>
 

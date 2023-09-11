@@ -22,7 +22,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <boost/noncopyable.hpp>
 

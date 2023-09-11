@@ -14,7 +14,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 namespace DB
 {

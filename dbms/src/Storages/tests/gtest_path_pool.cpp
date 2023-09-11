@@ -18,7 +18,7 @@
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/FFI/ProxyFFI.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>

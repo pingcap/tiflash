@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 #include <fmt/ranges.h>

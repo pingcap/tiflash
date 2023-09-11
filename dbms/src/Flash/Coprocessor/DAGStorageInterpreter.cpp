@@ -49,10 +49,10 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/MultiRaft/LockException.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/LockException.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>

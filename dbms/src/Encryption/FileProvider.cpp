@@ -25,7 +25,7 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/S3/S3WritableFile.h>
-#include <Storages/Transaction/FFI/FileEncryption.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
 #include <common/likely.h>
 
 namespace DB

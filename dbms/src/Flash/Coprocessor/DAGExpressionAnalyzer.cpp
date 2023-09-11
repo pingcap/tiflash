@@ -43,7 +43,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>

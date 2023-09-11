@@ -22,8 +22,8 @@
 #include <Operators/ExpressionTransformOp.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 

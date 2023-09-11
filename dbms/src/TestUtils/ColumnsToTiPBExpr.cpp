@@ -18,7 +18,7 @@
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
 
 namespace DB

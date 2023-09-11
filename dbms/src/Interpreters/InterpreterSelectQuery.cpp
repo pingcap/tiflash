@@ -53,11 +53,11 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/Decode/TiKVRange.h>
-#include <Storages/Transaction/MultiRaft/LearnerRead.h>
-#include <Storages/Transaction/MultiRaft/RegionRangeKeys.h>
-#include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/MultiRaft/LearnerRead.h>
+#include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>

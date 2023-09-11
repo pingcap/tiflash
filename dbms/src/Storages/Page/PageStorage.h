@@ -26,7 +26,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WALRecoveryMode.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 

@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
 #include <cstddef>

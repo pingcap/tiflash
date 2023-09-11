@@ -30,9 +30,9 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/Transaction/MultiRaft/RegionManager.h>
-#include <Storages/Transaction/MultiRaft/RegionPersister.h>
-#include <Storages/Transaction/Region.h>
+#include <Storages/KVStore/MultiRaft/RegionManager.h>
+#include <Storages/KVStore/MultiRaft/RegionPersister.h>
+#include <Storages/KVStore/Region.h>
 #include <TestUtils/ConfigTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 

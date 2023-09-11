@@ -16,8 +16,8 @@
 #include <Debug/dbgQueryExecutor.h>
 #include <Server/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 #include <fmt/core.h>
 

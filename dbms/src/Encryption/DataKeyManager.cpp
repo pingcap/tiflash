@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Encryption/DataKeyManager.h>
-#include <Storages/Transaction/FFI/FileEncryption.h>
-#include <Storages/Transaction/FFI/ProxyFFI.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 
 namespace DB
 {

@@ -22,11 +22,11 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/Decode/PartitionStreams.h>
-#include <Storages/Transaction/FFI/ProxyFFI.h>
-#include <Storages/Transaction/MultiRaft/SSTReader.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/MultiRaft/SSTReader.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <common/logger_useful.h>
 
 namespace DB

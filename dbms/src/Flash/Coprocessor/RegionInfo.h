@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/Decode/TiKVKeyValue.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/TiKVKeyValue.h>
+#include <Storages/KVStore/Types.h>
 
 namespace DB
 {

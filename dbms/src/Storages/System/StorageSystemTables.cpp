@@ -27,8 +27,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/System/StorageSystemTables.h>
-#include <Storages/Transaction/Decode/TiDB.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/TiDB.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 

@@ -24,10 +24,10 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/MultiRaft/Disagg/CheckpointInfo.h>
-#include <Storages/Transaction/MultiRaft/Disagg/FastAddPeer.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/TMTContext.h>
 
 #include <magic_enum.hpp>
 

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
 

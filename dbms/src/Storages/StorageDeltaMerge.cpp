@@ -53,10 +53,10 @@
 #include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/Transaction/Decode/TiKVRecordFormat.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/Decode/TiKVRecordFormat.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>

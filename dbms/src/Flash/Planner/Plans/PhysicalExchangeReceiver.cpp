@@ -24,7 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
-#include <Storages/Transaction/Decode/TypeMapping.h>
+#include <Storages/KVStore/Decode/TypeMapping.h>
 #include <fmt/format.h>
 
 namespace DB

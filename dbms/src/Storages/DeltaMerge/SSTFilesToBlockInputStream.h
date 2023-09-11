@@ -17,7 +17,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
-#include <Storages/Transaction/Decode/PartitionStreams.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
 
 #include <memory>
 #include <string_view>
