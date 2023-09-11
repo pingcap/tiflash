@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Storages/KVStore/Utils/JsonPathExpr.h>
+#include <TiDB/Decode/JsonPathExpr.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 

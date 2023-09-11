@@ -14,7 +14,7 @@
 
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <Storages/KVStore/Utils/JsonBinary.cpp>
+#include <TiDB/Decode/JsonBinary.cpp>
 
 namespace DB
 {

@@ -22,8 +22,8 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Storages/KVStore/Utils/JsonBinary.h>
-#include <Storages/KVStore/Utils/JsonPathExprRef.h>
+#include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/JsonPathExprRef.h>
 
 namespace DB
 {

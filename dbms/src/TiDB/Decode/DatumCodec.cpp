@@ -16,8 +16,8 @@
 #include <IO/Operators.h>
 #include <Storages/KVStore/Decode/TiDB.h>
 #include <Storages/KVStore/TiKV/TiKVVarInt.h>
-#include <Storages/KVStore/Utils/JsonBinary.h>
 #include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/JsonBinary.h>
 
 namespace DB
 {

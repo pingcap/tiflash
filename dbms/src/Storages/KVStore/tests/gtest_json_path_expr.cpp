@@ -14,7 +14,7 @@
 
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <Storages/KVStore/Utils/JsonPathExpr.cpp>
+#include <TiDB/Decode/JsonPathExpr.cpp>
 
 namespace DB
 {

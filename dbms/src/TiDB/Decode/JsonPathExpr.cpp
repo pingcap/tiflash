@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Storages/KVStore/Utils/JsonBinary.h>
-#include <Storages/KVStore/Utils/JsonPathExpr.h>
+#include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/JsonPathExpr.h>
 
 namespace DB
 {

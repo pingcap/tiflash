@@ -23,9 +23,9 @@
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/KVStore/Decode/TiDB.h>
-#include <Storages/KVStore/Utils/JsonBinary.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Collator/Collator.h>
+#include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 

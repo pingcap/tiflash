@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/KVStore/Utils/JsonBinary.h>
-#include <Storages/KVStore/Utils/JsonPathExpr.h>
-#include <Storages/KVStore/Utils/JsonPathExprRef.h>
+#include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/JsonPathExpr.h>
+#include <TiDB/Decode/JsonPathExprRef.h>
 
 namespace DB
 {

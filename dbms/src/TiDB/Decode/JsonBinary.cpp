@@ -14,9 +14,9 @@
 
 #include <Common/MyDuration.h>
 #include <Flash/Coprocessor/TiDBTime.h>
-#include <Storages/KVStore/Utils/JsonBinary.h>
-#include <Storages/KVStore/Utils/JsonPathExprRef.h>
 #include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/JsonPathExprRef.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

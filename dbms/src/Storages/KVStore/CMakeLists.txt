@@ -17,7 +17,7 @@ add_headers_and_sources(kvstore ./FFI)
 add_headers_and_sources(kvstore ./MultiRaft)
 add_headers_and_sources(kvstore ./MultiRaft/Disagg)
 add_headers_and_sources(kvstore ./Utils)
-add_headers_and_sources(kvstore ./TiKV)
+add_headers_and_sources(kvstore ./TiKVHelpers)
 add_headers_and_sources(kvstore ./Decode)
 add_headers_and_sources(kvstore ./Read)
 
