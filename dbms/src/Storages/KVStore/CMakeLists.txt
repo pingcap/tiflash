@@ -22,7 +22,7 @@ add_headers_and_sources(kvstore ./Decode)
 add_headers_and_sources(kvstore ./Read)
 
 add_library(kvstore ${kvstore_headers} ${kvstore_sources})
-target_link_libraries(kvstore PRIVATE dbms)
+target_link_libraries(kvstore PRIVATE dbms page)
 
 if (ENABLE_TESTS)
     add_headers_and_sources(kvstore tests)
