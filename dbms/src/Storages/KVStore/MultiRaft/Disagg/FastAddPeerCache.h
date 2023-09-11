@@ -17,6 +17,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/Page/Config.h>
 
 namespace DB
 {
