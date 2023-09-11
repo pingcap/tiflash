@@ -1071,7 +1071,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         bool should_stop = false;
         do
         {
-            if (is_cancelled())
+            if unlikely (is_cancelled())
                 return;
             if (!executeOnBlock(agg_process_info, result, thread_num))
             {
