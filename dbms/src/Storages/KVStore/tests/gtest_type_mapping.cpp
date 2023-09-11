@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
-#include <TiDB/Schema/TiDB.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

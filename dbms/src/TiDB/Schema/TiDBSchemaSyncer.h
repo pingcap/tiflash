@@ -18,8 +18,8 @@
 #include <Common/Stopwatch.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 

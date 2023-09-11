@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 #include <optional>

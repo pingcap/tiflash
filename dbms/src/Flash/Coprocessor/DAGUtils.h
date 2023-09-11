@@ -18,10 +18,10 @@
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Collator/Collator.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>

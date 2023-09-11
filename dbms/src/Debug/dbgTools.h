@@ -17,8 +17,8 @@
 #include <Parsers/IAST.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/raft_cmdpb.pb.h>
 
 #include <optional>

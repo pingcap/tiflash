@@ -42,13 +42,13 @@
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/disaggregated.pb.h>
 #include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>

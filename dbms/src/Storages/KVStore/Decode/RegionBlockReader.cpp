@@ -20,12 +20,12 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

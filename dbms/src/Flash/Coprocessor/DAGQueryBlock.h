@@ -21,8 +21,8 @@
 
 #include <Interpreters/IQuerySource.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
