@@ -67,7 +67,7 @@ Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
     }
 
     ColumnsWithTypeAndName columns;
-    for (auto & field : schema)
+    for (const auto & field : schema)
     {
         const auto & name = field.first;
         auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
