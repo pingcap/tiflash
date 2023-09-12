@@ -69,11 +69,12 @@ public:
     {
         LOG_DEBUG(
             log,
-            "Total rows: {}, pass: {:.2f}%"
+            "Total rows: {}, blocks: {}, pass: {:.2f}%"
             ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
             ", not clean: {:.2f}%, is deleted: {:.2f}%, effective: {:.2f}%"
             ", start_ts: {}",
             total_rows,
+            total_blocks,
             passed_rows * 100.0 / total_rows,
             complete_passed * 100.0 / total_blocks,
             complete_not_passed * 100.0 / total_blocks,

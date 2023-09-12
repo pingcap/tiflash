@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -40,6 +41,15 @@ public:
         assert(sorted_input_stream != nullptr);
         cur_block = {};
         children.push_back(child);
+    }
+
+    ~PKSquashingBlockInputStream() override
+    {
+        LOG_DEBUG(
+            &Poco::Logger::get("PKSquashingBlockInputStream"),
+            "Total runs {}, max_sort_rows {}",
+            runs,
+            max_sort_rows);
     }
 
     String getName() const override { return "PKSquashing"; }
@@ -69,9 +79,10 @@ public:
             first_read = false;
         }
 
+        runs++;
         cur_block = next_block;
         if (!cur_block)
-            return finializeBlock(std::move(cur_block));
+            return finializeBlock(std::move(cur_block), max_sort_rows);
 
         while (true)
         {
@@ -89,7 +100,7 @@ public:
             const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_id, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
-                return finializeBlock(std::move(cur_block));
+                return finializeBlock(std::move(cur_block), max_sort_rows);
             else
             {
                 const size_t next_block_nrows = next_block.rows();
@@ -114,7 +125,7 @@ public:
                 if (cut_offset != next_block_nrows)
                 {
                     // We merge some rows to `cur_block`, return it.
-                    return finializeBlock(std::move(cur_block));
+                    return finializeBlock(std::move(cur_block), max_sort_rows);
                 }
                 // else we merge all rows from `next_block` to `cur_block`, continue to check if we should merge more blocks.
             }
@@ -157,7 +168,7 @@ private:
         return cut_offset;
     }
 
-    static Block finializeBlock(Block && block)
+    static Block finializeBlock(Block && block, size_t & max_sort_rows)
     {
         if constexpr (need_extra_sort)
         {
@@ -165,8 +176,10 @@ private:
             static SortDescription sort{
                 SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
                 SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
-            if (block.rows() > 1 && !isAlreadySorted(block, sort))
+            if (block.rows() > 1 && !isAlreadySorted(block, sort)) {
+                max_sort_rows = std::max(block.rows(), max_sort_rows);
                 stableSortBlock(block, sort);
+            }
         }
         return std::move(block);
     }
@@ -180,6 +193,8 @@ private:
 
     bool first_read = true;
     const bool is_common_handle;
+    size_t max_sort_rows{0};
+    size_t runs{0};
 };
 
 } // namespace DM

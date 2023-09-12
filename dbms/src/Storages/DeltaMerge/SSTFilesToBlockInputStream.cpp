@@ -241,7 +241,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     while (reader && reader->remained())
     {
         // If we have load all keys that less than or equal to `rowkey_to_be_included`, done.
-        // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
+        // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file.
+        // We have to load all keys which has the same rowkey, since we handle these keys in reverse tso order.
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
             LOG_DEBUG(
@@ -256,7 +257,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                      ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
                      : "<end>"),
                 region->id());
-            break;
+            return;
         }
 
         // Let's try to load keys until process_keys_offset_end
@@ -281,6 +282,17 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // Else continue to read next batch from current CF.
         process_keys_offset_end += expected_size;
     }
+    LOG_DEBUG(
+        log,
+        "EOF while loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] "
+        "[rowkey_to_be_included={}] [region_id={}]",
+        CFToName(cf),
+        (*p_process_keys),
+        process_keys.write_cf,
+        Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
+        (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
+                               : "<end>"),
+        region->id());
 }
 
 Block SSTFilesToBlockInputStream::readCommitedBlock()
