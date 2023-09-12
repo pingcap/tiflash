@@ -981,7 +981,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_WARNING(log, "'storage.format_version' must be set to 100 when S3 is enabled!");
             throw Exception(
                 ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'storage.format_version' must be set to 5 when S3 is enabled!");
+                "'storage.format_version' must be set to 100 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
