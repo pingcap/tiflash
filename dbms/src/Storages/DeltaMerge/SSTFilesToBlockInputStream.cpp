@@ -41,7 +41,7 @@ namespace DM
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const std::string & log_prefix_,
     RegionPtr region_,
-    uint64_t snapshot_index_,
+    UInt64 snapshot_index_,
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
