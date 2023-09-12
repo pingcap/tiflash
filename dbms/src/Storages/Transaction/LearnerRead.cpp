@@ -412,7 +412,7 @@ LearnerReadSnapshot doLearnerRead(
                   // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
                   throw TiFlashException(
                       Errors::Coprocessor::RegionError,
-                      "Region unavailable, region_id={} index={} current={}",
+                      "Region unavailable, region_id={} wait_index={} applied_index={}",
                       region_id,
                       index,
                       current);
