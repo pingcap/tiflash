@@ -67,6 +67,7 @@
     M(StoragePoolV2Only)                        \
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
+    M(StoragePoolUniPS)                         \
     M(RegionPersisterRunMode)                   \
     M(S3Requests)                               \
     M(GlobalStorageRunMode)                     \
