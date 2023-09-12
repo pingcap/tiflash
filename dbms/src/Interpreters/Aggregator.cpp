@@ -151,7 +151,7 @@ size_t AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(Type type)
     }
 }
 
-void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num)
+void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
 {
     if (aggregator)
     {
@@ -672,21 +672,19 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        size_t processed_rows = std::numeric_limits<size_t>::max();
         try
         {
-            for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
+            for (size_t i = 0; i < agg_size; ++i)
             {
-                state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
-                processed_rows = i;
+                state.emplaceKey(method.data, agg_process_info.start_row, *aggregates_pool, sort_key_containers)
+                    .setMapped(place);
+                ++agg_process_info.start_row;
             }
         }
         catch (ResizeException &)
         {
             LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
         }
-        if (processed_rows != std::numeric_limits<size_t>::max())
-            agg_process_info.start_row = processed_rows + 1;
         return;
     }
 
