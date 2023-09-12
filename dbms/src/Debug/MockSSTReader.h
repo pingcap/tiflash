@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/MultiRaft/SSTReader.h>
+#include <Storages/KVStore/FFI/SSTReader.h>
 
 #include <map>
 

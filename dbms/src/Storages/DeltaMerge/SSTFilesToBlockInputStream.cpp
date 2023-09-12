@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/MultiRaft/SSTReader.h>
+#include <Storages/KVStore/FFI/SSTReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>

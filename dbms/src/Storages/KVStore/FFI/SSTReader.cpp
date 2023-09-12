@@ -13,7 +13,7 @@
 // limitations under the License.
 
 
-#include <Storages/KVStore/MultiRaft/SSTReader.h>
+#include <Storages/KVStore/FFI/SSTReader.h>
 
 #include <magic_enum.hpp>
 #include <vector>
