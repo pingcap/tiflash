@@ -114,7 +114,6 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
         {
-            resource_group.second->collectMetrics();
             auto acquire_info = buildAcquireInfo(resource_group.second, /*is_periodically_fetch=*/true);
             if (acquire_info.has_value())
                 acquire_infos.push_back(acquire_info.value());

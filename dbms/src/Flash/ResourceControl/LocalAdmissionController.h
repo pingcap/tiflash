@@ -325,7 +325,7 @@ private:
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
-    static prometheus::Gauge * getMetric(const std::string & name, const std::string & type)
+    static prometheus::Gauge * getGauge(const std::string & name, const std::string & type)
     {
         return TiFlashMetrics::instance().getOrCreateResourceGroupGauge(name, type);
     }
@@ -334,12 +334,12 @@ private:
     {
         std::lock_guard lock(mu);
         const auto & config = bucket->getConfig();
-        getMetric(name, "remaining_tokens")->Set(config.tokens);
-        getMetric(name, "avg_speed")->Set(bucket->getAvgSpeedPerSec());
-        getMetric(name, "total_consumption")->Set(total_consumption);
-        getMetric(name, "bucket_fill_rate")->Set(config.fill_rate);
-        getMetric(name, "bucket_capacity")->Set(config.capacity);
-        getMetric(name, "fetch_tokens_from_gac_count")->Set(fetch_tokens_from_gac_count);
+        getGauge(name, "remaining_tokens")->Set(config.tokens);
+        getGauge(name, "avg_speed")->Set(bucket->getAvgSpeedPerSec());
+        getGauge(name, "total_consumption")->Set(total_consumption);
+        getGauge(name, "bucket_fill_rate")->Set(config.fill_rate);
+        getGauge(name, "bucket_capacity")->Set(config.capacity);
+        getGauge(name, "fetch_tokens_from_gac_count")->Set(fetch_tokens_from_gac_count);
     }
 
     const std::string name;
