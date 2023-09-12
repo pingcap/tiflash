@@ -239,6 +239,10 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
         switch (e.status)
         {
         case RegionException::RegionReadStatus::OTHER:
+        case RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH:
+        case RegionException::RegionReadStatus::FLASHBACK:
+        case RegionException::RegionReadStatus::KEY_NOT_IN_REGION:
+        case RegionException::RegionReadStatus::TIKV_SERVER_ISSUE:
         case RegionException::RegionReadStatus::NOT_LEADER:
         case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
         case RegionException::RegionReadStatus::NOT_FOUND:

@@ -34,6 +34,10 @@ public:
         EPOCH_NOT_MATCH,
         NOT_LEADER,
         NOT_FOUND_TIKV, // reported by Proxy/TiKV
+        BUCKET_EPOCH_NOT_MATCH,
+        FLASHBACK,
+        KEY_NOT_IN_REGION,
+        TIKV_SERVER_ISSUE,
         OTHER,
     };
 
