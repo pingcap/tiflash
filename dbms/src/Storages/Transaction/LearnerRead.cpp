@@ -145,8 +145,8 @@ struct LearnerReadStatistics
 void addressBatchReadIndexError(
     std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> & batch_read_index_result,
     UnavailableRegions & unavailable_regions,
-    MvccQueryInfoWrap & mvcc_query_info
-) {
+    MvccQueryInfoWrap & mvcc_query_info)
+{
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : batch_read_index_result)
     {
@@ -161,24 +161,19 @@ void addressBatchReadIndexError(
             else if (region_error.has_region_not_found())
                 region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
             // Below errors seldomly happens in raftstore-v1, however, we are not sure if they will happen in v2.
-            else if (
-                region_error.has_flashbackinprogress() ||
-                region_error.has_flashbacknotprepared() 
-            ) {
+            else if (region_error.has_flashbackinprogress() || region_error.has_flashbacknotprepared())
+            {
                 region_status = RegionException::RegionReadStatus::FLASHBACK;
             }
-            // else if (region_error.has_bucket_version_not_match())
-            //     region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
+            else if (region_error.has_bucket_version_not_match())
+                region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
             else if (region_error.has_key_not_in_region())
                 region_status = RegionException::RegionReadStatus::KEY_NOT_IN_REGION;
             else if (
-                region_error.has_server_is_busy() ||
-                region_error.has_raft_entry_too_large() ||
-                region_error.has_region_not_initialized() ||
-                region_error.has_disk_full() ||
-                region_error.has_read_index_not_ready() ||
-                region_error.has_proposal_in_merging_mode()
-            ) {
+                region_error.has_server_is_busy() || region_error.has_raft_entry_too_large()
+                || region_error.has_region_not_initialized() || region_error.has_disk_full()
+                || region_error.has_read_index_not_ready() || region_error.has_proposal_in_merging_mode())
+            {
                 region_status = RegionException::RegionReadStatus::TIKV_SERVER_ISSUE;
             }
             unavailable_regions.add(region_id, region_status);
@@ -208,8 +203,8 @@ std::vector<kvrpcpb::ReadIndexRequest> buildBatchReadIndexReq(
     const MvccQueryInfo::RegionsQueryInfo & regions_info,
     LearnerReadSnapshot & regions_snapshot,
     std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> & batch_read_index_result,
-    LearnerReadStatistics & stats
-) {
+    LearnerReadStatistics & stats)
+{
     std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
     batch_read_index_req.reserve(ori_batch_region_size);
 
@@ -250,8 +245,8 @@ void doBatchReadIndex(
     std::vector<kvrpcpb::ReadIndexRequest> & batch_read_index_req,
     std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> & batch_read_index_result,
     KVStorePtr & kvstore,
-    TMTContext & tmt
-) {
+    TMTContext & tmt)
+{
     const auto & make_default_batch_read_index_result = [&](bool with_region_error) {
         for (const auto & req : batch_read_index_req)
         {
@@ -343,7 +338,7 @@ LearnerReadSnapshot doLearnerRead(
         const size_t ori_batch_region_size = num_regions - region_begin_idx;
         std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> batch_read_index_result;
         RegionTable & region_table = tmt.getRegionTable();
-        
+
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req = buildBatchReadIndexReq(
             region_table,
             mvcc_query_info,
@@ -353,8 +348,7 @@ LearnerReadSnapshot doLearnerRead(
             regions_info,
             regions_snapshot,
             batch_read_index_result,
-            stats
-        );
+            stats);
 
         GET_METRIC(tiflash_stale_read_count).Increment(stats.num_stale_read);
         GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
