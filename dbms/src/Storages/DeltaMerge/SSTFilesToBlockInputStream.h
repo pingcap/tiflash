@@ -92,7 +92,7 @@ private:
 
 private:
     RegionPtr region;
-    uint64_t snapshot_index;
+    UInt64 snapshot_index;
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
