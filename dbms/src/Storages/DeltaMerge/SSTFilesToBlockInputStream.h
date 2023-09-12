@@ -57,6 +57,7 @@ public:
     SSTFilesToBlockInputStream( //
         const std::string & log_prefix_,
         RegionPtr region_,
+        uint64_t snapshot_index_,
         const SSTViewVec & snaps_,
         const TiFlashRaftProxyHelper * proxy_helper_,
         DecodingStorageSchemaSnapshotConstPtr schema_snap_,
@@ -91,6 +92,7 @@ private:
 
 private:
     RegionPtr region;
+    uint64_t snapshot_index;
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     DecodingStorageSchemaSnapshotConstPtr schema_snap;

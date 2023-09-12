@@ -717,7 +717,13 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
+                LOG_WARNING(
+                    log,
+                    "{} wait learner index {} timeout current {} state {}",
+                    toString(false),
+                    index,
+                    appliedIndex(),
+                    peerState());
                 return {wait_idx_res, elapsed_secs};
             }
             }

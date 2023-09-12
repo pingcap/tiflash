@@ -37,7 +37,7 @@ class RegionRaftCommandDelegate;
 enum class WaitIndexResult
 {
     Finished,
-    Terminated,
+    Terminated, // Read index is terminated due to upper layer.
     Timeout,
 };
 

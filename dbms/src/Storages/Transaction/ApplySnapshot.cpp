@@ -397,6 +397,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 log_prefix,
                 new_region,
+                index,
                 snaps,
                 proxy_helper,
                 schema_snap,
