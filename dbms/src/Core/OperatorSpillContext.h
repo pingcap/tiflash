@@ -34,8 +34,8 @@ class OperatorSpillContext
 {
 protected:
     UInt64 operator_spill_threshold;
-    std::atomic<bool> in_spillable_stage{true};
     std::atomic<bool> is_spilled{false};
+    std::atomic<bool> in_spillable_stage{true};
     bool enable_spill = true;
     bool auto_spill_mode = false;
     String op_name;
@@ -48,36 +48,26 @@ public:
     const static Int64 MIN_SPILL_THRESHOLD = 10ULL * 1024 * 1024;
     OperatorSpillContext(UInt64 operator_spill_threshold_, const String op_name_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
-        , auto_spill_mode(operator_spill_threshold == 0)
         , op_name(op_name_)
         , log(log_)
     {}
     virtual ~OperatorSpillContext() = default;
-    bool isSpillEnabled() const { return enable_spill && (supportAutoTriggerSpill() || operator_spill_threshold > 0); }
+    bool isSpillEnabled() const;
+    bool supportSpill() const;
     void disableSpill() { enable_spill = false; }
-    void finishSpillableStage() { in_spillable_stage = false; }
-    bool spillableStageFinished() const { return !in_spillable_stage; }
-    Int64 getTotalRevocableMemory()
-    {
-        if (in_spillable_stage)
-            return getTotalRevocableMemoryImpl();
-        else
-            return 0;
-    }
+    virtual bool supportFurtherSpill() const { return in_spillable_stage; }
+    bool isInAutoSpillMode() const { return auto_spill_mode; }
+    void setAutoSpillMode();
+    Int64 getTotalRevocableMemory();
     UInt64 getOperatorSpillThreshold() const { return operator_spill_threshold; }
-    void markSpilled()
-    {
-        bool init_value = false;
-        if (is_spilled.compare_exchange_strong(init_value, true, std::memory_order_relaxed))
-        {
-            LOG_INFO(log, "Begin spill in {}", op_name);
-        }
-    }
+    void markSpilled();
     bool isSpilled() const { return is_spilled; }
     /// auto trigger spill means the operator will auto spill under the constraint of query/global level memory threshold,
     /// so user does not need set operator_spill_threshold explicitly
     virtual bool supportAutoTriggerSpill() const { return false; }
-    virtual Int64 triggerSpill(Int64 expected_released_memories) = 0;
+    Int64 triggerSpill(Int64 expected_released_memories);
+    virtual Int64 triggerSpillImpl(Int64 expected_released_memories) = 0;
+    void finishSpillableStage();
 };
 
 using OperatorSpillContextPtr = std::shared_ptr<OperatorSpillContext>;

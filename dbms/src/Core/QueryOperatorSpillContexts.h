@@ -30,7 +30,7 @@ public:
         watch.start();
     }
 
-    Int64 triggerAutoSpill(Int64 expected_released_memories);
+    Int64 triggerAutoSpill(Int64 expected_released_memories, bool ignore_cooldown_time_check = false);
 
     void registerTaskOperatorSpillContexts(
         const std::shared_ptr<TaskOperatorSpillContexts> & task_operator_spill_contexts)
@@ -51,6 +51,7 @@ private:
     std::list<std::shared_ptr<TaskOperatorSpillContexts>> task_operator_spill_contexts_list;
     bool first_check_done = false;
     const UInt64 auto_spill_check_min_interval_ns;
+    UInt64 last_checked_time_ns = 0;
     LoggerPtr log;
     mutable std::mutex mutex;
     Stopwatch watch;

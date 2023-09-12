@@ -16,11 +16,9 @@
 #include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/FileUsage.h>
-#include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
@@ -93,7 +91,7 @@ void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lo
 
 void RegionPersister::doPersist(
     RegionCacheWriteElement & region_write_buffer,
-    const RegionTaskLock &,
+    const RegionTaskLock & region_task_lock,
     const Region & region)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
@@ -116,7 +114,7 @@ void RegionPersister::doPersist(
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 
-    region.updateLastCompactLogApplied();
+    region.updateLastCompactLogApplied(region_task_lock);
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)

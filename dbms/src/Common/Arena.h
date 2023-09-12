@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Allocator.h>
+#include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Core/Defines.h>
 #include <common/likely.h>
@@ -26,6 +27,7 @@
 
 namespace DB
 {
+using ResizeCallback = std::function<bool()>;
 /** Memory pool to append something. For example, short strings.
   * Usage scenario:
   * - put lot of strings inside pool, keep their addresses;
@@ -71,6 +73,8 @@ private:
     Chunk * head;
     size_t size_in_bytes;
 
+    ResizeCallback resize_callback;
+
     static size_t roundUpToPageSize(size_t s) { return (s + 4096 - 1) / 4096 * 4096; }
 
     /// If chunks size is less than 'linear_growth_threshold', then use exponential growth, otherwise - linear growth
@@ -93,6 +97,11 @@ private:
     /// Add next contiguous chunk of memory with size not less than specified.
     void NO_INLINE addChunk(size_t min_size)
     {
+        if (resize_callback != nullptr)
+        {
+            if unlikely (!resize_callback())
+                throw ResizeException("Error in arena resize");
+        }
         head = new Chunk(nextSize(min_size), head);
         size_in_bytes += head->size();
     }
@@ -147,6 +156,8 @@ public:
       * Must pass size not more that was just allocated.
       */
     void rollback(size_t size) { head->pos -= size; }
+
+    void setResizeCallback(const ResizeCallback & resize_callback_) { resize_callback = resize_callback_; }
 
     /** Begin or expand allocation of contiguous piece of memory.
       * 'begin' - current begin of piece of memory, if it need to be expanded, or nullptr, if it need to be started.

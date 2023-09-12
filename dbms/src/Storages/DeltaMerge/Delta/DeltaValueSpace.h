@@ -325,7 +325,11 @@ class DeltaValueSnapshot
     friend class DeltaValueSpace;
     friend struct DB::DM::Remote::Serializer;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     bool is_update{false};
 
     // The delta index of cached.

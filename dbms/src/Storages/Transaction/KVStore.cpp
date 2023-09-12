@@ -19,6 +19,7 @@
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -30,8 +31,10 @@
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <common/likely.h>
 
+#include <mutex>
 #include <tuple>
 #include <variant>
 
@@ -56,13 +59,15 @@ KVStore::KVStore(Context & context)
             : std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
-    , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
+    , region_eager_gc_log_gap(512)
+    // Eager RaftLog GC is only enabled under UniPS
+    , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
-    // default config about compact-log: period 120s, rows 40k, bytes 32MB.
-    LOG_INFO(log, "KVStore inited");
+    // default config about compact-log: rows 40k, bytes 32MB, gap 200.
+    LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -267,7 +272,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
     TMTContext & tmt,
     DM::WriteResult & write_result)
 {
-    EngineStoreApplyRes res;
+    EngineStoreApplyRes apply_res;
     {
         auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -277,21 +282,60 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             return EngineStoreApplyRes::NotFound;
         }
 
-        auto && [r, w] = region->handleWriteRaftCmd(cmds, index, term, tmt);
+        std::tie(apply_res, write_result) = region->handleWriteRaftCmd(cmds, index, term, tmt);
 
         if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
         {
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
-        write_result = std::move(w);
-        res = r;
+
+        if (tryRegisterEagerRaftLogGCTask(region, region_persist_lock))
+        {
+            /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
+            // Persist RegionMeta on the storage engine
+            tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
+            persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
+            // return "Persist" to proxy for persisting the RegionMeta
+            apply_res = EngineStoreApplyRes::Persist;
+        }
     }
     /// Safety:
     /// This call is from Proxy's applying thread of this region, so:
     /// 1. No other thread can write from raft to this region even if we unlocked here.
     /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
     // TODO(proactive flush)
-    return res;
+    return apply_res;
+}
+
+bool KVStore::tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock & /*region_persist_lock*/)
+{
+    if (!eager_raft_log_gc_enabled)
+        return false;
+    const UInt64 threshold = region_eager_gc_log_gap.load();
+    if (threshold == 0) // disabled
+        return false;
+
+    // When some peer is down, the TiKV compact log become quite slow and the truncated index
+    // is advanced slowly. Under disagg arch, too many RaftLog are stored in UniPS and makes TiFlash OOM.
+    // We apply eager RaftLog GC on TiFlash's UniPS.
+    auto [last_eager_truncated_index, applied_index] = region->getRaftLogEagerGCRange();
+    return raft_log_gc_hints.updateHint(region->id(), last_eager_truncated_index, applied_index, threshold);
+}
+
+RaftLogEagerGcTasks::Hints KVStore::getRaftLogGcHints()
+{
+    return raft_log_gc_hints.getAndClearHints();
+}
+
+void KVStore::applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const
+{
+    for (const auto & [region_id, log_index] : res)
+    {
+        auto region = getRegion(region_id);
+        if (!region)
+            continue;
+        region->updateRaftLogEagerIndex(log_index);
+    }
 }
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
@@ -328,14 +372,20 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap)
+void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)
 {
-    region_compact_log_period = sec;
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
     region_compact_log_gap = gap;
+    region_eager_gc_log_gap = eager_gc_gap;
 
-    LOG_INFO(log, "threshold config: period {}, rows {}, bytes {}, gap {}", sec, rows, bytes, gap);
+    LOG_INFO(
+        log,
+        "Region compact log thresholds, rows={} bytes={} gap={} eager_gc_gap={}",
+        rows,
+        bytes,
+        gap,
+        eager_gc_gap);
 }
 
 void KVStore::persistRegion(
@@ -377,6 +427,7 @@ void KVStore::persistRegion(
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_useful_admin).Increment(1);
         break;
     case PersistRegionReason::Flush:
+        // It used to be type_exec_compact.
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
         break;
     case PersistRegionReason::ProactiveFlush:
@@ -389,7 +440,10 @@ void KVStore::persistRegion(
     case PersistRegionReason::IngestSst:
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_ingest_sst).Increment(1);
         break;
-    default:
+    case PersistRegionReason::EagerRaftGc:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_eager_gc).Increment(1);
+        break;
+    case PersistRegionReason::Debug: // ignore
         break;
     }
 }
@@ -432,6 +486,7 @@ bool KVStore::tryFlushRegionData(
 
     if (!force_persist)
     {
+        GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
         // try to flush RegionData according to the mem cache rows/bytes/interval
         return canFlushRegionDataImpl(
             curr_region_ptr,
@@ -480,40 +535,42 @@ bool KVStore::canFlushRegionDataImpl(
     bool can_flush = false;
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
+    // flush caused by rows
     if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
         can_flush = true;
     }
+    // flush caused by bytes
     if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
         can_flush = true;
     }
+    // flush caused by gap
     auto gap_threshold = region_compact_log_gap.load();
-    auto last_restart_log_applied = curr_region.lastRestartLogApplied();
+    const auto last_restart_log_applied = curr_region.lastRestartLogApplied();
     if (last_restart_log_applied + gap_threshold > index)
     {
+        // Make it more likely to flush after restart to reduce memory consumption
         gap_threshold = std::max(gap_threshold / 2, 1);
     }
-    auto last_compact_log_applied = curr_region.lastCompactLogApplied();
-    auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
+    const auto last_compact_log_applied = curr_region.lastCompactLogApplied();
+    const auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
 
     // TODO We will use truncated_index once Proxy/TiKV supports.
-    // After restart, last_compact_log_applied is 0, we don't trigger immediately.
-    if (last_compact_log_applied && index > last_compact_log_applied + gap_threshold)
-    {
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
-        can_flush = true;
-    }
-    if (!last_compact_log_applied)
+    // When a Region is newly created in TiFlash, last_compact_log_applied is 0, we don't trigger immediately.
+    if (last_compact_log_applied == 0)
     {
         // We will set `last_compact_log_applied` to current applied_index if it is zero.
         curr_region.setLastCompactLogApplied(index);
     }
+    else if (last_compact_log_applied > 0 && index > last_compact_log_applied + gap_threshold)
+    {
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
+        can_flush = true;
+    }
 
-    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
-    // GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
     LOG_DEBUG(
         log,
         "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
@@ -525,12 +582,11 @@ bool KVStore::canFlushRegionDataImpl(
 
     if (can_flush && flush_if_possible)
     {
-        GET_METRIC(tiflash_raft_raft_events_count, type_exec_compact).Increment(1);
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
         LOG_INFO(
             log,
-            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} gap "
-            "{}/{}",
+            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
+            " gap {}/{}",
             curr_region.toString(false),
             index,
             term,
@@ -538,13 +594,13 @@ bool KVStore::canFlushRegionDataImpl(
             truncated_term,
             current_applied_gap,
             gap_threshold);
-        GET_METRIC(tiflash_raft_region_flush_size, type_flushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     else
     {
-        GET_METRIC(tiflash_raft_region_flush_size, type_unflushed).Observe(size_bytes);
-        GET_METRIC(tiflash_raft_raft_log_lag_count, type_unflushed_applied_index).Observe(current_applied_gap);
+        GET_METRIC(tiflash_raft_region_flush_bytes, type_unflushed).Observe(size_bytes);
+        GET_METRIC(tiflash_raft_raft_log_gap_count, type_unflushed_applied_index).Observe(current_applied_gap);
     }
     return can_flush;
 }
@@ -560,7 +616,7 @@ bool KVStore::forceFlushRegionDataImpl(
     Stopwatch watch;
     if (index)
     {
-        // We set actual index when handling CompactLog.
+        // We advance index when pre exec CompactLog.
         curr_region.handleWriteRaftCmd({}, index, term, tmt);
     }
 
@@ -571,7 +627,8 @@ bool KVStore::forceFlushRegionDataImpl(
 
     // flush cache in storage level is done, persist the region info
     persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
-    curr_region.markCompactLog();
+    // CompactLog will be done in proxy soon, we advance the eager truncate index in TiFlash
+    curr_region.updateRaftLogEagerIndex(index);
     curr_region.cleanApproxMemCacheInfo();
     GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
     return true;
@@ -617,7 +674,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
-    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback //
+        || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
         || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
@@ -640,10 +698,33 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
     TMTContext & tmt)
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds()); });
     auto type = request.cmd_type();
-    switch (request.cmd_type())
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
+        switch (type)
+        {
+        case raft_cmdpb::AdminCmdType::ChangePeer:
+        case raft_cmdpb::AdminCmdType::ChangePeerV2:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_change_peer)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::BatchSplit:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_batch_split)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::PrepareMerge:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_prepare_merge)
+                .Observe(watch.elapsedSeconds());
+            break;
+        case raft_cmdpb::AdminCmdType::CommitMerge:
+            GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin_commit_merge)
+                .Observe(watch.elapsedSeconds());
+            break;
+        default:
+            break;
+        }
+    });
+    switch (type)
     {
     // CompactLog | VerifyHash | ComputeHash won't change region meta, there is no need to occupy task lock of kvstore.
     case raft_cmdpb::AdminCmdType::CompactLog:

@@ -32,17 +32,12 @@
 
 #include <mutex>
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-} // namespace ErrorCodes
-namespace FailPoints
-{
-extern const char force_ps_wal_compact[];
-}
-namespace PS::V3
+} // namespace DB::ErrorCodes
+
+namespace DB::PS::V3
 {
 PageStorageImpl::PageStorageImpl(
     String name,
@@ -146,6 +141,11 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     // Persist Page data to BlobStore
     auto edit = blob_store.write(std::move(write_batch), PageType::Normal, write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
+}
+
+void PageStorageImpl::freezeDataFiles()
+{
+    blob_store.freezeBlobFiles();
 }
 
 DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot)
@@ -321,5 +321,4 @@ void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceID ns_id)
     page_directory->unregisterNamespace(ns_id);
 }
 
-} // namespace PS::V3
-} // namespace DB
+} // namespace DB::PS::V3

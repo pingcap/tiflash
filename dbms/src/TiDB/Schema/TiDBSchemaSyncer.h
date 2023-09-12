@@ -16,7 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>

@@ -45,10 +45,10 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     SortHelper::removeConstantsFromBlock(header_without_constants);
     SortHelper::removeConstantsFromSortDescription(header, description);
     sort_spill_context = std::make_shared<SortSpillContext>(spill_config, max_bytes_before_external_sort, log);
-    if (sort_spill_context->isSpillEnabled())
-        sort_spill_context->buildSpiller(header_without_constants);
     if (register_operator_spill_context != nullptr)
         register_operator_spill_context(sort_spill_context);
+    if (sort_spill_context->isSpillEnabled())
+        sort_spill_context->buildSpiller(header_without_constants);
 }
 
 void MergeSortingBlockInputStream::spillCurrentBlocks()

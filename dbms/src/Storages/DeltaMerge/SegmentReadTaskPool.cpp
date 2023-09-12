@@ -16,7 +16,6 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 #include <magic_enum.hpp>

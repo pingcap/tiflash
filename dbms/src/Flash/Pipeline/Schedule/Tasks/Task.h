@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <memory.h>
 
@@ -87,6 +88,8 @@ public:
     const String & getResourceGroupName() const;
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
+
+    void onErrorOccurred(const String & err_msg) { exec_context.onErrorOccurred(err_msg); }
 
 public:
     LoggerPtr log;

@@ -16,7 +16,6 @@
 
 namespace DB
 {
-// TODO support resource group queue.
 enum class TaskQueueType
 {
     DEFAULT, // Determined internally by the task thread pool.

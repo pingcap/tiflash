@@ -68,7 +68,8 @@ namespace DB
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
-    M(exception_new_dynamic_thread)
+    M(exception_new_dynamic_thread)                               \
+    M(force_region_persist_version)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -87,7 +88,7 @@ namespace DB
     M(force_remote_read_for_batch_cop)                       \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
-    M(force_change_all_blobs_to_read_only)                   \
+    M(force_pick_all_blobs_to_full_gc)                       \
     M(force_ingest_via_delta)                                \
     M(force_ingest_via_replace)                              \
     M(unblock_query_init_after_write)                        \
@@ -100,7 +101,8 @@ namespace DB
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
-    M(exception_when_fetch_disagg_pages)
+    M(exception_when_fetch_disagg_pages)                     \
+    M(force_agg_on_partial_block)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \

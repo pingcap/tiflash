@@ -16,19 +16,25 @@
 
 namespace DB
 {
-Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memories)
+Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memories, bool ignore_cooldown_time_check)
 {
     std::unique_lock lock(mutex, std::try_to_lock);
     /// use mutex to avoid concurrent check
     if (lock.owns_lock())
     {
-        auto log_level = Poco::Message::PRIO_TRACE;
-        bool check_cooldown_time = true;
+        auto log_level = Poco::Message::PRIO_DEBUG;
+        bool check_cooldown_time = !ignore_cooldown_time_check;
         if unlikely (!first_check_done)
         {
             first_check_done = true;
             check_cooldown_time = false;
             log_level = Poco::Message::PRIO_INFORMATION;
+        }
+
+        auto current_time = watch.elapsed();
+        if (check_cooldown_time && current_time - last_checked_time_ns < auto_spill_check_min_interval_ns)
+        {
+            return expected_released_memories;
         }
 
         LOG_IMPL(
@@ -37,11 +43,7 @@ Int64 QueryOperatorSpillContexts::triggerAutoSpill(Int64 expected_released_memor
             "Query memory usage exceeded threshold, trigger auto spill check, expected released memory: {}",
             expected_released_memories);
 
-        if (check_cooldown_time && watch.elapsedFromLastTime() < auto_spill_check_min_interval_ns)
-        {
-            LOG_IMPL(log, log_level, "Auto spill check still in cooldown time, skip this check");
-            return expected_released_memories;
-        }
+        last_checked_time_ns = current_time;
 
         auto ret = expected_released_memories;
 

@@ -263,12 +263,13 @@ public:
         has_writes_from_remote |= rhs.has_writes_from_remote;
     }
 
-    void clear()
+    [[clang::reinitializes]] void clear()
     {
         Writes tmp;
         writes.swap(tmp);
         total_data_size = 0;
         has_writes_from_remote = false;
+        remote_lock_disabled = false;
     }
 
     UniversalWriteBatch(UniversalWriteBatch && rhs) noexcept
@@ -276,6 +277,7 @@ public:
         , writes(std::move(rhs.writes))
         , total_data_size(rhs.total_data_size)
         , has_writes_from_remote(rhs.has_writes_from_remote)
+        , remote_lock_disabled(rhs.remote_lock_disabled)
     {}
 
     void swap(UniversalWriteBatch & o)
@@ -284,6 +286,7 @@ public:
         writes.swap(o.writes);
         std::swap(total_data_size, o.total_data_size);
         std::swap(has_writes_from_remote, o.has_writes_from_remote);
+        std::swap(remote_lock_disabled, o.remote_lock_disabled);
     }
 
 private:
