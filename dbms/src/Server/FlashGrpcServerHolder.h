@@ -21,7 +21,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/Transaction/PDTiKVClient.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <grpc/grpc_security.h>
 
 

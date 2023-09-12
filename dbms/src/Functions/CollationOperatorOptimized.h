@@ -17,7 +17,7 @@
 #include <Columns/ColumnString.h>
 #include <Core/AccurateComparison.h>
 #include <Functions/StringUtil.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
 #include <common/fixed_mem_eq.h>

@@ -21,7 +21,7 @@
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collation/Collator.h>
 
 #include <cstddef>
 #include <memory>
@@ -92,8 +92,8 @@ public:
      *  row_num is number of row which should be added.
      *  Additional parameter arena should be used instead of standard memory allocator if the addition requires memory allocation.
      */
-    virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
-        const = 0;
+    virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
+        = 0;
 
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
@@ -134,14 +134,16 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const = 0;
+        ssize_t if_argument_pos = -1) const
+        = 0;
 
     virtual void mergeBatch(
         size_t batch_size,
         AggregateDataPtr * places,
         size_t place_offset,
         const AggregateDataPtr * rhs,
-        Arena * arena) const = 0;
+        Arena * arena) const
+        = 0;
 
     /** The same for single place.
       */
@@ -151,7 +153,8 @@ public:
         AggregateDataPtr place,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const = 0;
+        ssize_t if_argument_pos = -1) const
+        = 0;
 
     /** The same for single place when need to aggregate only filtered data.
       */
@@ -162,7 +165,8 @@ public:
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const = 0;
+        ssize_t if_argument_pos = -1) const
+        = 0;
 
     /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
       *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
@@ -175,7 +179,8 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         const UInt64 * offsets,
-        Arena * arena) const = 0;
+        Arena * arena) const
+        = 0;
 
     /** The case when the aggregation key is UInt8
       * and pointers to aggregation states are stored in AggregateDataPtr[256] lookup table.
@@ -188,7 +193,8 @@ public:
         std::function<void(AggregateDataPtr &)> init,
         const UInt8 * key,
         const IColumn ** columns,
-        Arena * arena) const = 0;
+        Arena * arena) const
+        = 0;
 
     /** This is used for runtime code generation to determine, which header files to include in generated source.
       * Always implement it as

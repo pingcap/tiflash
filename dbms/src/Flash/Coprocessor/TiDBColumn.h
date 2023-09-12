@@ -20,7 +20,7 @@
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Flash/Coprocessor/TiDBEnum.h>
 #include <Flash/Coprocessor/TiDBTime.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

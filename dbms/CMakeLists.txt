@@ -74,8 +74,9 @@ add_headers_and_sources(dbms src/Interpreters/SharedContexts)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/S3)
-add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/WindowFunctions)
+add_headers_and_sources(dbms src/TiDB/Decode)
+add_headers_and_sources(dbms src/TiDB/Collation)
 add_headers_and_sources(dbms src/TiDB/Schema)
 add_headers_and_sources(dbms src/TiDB/Etcd)
 add_headers_and_sources(dbms src/TiDB)
@@ -206,6 +207,7 @@ target_link_libraries (dbms
     dtpb
     RemoteTaskProto
     PSCheckpointProto
+    kvstore
 )
 
 # always add GmSSL include dir to the include path for static analysis
@@ -315,7 +317,7 @@ if (ENABLE_TESTS)
     target_compile_definitions(dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
-    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge)
+    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge kvstore)
 
     install (TARGETS gtests_dbms
             COMPONENT tiflash-gtest
@@ -359,7 +361,7 @@ if (ENABLE_TESTS)
         )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark tiflash_functions server_for_test delta_merge)
+    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark tiflash_functions server_for_test delta_merge kvstore)
 
     add_check(bench_dbms)
 endif ()

@@ -51,7 +51,7 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 
 namespace DB
 {

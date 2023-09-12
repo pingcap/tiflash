@@ -31,9 +31,9 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <queue>
 

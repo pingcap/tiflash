@@ -26,7 +26,7 @@
 #include <Functions/re2Util.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <fmt/core.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
