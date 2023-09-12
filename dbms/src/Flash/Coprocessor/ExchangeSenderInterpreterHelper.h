@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
 

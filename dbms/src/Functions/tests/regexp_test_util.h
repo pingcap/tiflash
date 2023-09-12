@@ -18,7 +18,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/types.h>
 
 #pragma GCC diagnostic push

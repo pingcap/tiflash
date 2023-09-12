@@ -53,7 +53,7 @@
 #include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collation/Collator.h>
 
 #include <ext/collection_cast.h>
 #include <ext/enumerate.h>

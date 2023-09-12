@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <TiDB/Collator/Collator.h>
+#include <TiDB/Collation/Collator.h>
 
 namespace DB::HashBaseWriterHelper
 {
