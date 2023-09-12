@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
@@ -325,21 +326,17 @@ private:
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
-    static prometheus::Gauge * getGauge(const std::string & name, const std::string & type)
-    {
-        return TiFlashMetrics::instance().getOrCreateResourceGroupGauge(name, type);
-    }
-
     void collectMetrics() const
     {
         std::lock_guard lock(mu);
         const auto & config = bucket->getConfig();
-        getGauge(name, "remaining_tokens")->Set(config.tokens);
-        getGauge(name, "avg_speed")->Set(bucket->getAvgSpeedPerSec());
-        getGauge(name, "total_consumption")->Set(total_consumption);
-        getGauge(name, "bucket_fill_rate")->Set(config.fill_rate);
-        getGauge(name, "bucket_capacity")->Set(config.capacity);
-        getGauge(name, "fetch_tokens_from_gac_count")->Set(fetch_tokens_from_gac_count);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(bucket->getAvgSpeedPerSec());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_consumption);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
+            .Set(fetch_tokens_from_gac_count);
     }
 
     const std::string name;

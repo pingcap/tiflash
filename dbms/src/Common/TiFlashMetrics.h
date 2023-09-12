@@ -697,7 +697,16 @@ namespace DB
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
-    M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))
+    M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                 \
+    M(tiflash_resource_group,                                                                                                       \
+      "meta infos of resource groups",                                                                                              \
+      Gauge,                                                                                                                        \
+      F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
+      F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
+      F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
+      F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
+      F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
+      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
@@ -743,6 +752,8 @@ struct EqualWidthBuckets
     }
 };
 
+static const String METRIC_RESOURCE_GROUP_STR = "resource_group";
+
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -756,6 +767,15 @@ struct MetricFamilyTrait<prometheus::Counter>
     {
         return family.Add(std::forward<ArgType>(arg));
     }
+    static auto & add(
+        prometheus::Family<prometheus::Counter> & family,
+        const String & resource_group_name,
+        ArgType && arg)
+    {
+        std::map<String, String> args_map = {std::forward<ArgType>(arg)};
+        args_map[METRIC_RESOURCE_GROUP_STR] = resource_group_name;
+        return family.Add(args_map);
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
@@ -766,6 +786,15 @@ struct MetricFamilyTrait<prometheus::Gauge>
     {
         return family.Add(std::forward<ArgType>(arg));
     }
+    static auto & add(
+        prometheus::Family<prometheus::Gauge> & family,
+        const String & resource_group_name,
+        ArgType && arg)
+    {
+        std::map<String, String> args_map = {std::forward<ArgType>(arg)};
+        args_map[METRIC_RESOURCE_GROUP_STR] = resource_group_name;
+        return family.Add(args_map);
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
@@ -775,6 +804,15 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
     {
         return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
+    }
+    static auto & add(
+        prometheus::Family<prometheus::Histogram> & family,
+        const String & resource_group_name,
+        ArgType && arg)
+    {
+        std::map<String, String> args_map = std::get<0>(arg);
+        args_map[METRIC_RESOURCE_GROUP_STR] = resource_group_name;
+        return family.Add(args_map, std::move(std::get<1>(arg)));
     }
 };
 
@@ -790,7 +828,9 @@ struct MetricFamily
         const std::string & help,
         std::initializer_list<MetricArgType> args)
     {
+        store_args = args;
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
+        store_family = &family;
 
         metrics.reserve(args.size() ? args.size() : 1);
         for (auto arg : args)
@@ -806,9 +846,39 @@ struct MetricFamily
     }
 
     T & get(size_t idx = 0) { return *(metrics[idx]); }
+    T & get(size_t idx, const String & resource_group_name)
+    {
+        if (metrics_map.find(resource_group_name) == metrics_map.end())
+        {
+            addMetricsForResourceGroup(resource_group_name);
+        }
+        return *(metrics_map[resource_group_name][idx]);
+    }
 
 private:
+    void addMetricsForResourceGroup(const String & resource_group_name)
+    {
+        std::vector<T *> metrics_temp;
+
+        for (auto arg : store_args)
+        {
+            auto & metric = MetricTrait::add(*store_family, resource_group_name, std::forward<MetricArgType>(arg));
+            metrics_temp.emplace_back(&metric);
+        }
+
+        if (store_args.size() == 0)
+        {
+            auto & metric = MetricTrait::add(*store_family, resource_group_name, MetricArgType{});
+            metrics_temp.emplace_back(&metric);
+        }
+        metrics_map[resource_group_name] = metrics_temp;
+    }
+
     std::vector<T *> metrics;
+    prometheus::Family<T> * store_family;
+    std::vector<MetricArgType> store_args;
+    // <resource_group_name, metrics>
+    std::unordered_map<String, std::vector<T *>> metrics_map;
 };
 
 /// Centralized registry of TiFlash metrics.
@@ -821,7 +891,6 @@ public:
     static TiFlashMetrics & instance();
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
-    prometheus::Gauge * getOrCreateResourceGroupGauge(const String & resource_group_name, const String & type);
 
 private:
     TiFlashMetrics();
@@ -851,9 +920,6 @@ private:
     prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
-
-    prometheus::Family<prometheus::Gauge> * registered_resource_group_family;
-    std::unordered_map<String, prometheus::Gauge *> registered_resource_group;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
@@ -885,19 +951,41 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_RESOURCE_GROUP_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
+
 #ifndef GTEST_TIFLASH_METRICS
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_RESOURCE_GROUP_METRIC_0(family, resource_group) TiFlashMetrics::instance().family.get(0, resource_group)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_RESOURCE_GROUP_METRIC_1(family, metric, resource_group) \
+    TiFlashMetrics::instance().family.get(family##_metrics::metric, resource_group)
 #else
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_RESOURCE_GROUP_METRIC_0(family, resource_group) TestMetrics::instance().family.get(0, resource_group)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_RESOURCE_GROUP_METRIC_1(family, metric, resource_group) \
+    TestMetrics::instance().family.get(family##_metrics::metric, resource_group)
 #endif
+
 #define GET_METRIC(...)                                             \
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
+    (__VA_ARGS__)
+
+#define GET_RESOURCE_GROUP_METRIC(...) \
+    __GET_RESOURCE_GROUP_METRIC_MACRO( \
+        __VA_ARGS__,                   \
+        __GET_RESOURCE_GROUP_METRIC_1, \
+        __GET_RESOURCE_GROUP_METRIC_0, \
+        __GET_METRIC_0)                \
     (__VA_ARGS__)
 
 #define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                       \
