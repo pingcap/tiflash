@@ -151,6 +151,33 @@ size_t AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(Type type)
     }
 }
 
+void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num)
+{
+    if (aggregator)
+    {
+        auto agg_spill_context = aggregator->agg_spill_context;
+        if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
+        {
+            auto resize_callback = [agg_spill_context, thread_num]() {
+                return !agg_spill_context->isThreadMarkedForAutoSpill(thread_num);
+            };
+#define M(NAME)                                                                                         \
+    case AggregationMethodType(NAME):                                                                   \
+    {                                                                                                   \
+        ToAggregationMethodPtr(NAME, aggregation_method_impl)->data.setResizeCallback(resize_callback); \
+        break;                                                                                          \
+    }
+            switch (type)
+            {
+                APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+            default:
+                throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+            }
+#undef M
+        }
+    }
+}
+
 void AggregatedDataVariants::convertToTwoLevel()
 {
     switch (type)
@@ -645,9 +672,21 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
-            state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
-        agg_process_info.start_row += agg_size;
+        size_t processed_rows = std::numeric_limits<size_t>::max();
+        try
+        {
+            for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
+            {
+                state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
+                processed_rows = i;
+            }
+        }
+        catch (ResizeException &)
+        {
+            LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+        }
+        if (processed_rows != std::numeric_limits<size_t>::max())
+            agg_process_info.start_row = processed_rows + 1;
         return;
     }
 
@@ -657,6 +696,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
              ++inst)
         {
+            /// no resize will happen for this kind of hash table, so don't catch resize exception
             inst->batch_that->addBatchLookupTable8(
                 agg_process_info.start_row,
                 agg_size,
@@ -678,43 +718,65 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Generic case.
 
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_size]);
+    size_t processed_rows = std::numeric_limits<size_t>::max();
+    bool allow_exception = false;
 
-    for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
+    try
     {
-        AggregateDataPtr aggregate_data = nullptr;
-
-        auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
-
-        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-        if (emplace_result.isInserted())
+        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
         {
-            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-            emplace_result.setMapped(nullptr);
+            AggregateDataPtr aggregate_data = nullptr;
 
-            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(aggregate_data);
+            allow_exception = true;
 
-            emplace_result.setMapped(aggregate_data);
+            auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
+
+            allow_exception = false;
+
+            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+            if (emplace_result.isInserted())
+            {
+                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                emplace_result.setMapped(nullptr);
+
+                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(aggregate_data);
+
+                emplace_result.setMapped(aggregate_data);
+            }
+            else
+                aggregate_data = emplace_result.getMapped();
+
+            places[i - agg_process_info.start_row] = aggregate_data;
+            processed_rows = i;
         }
-        else
-            aggregate_data = emplace_result.getMapped();
-
-        places[i - agg_process_info.start_row] = aggregate_data;
     }
-
-    /// Add values to the aggregate functions.
-    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-         ++inst)
+    catch (ResizeException &)
     {
-        inst->batch_that->addBatch(
-            agg_process_info.start_row,
-            agg_size,
-            places.get(),
-            inst->state_offset,
-            inst->batch_arguments,
-            aggregates_pool);
+        LOG_INFO(
+            log,
+            "HashTable resize throw ResizeException since the data is already marked for spill, allow_exception: {}",
+            allow_exception);
+        if unlikely (!allow_exception)
+            throw;
     }
-    agg_process_info.start_row += agg_size;
+
+    if (processed_rows != std::numeric_limits<size_t>::max())
+    {
+        /// Add values to the aggregate functions.
+        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+             ++inst)
+        {
+            inst->batch_that->addBatch(
+                agg_process_info.start_row,
+                processed_rows - agg_process_info.start_row + 1,
+                places.get(),
+                inst->state_offset,
+                inst->batch_arguments,
+                aggregates_pool);
+        }
+        agg_process_info.start_row = processed_rows + 1;
+    }
 }
 
 void NO_INLINE
@@ -896,7 +958,10 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
       */
     if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
+    {
         result.convertToTwoLevel();
+        result.setResizeCallbackIfNeeded(thread_num);
+    }
 
     /** Flush data to disk if too much RAM is consumed.
       */
@@ -953,6 +1018,7 @@ void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num
 
     /// NOTE Instead of freeing up memory and creating new hash tables and arenas, you can re-use the old ones.
     data_variants.init(data_variants.type);
+    data_variants.setResizeCallbackIfNeeded(thread_num);
     data_variants.need_spill = false;
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();

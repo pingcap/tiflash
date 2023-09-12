@@ -938,6 +938,8 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void convertToTwoLevel();
 
+    void setResizeCallbackIfNeeded(size_t thread_num);
+
 #define APPLY_FOR_VARIANTS_TWO_LEVEL(M)               \
     M(key32_two_level)                                \
     M(key64_two_level)                                \
