@@ -770,7 +770,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(
     }
 
     // set block size so that we can test for schema-sync while decoding dt files
-    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size, static_cast<size_t>(3));
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(
@@ -876,7 +876,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(
     }
 
     // set block size so that we can test for schema-sync while decoding dt files
-    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size, static_cast<size_t>(3));
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(

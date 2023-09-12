@@ -349,7 +349,10 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
     // Use failpoint to change the expected_block_size for some test cases
-    fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
+    fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_sst_to_dtfile_block_size); v)
+            expected_block_size = std::any_cast<size_t>(v.value());
+    });
 
     Stopwatch watch;
     SCOPE_EXIT({
