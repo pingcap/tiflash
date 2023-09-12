@@ -145,7 +145,8 @@ struct LearnerReadStatistics
 void addressBatchReadIndexError(
     std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> & batch_read_index_result,
     UnavailableRegions & unavailable_regions,
-    MvccQueryInfoWrap & mvcc_query_info)
+    MvccQueryInfoWrap & mvcc_query_info,
+    LoggerPtr log)
 {
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : batch_read_index_result)
@@ -166,15 +167,42 @@ void addressBatchReadIndexError(
                 region_status = RegionException::RegionReadStatus::FLASHBACK;
             }
             else if (region_error.has_bucket_version_not_match())
+            {
+                LOG_DEBUG(
+                    log,
+                    "meet abnormal region error {}, [region_id={}]",
+                    resp.region_error().DebugString(),
+                    region_id);
                 region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
+            }
             else if (region_error.has_key_not_in_region())
+            {
+                LOG_DEBUG(
+                    log,
+                    "meet abnormal region error {}, [region_id={}]",
+                    resp.region_error().DebugString(),
+                    region_id);
                 region_status = RegionException::RegionReadStatus::KEY_NOT_IN_REGION;
+            }
             else if (
                 region_error.has_server_is_busy() || region_error.has_raft_entry_too_large()
                 || region_error.has_region_not_initialized() || region_error.has_disk_full()
                 || region_error.has_read_index_not_ready() || region_error.has_proposal_in_merging_mode())
             {
+                LOG_DEBUG(
+                    log,
+                    "meet abnormal region error {}, [region_id={}]",
+                    resp.region_error().DebugString(),
+                    region_id);
                 region_status = RegionException::RegionReadStatus::TIKV_SERVER_ISSUE;
+            }
+            else
+            {
+                LOG_DEBUG(
+                    log,
+                    "meet abnormal region error {}, [region_id={}]",
+                    resp.region_error().DebugString(),
+                    region_id);
             }
             unavailable_regions.add(region_id, region_status);
         }
@@ -371,10 +399,10 @@ LearnerReadSnapshot doLearnerRead(
             watch.restart(); // restart to count the elapsed of wait index
         }
 
-        addressBatchReadIndexError(batch_read_index_result, unavailable_regions, mvcc_query_info);
+        addressBatchReadIndexError(batch_read_index_result, unavailable_regions, mvcc_query_info, log);
 
         auto handle_wait_timeout_region
-            = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id, UInt64 index) {
+            = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id, UInt64 index, UInt64 current) {
                   if (!for_batch_cop)
                   {
                       // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
@@ -384,9 +412,10 @@ LearnerReadSnapshot doLearnerRead(
                   // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
                   throw TiFlashException(
                       Errors::Coprocessor::RegionError,
-                      "Region unavailable, region_id={} index={}",
+                      "Region unavailable, region_id={} index={} current={}",
                       region_id,
-                      index);
+                      index,
+                      current);
               };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < num_regions;
@@ -410,7 +439,8 @@ LearnerReadSnapshot doLearnerRead(
                     = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
                 if (wait_res != WaitIndexResult::Finished)
                 {
-                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait);
+                    auto current = region->appliedIndex();
+                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait, current);
                     continue;
                 }
                 if (time_cost > 0)
@@ -425,7 +455,8 @@ LearnerReadSnapshot doLearnerRead(
                 // for Regions one by one.
                 if (!region->checkIndex(index_to_wait))
                 {
-                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait);
+                    auto current = region->appliedIndex();
+                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait, current);
                     continue;
                 }
             }
