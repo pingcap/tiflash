@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Transaction/KVStoreCommon.h>
 #include <Storages/Transaction/RaftLogManager.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
@@ -348,6 +349,21 @@ private:
         PersistRegionReason reason,
         const char * extra_msg) const;
 
+    // If `persistRegionAtState` is called with a stale applied_index, We must ask Proxy not to persist.
+    bool persistRegionAtState(
+        Region & region,
+        const PersistRegionState & persist_state,
+        const RegionTaskLock * region_task_lock,
+        PersistRegionReason reason,
+        const char * extra_msg) const;
+
+    PersistRegionState getPersistRegionState(RegionID region_id) const;
+    PersistRegionState getPersistRegionState(RegionPtr region, const RegionTaskLock & region_task_lock) const;
+    bool doFlushRegionDataWithState(RegionID region_id, const PersistRegionState & state) const;
+    bool doFlushRegionDataWithState(
+        Region & curr_region,
+        const RegionTaskLock & region_task_lock,
+        const PersistRegionState & state) const;
     bool tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock &);
 
     void releaseReadIndexWorkers();

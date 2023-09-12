@@ -50,12 +50,15 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 }
 
-void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer)
+void RegionPersister::computeRegionWriteBuffer(
+    const Region & region,
+    RegionCacheWriteElement & region_write_buffer,
+    const PersistRegionState * state)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 
     region_id = region.id();
-    std::tie(region_size, applied_index) = region.serialize(buffer);
+    std::tie(region_size, applied_index) = region.serialize(buffer, state);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_WARNING(
@@ -67,21 +70,21 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     }
 }
 
-void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
+void RegionPersister::persist(const Region & region, const RegionTaskLock & lock, const PersistRegionState * state)
 {
-    doPersist(region, &lock);
+    doPersist(region, &lock, state);
 }
 
 void RegionPersister::persist(const Region & region)
 {
-    doPersist(region, nullptr);
+    doPersist(region, nullptr, nullptr);
 }
 
-void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
+void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock, const PersistRegionState * state)
 {
     // Support only one thread persist.
     RegionCacheWriteElement region_buffer;
-    computeRegionWriteBuffer(region, region_buffer);
+    computeRegionWriteBuffer(region, region_buffer, state);
 
     if (lock)
         doPersist(region_buffer, *lock, region);

@@ -410,7 +410,7 @@ namespace RegionPersistFormat
 static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 }
 
-std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf, const PersistRegionState * state) const
 {
     auto binary_version = Region::CURRENT_VERSION;
     fiu_do_on(FailPoints::force_region_persist_version, {
@@ -430,7 +430,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
         std::shared_lock<std::shared_mutex> lock(mutex);
 
         // serialize meta
-        const auto [meta_size, index] = meta.serialize(buf);
+        const auto [meta_size, index] = meta.serialize(buf, state);
         total_size += meta_size;
         applied_index = index;
 
@@ -582,6 +582,17 @@ void Region::updateRaftLogEagerIndex(UInt64 new_truncate_index)
 UInt64 Region::lastRestartLogApplied() const
 {
     return last_restart_log_applied;
+}
+
+UInt64 Region::unreplayableIndex() const
+{
+    if (!lastCompactLogApplied())
+    {
+        return UINT64_MAX;
+    }
+    UInt64 index = lastCompactLogApplied();
+    // TODO(eager gc) Can't replay before eager gc truncated index.
+    return index;
 }
 
 UInt64 Region::lastCompactLogApplied() const

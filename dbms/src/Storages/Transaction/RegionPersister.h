@@ -43,7 +43,7 @@ public:
 
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
-    void persist(const Region & region, const RegionTaskLock & lock);
+    void persist(const Region & region, const RegionTaskLock & lock, const PersistRegionState * state);
     RegionMap restore(
         PathPool & path_pool,
         const TiFlashRaftProxyHelper * proxy_helper = nullptr,
@@ -51,7 +51,10 @@ public:
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
-    static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer);
+    static void computeRegionWriteBuffer(
+        const Region & region,
+        RegionCacheWriteElement & region_write_buffer,
+        const PersistRegionState * state);
 
     PageStorageConfig getPageStorageSettings() const;
 
@@ -61,7 +64,7 @@ private:
     void forceTransformKVStoreV2toV3();
 
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
-    void doPersist(const Region & region, const RegionTaskLock * lock);
+    void doPersist(const Region & region, const RegionTaskLock * lock, const PersistRegionState * state);
 
 private:
     inline std::variant<String, NamespaceID> getWriteBatchPrefix() const

@@ -33,14 +33,24 @@
 
 namespace DB
 {
-std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf, const PersistRegionState * state) const
 {
     std::lock_guard lock(mutex);
 
     size_t size = 0;
     size += writeBinary2(peer, buf);
-    size += writeBinary2(apply_state, buf);
-    size += writeBinary2(applied_term, buf);
+    if (state)
+    {
+        auto apply_state_override = apply_state;
+        apply_state_override.set_applied_index(state->index);
+        size += writeBinary2(apply_state, buf);
+        size += writeBinary2(state->term, buf);
+    }
+    else
+    {
+        size += writeBinary2(apply_state, buf);
+        size += writeBinary2(applied_term, buf);
+    }
     size += writeBinary2(region_state.getBase(), buf);
     return {size, apply_state.applied_index()};
 }

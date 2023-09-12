@@ -393,6 +393,7 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
       F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+      F(type_async_flush_region, {{"type", "async_flush_region"}}, ExpBuckets{0.0005, 2, 20}),                                      \
       F(type_admin_batch_split, {{"type", "admin_batch_split"}}, ExpBuckets{0.0005, 2, 20}),                                        \
       F(type_admin_prepare_merge, {{"type", "admin_prepare_merge"}}, ExpBuckets{0.0005, 2, 20}),                                    \
       F(type_admin_commit_merge, {{"type", "admin_commit_merge"}}, ExpBuckets{0.0005, 2, 20}),                                      \

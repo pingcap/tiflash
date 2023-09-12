@@ -408,11 +408,12 @@ void KVStore::persistRegion(
             region.toString(true),
             region.dataSize(),
             caller);
-        region_persister->persist(region, *region_task_lock.value());
+        region_persister->persist(region, *region_task_lock.value(), nullptr);
         LOG_DEBUG(log, "Persist {} done", region.toString(false));
     }
     else
     {
+        // Only happens in tests.
         LOG_INFO(log, "Try to persist {}", region.toString(false));
         region_persister->persist(region);
         LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
@@ -446,6 +447,54 @@ void KVStore::persistRegion(
     case PersistRegionReason::Debug: // ignore
         break;
     }
+}
+
+bool KVStore::persistRegionAtState(
+    Region & region,
+    const PersistRegionState & persist_state,
+    const RegionTaskLock * region_task_lock,
+    PersistRegionReason reason,
+    const char * extra_msg) const
+{
+    auto unreplayable_index = region.unreplayableIndex();
+    if (persist_state.index <= unreplayable_index)
+    {
+        LOG_INFO(
+            log,
+            "persistRegionAtState failed for {} <= {}, region_id={}",
+            persist_state.index,
+            unreplayable_index,
+            region.id());
+        return false;
+    }
+    // The region will be locked in Region::serialize.
+    region_persister->persist(region, *region_task_lock, &persist_state);
+    auto reason_id = magic_enum::enum_underlying(reason);
+    std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
+    switch (reason)
+    {
+    case PersistRegionReason::Flush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
+        break;
+    case PersistRegionReason::ProactiveFlush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_proactive).Increment(1);
+        break;
+    default:
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can't persistRegionAtState for {}, region_id={}",
+            caller,
+            region.id());
+        break;
+    }
+    LOG_INFO(
+        log,
+        "persistRegionAtState success for {} at {} {}, region_id={}",
+        caller,
+        persist_state.index,
+        persist_state.term,
+        region.id());
+    return true;
 }
 
 bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
@@ -620,18 +669,69 @@ bool KVStore::forceFlushRegionDataImpl(
         curr_region.handleWriteRaftCmd({}, index, term, tmt);
     }
 
+    // Region lock should be held here to prevent further writes, expecially admin cmds.
     if (!tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
         return false;
     }
 
-    // flush cache in storage level is done, persist the region info
+    // Flush cache in DeltaMerge level is done, persist the region info.
     persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
     // CompactLog will be done in proxy soon, we advance the eager truncate index in TiFlash
     curr_region.updateRaftLogEagerIndex(index);
     curr_region.cleanApproxMemCacheInfo();
     GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
     return true;
+}
+
+PersistRegionState KVStore::getPersistRegionState(RegionID region_id) const
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Try get persist region state of a non-exesting region {}",
+            region_id);
+    }
+    return getPersistRegionState(curr_region_ptr, region_task_lock);
+}
+
+PersistRegionState KVStore::getPersistRegionState(RegionPtr region, const RegionTaskLock &) const
+{
+    return PersistRegionState{region->appliedIndex(), region->appliedIndexTerm()};
+}
+
+bool KVStore::doFlushRegionDataWithState(RegionID region_id, const PersistRegionState & state) const {
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Try persist of a non-exesting region {} by state",
+            region_id);
+    }
+    return doFlushRegionDataWithState(*curr_region_ptr, region_task_lock, state);
+}
+
+bool KVStore::doFlushRegionDataWithState(
+    Region & curr_region,
+    const RegionTaskLock & region_task_lock,
+    const PersistRegionState & state) const
+{
+    Stopwatch watch;
+    bool suc = persistRegionAtState(curr_region, state, &region_task_lock, PersistRegionReason::Flush, "");
+    if (suc)
+    {
+        curr_region.cleanApproxMemCacheInfo();
+        // "async" here means flushing DeltaCache is async, persist region is still sync.
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_async_flush_region)
+            .Observe(watch.elapsedSeconds());
+        return true;
+    }
+    return false;
 }
 
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
