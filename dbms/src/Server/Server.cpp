@@ -1577,11 +1577,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
+        auto cpu_task_queue_type = TaskQueueType::DEFAULT;
+        auto io_task_queue_type = TaskQueueType::DEFAULT;
+        if (!global_context->getSettingsRef().enable_resource_control)
+            cpu_task_queue_type = TaskQueueType::MLFQ;
+
         TaskSchedulerConfig config{
-            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-             settings.pipeline_cpu_task_thread_pool_queue_type},
-            {get_pool_size(settings.pipeline_io_task_thread_pool_size),
-             settings.pipeline_io_task_thread_pool_queue_type},
+            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), cpu_task_queue_type},
+            {get_pool_size(settings.pipeline_io_task_thread_pool_size), io_task_queue_type},
         };
         RUNTIME_CHECK(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
