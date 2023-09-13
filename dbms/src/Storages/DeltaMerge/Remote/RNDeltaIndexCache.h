@@ -16,7 +16,7 @@
 
 #include <Common/LRUCache.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>

@@ -35,9 +35,9 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
-#include <Storages/Transaction/TiDB.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
+#include <TiDB/Schema/TiDB.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/UTF8Helpers.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <common/mem_utils_opt.h>
 
 #include <algorithm>

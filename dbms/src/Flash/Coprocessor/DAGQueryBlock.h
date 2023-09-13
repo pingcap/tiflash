@@ -20,9 +20,9 @@
 #pragma GCC diagnostic pop
 
 #include <Interpreters/IQuerySource.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

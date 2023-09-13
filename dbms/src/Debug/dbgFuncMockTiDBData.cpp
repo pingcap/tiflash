@@ -19,8 +19,8 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <fmt/core.h>
 
 namespace DB

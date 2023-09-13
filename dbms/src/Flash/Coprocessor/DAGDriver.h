@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/RegionInfo.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Types.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push

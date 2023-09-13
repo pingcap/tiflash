@@ -21,12 +21,12 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/FFI/SSTReader.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/PartitionStreams.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -41,6 +41,7 @@ namespace DM
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const std::string & log_prefix_,
     RegionPtr region_,
+    UInt64 snapshot_index_,
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
@@ -49,6 +50,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     TMTContext & tmt_,
     size_t expected_size_)
     : region(std::move(region_))
+    , snapshot_index(snapshot_index_)
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
     , schema_snap(std::move(schema_snap_))
@@ -121,11 +123,12 @@ void SSTFilesToBlockInputStream::readPrefix()
     }
     LOG_INFO(
         log,
-        "Finish Construct MultiSSTReader, write={} lock={} default={} region_id={}",
+        "Finish Construct MultiSSTReader, write={} lock={} default={} region_id={} snapshot_index={}",
         ssts_write.size(),
         ssts_lock.size(),
         ssts_default.size(),
-        this->region->id());
+        this->region->id(),
+        snapshot_index);
 
     process_keys.default_cf = 0;
     process_keys.write_cf = 0;
@@ -229,11 +232,12 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         }
         LOG_DEBUG(
             log,
-            "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] [region_id={}]",
+            "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] [region_id={}] [snapshot_index={}]",
             CFToName(cf),
             (*p_process_keys),
             process_keys.write_cf,
-            region->id());
+            region->id(),
+            snapshot_index);
         return;
     }
 
@@ -247,7 +251,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             LOG_DEBUG(
                 log,
                 "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] "
-                "[rowkey_to_be_included={}] [region_id={}]",
+                "[rowkey_to_be_included={}] [region_id={}] [snapshot_index={}]",
                 CFToName(cf),
                 (*p_process_keys),
                 process_keys.write_cf,
@@ -255,7 +259,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                 (rowkey_to_be_included
                      ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size())
                      : "<end>"),
-                region->id());
+                region->id(),
+                snapshot_index);
             break;
         }
 
