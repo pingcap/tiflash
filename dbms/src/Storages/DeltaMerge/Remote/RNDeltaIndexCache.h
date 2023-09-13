@@ -15,11 +15,17 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
+
+namespace DB::DM
+{
+class DeltaIndex;
+using DeltaIndexPtr = std::shared_ptr<DeltaIndex>;
+} // namespace DB::DM
 
 namespace DB::DM::Remote
 {
@@ -30,15 +36,14 @@ namespace DB::DM::Remote
 class RNDeltaIndexCache : private boost::noncopyable
 {
 public:
-    // TODO: Currently we use a quantity based cache size. We could change to memory-size based.
-    //       However, as the delta index's size could be changing, we need to implement our own LRU instead.
-    explicit RNDeltaIndexCache(size_t max_cache_keys)
-        : cache(max_cache_keys)
+    explicit RNDeltaIndexCache(size_t max_cache_size)
+        : cache(max_cache_size)
     {}
 
     struct CacheKey
     {
         UInt64 store_id;
+        KeyspaceID keyspace_id;
         Int64 table_id;
         UInt64 segment_id;
         UInt64 segment_epoch;
@@ -46,9 +51,21 @@ public:
 
         bool operator==(const CacheKey & other) const
         {
-            return store_id == other.store_id && table_id == other.table_id && segment_id == other.segment_id
-                && segment_epoch == other.segment_epoch && delta_index_epoch == other.delta_index_epoch;
+            return store_id == other.store_id && keyspace_id == other.keyspace_id && table_id == other.table_id
+                && segment_id == other.segment_id && segment_epoch == other.segment_epoch
+                && delta_index_epoch == other.delta_index_epoch;
         }
+    };
+
+    struct CacheValue
+    {
+        CacheValue(const DeltaIndexPtr & delta_index_, size_t bytes_)
+            : delta_index(delta_index_)
+            , bytes(bytes_)
+        {}
+
+        DeltaIndexPtr delta_index;
+        size_t bytes;
     };
 
     struct CacheKeyHasher
@@ -58,6 +75,7 @@ public:
             using std::hash;
 
             return hash<UInt64>()(k.store_id) ^ //
+                hash<UInt64>()(k.keyspace_id) ^ //
                 hash<Int64>()(k.table_id) ^ //
                 hash<UInt64>()(k.segment_id) ^ //
                 hash<UInt64>()(k.segment_epoch) ^ //
@@ -65,13 +83,26 @@ public:
         }
     };
 
+    struct CacheValueWeight
+    {
+        size_t operator()(const CacheKey & key, const CacheValue & v) const { return sizeof(key) + v.bytes; }
+    };
+
     /**
      * Returns a cached or newly created delta index, which is assigned to the specified segment(at)epoch.
      */
     DeltaIndexPtr getDeltaIndex(const CacheKey & key);
 
+    // `setDeltaIndex` will updated cache size and remove overflows if necessary.
+    void setDeltaIndex(const DeltaIndexPtr & delta_index);
+
+    size_t getCacheWeight() const { return cache.weight(); }
+    size_t getCacheCount() const { return cache.count(); }
+
+
 private:
-    LRUCache<CacheKey, DeltaIndex, CacheKeyHasher> cache;
+    std::mutex mtx;
+    LRUCache<CacheKey, CacheValue, CacheKeyHasher, CacheValueWeight> cache;
 };
 
 } // namespace DB::DM::Remote

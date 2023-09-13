@@ -39,11 +39,6 @@
 #include <limits>
 using namespace DB::S3::tests;
 
-namespace DB::FailPoints
-{
-extern const char force_ps_wal_compact[];
-} // namespace DB::FailPoints
-
 namespace DB::PS::universal::tests
 {
 

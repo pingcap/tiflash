@@ -43,7 +43,7 @@ Block AggregatingBlockInputStream::readImpl()
         /// no new spill can be triggered anymore
         aggregator.getAggSpillContext()->finishSpillableStage();
 
-        if (!aggregator.hasSpilledData() && !aggregator.getAggSpillContext()->needFinalSpill(0))
+        if (!aggregator.hasSpilledData() && !aggregator.getAggSpillContext()->isThreadMarkedForAutoSpill(0))
         {
             ManyAggregatedDataVariants many_data{data_variants};
             auto merging_buckets = aggregator.mergeAndConvertToBlocks(many_data, final, 1);

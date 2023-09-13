@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
@@ -47,6 +48,7 @@ namespace FailPoints
 {
 extern const char exception_before_page_file_write_sync[];
 extern const char force_set_page_file_write_errno[];
+extern const char force_pick_all_blobs_to_full_gc[];
 } // namespace FailPoints
 
 namespace PS::V3::tests
@@ -1826,6 +1828,135 @@ try
     // After restored from disk, we should not see page0 again
     // or it could be an entry pointing to a non-exist BlobFile
     ASSERT_ANY_THROW(page_storage->read(page_id0));
+}
+CATCH
+
+TEST_F(PageStorageTest, WriteEmptyPage)
+try
+{
+    {
+        PageStorageConfig config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    UInt64 tag = 0;
+    PageIdU64 page_id1 = 131;
+    PageIdU64 page_id2 = 132;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id1, tag, "", {}); // empty page
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.putPage(page_id2, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto page = page_storage->read(page_id1);
+        ASSERT_EQ(page.page_id, page_id1);
+        ASSERT_EQ(page.data.size(), 0);
+    }
+    {
+        auto page = page_storage->read(page_id2);
+        ASSERT_EQ(page.page_id, page_id2);
+        ASSERT_EQ(page.data.size(), buf_sz);
+    }
+
+    // delete empty page
+    {
+        WriteBatch batch;
+        batch.delPage(page_id1);
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto page = page_storage->readImpl(TEST_NAMESPACE_ID, page_id1, nullptr, nullptr, /*throw_on_not_exist*/ false);
+        ASSERT_FALSE(page.isValid());
+    }
+    {
+        auto page = page_storage->read(page_id2);
+        ASSERT_EQ(page.page_id, page_id2);
+        ASSERT_EQ(page.data.size(), buf_sz);
+    }
+
+    {
+        PageStorageConfig config;
+        page_storage = reopenWithConfig(config);
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, RestoreWithEmptyPage)
+try
+{
+    {
+        PageStorageConfig config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    UInt64 tag = 0;
+    PageIdU64 page_id0 = 120;
+    PageIdU64 page_id1 = 131;
+    PageIdU64 page_id2 = 122;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id0, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        batch.putPage(page_id1, tag, "", {}); // empty page
+        page_storage->write(std::move(batch));
+    }
+    page_storage->freezeDataFiles(); // new write will be written to new BlobFile
+    {
+        WriteBatch batch;
+        batch.putPage(page_id2, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto page = page_storage->read(page_id0);
+        ASSERT_EQ(page.page_id, page_id0);
+        ASSERT_EQ(page.data.size(), buf_sz);
+    }
+    {
+        auto page = page_storage->read(page_id1);
+        ASSERT_EQ(page.page_id, page_id1);
+        ASSERT_EQ(page.data.size(), 0);
+    }
+    {
+        auto page = page_storage->read(page_id2);
+        ASSERT_EQ(page.page_id, page_id2);
+        ASSERT_EQ(page.data.size(), buf_sz);
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::force_pick_all_blobs_to_full_gc);
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    // When restoring from disk, we will first restore two non-empty page,
+    // then restore the empty page. No exception should be thrown.
+    {
+        PageStorageConfig config;
+        page_storage = reopenWithConfig(config);
+    }
 }
 CATCH
 

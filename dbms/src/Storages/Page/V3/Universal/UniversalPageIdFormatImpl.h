@@ -18,9 +18,9 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -109,6 +109,18 @@ public:
         return buff.releaseStr();
     }
 
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
+    static UniversalPageId toRaftApplyStateKeyInRaftEngine(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(RAFT_PREFIX, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x03, buff);
+        return buff.releaseStr();
+    }
+
     // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id REGION_STATE_SUFFIX
     static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
@@ -143,6 +155,19 @@ public:
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
         writeChar(0x02, buff);
+        return buff.releaseStr();
+    }
+
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX log_index
+    static String toRaftLogKey(RegionID region_id, UInt64 log_index)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(RAFT_PREFIX, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        encodeUInt64(log_index, buff);
         return buff.releaseStr();
     }
 

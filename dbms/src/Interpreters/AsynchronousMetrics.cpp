@@ -26,13 +26,13 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/config_common.h>
 
 #include <chrono>
@@ -197,12 +197,29 @@ void AsynchronousMetrics::update()
     }
 
     {
+        if (auto min_max_cache = context.getMinMaxIndexCache())
+        {
+            set("MinMaxIndexCacheBytes", min_max_cache->weight());
+            set("MinMaxIndexFiles", min_max_cache->count());
+        }
+    }
+
+    {
         if (auto uncompressed_cache = context.getUncompressedCache())
         {
             set("UncompressedCacheBytes", uncompressed_cache->weight());
             set("UncompressedCacheCells", uncompressed_cache->count());
         }
     }
+
+    {
+        if (auto rn_delta_index_cache = context.getSharedContextDisagg()->rn_delta_index_cache)
+        {
+            set("RNDeltaIndexCacheBytes", rn_delta_index_cache->getCacheWeight());
+            set("RNDeltaIndexFiles", rn_delta_index_cache->getCacheCount());
+        }
+    }
+
 
     set("Uptime", context.getUptimeSeconds());
 

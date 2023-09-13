@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <TiDB/OwnerManager.h>
 #include <common/types.h>
 #include <kvproto/disaggregated.pb.h>

@@ -40,18 +40,20 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
+#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/FastAddPeerCache.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -746,7 +748,10 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
-    return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
+    return std::make_shared<SegmentSnapshot>(
+        std::move(delta_snap),
+        std::move(stable_snap),
+        Logger::get(dm_context.tracing_id));
 }
 
 BlockInputStreamPtr Segment::getInputStream(
@@ -816,7 +821,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     size_t expected_block_size,
     bool need_row_id)
 {
-    LOG_TRACE(log, "Begin segment create input stream");
+    LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -883,7 +888,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         dm_context.tracing_id);
 
     LOG_TRACE(
-        log->getChild(dm_context.tracing_id),
+        segment_snap->log,
         "Finish segment create input stream, max_version={} range_size={} ranges={}",
         max_version,
         real_ranges.size(),
@@ -2312,8 +2317,7 @@ Segment::ReadInfo Segment::getReadInfo(
     const RowKeyRanges & read_ranges,
     UInt64 max_version) const
 {
-    auto tracing_logger = log->getChild(dm_context.tracing_id);
-    LOG_DEBUG(tracing_logger, "Begin segment getReadInfo");
+    LOG_DEBUG(segment_snap->log, "Begin segment getReadInfo");
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
@@ -2323,21 +2327,26 @@ Segment::ReadInfo Segment::getReadInfo(
         = std::make_shared<DeltaValueReader>(dm_context, segment_snap->delta, pk_ver_col_defs, this->rowkey_range);
 
     auto [my_delta_index, fully_indexed]
-        = ensurePlace(dm_context, segment_snap->stable, delta_reader, read_ranges, max_version);
+        = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, max_version);
     auto compacted_index = my_delta_index->getDeltaTree()->getCompactedEntries();
 
 
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_DEBUG(tracing_logger, "Finish segment getReadInfo");
+    LOG_DEBUG(segment_snap->log, "Finish segment getReadInfo");
 
     if (fully_indexed)
     {
         // Try update shared index, if my_delta_index is more advanced.
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
-            LOG_DEBUG(tracing_logger, "Segment updated delta index");
+        {
+            LOG_DEBUG(segment_snap->log, "Segment updated delta index");
+            // Update cache size.
+            if (auto cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
+                cache->setDeltaIndex(segment_snap->delta->getSharedDeltaIndex());
+        }
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
@@ -2407,7 +2416,8 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
             delta_index_end,
             rowkey_range,
             expected_block_size,
-            stable_snap->getDMFilesRows());
+            stable_snap->getDMFilesRows(),
+            dm_context.tracing_id);
     }
     else
     {
@@ -2419,17 +2429,19 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
             delta_index_end,
             rowkey_range,
             expected_block_size,
-            stable_snap->getDMFilesRows());
+            stable_snap->getDMFilesRows(),
+            dm_context.tracing_id);
     }
 }
 
 std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     const DMContext & dm_context,
-    const StableSnapshotPtr & stable_snap,
+    const SegmentSnapshotPtr & segment_snap,
     const DeltaValueReaderPtr & delta_reader,
     const RowKeyRanges & read_ranges,
     UInt64 max_version) const
 {
+    const auto & stable_snap = segment_snap->stable;
     auto delta_snap = delta_reader->getDeltaSnap();
     // Clone a new delta index.
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
@@ -2538,7 +2550,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
     LOG_DEBUG(
-        log,
+        segment_snap->log,
         "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={}",
         DB::DM::toDebugString(read_ranges),
         items.size(),
@@ -2736,7 +2748,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
     LOG_DEBUG(
-        log->getChild(dm_context.tracing_id),
+        segment_snap->log,
         "buildBitmapFilterNormal total_rows={} cost={}ms",
         total_rows,
         sw_total.elapsedMilliseconds());
@@ -2858,7 +2870,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
         LOG_DEBUG(
-            log,
+            segment_snap->log,
             "buildBitmapFilterStableOnly all match, total_rows={}, cost={}ms",
             segment_snap->stable->getDMFilesRows(),
             sw.elapsedMilliseconds());
@@ -2884,7 +2896,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     if (!has_some_packs)
     {
         LOG_DEBUG(
-            log,
+            segment_snap->log,
             "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={}ms",
             segment_snap->stable->getDMFilesRows(),
             sw.elapsedMilliseconds());
@@ -2920,7 +2932,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         dm_context.tracing_id);
     bitmap_filter->set(stream);
     LOG_DEBUG(
-        log,
+        segment_snap->log,
         "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={}ms",
         some_packs_sets.size(),
         segment_snap->stable->getDMFilesRows(),
@@ -3002,7 +3014,9 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
 
     if (unlikely(filter_columns->size() == columns_to_read.size()))
     {
-        LOG_ERROR(log, "Late materialization filter columns size equal to read columns size, which is not expected.");
+        LOG_ERROR(
+            segment_snap->log,
+            "Late materialization filter columns size equal to read columns size, which is not expected.");
         BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
             *filter_columns,
             filter_column_stable_stream,

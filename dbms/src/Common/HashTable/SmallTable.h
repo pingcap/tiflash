@@ -372,6 +372,8 @@ public:
     }
 
     size_t getBufferSizeInBytes() const { return sizeof(buf); }
+
+    void setResizeCallback(const ResizeCallback &) {}
 };
 
 

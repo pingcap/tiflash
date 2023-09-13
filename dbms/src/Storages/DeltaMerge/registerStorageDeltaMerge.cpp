@@ -19,7 +19,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

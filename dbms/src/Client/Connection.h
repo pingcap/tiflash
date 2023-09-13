@@ -25,7 +25,7 @@
 #include <IO/CompressionSettings.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/Progress.h>
-#include <Interpreters/Settings.h>
+#include <Interpreters/Settings_fwd.h>
 #include <Interpreters/TablesStatus.h>
 #include <Poco/Net/StreamSocket.h>
 #include <common/logger_useful.h>

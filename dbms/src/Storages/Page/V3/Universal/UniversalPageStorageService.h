@@ -47,7 +47,7 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config);
 
-    bool gc();
+    bool gc() const;
 
     bool uploadCheckpoint();
 
@@ -78,7 +78,7 @@ public:
     explicit UniversalPageStorageService(Context & global_context_);
     // If the TiFlash process restart unexpectedly, some local checkpoint files can be left,
     // remove these files when the process restarting.
-    void removeAllLocalCheckpointFiles();
+    void removeAllLocalCheckpointFiles() const;
     Poco::Path getCheckpointLocalDir(UInt64 seq) const;
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -95,8 +95,6 @@ public:
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
-
-    std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     LoggerPtr log;
 

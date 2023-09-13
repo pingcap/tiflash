@@ -23,6 +23,9 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <thread>
+
 namespace DB
 {
 namespace tests
@@ -61,7 +64,7 @@ try
     std::shared_ptr<TaskOperatorSpillContexts> task_operator_spill_contexts
         = std::make_shared<TaskOperatorSpillContexts>();
     task_operator_spill_contexts->registerOperatorSpillContext(sort_spill_context);
-    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0));
+    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""), 0);
     ASSERT_TRUE(query_operator_spill_contexts.getTaskOperatorSpillContextsCount() == 0);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts);
     ASSERT_TRUE(query_operator_spill_contexts.getTaskOperatorSpillContextsCount() == 1);
@@ -84,7 +87,7 @@ try
     task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_2);
     task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_3);
 
-    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0));
+    QueryOperatorSpillContexts query_operator_spill_contexts(MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""), 0);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_1);
     query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_2);
 
@@ -124,6 +127,51 @@ try
     ASSERT_FALSE(sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
     ASSERT_FALSE(sort_spill_context_3->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD + 1));
     ASSERT_TRUE(query_operator_spill_contexts.getTaskOperatorSpillContextsCount() == 1);
+}
+CATCH
+
+TEST_F(TestQueryOperatorSpillContexts, TestMinCheckInterval)
+try
+{
+    auto sort_spill_context_1 = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
+    auto sort_spill_context_2 = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
+    auto sort_spill_context_3 = std::make_shared<SortSpillContext>(*spill_config_ptr, 0, logger);
+    std::shared_ptr<TaskOperatorSpillContexts> task_operator_spill_contexts_1
+        = std::make_shared<TaskOperatorSpillContexts>();
+    std::shared_ptr<TaskOperatorSpillContexts> task_operator_spill_contexts_2
+        = std::make_shared<TaskOperatorSpillContexts>();
+    task_operator_spill_contexts_1->registerOperatorSpillContext(sort_spill_context_1);
+    task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_2);
+    task_operator_spill_contexts_2->registerOperatorSpillContext(sort_spill_context_3);
+
+    UInt64 min_check_interval = 1000;
+    QueryOperatorSpillContexts query_operator_spill_contexts(
+        MPPQueryId(0, 0, 0, 0, /*resource_group_name=*/""),
+        min_check_interval);
+    query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_1);
+    query_operator_spill_contexts.registerTaskOperatorSpillContexts(task_operator_spill_contexts_2);
+
+    sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);
+    sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2);
+    sort_spill_context_3->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2);
+    ASSERT_TRUE(query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 4) == 0);
+    ASSERT_FALSE(sort_spill_context_1->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3));
+    ASSERT_TRUE(sort_spill_context_2->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2));
+    ASSERT_TRUE(sort_spill_context_3->updateRevocableMemory(OperatorSpillContext::MIN_SPILL_THRESHOLD * 2));
+    /// check interval less than threshold, no spill is triggered
+    ASSERT_TRUE(
+        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3)
+        == OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);
+    ASSERT_TRUE(
+        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3, true) == 0);
+    ASSERT_TRUE(
+        query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3)
+        == OperatorSpillContext::MIN_SPILL_THRESHOLD * 3);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2 * min_check_interval));
+    ASSERT_TRUE(query_operator_spill_contexts.triggerAutoSpill(OperatorSpillContext::MIN_SPILL_THRESHOLD * 3) == 0);
+    sort_spill_context_1->finishOneSpill();
+    sort_spill_context_2->finishOneSpill();
+    sort_spill_context_3->finishOneSpill();
 }
 CATCH
 } // namespace tests

@@ -47,7 +47,12 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         read_ranges[i] = RowKeyRange::deserialize(rb);
     }
 
-    auto tracing_id = fmt::format("{} segment_id={}", table_log->identifier(), proto.segment_id());
+    auto tracing_id = fmt::format(
+        "{} segment_id={} epoch={} delta_epoch={}",
+        table_log->identifier(),
+        proto.segment_id(),
+        proto.segment_epoch(),
+        proto.delta_index_epoch());
     auto dm_context = std::make_shared<DMContext>(
         db_context,
         /* path_pool */ nullptr,
@@ -70,7 +75,8 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         nullptr,
         nullptr);
 
-    auto segment_snap = Serializer::deserializeSegmentSnapshotFrom(*dm_context, store_id, physical_table_id, proto);
+    auto segment_snap
+        = Serializer::deserializeSegmentSnapshotFrom(*dm_context, store_id, keyspace_id, physical_table_id, proto);
 
     // Note: At this moment, we still cannot read from `task->segment_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
@@ -92,11 +98,11 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     }
 
     LOG_DEBUG(
-        table_log,
-        "Build RNReadSegmentTask, segment_id={} memtable_cfs={} persisted_cfs={}",
-        proto.segment_id(),
+        segment_snap->log,
+        "Build RNReadSegmentTask: memtable_cfs={} persisted_cfs={} delta_index={}",
         segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
-        segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
+        segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
+        segment_snap->delta->getSharedDeltaIndex()->toString());
 
     return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(RNReadSegmentMeta{
         .keyspace_id = keyspace_id,

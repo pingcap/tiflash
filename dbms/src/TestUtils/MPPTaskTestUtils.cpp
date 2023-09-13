@@ -16,8 +16,8 @@
 #include <Debug/dbgQueryExecutor.h>
 #include <Server/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 #include <fmt/core.h>
 
@@ -113,6 +113,18 @@ std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder build
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     return tasks;
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::executeProblematicMPPTasks(
+    QueryTasks & tasks,
+    const DAGProperties & properties,
+    BlockInputStreamPtr & stream)
+{
+    stream = executeMPPQueryWithMultipleContext(
+        properties,
+        tasks,
+        MockComputeServerManager::instance().getServerConfigMap());
+    return readBlock(stream);
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties)

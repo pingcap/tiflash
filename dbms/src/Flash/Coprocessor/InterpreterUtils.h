@@ -82,6 +82,7 @@ void executeLocalSort(
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
+    bool for_fine_grained_executor,
     const Context & context,
     const LoggerPtr & log);
 

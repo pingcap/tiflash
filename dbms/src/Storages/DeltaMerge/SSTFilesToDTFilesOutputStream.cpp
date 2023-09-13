@@ -24,13 +24,13 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/FFI/SSTReader.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PartitionStreams.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
@@ -105,13 +105,15 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
 
     LOG_INFO(
         log,
-        "Transformed snapshot in SSTFile to DTFiles, region={} job_type={} cost_ms={} rows={} bytes={} "
-        "write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
+        "Transformed snapshot in SSTFile to DTFiles,"
+        " region={} job_type={} cost_ms={} rows={} bytes={} bytes_on_disk={}"
+        " write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
         child->getRegion()->toString(true),
         magic_enum::enum_name(job_type),
         watch.elapsedMilliseconds(),
         total_committed_rows,
         total_committed_bytes,
+        total_bytes_on_disk,
         process_keys.write_cf,
         process_keys.default_cf,
         process_keys.lock_cf,
@@ -213,6 +215,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
     auto dt_file = dt_stream->getFile();
     assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
     const auto bytes_written = dt_file->getBytesOnDisk();
+    total_bytes_on_disk += bytes_written;
 
     // If remote data store is not enabled, add the DTFile to StoragePathPool so that we can restore it later
     // Else just add it's size to disk delegator
@@ -367,6 +370,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
         }
     }
     ingest_files.clear();
+    ingest_files_range.clear();
 }
 
 template <typename ChildStream>

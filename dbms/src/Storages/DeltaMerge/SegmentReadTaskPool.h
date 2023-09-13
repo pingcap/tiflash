@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
-
+#include <Storages/DeltaMerge/Segment.h>
 namespace DB
 {
 namespace DM
@@ -290,3 +290,19 @@ using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
 } // namespace DM
 } // namespace DB
+
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
+{
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(
+            ctx.out(),
+            "{}_{}_{}",
+            t->segment->segmentId(),
+            t->segment->segmentEpoch(),
+            t->read_snapshot->delta->getDeltaIndexEpoch());
+    }
+};

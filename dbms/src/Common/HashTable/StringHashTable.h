@@ -157,6 +157,7 @@ public:
     size_t size() const { return hasZero() ? 1 : 0; }
     bool empty() const { return !hasZero(); }
     size_t getBufferSizeInBytes() const { return sizeof(Cell); }
+    void setResizeCallback(const ResizeCallback &) {}
     size_t getCollisions() const { return 0; }
 };
 
@@ -437,6 +438,15 @@ public:
     {
         return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes()
             + m3.getBufferSizeInBytes() + ms.getBufferSizeInBytes();
+    }
+
+    void setResizeCallback(const ResizeCallback & resize_callback)
+    {
+        m0.setResizeCallback(resize_callback);
+        m1.setResizeCallback(resize_callback);
+        m2.setResizeCallback(resize_callback);
+        m3.setResizeCallback(resize_callback);
+        ms.setResizeCallback(resize_callback);
     }
 
     void clearAndShrink()
