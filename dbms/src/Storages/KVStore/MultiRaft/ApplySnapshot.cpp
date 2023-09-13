@@ -87,7 +87,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(old_region);
+            tmt.getRegionTable().tryWriteBlockByRegion(old_region);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
             persistRegion(*old_region, &region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
@@ -233,7 +233,7 @@ void KVStore::onSnapshot(
         {
             try
             {
-                auto tmp = region_table.tryWriteBlockByRegionAndFlush(new_region_wrap);
+                auto tmp = region_table.tryWriteBlockByRegion(new_region_wrap);
                 {
                     std::lock_guard lock(bg_gc_region_data_mutex);
                     bg_gc_region_data.push_back(std::move(tmp));
@@ -635,11 +635,11 @@ EngineStoreApplyRes KVStore::handleIngestSST(
     }
 
     const auto func_try_flush = [&]() {
-        if (!region->writeCFCount())
+        if (region->writeCFCount() == 0)
             return;
         try
         {
-            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
+            tmt.getRegionTable().tryWriteBlockByRegion(region);
             tryFlushRegionCacheInStorage(tmt, *region, log);
         }
         catch (Exception & e)
