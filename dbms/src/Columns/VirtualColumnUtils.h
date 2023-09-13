@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Parsers/IAST.h>
 #include <Interpreters/Context_fwd.h>
+#include <Parsers/IAST.h>
 
 
 namespace DB::VirtualColumnUtils
