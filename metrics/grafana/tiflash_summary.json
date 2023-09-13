@@ -7267,7 +7267,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "hide": false,
               "interval": "",
               "legendFormat": "100%-{{type}}",
@@ -9050,7 +9050,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -9293,7 +9293,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -10188,7 +10188,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "max",
@@ -10315,7 +10315,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "max",
@@ -10471,7 +10471,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -11547,7 +11547,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -12212,7 +12212,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": " 100%",
@@ -12688,7 +12688,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -15635,7 +15635,7 @@
             },
             {
               "exemplar": true,
-              "expr": "\r\nhistogram_quantile(1.00, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)\r",
               "hide": false,
               "interval": "",
               "legendFormat": "100-{{type}}",
