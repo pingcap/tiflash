@@ -1031,8 +1031,11 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                 RUNTIME_CHECK_MSG(
                     delta_merge_storage != nullptr,
                     "delta_merge_storage which cast from storage is null");
-                table_snap = delta_merge_storage
-                                 ->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
+                table_snap = delta_merge_storage->writeNodeBuildRemoteReadSnapshot( //
+                    required_columns,
+                    query_info,
+                    context,
+                    max_streams);
             }
 
             injectFailPointForLocalRead(query_info);
@@ -1111,8 +1114,11 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                 RUNTIME_CHECK_MSG(
                     delta_merge_storage != nullptr,
                     "delta_merge_storage which cast from storage is null");
-                table_snap = delta_merge_storage
-                                 ->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
+                table_snap = delta_merge_storage->writeNodeBuildRemoteReadSnapshot( //
+                    required_columns,
+                    query_info,
+                    context,
+                    max_streams);
             }
 
             injectFailPointForLocalRead(query_info);

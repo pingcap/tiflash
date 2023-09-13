@@ -48,11 +48,9 @@ struct SegmentPagesFetchTask
 public:
     static SegmentPagesFetchTask error(String err_msg)
     {
-        return SegmentPagesFetchTask{nullptr, nullptr,std::move(err_msg)};
+        return SegmentPagesFetchTask{nullptr, nullptr, std::move(err_msg)};
     }
-    static SegmentPagesFetchTask task(
-        SegmentReadTaskPtr seg_task,
-        DM::ColumnDefinesPtr column_defines)
+    static SegmentPagesFetchTask task(SegmentReadTaskPtr seg_task, DM::ColumnDefinesPtr column_defines)
     {
         return SegmentPagesFetchTask{std::move(seg_task), std::move(column_defines), ""};
     }
