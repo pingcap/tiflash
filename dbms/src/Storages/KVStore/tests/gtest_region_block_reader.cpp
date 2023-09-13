@@ -22,12 +22,12 @@
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/RowCodecTestUtils.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Schema/TiDB.h>
+#include <TiDB/tests/RowCodecTestUtils.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 

@@ -18,7 +18,7 @@
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
 
-#include "RowCodecTestUtils.h"
+#include <TiDB/tests/RowCodecTestUtils.h>
 
 using TableInfo = TiDB::TableInfo;
 namespace DB::tests
