@@ -21,6 +21,7 @@
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/tests/RowCodecTestUtils.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -29,8 +30,6 @@
 #include <TiDB/Schema/TiDB.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
-
-#include "Storages/Transaction/Types.h"
 
 using TableInfo = TiDB::TableInfo;
 

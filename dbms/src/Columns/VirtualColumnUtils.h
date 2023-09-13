@@ -14,21 +14,17 @@
 
 #pragma once
 
-#include <DataTypes/IDataType.h>
+#include <Core/Block.h>
+#include <Parsers/IAST.h>
+#include <Interpreters/Context_fwd.h>
 
-namespace DB
+
+namespace DB::VirtualColumnUtils
 {
 
-/** Knows the names and types of all possible virtual columns.
-  * It is necessary for engines that redirect a request to other tables without knowing in advance what virtual columns they contain.
-  */
-class VirtualColumnFactory
-{
-public:
-    static bool hasColumn(const String & name);
-    static DataTypePtr getType(const String & name);
+/// Leave in the block only the rows that fit under the WHERE clause and the PREWHERE clause of the query.
+/// Only elements of the outer conjunction are considered, depending only on the columns present in the block.
+/// Returns true if at least one row is discarded.
+void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & context);
 
-    static DataTypePtr tryGetType(const String & name);
-};
-
-} // namespace DB
+} // namespace DB::VirtualColumnUtils
