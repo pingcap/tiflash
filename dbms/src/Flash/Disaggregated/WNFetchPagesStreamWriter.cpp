@@ -42,7 +42,6 @@ WNFetchPagesStreamWriterPtr WNFetchPagesStreamWriter::build(
     return std::unique_ptr<WNFetchPagesStreamWriter>(new WNFetchPagesStreamWriter(
         task.seg_task,
         task.column_defines,
-        task.output_field_types,
         read_page_ids,
         packet_limit_size));
 }

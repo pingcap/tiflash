@@ -1033,13 +1033,6 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                     "delta_merge_storage which cast from storage is null");
                 table_snap = delta_merge_storage
                                  ->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
-                // TODO: could be shared on the logical table level
-                table_snap->output_field_types = std::make_shared<std::vector<tipb::FieldType>>();
-                *table_snap->output_field_types = collectOutputFieldTypes(*dag_context.dag_request);
-                RUNTIME_CHECK(
-                    table_snap->output_field_types->size() == table_snap->column_defines->size(),
-                    table_snap->output_field_types->size(),
-                    table_snap->column_defines->size());
             }
 
             injectFailPointForLocalRead(query_info);
@@ -1120,13 +1113,6 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                     "delta_merge_storage which cast from storage is null");
                 table_snap = delta_merge_storage
                                  ->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
-                // TODO: could be shared on the logical table level
-                table_snap->output_field_types = std::make_shared<std::vector<tipb::FieldType>>();
-                *table_snap->output_field_types = collectOutputFieldTypes(*dag_context.dag_request);
-                RUNTIME_CHECK(
-                    table_snap->output_field_types->size() == table_snap->column_defines->size(),
-                    table_snap->output_field_types->size(),
-                    table_snap->column_defines->size());
             }
 
             injectFailPointForLocalRead(query_info);

@@ -47,8 +47,7 @@ SegmentPagesFetchTask DisaggReadSnapshot::popSegTask(TableID physical_table_id, 
 
     auto task = SegmentPagesFetchTask::task(
         seg_task,
-        table_iter->second->column_defines,
-        table_iter->second->output_field_types);
+        table_iter->second->column_defines);
     if (table_iter->second->empty())
     {
         table_snapshots.erase(table_iter);
