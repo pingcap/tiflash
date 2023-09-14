@@ -73,6 +73,8 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
                 active_set_soft_limit);
         }
     }
+    GET_METRIC(tiflash_task_scheduler, type_thread_hard_limit).Set(thread_hard_limit);
+    GET_METRIC(tiflash_task_scheduler, type_thread_soft_limit).Set(thread_soft_limit);
 }
 
 bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTaskManager & task_manager)
@@ -106,7 +108,7 @@ void MinTSOScheduler::deleteQuery(
         return;
     }
 
-    auto & entry = mustGetGroupEntry(query_id.resource_group_name);
+    auto & entry = getOrCreateGroupEntry(query_id.resource_group_name);
     bool all_gathers_deleted = true;
     auto query = task_manager.getMPPQueryWithoutLock(query_id);
 
@@ -186,7 +188,7 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
         return;
     }
 
-    auto & entry = mustGetGroupEntry(resource_group_name);
+    auto & entry = getOrCreateGroupEntry(resource_group_name);
     auto updated_estimated_threads = static_cast<Int64>(entry.estimated_thread_usage) - needed_threads;
     RUNTIME_ASSERT(
         updated_estimated_threads >= 0,
@@ -200,7 +202,7 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
     GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_active_tasks_count, resource_group_name).Decrement();
     /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(entry, task_manager, log);
-    if (entry.active_set.size() + entry.waiting_set.size() == 0)
+    if (entry.active_set.size() + entry.waiting_set.size() == 0 && entry.estimated_thread_usage == 0)
     {
         LOG_INFO(log, "min tso scheduler_entry of resouce group {} deleted", resource_group_name);
         scheduler_entries.erase(resource_group_name);
@@ -310,8 +312,7 @@ bool MinTSOScheduler::scheduleImp(
             .Set(entry.active_set.size());
         GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_estimated_thread_usage, entry.resource_group_name)
             .Set(entry.estimated_thread_usage);
-        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_global_estimated_thread_usage, entry.resource_group_name)
-            .Set(global_estimated_thread_usage);
+        GET_METRIC(tiflash_task_scheduler, type_global_estimated_thread_usage).Set(global_estimated_thread_usage);
         LOG_DEBUG(
             log,
             "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} "
@@ -422,13 +423,6 @@ bool MinTSOScheduler::GroupEntry::updateMinQueryId(
             waiting_set.size());
     }
     return force_scheduling;
-}
-
-MinTSOScheduler::GroupEntry & MinTSOScheduler::mustGetGroupEntry(const String & resource_group_name)
-{
-    auto iter = scheduler_entries.find(resource_group_name);
-    RUNTIME_CHECK(iter != scheduler_entries.end());
-    return iter->second;
 }
 
 MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const String & resource_group_name)
