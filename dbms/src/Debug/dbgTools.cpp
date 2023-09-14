@@ -780,7 +780,9 @@ void handleApplySnapshot(
 {
     auto new_region = kvstore.genRegionPtr(std::move(region), peer_id, index, term);
     auto prehandle_result = kvstore.preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
-    kvstore.applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(prehandle_result.ingest_ids)}, tmt);
+    kvstore.applyPreHandledSnapshot(
+        RegionPtrWithSnapshotFiles{new_region, std::move(prehandle_result.ingest_ids)},
+        tmt);
 }
 
 } // namespace RegionBench

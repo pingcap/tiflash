@@ -626,12 +626,27 @@ RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
 
 struct PreHandledSnapshotWithFiles
 {
-    ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
+    ~PreHandledSnapshotWithFiles()
+    {
+        CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply);
+        GET_METRIC(tiflash_raft_ongoing_snapshot_total_size, type_raft_snapshot)
+            .Decrement(prehandle_result.stats.raft_snapshot_bytes);
+        GET_METRIC(tiflash_raft_ongoing_snapshot_total_size, type_dt_on_disk)
+            .Decrement(prehandle_result.stats.dt_disk_bytes);
+        GET_METRIC(tiflash_raft_ongoing_snapshot_total_size, type_dt_total)
+            .Decrement(prehandle_result.stats.dt_total_bytes);
+    }
     PreHandledSnapshotWithFiles(const RegionPtr & region_, PrehandleResult && prehandle_result_)
         : region(region_)
         , prehandle_result(std::move(prehandle_result_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
+        GET_METRIC(tiflash_raft_ongoing_snapshot_total_size, type_raft_snapshot)
+            .Increment(prehandle_result.stats.raft_snapshot_bytes);
+        GET_METRIC(tiflash_raft_ongoing_snapshot_total_size, type_dt_on_disk)
+            .Increment(prehandle_result.stats.dt_disk_bytes);
+        GET_METRIC(tiflash_raft_ongoing_snapshot_total_size, type_dt_total)
+            .Increment(prehandle_result.stats.dt_total_bytes);
     }
     RegionPtr region;
     PrehandleResult prehandle_result; // The file_ids storing pre-handled files

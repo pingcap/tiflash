@@ -241,7 +241,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         }
         LOG_DEBUG(
             log,
-            "Done loading all kvpairs from [CF={}] [offset={}] [proc_size={}] [write_cf_offset={}] [region_id={}] [snapshot_index={}]",
+            "Done loading all kvpairs from [CF={}] [offset={}] [proc_size={}] [write_cf_offset={}] [region_id={}] "
+            "[snapshot_index={}]",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),

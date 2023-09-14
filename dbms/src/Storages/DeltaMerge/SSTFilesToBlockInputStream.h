@@ -89,9 +89,8 @@ public:
         inline size_t total_bytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
     };
 
-    const ProcessKeys & getProcessKeys() const {
-        return process_keys;
-    }
+    const ProcessKeys & getProcessKeys() const { return process_keys; }
+
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 

@@ -440,6 +440,12 @@ namespace DB
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
       F(type_normal, {{"type", "normal"}}, ExpBuckets{1, 2, 13}))                                                                   \
+    M(tiflash_raft_ongoing_snapshot_total_size,                                                                                     \
+      "Ongoing snapshot total size",                                                                                                \
+      Gauge,                                                                                                                        \
+      F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
+      F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
+      F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \

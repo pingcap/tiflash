@@ -210,6 +210,8 @@ void KVStore::onSnapshot(
                 }
                 else
                 {
+                    // It is only for debug usage now.
+                    static_assert(std::is_same_v<RegionPtrWrap, RegionPtrWithBlock>);
                     // Call `deleteRange` to delete data for range
                     dm_storage->deleteRange(new_key_range, context.getSettingsRef());
                 }
@@ -438,11 +440,10 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 stream->cancel();
             }
             prehandle_result.ingest_ids = stream->outputFiles();
-            prehandle_result.stats = PrehandleResult::Stats {
+            prehandle_result.stats = PrehandleResult::Stats{
                 sst_stream->getProcessKeys().total_bytes(),
                 stream->getTotalCommittedBytes(),
-                stream->getTotalBytesOnDisk()
-            };
+                stream->getTotalBytesOnDisk()};
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
@@ -702,7 +703,8 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
     PrehandleResult prehandle_result;
     try
     {
-        prehandle_result = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
+        prehandle_result
+            = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
     }
     catch (DB::Exception & e)
     {
