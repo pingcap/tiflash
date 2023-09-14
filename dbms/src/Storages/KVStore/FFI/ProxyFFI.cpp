@@ -971,12 +971,23 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
         auto & kvstore = server->tmt->getKVStore();
         auto region = kvstore->getRegion(region_id);
         auto value = region->getLockByKey(tikv_key);
+        if (!value)
+        {
+            // key not exist
+            LOG_WARNING(
+                Logger::get(),
+                "Failed to get lock by key {}, region_id={}",
+                tikv_key.toDebugString(),
+                region_id);
+            return BaseBuffView{};
+        }
+
         return BaseBuffView{value->data(), value->dataSize()};
     }
     catch (...)
     {
-        LOG_WARNING(
-            &Poco::Logger::get(__FUNCTION__),
+        LOG_WARNING( //
+            Logger::get(),
             "Failed to get lock by key {}, region_id={}",
             tikv_key.toDebugString(),
             region_id);

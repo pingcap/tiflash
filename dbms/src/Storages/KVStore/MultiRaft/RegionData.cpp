@@ -244,16 +244,15 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
         std::ignore = lock_info_ptr;
         return tikv_val;
     }
-    else
-    {
-        LOG_WARNING(
-            &Poco::Logger::get(__FUNCTION__),
-            "Failed to get lock by key {} in region data, map size {}, count {}",
-            key.toDebugString(),
-            map.size(),
-            map.count(lock_key));
-        throw Exception("Failed to get lock");
-    }
+
+    // It is safe to ignore the missing lock key after restart, print a warning log and return nullptr
+    LOG_WARNING(
+        Logger::get(),
+        "Failed to get lock by key {} in region data, map size {}, count {}",
+        key.toDebugString(),
+        map.size(),
+        map.count(lock_key));
+    return nullptr;
 }
 
 void RegionData::splitInto(const RegionRange & range, RegionData & new_region_data)
