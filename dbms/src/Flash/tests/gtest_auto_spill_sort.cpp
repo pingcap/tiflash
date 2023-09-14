@@ -33,7 +33,7 @@ public:
 };
 
 /// todo add more tests
-TEST_F(AutoSpillSortTestRunner, SimpleCase)
+TEST_F(AutoSpillSortTestRunner, TriggerByRandomMarkForSpill)
 try
 {
     DB::MockColumnInfoVec column_infos{

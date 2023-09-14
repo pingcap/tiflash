@@ -43,7 +43,7 @@ public:
 #define WRAP_FOR_SPILL_TEST_END }
 
 /// todo add more tests
-TEST_F(AutoSpillAggregationTestRunner, TriggerByRandomMarkFailPoint)
+TEST_F(AutoSpillAggregationTestRunner, TriggerByRandomMarkForSpill)
 try
 {
     DB::MockColumnInfoVec column_infos{
