@@ -159,7 +159,7 @@ void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
         if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
         {
             auto resize_callback = [agg_spill_context, thread_num]() {
-                return !agg_spill_context->isThreadMarkedForAutoSpill(thread_num);
+                return !(agg_spill_context->supportAutoTriggerSpill() && agg_spill_context->isThreadMarkedForAutoSpill(thread_num));
             };
 #define M(NAME)                                                                                         \
     case AggregationMethodType(NAME):                                                                   \
