@@ -236,7 +236,9 @@ void JoinPartition::setResizeCallbackIfNeeded()
     if (hash_join_spill_context->isSpillEnabled() && hash_join_spill_context->isInAutoSpillMode())
     {
         auto resize_callback = [this]() {
-            return !(hash_join_spill_context->supportFurtherSpill() && hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index));
+            return !(
+                hash_join_spill_context->supportFurtherSpill()
+                && hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index));
         };
         assert(pool != nullptr);
         pool->setResizeCallback(resize_callback);

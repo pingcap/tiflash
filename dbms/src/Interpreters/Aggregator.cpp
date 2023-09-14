@@ -159,7 +159,9 @@ void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
         if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
         {
             auto resize_callback = [agg_spill_context, thread_num]() {
-                return !(agg_spill_context->supportAutoTriggerSpill() && agg_spill_context->isThreadMarkedForAutoSpill(thread_num));
+                return !(
+                    agg_spill_context->supportAutoTriggerSpill()
+                    && agg_spill_context->isThreadMarkedForAutoSpill(thread_num));
             };
 #define M(NAME)                                                                                         \
     case AggregationMethodType(NAME):                                                                   \
@@ -653,6 +655,24 @@ void NO_INLINE Aggregator::executeImpl(
 }
 
 template <typename Method>
+std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
+    Method & method,
+    typename Method::State & state,
+    size_t index,
+    Arena & aggregates_pool,
+    std::vector<std::string> & sort_key_containers) const
+{
+    try
+    {
+        return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
+    }
+    catch (ResizeException &)
+    {
+        return {};
+    }
+}
+
+template <typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
@@ -717,46 +737,36 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_size]);
     size_t processed_rows = std::numeric_limits<size_t>::max();
-    bool allow_exception = false;
 
-    try
+    for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
     {
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
+        AggregateDataPtr aggregate_data = nullptr;
+
+        auto emplace_result_holder = emplaceKey(method, state, i, *aggregates_pool, sort_key_containers);
+        if unlikely (!emplace_result_holder.has_value())
         {
-            AggregateDataPtr aggregate_data = nullptr;
-
-            allow_exception = true;
-
-            auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
-
-            allow_exception = false;
-
-            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-            if (emplace_result.isInserted())
-            {
-                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-                emplace_result.setMapped(nullptr);
-
-                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                createAggregateStates(aggregate_data);
-
-                emplace_result.setMapped(aggregate_data);
-            }
-            else
-                aggregate_data = emplace_result.getMapped();
-
-            places[i - agg_process_info.start_row] = aggregate_data;
-            processed_rows = i;
+            LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+            break;
         }
-    }
-    catch (ResizeException &)
-    {
-        LOG_INFO(
-            log,
-            "HashTable resize throw ResizeException since the data is already marked for spill, allow_exception: {}",
-            allow_exception);
-        if unlikely (!allow_exception)
-            throw;
+
+        auto & emplace_result = emplace_result_holder.value();
+
+        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+        if (emplace_result.isInserted())
+        {
+            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+            emplace_result.setMapped(nullptr);
+
+            aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+            createAggregateStates(aggregate_data);
+
+            emplace_result.setMapped(aggregate_data);
+        }
+        else
+            aggregate_data = emplace_result.getMapped();
+
+        places[i - agg_process_info.start_row] = aggregate_data;
+        processed_rows = i;
     }
 
     if (processed_rows != std::numeric_limits<size_t>::max())
