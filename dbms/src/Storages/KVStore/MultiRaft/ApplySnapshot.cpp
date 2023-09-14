@@ -298,7 +298,7 @@ void KVStore::onSnapshot(
     prehandling_trace.deregisterTask(new_region->id());
 }
 
-std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
+PrehandleResult KVStore::preHandleSnapshotToFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
     uint64_t index,
@@ -306,12 +306,12 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
-    std::vector<DM::ExternalDTFileInfo> external_files;
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
+    PrehandleResult result;
     try
     {
         SCOPE_EXIT({ new_region->afterPrehandleSnapshot(); });
-        external_files = preHandleSSTsToDTFiles( //
+        result = preHandleSSTsToDTFiles( //
             new_region,
             snaps,
             index,
@@ -325,12 +325,12 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
             fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
         e.rethrow();
     }
-    return external_files;
+    return result;
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
 /// return the ids of DTFile(s), the uncommitted data will be inserted to `new_region`
-std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
+PrehandleResult KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
     uint64_t index,
@@ -360,7 +360,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             .Observe(watch.elapsedSeconds());
     });
 
-    std::vector<DM::ExternalDTFileInfo> generated_ingest_ids;
+    PrehandleResult prehandle_result;
     TableID physical_table_id = InvalidTableID;
 
     auto region_id = new_region->id();
@@ -437,7 +437,12 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                     index);
                 stream->cancel();
             }
-            generated_ingest_ids = stream->outputFiles();
+            prehandle_result.ingest_ids = stream->outputFiles();
+            prehandle_result.stats = PrehandleResult::Stats {
+                sst_stream->getProcessKeys().total_bytes(),
+                stream->getTotalCommittedBytes(),
+                stream->getTotalBytesOnDisk()
+            };
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
@@ -492,7 +497,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
         }
     }
 
-    return generated_ingest_ids;
+    return prehandle_result;
 }
 
 template <typename RegionPtrWrap>
@@ -694,10 +699,10 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
     }
 
     // Decode the KV pairs in ingesting SST into DTFiles
-    std::vector<DM::ExternalDTFileInfo> external_files;
+    PrehandleResult prehandle_result;
     try
     {
-        external_files = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
+        prehandle_result = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
     }
     catch (DB::Exception & e)
     {
@@ -708,7 +713,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
 
     // If `external_files` is empty, ingest SST won't write delete_range for ingest region, it is safe to
     // ignore the step of calling `ingestFiles`
-    if (!external_files.empty())
+    if (!prehandle_result.ingest_ids.empty())
     {
         auto keyspace_id = region->getKeyspaceID();
         auto table_id = region->getMappedTableID();
@@ -730,7 +735,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 dm_storage->ingestFiles( //
                     key_range,
-                    external_files,
+                    prehandle_result.ingest_ids,
                     /*clear_data_in_range=*/false,
                     context.getSettingsRef());
             }

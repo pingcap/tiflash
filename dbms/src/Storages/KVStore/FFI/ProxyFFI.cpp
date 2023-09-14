@@ -627,14 +627,14 @@ RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
 struct PreHandledSnapshotWithFiles
 {
     ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<DM::ExternalDTFileInfo> && external_files_)
+    PreHandledSnapshotWithFiles(const RegionPtr & region_, PrehandleResult && prehandle_result_)
         : region(region_)
-        , external_files(std::move(external_files_))
+        , prehandle_result(std::move(prehandle_result_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
     RegionPtr region;
-    std::vector<DM::ExternalDTFileInfo> external_files; // The file_ids storing pre-handled files
+    PrehandleResult prehandle_result; // The file_ids storing pre-handled files
 };
 
 RawCppPtr PreHandleSnapshot(
@@ -663,8 +663,8 @@ RawCppPtr PreHandleSnapshot(
 
         // Pre-decode and save as DTFiles
         // TODO Forward deadline_index when TiKV supports.
-        auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, std::nullopt, tmt);
-        auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
+        auto prehandle_result = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, std::nullopt, tmt);
+        auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(prehandle_result)};
         return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
     }
     catch (...)
@@ -685,7 +685,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         {
             auto & kvstore = server->tmt->getKVStore();
             kvstore->applyPreHandledSnapshot(
-                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)},
+                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)},
                 *server->tmt);
         }
         catch (...)
@@ -719,7 +719,7 @@ void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, R
     auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
     try
     {
-        auto s = RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)};
+        auto s = RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)};
         auto & kvstore = server->tmt->getKVStore();
         kvstore->releasePreHandledSnapshot(s, *server->tmt);
     }

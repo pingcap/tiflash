@@ -81,10 +81,17 @@ public:
         size_t default_cf = 0;
         size_t write_cf = 0;
         size_t lock_cf = 0;
+        size_t default_cf_bytes = 0;
+        size_t write_cf_bytes = 0;
+        size_t lock_cf_bytes = 0;
 
         inline size_t total() const { return default_cf + write_cf + lock_cf; }
+        inline size_t total_bytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
     };
 
+    const ProcessKeys & getProcessKeys() const {
+        return process_keys;
+    }
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 
 #include <list>
 
@@ -25,4 +26,13 @@ using RegionDataReadInfo = std::tuple<RawTiDBPK, UInt8, Timestamp, std::shared_p
 
 using RegionDataReadInfoList = std::vector<RegionDataReadInfo>;
 
+struct PrehandleResult {
+    std::vector<DM::ExternalDTFileInfo> ingest_ids;
+    struct Stats {
+        size_t raft_snapshot_bytes;
+        size_t dt_disk_bytes;
+        size_t dt_total_bytes;
+    };
+    Stats stats;
+};
 } // namespace DB
