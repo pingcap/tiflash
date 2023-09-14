@@ -692,18 +692,20 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        try
+        for (size_t i = 0; i < agg_size; ++i)
         {
-            for (size_t i = 0; i < agg_size; ++i)
+            auto emplace_result_hold
+                = emplaceKey(method, state, agg_process_info.start_row, *aggregates_pool, sort_key_containers);
+            if likely (emplace_result_hold.has_value())
             {
-                state.emplaceKey(method.data, agg_process_info.start_row, *aggregates_pool, sort_key_containers)
-                    .setMapped(place);
+                emplace_result_hold.value().setMapped(place);
                 ++agg_process_info.start_row;
             }
-        }
-        catch (ResizeException &)
-        {
-            LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+            else
+            {
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
+            }
         }
         return;
     }
@@ -714,7 +716,6 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
              ++inst)
         {
-            /// no resize will happen for this kind of hash table, so don't catch resize exception
             inst->batch_that->addBatchLookupTable8(
                 agg_process_info.start_row,
                 agg_size,
@@ -736,7 +737,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Generic case.
 
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_size]);
-    size_t processed_rows = std::numeric_limits<size_t>::max();
+    std::optional<size_t> processed_rows;
 
     for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
     {
@@ -769,7 +770,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         processed_rows = i;
     }
 
-    if (processed_rows != std::numeric_limits<size_t>::max())
+    if (processed_rows)
     {
         /// Add values to the aggregate functions.
         for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
@@ -777,13 +778,13 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
         {
             inst->batch_that->addBatch(
                 agg_process_info.start_row,
-                processed_rows - agg_process_info.start_row + 1,
+                *processed_rows - agg_process_info.start_row + 1,
                 places.get(),
                 inst->state_offset,
                 inst->batch_arguments,
                 aggregates_pool);
         }
-        agg_process_info.start_row = processed_rows + 1;
+        agg_process_info.start_row = *processed_rows + 1;
     }
 }
 
