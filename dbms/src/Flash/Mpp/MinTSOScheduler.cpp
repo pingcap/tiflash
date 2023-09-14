@@ -186,6 +186,7 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
         return;
     }
 
+    global_estimated_thread_usage -= needed_threads;
     auto & entry = getOrCreateGroupEntry(resource_group_name);
     auto updated_estimated_threads = static_cast<Int64>(entry.estimated_thread_usage) - needed_threads;
     RUNTIME_ASSERT(
@@ -295,8 +296,6 @@ bool MinTSOScheduler::scheduleImp(
     auto check_for_not_min_tso
         = (entry.active_set.size() < active_set_soft_limit || entry.active_set.find(query_id) != entry.active_set.end())
         && (entry.estimated_thread_usage + needed_threads <= thread_soft_limit);
-    GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_hard_limit, entry.resource_group_name).Set(thread_hard_limit);
-    GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_soft_limit, entry.resource_group_name).Set(thread_soft_limit);
     if (check_for_new_min_tso || check_for_not_min_tso)
     {
         entry.updateMinQueryId(query_id, false, isWaiting ? "from the waiting set" : "when directly schedule it", log);
@@ -312,7 +311,7 @@ bool MinTSOScheduler::scheduleImp(
             .Set(entry.active_set.size());
         GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_estimated_thread_usage, entry.resource_group_name)
             .Set(entry.estimated_thread_usage);
-        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_global_estimated_thread_usage, entry.resource_group_name).Set(global_estimated_thread_usage);
+        GET_METRIC(tiflash_task_scheduler, type_global_estimated_thread_usage).Set(global_estimated_thread_usage);
         LOG_DEBUG(
             log,
             "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} "
@@ -430,6 +429,8 @@ MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const Strin
     auto iter = scheduler_entries.find(resource_group_name);
     if (iter == scheduler_entries.end())
     {
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_hard_limit, resource_group_name).Set(thread_hard_limit);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_soft_limit, resource_group_name).Set(thread_soft_limit);
         iter = scheduler_entries.insert({resource_group_name, GroupEntry(resource_group_name)}).first;
     }
     return iter->second;
