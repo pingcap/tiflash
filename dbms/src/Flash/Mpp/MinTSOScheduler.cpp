@@ -27,9 +27,6 @@ extern const char random_min_tso_scheduler_failpoint[];
 
 constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
-#define GET_MIN_TSO_METRIC(resource_group_name, type) \
-    TiFlashMetrics::instance().getOrCreateMinTSOGauge(resource_group_name, type)
-
 MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit)
     : thread_soft_limit(soft_limit)
     , thread_hard_limit(hard_limit)
@@ -77,16 +74,18 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
         }
 
         const auto & empty_detail = getOrCreateSchedulerDetail("");
-        GET_MIN_TSO_METRIC("", "min_tso")->Set(empty_detail.min_query_id.query_ts);
-        GET_MIN_TSO_METRIC("", "thread_soft_limit")->Set(thread_soft_limit);
-        GET_MIN_TSO_METRIC("", "thread_hard_limit")->Set(thread_hard_limit);
-        GET_MIN_TSO_METRIC("", "estimated_thread_usage")->Set(empty_detail.estimated_thread_usage);
-        GET_MIN_TSO_METRIC("", "global_estimated_thread_usage")->Set(global_estimated_thread_usage);
-        GET_MIN_TSO_METRIC("", "waiting_queries_count")->Set(0);
-        GET_MIN_TSO_METRIC("", "active_queries_count")->Set(0);
-        GET_MIN_TSO_METRIC("", "waiting_tasks_count")->Set(0);
-        GET_MIN_TSO_METRIC("", "active_tasks_count")->Set(0);
-        GET_MIN_TSO_METRIC("", "hard_limit_exceeded_count")->Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_min_tso, "").Set(empty_detail.min_query_id.query_ts);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_thread_soft_limit, "").Set(thread_soft_limit);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_thread_hard_limit, "").Set(thread_hard_limit);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_estimated_thread_usage, "")
+            .Set(empty_detail.estimated_thread_usage);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_global_estimated_thread_usage, "")
+            .Set(global_estimated_thread_usage);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, "").Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_queries_count, "").Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_tasks_count, "").Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_tasks_count, "").Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_hard_limit_exceeded_count, "").Set(0);
     }
 }
 
@@ -139,7 +138,11 @@ void MinTSOScheduler::deleteQuery(
                         if (task != nullptr)
                             task->scheduleThisTask(ScheduleState::FAILED);
                         gather_it.second->waiting_tasks.pop();
-                        GET_MIN_TSO_METRIC(query_id.resource_group_name, "waiting_tasks_count")->Decrement();
+                        GET_RESOURCE_GROUP_METRIC(
+                            tiflash_resource_group,
+                            type_waiting_tasks_count,
+                            query_id.resource_group_name)
+                            .Decrement();
                     }
                 }
             }
@@ -164,8 +167,10 @@ void MinTSOScheduler::deleteQuery(
             detail.waiting_set.size());
         detail.active_set.erase(query_id);
         detail.waiting_set.erase(query_id);
-        GET_MIN_TSO_METRIC(query_id.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
-        GET_MIN_TSO_METRIC(query_id.resource_group_name, "active_queries_count")->Set(detail.active_set.size());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, query_id.resource_group_name)
+            .Set(detail.waiting_set.size());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_queries_count, query_id.resource_group_name)
+            .Set(detail.active_set.size());
 
         /// NOTE: if updated min_query_id query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
         if (detail.updateMinQueryId(query_id, true, is_cancelled ? "when cancelling it" : "as finishing it", log))
@@ -204,8 +209,9 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
         updated_estimated_threads);
 
     detail.estimated_thread_usage = updated_estimated_threads;
-    GET_MIN_TSO_METRIC(resource_group_name, "estimated_thread_usage")->Set(detail.estimated_thread_usage);
-    GET_MIN_TSO_METRIC(resource_group_name, "active_tasks_count")->Decrement();
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_estimated_thread_usage, resource_group_name)
+        .Set(detail.estimated_thread_usage);
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_tasks_count, resource_group_name).Decrement();
     /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(detail, task_manager, log);
     if (detail.active_set.size() + detail.waiting_set.size() == 0)
@@ -228,8 +234,10 @@ void MinTSOScheduler::scheduleWaitingQueries(SchedulerDetail & detail, MPPTaskMa
             detail.updateMinQueryId(current_query_id, true, "as it is not in the task manager.", log);
             detail.active_set.erase(current_query_id);
             detail.waiting_set.erase(current_query_id);
-            GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
-            GET_MIN_TSO_METRIC(detail.resource_group_name, "active_queries_count")->Set(detail.active_set.size());
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, detail.resource_group_name)
+                .Set(detail.waiting_set.size());
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_queries_count, detail.resource_group_name)
+                .Set(detail.active_set.size());
             continue;
         }
 
@@ -253,7 +261,11 @@ void MinTSOScheduler::scheduleWaitingQueries(SchedulerDetail & detail, MPPTaskMa
                     if (task != nullptr)
                         task->getScheduleEntry().schedule(ScheduleState::EXCEEDED);
                     gather_set.second->waiting_tasks.pop();
-                    GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                    GET_RESOURCE_GROUP_METRIC(
+                        tiflash_resource_group,
+                        type_waiting_tasks_count,
+                        detail.resource_group_name)
+                        .Decrement();
                     continue;
                 }
 
@@ -265,17 +277,19 @@ void MinTSOScheduler::scheduleWaitingQueries(SchedulerDetail & detail, MPPTaskMa
                         return;
                 }
                 gather_set.second->waiting_tasks.pop();
-                GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_tasks_count, detail.resource_group_name)
+                    .Decrement();
             }
         }
         LOG_DEBUG(
             log,
             "query {} (is min = {}) is scheduled from waiting set (size = {}).",
             current_query_id.toString(),
-            current_query_id == min_query_id,
-            waiting_set.size());
-        waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
-        GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
+            current_query_id == detail.min_query_id,
+            detail.waiting_set.size());
+        detail.waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, detail.resource_group_name)
+            .Set(detail.waiting_set.size());
     }
 }
 
@@ -303,11 +317,15 @@ bool MinTSOScheduler::scheduleImp(
         {
             detail.estimated_thread_usage += needed_threads;
             global_estimated_thread_usage += needed_threads;
-            GET_MIN_TSO_METRIC(detail.resource_group_name, "active_tasks_count")->Increment();
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_tasks_count, detail.resource_group_name)
+                .Increment();
         }
-        GET_MIN_TSO_METRIC(detail.resource_group_name, "active_queries_count")->Set(detail.active_set.size());
-        GET_MIN_TSO_METRIC(detail.resource_group_name, "estimated_thread_usage")->Set(detail.estimated_thread_usage);
-        GET_MIN_TSO_METRIC("", "global_estimated_thread_usage")->Set(global_estimated_thread_usage);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_queries_count, detail.resource_group_name)
+            .Set(detail.active_set.size());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_estimated_thread_usage, detail.resource_group_name)
+            .Set(detail.estimated_thread_usage);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_global_estimated_thread_usage, "")
+            .Set(global_estimated_thread_usage);
         LOG_DEBUG(
             log,
             "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} "
@@ -332,16 +350,20 @@ bool MinTSOScheduler::scheduleImp(
                 "threads are unavailable for the query {} ({} min_query_id {}) {}, need {}, but used {} of the thread "
                 "hard limit {}, {} active and {} waiting queries.",
                 query_id.toString(),
-                query_id == min_query_id ? "is" : "is newer than",
-                min_query_id.toString(),
+                query_id == detail.min_query_id ? "is" : "is newer than",
+                detail.min_query_id.toString(),
                 isWaiting ? "from the waiting set" : "when directly schedule it",
                 needed_threads,
-                estimated_thread_usage,
+                detail.estimated_thread_usage,
                 thread_hard_limit,
-                active_set.size(),
-                waiting_set.size());
+                detail.active_set.size(),
+                detail.waiting_set.size());
             LOG_ERROR(log, "{}", msg);
-            GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
+            GET_RESOURCE_GROUP_METRIC(
+                tiflash_resource_group,
+                type_hard_limit_exceeded_count,
+                detail.resource_group_name)
+                .Increment();
             if (isWaiting)
             {
                 /// set this task be failed to schedule, and the task will throw exception.
@@ -357,8 +379,10 @@ bool MinTSOScheduler::scheduleImp(
         {
             detail.waiting_set.insert(query_id);
             query_task_set->waiting_tasks.push(schedule_entry.getMPPTaskId());
-            GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_queries_count")->Set(detail.waiting_set.size());
-            GET_MIN_TSO_METRIC(detail.resource_group_name, "waiting_tasks_count")->Increment();
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, detail.resource_group_name)
+                .Set(detail.waiting_set.size());
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_tasks_count, detail.resource_group_name)
+                .Increment();
         }
         LOG_INFO(
             log,
@@ -402,8 +426,8 @@ bool MinTSOScheduler::SchedulerDetail::updateMinQueryId(
     if (min_query_id
         != old_min_query_id) /// if min_query_id == MPPTaskId::Max_Query_Id and the query_id is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
     {
-        GET_MIN_TSO_METRIC(resource_group_name, "min_tso")
-            ->Set(min_query_id.query_ts == 0 ? min_query_id.start_ts : min_query_id.query_ts);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_min_tso, resource_group_name)
+            .Set(min_query_id.query_ts == 0 ? min_query_id.start_ts : min_query_id.query_ts);
         LOG_DEBUG(
             log,
             "min_query_id query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.",
