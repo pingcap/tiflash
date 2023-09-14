@@ -63,7 +63,8 @@ void MPPTaskScheduleEntry::waitForSchedule()
         std::unique_lock lock(schedule_mu);
         schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
         time_cost = stopwatch.elapsedSeconds();
-        GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler_waiting_duration_seconds, getResourceGroupName())
+            .Observe(time_cost);
 
         if (schedule_state == ScheduleState::EXCEEDED)
         {

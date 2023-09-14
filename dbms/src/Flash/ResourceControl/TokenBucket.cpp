@@ -85,7 +85,13 @@ double TokenBucket::getAvgSpeedPerSec()
 
 void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
 {
-    tokens += getDynamicTokens(timepoint);
+    auto dynamic_tokens = getDynamicTokens(timepoint);
+    RUNTIME_CHECK(dynamic_tokens >= 0.0);
+    // To avoid getDynamicTokens() too frequently.
+    if (dynamic_tokens == 0.0)
+        return;
+
+    tokens += dynamic_tokens;
     if (tokens >= capacity)
         tokens = capacity;
     last_compact_timepoint = timepoint;

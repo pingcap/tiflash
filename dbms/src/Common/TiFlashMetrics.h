@@ -468,6 +468,19 @@ namespace DB
       F(type_active_threads_of_dispatch_mpp, {"type", "rpc_dispatch_mpp"}),                                                         \
       F(type_active_rpc_async_worker, {"type", "rpc_async_worker_active"}),                                                         \
       F(type_total_rpc_async_worker, {"type", "rpc_async_worker_total"}))                                                           \
+    M(tiflash_task_scheduler,                                                                                                       \
+      "Min-tso task scheduler",                                                                                                     \
+      Gauge,                                                                                                                        \
+      F(type_min_tso, {"type", "min_tso"}),                                                                                         \
+      F(type_waiting_queries_count, {"type", "waiting_queries_count"}),                                                             \
+      F(type_active_queries_count, {"type", "active_queries_count"}),                                                               \
+      F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                 \
+      F(type_active_tasks_count, {"type", "active_tasks_count"}),                                                                   \
+      F(type_global_estimated_thread_usage, {"type", "global_estimated_thread_usage"}),                                             \
+      F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                           \
+      F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                     \
+      F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                     \
+      F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                     \
     M(tiflash_task_scheduler_waiting_duration_seconds,                                                                              \
       "Bucketed histogram of task waiting for scheduling duration",                                                                 \
       Histogram,                                                                                                                    \
@@ -687,27 +700,14 @@ namespace DB
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
     M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                 \
     M(tiflash_resource_group,                                                                                                       \
-      "meta infos of resource groups",                                                                                              \
+      "meta info of resource group",                                                                                                \
       Gauge,                                                                                                                        \
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
-      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))                                                 \
-    M(tiflash_resource_group_task_scheduler,                                                                                        \
-      "min tso task scheduler of resource groups",                                                                                  \
-      Gauge,                                                                                                                        \
-      F(type_min_tso, {"type", "min_tso"}),                                                                                         \
-      F(type_waiting_queries_count, {"type", "waiting_queries_count"}),                                                             \
-      F(type_active_queries_count, {"type", "active_queries_count"}),                                                               \
-      F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                 \
-      F(type_active_tasks_count, {"type", "active_tasks_count"}),                                                                   \
-      F(type_estimated_thread_usage, {"type", "estimated_thread_usage"}),                                                           \
-      F(type_global_estimated_thread_usage, {"type", "global_estimated_thread_usage"}),                                             \
-      F(type_thread_soft_limit, {"type", "thread_soft_limit"}),                                                                     \
-      F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                     \
-      F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))
+      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
