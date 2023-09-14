@@ -18,12 +18,12 @@
 #include <Interpreters/Context.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3WritableFile.h>
-#include <Storages/Transaction/Types.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>

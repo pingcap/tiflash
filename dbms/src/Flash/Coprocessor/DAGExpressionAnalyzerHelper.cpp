@@ -24,7 +24,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsGrouping.h>
 #include <Functions/FunctionsTiDBConversion.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/defines.h>
 #include <common/types.h>
 #include <fmt/format.h>

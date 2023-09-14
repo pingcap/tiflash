@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Decode/TiKVHandle.h>
 
 namespace DB
 {

@@ -17,7 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Server/BgStorageInit.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <common/logger_useful.h>
 
 #include <thread>

@@ -26,8 +26,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Transaction/CheckpointInfo.h>
 
 namespace DB::DM
 {

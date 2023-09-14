@@ -19,8 +19,8 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Transaction/Types.h>
 #include <kvproto/disaggregated.pb.h>
 
 #pragma GCC diagnostic push
@@ -55,12 +55,10 @@ private:
     WNFetchPagesStreamWriter(
         DM::SegmentReadTaskPtr seg_task_,
         DM::ColumnDefinesPtr column_defines_,
-        std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
         PageIdU64s read_page_ids,
         UInt64 packet_limit_size_)
         : seg_task(std::move(seg_task_))
         , column_defines(column_defines_)
-        , result_field_types(std::move(result_field_types_))
         , read_page_ids(std::move(read_page_ids))
         , packet_limit_size(packet_limit_size_)
         , log(Logger::get())
@@ -75,7 +73,6 @@ private:
     const DM::DisaggTaskId task_id;
     DM::SegmentReadTaskPtr seg_task;
     DM::ColumnDefinesPtr column_defines;
-    std::shared_ptr<std::vector<tipb::FieldType>> result_field_types;
     PageIdU64s read_page_ids;
     UInt64 packet_limit_size;
 

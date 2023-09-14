@@ -22,7 +22,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/Datum.h>
+#include <TiDB/Decode/Datum.h>
 
 #include <unordered_map>
 namespace DB

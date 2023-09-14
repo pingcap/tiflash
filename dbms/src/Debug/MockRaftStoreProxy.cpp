@@ -22,15 +22,15 @@
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFICommon.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionMeta.h>
-#include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/RowCodec.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
+#include <Storages/KVStore/FFI/ProxyFFICommon.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <google/protobuf/text_format.h>
 
@@ -775,9 +775,7 @@ void MockRaftStoreProxy::doApply(
             }
         }
     }
-    else if (cmd.has_admin_request())
-    {
-    }
+    else if (cmd.has_admin_request()) {}
 
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE)
         return;

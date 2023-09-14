@@ -17,7 +17,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
-#include <Storages/Transaction/PartitionStreams.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
 
 #include <memory>
 #include <string_view>
@@ -57,6 +57,7 @@ public:
     SSTFilesToBlockInputStream( //
         const std::string & log_prefix_,
         RegionPtr region_,
+        UInt64 snapshot_index_,
         const SSTViewVec & snaps_,
         const TiFlashRaftProxyHelper * proxy_helper_,
         DecodingStorageSchemaSnapshotConstPtr schema_snap_,
@@ -91,6 +92,7 @@ private:
 
 private:
     RegionPtr region;
+    UInt64 snapshot_index;
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     DecodingStorageSchemaSnapshotConstPtr schema_snap;

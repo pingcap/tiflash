@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/Operator.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
 
 #include <atomic>
