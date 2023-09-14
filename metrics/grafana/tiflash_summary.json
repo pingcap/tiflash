@@ -4325,6 +4325,15 @@
               "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"global_estimated_thread_usage\"}) by (instance, type, resource_group)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
+              "queryType": "randomWalk",
+              "refId": "C"
             }
           ],
           "thresholds": [],
