@@ -27,11 +27,11 @@ extern const char random_min_tso_scheduler_failpoint[];
 
 constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
-MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit)
+MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit_)
     : thread_soft_limit(soft_limit)
     , thread_hard_limit(hard_limit)
     , global_estimated_thread_usage(0)
-    , active_set_soft_limit(active_set_soft_limit)
+    , active_set_soft_limit(active_set_soft_limit_)
     , log(Logger::get())
 {
     auto cores = static_cast<size_t>(getNumberOfLogicalCPUCores() / 2);
@@ -167,9 +167,9 @@ void MinTSOScheduler::deleteQuery(
             entry.waiting_set.size());
         entry.active_set.erase(query_id);
         entry.waiting_set.erase(query_id);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, query_id.resource_group_name)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_waiting_queries_count, entry.resource_group_name)
             .Set(entry.waiting_set.size());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_queries_count, query_id.resource_group_name)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_active_queries_count, entry.resource_group_name)
             .Set(entry.active_set.size());
 
         /// NOTE: if updated min_query_id query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
@@ -447,7 +447,6 @@ MinTSOScheduler::GroupEntry & MinTSOScheduler::mustGetGroupEntry(const String & 
 
 MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const String & resource_group_name)
 {
-    const String name_with_prefix = "rg_" + resource_group_name;
     auto iter = scheduler_entries.find(resource_group_name);
     if (iter == scheduler_entries.end())
     {
