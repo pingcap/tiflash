@@ -429,8 +429,10 @@ MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const Strin
     auto iter = scheduler_entries.find(resource_group_name);
     if (iter == scheduler_entries.end())
     {
-        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_hard_limit, resource_group_name).Set(thread_hard_limit);
-        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_soft_limit, resource_group_name).Set(thread_soft_limit);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_hard_limit, resource_group_name)
+            .Set(thread_hard_limit);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_soft_limit, resource_group_name)
+            .Set(thread_soft_limit);
         iter = scheduler_entries.insert({resource_group_name, GroupEntry(resource_group_name)}).first;
     }
     return iter->second;
