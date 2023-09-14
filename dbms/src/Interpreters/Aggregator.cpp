@@ -160,7 +160,7 @@ void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
         {
             auto resize_callback = [agg_spill_context, thread_num]() {
                 return !(
-                    agg_spill_context->supportAutoTriggerSpill()
+                    agg_spill_context->supportFurtherSpill()
                     && agg_spill_context->isThreadMarkedForAutoSpill(thread_num));
             };
 #define M(NAME)                                                                                         \
