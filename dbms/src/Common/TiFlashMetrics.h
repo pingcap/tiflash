@@ -890,8 +890,6 @@ public:
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
 
-    prometheus::Gauge * getOrCreateMinTSOGauge(const String & resource_group_name, const String & type);
-
 private:
     TiFlashMetrics();
 
@@ -920,9 +918,6 @@ private:
     prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
-
-    prometheus::Family<prometheus::Gauge> * registered_min_tso_scheduler_family;
-    std::unordered_map<String, prometheus::Gauge *> registered_resource_group_min_tso;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

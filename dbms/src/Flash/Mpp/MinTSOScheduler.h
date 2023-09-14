@@ -60,9 +60,9 @@ private:
         bool & has_error);
     bool isDisabled() const { return thread_hard_limit == 0 && thread_soft_limit == 0; }
 
-    struct SchedulerDetail
+    struct GroupEntry
     {
-        explicit SchedulerDetail(const String & name)
+        explicit GroupEntry(const String & name)
             : resource_group_name(name)
             , min_query_id(MPPTaskId::Max_Query_Id)
             , estimated_thread_usage(0)
@@ -77,11 +77,11 @@ private:
         bool updateMinQueryId(const MPPQueryId & query_id, bool retired, const String & msg, LoggerPtr log);
     };
 
-    void scheduleWaitingQueries(SchedulerDetail & detail, MPPTaskManager & task_manager, LoggerPtr log);
-    SchedulerDetail & mustGetSchedulerDetail(const String & resource_group_name);
-    SchedulerDetail & getOrCreateSchedulerDetail(const String & resource_group_name);
+    void scheduleWaitingQueries(GroupEntry & entry, MPPTaskManager & task_manager, LoggerPtr log);
+    GroupEntry & mustGetGroupEntry(const String & resource_group_name);
+    GroupEntry & getOrCreateGroupEntry(const String & resource_group_name);
 
-    std::unordered_map<String, SchedulerDetail> scheduler_details;
+    std::unordered_map<String, GroupEntry> scheduler_entries;
     UInt64 thread_soft_limit;
     UInt64 thread_hard_limit;
     UInt64 global_estimated_thread_usage;
