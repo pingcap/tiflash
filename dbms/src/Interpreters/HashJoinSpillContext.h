@@ -59,6 +59,8 @@ public:
     {
         return (*partition_spill_status)[partition_id] != AutoSpillStatus::NO_NEED_AUTO_SPILL;
     }
+    /// only used in random failpoint
+    void markPartitionForAutoSpill(size_t partition_id);
     void finishBuild();
 };
 

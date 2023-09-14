@@ -42,6 +42,7 @@ namespace FailPoints
 extern const char random_aggregate_create_state_failpoint[];
 extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
+extern const char random_fail_in_resize_callback[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
@@ -159,9 +160,18 @@ void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
         if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
         {
             auto resize_callback = [agg_spill_context, thread_num]() {
-                return !(
-                    agg_spill_context->supportFurtherSpill()
-                    && agg_spill_context->isThreadMarkedForAutoSpill(thread_num));
+                if (agg_spill_context->supportFurtherSpill()
+                    && agg_spill_context->isThreadMarkedForAutoSpill(thread_num))
+                    return false;
+                bool ret = true;
+                fiu_do_on(FailPoints::random_fail_in_resize_callback, {
+                    if (agg_spill_context->supportFurtherSpill())
+                    {
+                        agg_spill_context->markThreadForAutoSpill(thread_num);
+                        ret = false;
+                    }
+                });
+                return ret;
             };
 #define M(NAME)                                                                                         \
     case AggregationMethodType(NAME):                                                                   \

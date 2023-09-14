@@ -344,7 +344,16 @@ public:
         query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
     }
 
-    void setAutoSpillMode() { in_auto_spill_mode = true; }
+    void setAutoSpillMode()
+    {
+        in_auto_spill_mode = true;
+        if unlikely (query_operator_spill_contexts == nullptr)
+        {
+            /// only used in test
+            query_operator_spill_contexts
+                = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, ""), 100);
+        }
+    }
     bool isInAutoSpillMode() const { return in_auto_spill_mode; }
 
 public:

@@ -330,12 +330,20 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     return executeStreams(&dag_context);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
+ColumnsWithTypeAndName ExecutorTest::executeStreamsForAutoSpill(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
+{
+    DAGContext dag_context(*request, "executor_test", concurrency);
+    return executeStreams(&dag_context, false);
+}
+
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool is_internal)
 {
     TiFlashTestEnv::setUpTestContext(*context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(*context.context, /*internal=*/true)
+    queryExecute(*context.context, is_internal)
         ->execute([&blocks](const Block & block) { blocks.push_back(block); })
         .verify();
     return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
