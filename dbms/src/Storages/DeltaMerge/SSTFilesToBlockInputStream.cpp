@@ -261,8 +261,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         {
             LOG_DEBUG(
                 log,
-                "Done loading from [CF={}] [offset={}] [proc_size={}] [write_cf_offset={}] [last_loaded_rowkey={}] "
-                "[rowkey_to_be_included={}] [region_id={}] [snapshot_index={}]",
+                "Done loading, CF={} offset={} processed_size={} write_cf_offset={} last_loaded_rowkey={} "
+                "rowkey_to_be_included={} region_id={} snapshot_index={}",
                 CFToName(cf),
                 (*p_process_keys),
                 (*p_process_keys_bytes),
