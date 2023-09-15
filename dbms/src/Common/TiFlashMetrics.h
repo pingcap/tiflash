@@ -440,7 +440,7 @@ namespace DB
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
       F(type_normal, {{"type", "normal"}}, ExpBuckets{1, 2, 13}))                                                                   \
-    M(tiflash_raft_ongoing_snapshot_total_bytes,                                                                                     \
+    M(tiflash_raft_ongoing_snapshot_total_bytes,                                                                                    \
       "Ongoing snapshot total size",                                                                                                \
       Gauge,                                                                                                                        \
       F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
