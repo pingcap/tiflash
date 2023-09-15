@@ -31,6 +31,8 @@ struct PrehandleResult
     std::vector<DM::ExternalDTFileInfo> ingest_ids;
     struct Stats
     {
+        // These are bytes we actually read from sst reader.
+        // It doesn't includes rocksdb's space amplification.
         size_t raft_snapshot_bytes;
         size_t dt_disk_bytes;
         size_t dt_total_bytes;

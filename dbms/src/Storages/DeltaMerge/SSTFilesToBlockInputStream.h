@@ -81,8 +81,6 @@ public:
         size_t default_cf = 0;
         size_t write_cf = 0;
         size_t lock_cf = 0;
-        // These are bytes we actually read from sst reader.
-        // It doesn't includes rocksdb's space amplification.
         size_t default_cf_bytes = 0;
         size_t write_cf_bytes = 0;
         size_t lock_cf_bytes = 0;
