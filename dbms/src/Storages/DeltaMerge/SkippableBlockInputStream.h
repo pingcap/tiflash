@@ -218,7 +218,10 @@ private:
     {
         if (likely(scan_context != nullptr))
         {
-            LocalAdmissionController::global_instance->consumeResource(scan_context->resource_group_name, bytesToRU(bytes), 0);
+            LocalAdmissionController::global_instance->consumeResource(
+                scan_context->resource_group_name,
+                bytesToRU(bytes),
+                0);
             scan_context->total_user_read_bytes += bytes;
         }
     }

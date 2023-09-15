@@ -1566,8 +1566,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #ifdef DBMS_PUBLIC_GTEST
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-    LocalAdmissionController::global_instance
-        = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+    LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
+        tmt_context.getKVCluster(),
+        tmt_context.getEtcdClient(),
+        global_context.getSettingsRef().enable_pipeline);
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
