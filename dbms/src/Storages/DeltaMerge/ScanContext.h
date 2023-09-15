@@ -55,7 +55,9 @@ public:
     std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
 
-    ScanContext() = default;
+    explicit ScanContext(const String & name = "")
+        : resource_group_name(name)
+    {}
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
@@ -129,6 +131,8 @@ public:
         total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
         total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
+
+    const String resource_group_name;
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

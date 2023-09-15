@@ -115,7 +115,7 @@ RU DataStreamExecutor::collectRequestUnit()
     // We can assume `condition.wait` takes half of datastream execute time.
     // TODO find a more reasonable ratio for `condition.wait`.
     cpu_time_ns /= 2;
-    return toRU(ceil(cpu_time_ns));
+    return cpuTimeToRU(static_cast<UInt64>(ceil(cpu_time_ns)));
 }
 
 Block DataStreamExecutor::getSampleBlock() const
