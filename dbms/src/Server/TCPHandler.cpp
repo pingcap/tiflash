@@ -36,9 +36,9 @@
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/executeQuery.h>
 #include <Poco/Net/NetException.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/StorageMemory.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -109,8 +109,7 @@ void TCPHandler::runImpl()
             sendException(e);
         }
         catch (...)
-        {
-        }
+        {}
 
         throw;
     }

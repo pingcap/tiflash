@@ -20,7 +20,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/transformProfiles.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
 

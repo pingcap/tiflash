@@ -15,7 +15,7 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings_fwd.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push

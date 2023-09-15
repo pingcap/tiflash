@@ -62,6 +62,7 @@ void LocalAdmissionController::startBackgroudJob()
         std::terminate();
     }
 
+    auto last_metric_time_point = std::chrono::steady_clock::now();
     while (!stopped.load())
     {
         std::function<void()> local_refill_token_callback = nullptr;
@@ -70,6 +71,14 @@ void LocalAdmissionController::startBackgroudJob()
         {
             std::unique_lock<std::mutex> lock(mu);
             local_refill_token_callback = refill_token_callback;
+
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_metric_time_point >= COLLECT_METRIC_INTERVAL)
+            {
+                last_metric_time_point = now;
+                for (const auto & resource_group : resource_groups)
+                    resource_group.second->collectMetrics();
+            }
 
             if (low_token_resource_groups.empty())
             {
@@ -364,7 +373,7 @@ void LocalAdmissionController::doWatch()
 {
     auto stream = etcd_client->watch(&watch_gac_grpc_context);
     auto watch_req = setupWatchReq();
-    LOG_DEBUG(log, "watch req: {}", watch_req.DebugString());
+    LOG_DEBUG(log, "watchGAC req: {}", watch_req.DebugString());
     const bool write_ok = stream->Write(watch_req);
     if (!write_ok)
     {

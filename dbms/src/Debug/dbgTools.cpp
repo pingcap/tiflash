@@ -19,14 +19,14 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/ColumnFamily.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RowCodec.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVRange.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/FFI/ColumnFamily.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <random>

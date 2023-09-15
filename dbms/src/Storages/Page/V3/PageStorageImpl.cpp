@@ -32,17 +32,12 @@
 
 #include <mutex>
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-} // namespace ErrorCodes
-namespace FailPoints
-{
-extern const char force_ps_wal_compact[];
-}
-namespace PS::V3
+} // namespace DB::ErrorCodes
+
+namespace DB::PS::V3
 {
 PageStorageImpl::PageStorageImpl(
     String name,
@@ -326,5 +321,4 @@ void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceID ns_id)
     page_directory->unregisterNamespace(ns_id);
 }
 
-} // namespace PS::V3
-} // namespace DB
+} // namespace DB::PS::V3

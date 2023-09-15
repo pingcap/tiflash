@@ -16,8 +16,8 @@
 
 #include <Common/Exception.h>
 #include <Common/config.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/Collator.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <re2/re2.h>
 
 

@@ -118,6 +118,11 @@ void EtcdOwnerManager::cancelImpl()
     }
     if (th_camaign.joinable())
     {
+        {
+            std::unique_lock lock(mtx_camaign);
+            if (campaing_ctx)
+                campaing_ctx->TryCancel();
+        }
         th_camaign.join();
     }
     if (th_watch_owner.joinable())
@@ -248,7 +253,11 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
             const auto lease_id = session->leaseID();
             LOG_DEBUG(log, "new campaign loop with lease_id={:x}", lease_id);
             // Let this thread blocks until becone owner or error occurs
-            auto && [new_leader, status] = client->campaign(campaign_name, id, lease_id);
+            {
+                std::unique_lock lock(mtx_camaign);
+                campaing_ctx = std::make_unique<grpc::ClientContext>();
+            }
+            auto && [new_leader, status] = client->campaign(campaing_ctx.get(), campaign_name, id, lease_id);
             if (!status.ok())
             {
                 // if error, continue next campaign

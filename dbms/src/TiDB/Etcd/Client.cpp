@@ -186,6 +186,7 @@ grpc::Status Client::leaseRevoke(LeaseID lease_id)
 }
 
 std::tuple<v3electionpb::LeaderKey, grpc::Status> Client::campaign(
+    grpc::ClientContext * grpc_context,
     const String & name,
     const String & value,
     LeaseID lease_id)
@@ -195,12 +196,11 @@ std::tuple<v3electionpb::LeaderKey, grpc::Status> Client::campaign(
     req.set_value(value);
     req.set_lease(lease_id);
 
-    grpc::ClientContext context;
     // usually use `campaign` blocks until become leader or error happens,
     // don't set timeout.
 
     v3electionpb::CampaignResponse resp;
-    auto status = leaderClient()->election_stub->Campaign(&context, req, &resp);
+    auto status = leaderClient()->election_stub->Campaign(grpc_context, req, &resp);
     return {resp.leader(), status};
 }
 

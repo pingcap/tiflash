@@ -62,7 +62,6 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
                 : fromBuildToConvergent(block);
         }
         agg_context.buildOnBlock(task_index, block);
-        block.clear();
         return tryFromBuildToSpill();
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
@@ -112,6 +111,12 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     switch (status)
     {
     case LocalAggStatus::build:
+        while (agg_context.hasLocalDataToBuild(task_index))
+        {
+            agg_context.buildOnLocalData(task_index);
+            if (tryFromBuildToSpill() == OperatorStatus::IO_OUT)
+                return OperatorStatus::IO_OUT;
+        }
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convergent:
         block = agg_context.readForConvergent(task_index);

@@ -25,8 +25,8 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/TypeMapping.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>

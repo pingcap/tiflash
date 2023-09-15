@@ -26,7 +26,7 @@
 #include <Poco/PatternFormatter.h>
 #include <Server/IServer.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <daemon/BaseDaemon.h>
 #include <pingcap/Config.h>
 

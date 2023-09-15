@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Poco/StringTokenizer.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
 
 namespace DB

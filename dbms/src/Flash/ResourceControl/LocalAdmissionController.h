@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
@@ -27,6 +28,7 @@
 #include <pingcap/kv/Cluster.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 
@@ -172,12 +174,6 @@ private:
         return !burstable && bucket->lowToken();
     }
 
-    double getRU() const
-    {
-        std::lock_guard lock(mu);
-        return bucket->peek();
-    }
-
     // Return how many tokens should acquire from GAC for the next n seconds.
     double getAcquireRUNum(uint32_t n, double amplification) const
     {
@@ -305,6 +301,7 @@ private:
         std::lock_guard lock(mu);
         auto ori = ru_consumption_delta;
         ru_consumption_delta = 0.0;
+        total_consumption += ori;
         return ori;
     }
 
@@ -320,12 +317,26 @@ private:
         std::lock_guard lock(mu);
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
         last_fetch_tokens_from_gac_timepoint = tp;
+        ++fetch_tokens_from_gac_count;
     }
 
     bool inTrickleModeLease(const std::chrono::steady_clock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
+    }
+
+    void collectMetrics() const
+    {
+        std::lock_guard lock(mu);
+        const auto & config = bucket->getConfig();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(bucket->getAvgSpeedPerSec());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_consumption);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
+            .Set(fetch_tokens_from_gac_count);
     }
 
     const std::string name;
@@ -354,6 +365,8 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
         = std::chrono::steady_clock::now();
     std::chrono::time_point<std::chrono::steady_clock> stop_trickle_timepoint = std::chrono::steady_clock::now();
+    uint64_t fetch_tokens_from_gac_count = 0;
+    double total_consumption = 0.0;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -467,6 +480,7 @@ private:
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
+    static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;

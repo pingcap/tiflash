@@ -15,7 +15,7 @@
 #pragma once
 #include <Common/Logger.h>
 #include <Core/Types.h>
-#include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/KVStore/StorageEngineType.h>
 
 #include <unordered_set>
 

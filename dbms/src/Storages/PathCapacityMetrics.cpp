@@ -17,9 +17,9 @@
 #include <Common/formatReadable.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/ProxyFFI.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 

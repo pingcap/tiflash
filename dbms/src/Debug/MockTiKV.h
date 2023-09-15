@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/RegionMeta.h>
+#include <Storages/KVStore/MultiRaft/RegionMeta.h>
 
 namespace DB
 {
