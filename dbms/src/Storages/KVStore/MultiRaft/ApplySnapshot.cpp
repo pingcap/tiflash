@@ -441,9 +441,9 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             }
             prehandle_result.ingest_ids = stream->outputFiles();
             prehandle_result.stats = PrehandleResult::Stats{
-                sst_stream->getProcessKeys().total_bytes(),
-                stream->getTotalCommittedBytes(),
-                stream->getTotalBytesOnDisk()};
+                .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                .dt_disk_bytes = stream->getTotalBytesOnDisk(),
+                .dt_total_bytes = stream->getTotalCommittedBytes()};
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
