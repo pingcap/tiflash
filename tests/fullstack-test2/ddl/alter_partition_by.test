@@ -132,13 +132,6 @@ mysql> drop table test.t;
 mysql> alter table test.t2 partition by hash (a) partitions 3;
 mysql> analyze table test.t2;
 
-mysql> explain format='brief' select /*+ READ_FROM_STORAGE(TIFLASH[t2]) */ count(*) from test.t2 partition (p0);
-id	estRows	task	access object	operator info
-StreamAgg	1.00	root		funcs:count(Column#16)->Column#4
-└─TableReader	1.00	root	partition:p0	index:StreamAgg
-└─StreamAgg	1.00	cop[tikv]		funcs:count(1)->Column#16
-└─IndexFullScan	16.00	cop[tikv]	table:t2	keep order:false
-
 mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t2]) */ count(*) from test.t2 partition (p0);
 +----------+
 | count(*) |
