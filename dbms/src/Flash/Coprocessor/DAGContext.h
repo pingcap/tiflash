@@ -347,12 +347,6 @@ public:
     void setAutoSpillMode()
     {
         in_auto_spill_mode = true;
-        /// only happens in test
-        if unlikely (query_operator_spill_contexts == nullptr)
-        {
-            query_operator_spill_contexts
-                = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, ""), 100);
-        }
     }
     bool isInAutoSpillMode() const { return in_auto_spill_mode; }
 

@@ -330,7 +330,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     return executeStreams(&dag_context);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreamsForAutoSpill(
+ColumnsWithTypeAndName ExecutorTest::executeStreamsWithMemoryTracker(
     const std::shared_ptr<tipb::DAGRequest> & request,
     size_t concurrency)
 {

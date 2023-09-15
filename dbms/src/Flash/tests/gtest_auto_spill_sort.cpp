@@ -81,11 +81,11 @@ try
     DB::FailPointHelper::enableRandomFailPoint(DB::FailPoints::random_marked_for_auto_spill, 0.5);
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreamsForAutoSpill(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreamsWithMemoryTracker(request, original_max_streams));
 
     // The implementation of topN in the pipeline model is LocalSort, and the result of using multiple threads is unstable. Therefore, a single thread is used here instead.
     enablePipeline(true);
-    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreamsForAutoSpill(request, 1));
+    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreamsWithMemoryTracker(request, 1));
     DB::FailPointHelper::disableFailPoint(DB::FailPoints::random_marked_for_auto_spill);
 }
 CATCH

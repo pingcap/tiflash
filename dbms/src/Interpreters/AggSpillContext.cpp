@@ -61,9 +61,9 @@ bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thr
             /// in auto spill mode, don't set revocable_memory to 0 here, so in triggerSpill it will take
             /// the revocable_memory into account if current spill is on the way
             return true;
-        old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
         bool ret = false;
         fiu_do_on(FailPoints::random_marked_for_auto_spill, {
+            old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
             if (new_value > 0
                 && per_thread_auto_spill_status[thread_num].compare_exchange_strong(
                     old_value,

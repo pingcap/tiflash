@@ -95,7 +95,7 @@ try
     WRAP_FOR_SPILL_TEST_BEGIN
     context.context->setSetting("max_memory_usage", Field(static_cast<UInt64>(total_data_size * 1000)));
     context.context->setSetting("auto_memory_revoke_trigger_threshold", Field(0.7));
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreamsForAutoSpill(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreamsWithMemoryTracker(request, original_max_streams));
     WRAP_FOR_SPILL_TEST_END
     DB::FailPointHelper::disableFailPoint(DB::FailPoints::random_marked_for_auto_spill);
 }
@@ -157,7 +157,7 @@ try
     WRAP_FOR_SPILL_TEST_BEGIN
     context.context->setSetting("max_memory_usage", Field(static_cast<UInt64>(total_data_size * 1000)));
     context.context->setSetting("auto_memory_revoke_trigger_threshold", Field(0.7));
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreamsForAutoSpill(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreamsWithMemoryTracker(request, original_max_streams));
     WRAP_FOR_SPILL_TEST_END
     DB::FailPointHelper::disableFailPoint(DB::FailPoints::random_fail_in_resize_callback);
 }

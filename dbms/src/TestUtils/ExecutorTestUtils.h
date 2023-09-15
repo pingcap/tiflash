@@ -123,7 +123,7 @@ public:
 
     ColumnsWithTypeAndName executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency = 1);
 
-    ColumnsWithTypeAndName executeStreamsForAutoSpill(
+    ColumnsWithTypeAndName executeStreamsWithMemoryTracker(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
 
