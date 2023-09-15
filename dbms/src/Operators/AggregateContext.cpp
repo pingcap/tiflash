@@ -27,17 +27,16 @@ void AggregateContext::initBuild(
     max_threads = max_threads_;
     empty_result_for_aggregation_by_empty_set = params.empty_result_for_aggregation_by_empty_set;
     keys_size = params.keys_size;
+    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads, register_operator_spill_context);
+    aggregator->setCancellationHook(is_cancelled);
+    aggregator->initThresholdByAggregatedDataVariantsSize(max_threads);
     many_data.reserve(max_threads);
     threads_data.reserve(max_threads);
     for (size_t i = 0; i < max_threads; ++i)
     {
-        threads_data.emplace_back(std::make_unique<ThreadData>());
+        threads_data.emplace_back(std::make_unique<ThreadData>(aggregator.get()));
         many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
     }
-
-    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads, register_operator_spill_context);
-    aggregator->setCancellationHook(is_cancelled);
-    aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     status = AggStatus::build;
     build_watch.emplace();
     LOG_TRACE(log, "Aggregate Context inited");
