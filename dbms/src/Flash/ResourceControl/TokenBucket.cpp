@@ -87,7 +87,8 @@ void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
 {
     auto dynamic_tokens = getDynamicTokens(timepoint);
     RUNTIME_CHECK(dynamic_tokens >= 0.0);
-    // To avoid getDynamicTokens() too frequently.
+    // To avoid the interval between each call from being less than 1ms,
+    // resulting in dynamic_tokens always being 0.
     if (dynamic_tokens == 0.0)
         return;
 
@@ -101,8 +102,8 @@ double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) c
 {
     RUNTIME_CHECK(timepoint >= last_compact_timepoint);
     auto elspased = timepoint - last_compact_timepoint;
-    auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
-    return elapsed_second * fill_rate;
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elspased).count();
+    return elapsed_ms * fill_rate / 1000;
 }
 
 } // namespace DB
