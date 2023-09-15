@@ -17,6 +17,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
@@ -217,6 +218,7 @@ private:
     {
         if (likely(scan_context != nullptr))
         {
+            LocalAdmissionController::global_instance->consumeResource(scan_context->resource_group_name, bytesToRU(bytes), 0);
             scan_context->total_user_read_bytes += bytes;
         }
     }

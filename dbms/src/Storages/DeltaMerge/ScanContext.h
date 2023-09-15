@@ -129,10 +129,6 @@ public:
         total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
         total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
-
-    // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control
-    // For Read I/O, 1/64 RU per KB.
-    double getReadRU() const { return static_cast<double>(total_user_read_bytes) / 1024.0 / 64.0; }
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

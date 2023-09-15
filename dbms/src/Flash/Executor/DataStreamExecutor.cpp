@@ -91,7 +91,7 @@ RU DataStreamExecutor::collectRequestUnit()
     // When the number of threads is greater than the number of cpu cores,
     // BlockInputStream's estimated cpu time will be much greater than the actual value.
     if (execute_time_ns <= 0 || total_thread_cnt <= logical_cpu_cores)
-        return toRU(execute_time_ns);
+        return cpuTimeToRU(execute_time_ns);
 
     // Here we use `execute_time_ns / thread_cnt` to get the average execute time of each thread.
     // So we have `per_thread_execute_time_ns = execute_time_ns / estimate_thread_cnt`.

@@ -80,16 +80,16 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
-#include <Storages/Transaction/FileEncryption.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -981,7 +981,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_WARNING(log, "'storage.format_version' must be set to 100 when S3 is enabled!");
             throw Exception(
                 ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'storage.format_version' must be set to 5 when S3 is enabled!");
+                "'storage.format_version' must be set to 100 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
@@ -1577,14 +1577,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
-        auto cpu_task_queue_type = TaskQueueType::DEFAULT;
-        auto io_task_queue_type = TaskQueueType::DEFAULT;
-        if (!global_context->getSettingsRef().enable_resource_control)
-            cpu_task_queue_type = TaskQueueType::MLFQ;
-
         TaskSchedulerConfig config{
-            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), cpu_task_queue_type},
-            {get_pool_size(settings.pipeline_io_task_thread_pool_size), io_task_queue_type},
+            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+             settings.pipeline_cpu_task_thread_pool_queue_type},
+            {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+             settings.pipeline_io_task_thread_pool_queue_type},
         };
         RUNTIME_CHECK(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);

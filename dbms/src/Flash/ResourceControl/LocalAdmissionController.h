@@ -369,12 +369,16 @@ public:
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
-    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
-        : cluster(cluster_)
+    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_, bool enable = true)
+        : stopped(!enable)
+        , cluster(cluster_)
         , etcd_client(etcd_client_)
     {
-        background_threads.emplace_back([this] { this->startBackgroudJob(); });
-        background_threads.emplace_back([this] { this->watchGAC(); });
+        if (enable)
+        {
+            background_threads.emplace_back([this] { this->startBackgroudJob(); });
+            background_threads.emplace_back([this] { this->watchGAC(); });
+        }
     }
 
     ~LocalAdmissionController() { stop(); }
@@ -382,7 +386,7 @@ public:
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         // When tidb_enable_resource_control is disabled, resource group name is empty.
-        if (name.empty())
+        if (name.empty() || stopped)
             return;
 
         ResourceGroupPtr group = findResourceGroup(name);
@@ -405,7 +409,7 @@ public:
 
     std::optional<uint64_t> getPriority(const std::string & name)
     {
-        if (name.empty())
+        if (name.empty() || stopped)
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
         ResourceGroupPtr group = findResourceGroup(name);
