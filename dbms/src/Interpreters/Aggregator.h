@@ -1123,6 +1123,8 @@ public:
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
 
+    bool isCancelled() { return is_cancelled(); }
+
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
     using AggregateColumnsConstData = std::vector<const ColumnAggregateFunction::Container *>;
@@ -1146,6 +1148,11 @@ public:
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
     struct AggProcessInfo
     {
+        AggProcessInfo(Aggregator * aggregator_)
+            : aggregator(aggregator_)
+        {
+            assert(aggregator);
+        }
         Block block;
         size_t start_row = 0;
         size_t end_row = 0;
@@ -1155,11 +1162,12 @@ public:
         ColumnRawPtrs key_columns;
         AggregateColumns aggregate_columns;
         AggregateFunctionInstructions aggregate_functions_instructions;
-        void prepareForAgg(Aggregator * aggregator);
+        Aggregator * aggregator;
+        void prepareForAgg();
         bool allBlockDataHandled() const
         {
             assert(start_row <= end_row);
-            return start_row == end_row;
+            return start_row == end_row || aggregator->isCancelled();
         }
         void resetBlock(const Block & block_)
         {
@@ -1167,6 +1175,7 @@ public:
             block = block_;
             start_row = 0;
             end_row = 0;
+            aggregator = nullptr;
             materialized_columns.clear();
             prepare_for_agg_done = false;
         }
