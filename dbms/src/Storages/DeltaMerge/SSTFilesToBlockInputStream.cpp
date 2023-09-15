@@ -241,7 +241,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         }
         LOG_DEBUG(
             log,
-            "Done loading all kvpairs, CF={} offset={} processed_size={} write_cf_offset={} region_id={} "
+            "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} "
             "snapshot_index={}",
             CFToName(cf),
             (*p_process_keys),
@@ -261,7 +261,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         {
             LOG_DEBUG(
                 log,
-                "Done loading, CF={} offset={} processed_size={} write_cf_offset={} last_loaded_rowkey={} "
+                "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
                 "rowkey_to_be_included={} region_id={} snapshot_index={}",
                 CFToName(cf),
                 (*p_process_keys),
