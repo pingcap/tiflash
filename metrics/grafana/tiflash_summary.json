@@ -11408,7 +11408,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_raft_ongoing_snapshot_total_size{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type)",
+              "expr": "sum(rate(tiflash_raft_ongoing_snapshot_total_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type)",
               "format": "time_series",
               "hide": false,
               "interval": "",
