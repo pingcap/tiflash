@@ -1569,7 +1569,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
         tmt_context.getKVCluster(),
         tmt_context.getEtcdClient(),
-        global_context.getSettingsRef().enable_pipeline);
+        global_context->getSettingsRef().enable_pipeline);
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
