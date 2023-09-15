@@ -98,44 +98,12 @@ inline void setAlterCommandColumn(Poco::Logger * log, AlterCommand & command, co
 
 AlterCommand newRenameColCommand(const String & old_col, const String & new_col, ColumnID new_col_id, const TableInfo & orig_table_info)
 {
-<<<<<<< HEAD
     AlterCommand command;
     command.type = AlterCommand::RENAME_COLUMN;
     command.column_name = old_col;
     command.new_column_name = new_col;
     command.column_id = new_col_id;
     if (auto pk = orig_table_info.getPKHandleColumn())
-=======
-    if (diff.old_table_id == diff.table_id && diff.old_schema_id == diff.schema_id)
-    {
-        // Only internal changes in non-partitioned table, not affecting TiFlash
-        LOG_DEBUG(
-            log,
-            "Table is going to be exchanged, skipping for now. database_id={} table_id={}",
-            diff.schema_id,
-            diff.table_id);
-        return;
-    }
-    LOG_DEBUG(
-        log,
-        "Table and partition is exchanged. database_id={} table_id={}, part_db_id={}, part_table_id={} partition_id={}",
-        diff.old_schema_id,
-        diff.old_table_id,
-        diff.affected_opts[0].schema_id,
-        diff.affected_opts[0].table_id,
-        diff.table_id);
-    /// Table_id in diff is the partition id of which will be exchanged,
-    /// Schema_id in diff is the non-partition table's schema id
-    /// Old_table_id in diff is the non-partition table's table id
-    /// Table_id in diff.affected_opts[0] is the table id of the partition table
-    /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
-    table_id_map.eraseTableIDOrLogError(diff.old_table_id);
-    table_id_map.emplaceTableID(diff.table_id, diff.schema_id);
-    table_id_map.erasePartitionTableIDOrLogError(diff.table_id);
-    table_id_map.emplacePartitionTableID(diff.old_table_id, diff.affected_opts[0].table_id);
-
-    if (diff.schema_id != diff.affected_opts[0].schema_id)
->>>>>>> b1f1dbcf00 (Skip first state change of EXCHANGE Partition. (#7945))
     {
         if (pk->get().name == old_col)
         {
@@ -789,6 +757,25 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const SchemaDiff & diff)
 {
+    if (diff.old_table_id == diff.table_id && diff.old_schema_id == diff.schema_id)
+    {
+        // Only internal changes in non-partitioned table, not affecting TiFlash
+        LOG_DEBUG(
+            log,
+            "Table is going to be exchanged, skipping for now. database_id={} table_id={}",
+            diff.schema_id,
+            diff.table_id);
+        return;
+    }
+    LOG_DEBUG(
+        log,
+        "Table and partition is exchanged. database_id={} table_id={}, part_db_id={}, part_table_id={} partition_id={}",
+        diff.old_schema_id,
+        diff.old_table_id,
+        diff.affected_opts[0].schema_id,
+        diff.affected_opts[0].table_id,
+        diff.table_id);
+
     /// Exchange table partition is used for ddl:
     /// alter table partition_table exchange partition partition_name with table non_partition_table
     /// It involves three table/partition: partition_table, partition_name and non_partition_table

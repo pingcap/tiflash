@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-<<<<<<< HEAD
-=======
-
->>>>>>> b1f1dbcf00 (Skip first state change of EXCHANGE Partition. (#7945))
 >> DBGInvoke __enable_schema_sync_service('true')
 mysql> drop table if exists test.e;
 mysql> drop table if exists test.e2;
