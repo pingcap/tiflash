@@ -637,31 +637,6 @@ RaftstoreVer Region::getClusterRaftstoreVer()
     return RaftstoreVer::Uncertain;
 }
 
-void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
-{
-    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
-    {
-        data.orphan_keys_info.snapshot_index = appliedIndex();
-        data.orphan_keys_info.pre_handling = true;
-        data.orphan_keys_info.deadline_index = deadline_index;
-        data.orphan_keys_info.region_id = region_id;
-    }
-}
-
-void Region::afterPrehandleSnapshot()
-{
-    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
-    {
-        data.orphan_keys_info.pre_handling = false;
-        LOG_INFO(
-            log,
-            "After prehandle, remains orphan keys {} removed orphan keys {} [region_id={}]",
-            data.orphan_keys_info.remainedKeyCount(),
-            data.orphan_keys_info.removed_remained_keys.size(),
-            id());
-    }
-}
-
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
 {
     auto meta_snap = region.dumpRegionMetaSnapshot();
@@ -972,33 +947,6 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     return std::make_pair(EngineStoreApplyRes::None, std::move(write_result));
 }
 
-void Region::finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UInt64 term)
-{
-    if (index <= appliedIndex())
-        return;
-
-    {
-        std::unique_lock<std::shared_mutex> lock(mutex);
-
-        if (temp_region)
-        {
-            // Merge the uncommitted data from `temp_region`.
-            // As we have taken the ownership of `temp_region`, so don't need to acquire lock on `temp_region.mutex`
-            data.mergeFrom(temp_region->data);
-        }
-
-        meta.setApplied(index, term);
-    }
-    LOG_INFO(
-        log,
-        "{} finish ingest sst by DTFile, write_cf_keys={} default_cf_keys={} lock_cf_keys={}",
-        this->toString(false),
-        data.write_cf.getSize(),
-        data.default_cf.getSize(),
-        data.lock_cf.getSize());
-    meta.notifyAll();
-}
-
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
 {
     static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
@@ -1077,6 +1025,40 @@ void Region::cleanApproxMemCacheInfo() const
 {
     approx_mem_cache_rows = 0;
     approx_mem_cache_bytes = 0;
+}
+
+static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
+{
+    for (const auto & peer : region.peers())
+    {
+        if (peer.id() == peer_id)
+        {
+            return peer;
+        }
+    }
+
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
+        "{}: peer not found in region, peer_id={} region_id={}",
+        __PRETTY_FUNCTION__,
+        peer_id,
+        region.id());
+}
+
+RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
+{
+    auto meta = ({
+        auto peer = findPeer(region, peer_id);
+        raft_serverpb::RaftApplyState apply_state;
+        {
+            apply_state.set_applied_index(index);
+            apply_state.mutable_truncated_state()->set_index(index);
+            apply_state.mutable_truncated_state()->set_term(term);
+        }
+        RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
+    });
+
+    return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
 } // namespace DB
