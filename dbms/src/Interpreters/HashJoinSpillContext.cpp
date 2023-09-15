@@ -80,10 +80,22 @@ void HashJoinSpillContext::finishBuild()
     in_build_stage = false;
 }
 
-void HashJoinSpillContext::markPartitionForAutoSpill(size_t partition_id)
+bool HashJoinSpillContext::markPartitionForAutoSpill(size_t partition_id)
 {
     auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-    (*partition_spill_status)[partition_id].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
+    if (in_build_stage && isSpillEnabled())
+    {
+        return (*partition_spill_status)[partition_id].compare_exchange_strong(
+            old_value,
+            AutoSpillStatus::NEED_AUTO_SPILL);
+    }
+    if (!in_build_stage && in_spillable_stage && isSpillEnabled() && isPartitionSpilled(partition_id))
+    {
+        return (*partition_spill_status)[partition_id].compare_exchange_strong(
+            old_value,
+            AutoSpillStatus::NEED_AUTO_SPILL);
+    }
+    return false;
 }
 
 void HashJoinSpillContext::buildProbeSpiller(const Block & input_schema)

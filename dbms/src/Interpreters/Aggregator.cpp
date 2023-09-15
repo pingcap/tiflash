@@ -167,8 +167,7 @@ void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
                 fiu_do_on(FailPoints::random_fail_in_resize_callback, {
                     if (agg_spill_context->supportFurtherSpill())
                     {
-                        agg_spill_context->markThreadForAutoSpill(thread_num);
-                        ret = false;
+                        ret = !agg_spill_context->markThreadForAutoSpill(thread_num);
                     }
                 });
                 return ret;

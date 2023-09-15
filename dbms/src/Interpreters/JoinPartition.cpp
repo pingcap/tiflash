@@ -248,8 +248,7 @@ void JoinPartition::setResizeCallbackIfNeeded()
             fiu_do_on(FailPoints::random_fail_in_resize_callback, {
                 if (hash_join_spill_context->supportFurtherSpill())
                 {
-                    hash_join_spill_context->markPartitionForAutoSpill(partition_index);
-                    ret = false;
+                    ret = !hash_join_spill_context->markPartitionForAutoSpill(partition_index);
                 }
             });
             return ret;

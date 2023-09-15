@@ -144,9 +144,15 @@ void AggSpillContext::finishOneSpill(size_t thread_num)
     per_thread_revocable_memories[thread_num] = 0;
 }
 
-void AggSpillContext::markThreadForAutoSpill(size_t thread_num)
+bool AggSpillContext::markThreadForAutoSpill(size_t thread_num)
 {
-    auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-    per_thread_auto_spill_status[thread_num].compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
+    if (in_spillable_stage && isSpillEnabled())
+    {
+        auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+        return per_thread_auto_spill_status[thread_num].compare_exchange_strong(
+            old_value,
+            AutoSpillStatus::NEED_AUTO_SPILL);
+    }
+    return false;
 }
 } // namespace DB
