@@ -43,6 +43,8 @@ bool CachedSpillHandler::batchRead()
     {
         if unlikely (is_cancelled())
             return false;
+        if unlikely (block.rows() == 0)
+            continue;
         ret.push_back(std::move(block));
         current_return_size += ret.back().estimateBytesForSpill();
         if (bytes_threshold > 0 && current_return_size >= bytes_threshold)
