@@ -757,6 +757,25 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const SchemaDiff & diff)
 {
+    if (diff.old_table_id == diff.table_id && diff.old_schema_id == diff.schema_id)
+    {
+        // Only internal changes in non-partitioned table, not affecting TiFlash
+        LOG_DEBUG(
+            log,
+            "Table is going to be exchanged, skipping for now. database_id={} table_id={}",
+            diff.schema_id,
+            diff.table_id);
+        return;
+    }
+    LOG_DEBUG(
+        log,
+        "Table and partition is exchanged. database_id={} table_id={}, part_db_id={}, part_table_id={} partition_id={}",
+        diff.old_schema_id,
+        diff.old_table_id,
+        diff.affected_opts[0].schema_id,
+        diff.affected_opts[0].table_id,
+        diff.table_id);
+
     /// Exchange table partition is used for ddl:
     /// alter table partition_table exchange partition partition_name with table non_partition_table
     /// It involves three table/partition: partition_table, partition_name and non_partition_table

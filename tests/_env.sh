@@ -33,7 +33,7 @@ fi
 export storage_server="127.0.0.1"
 
 # Server port for connecting
-export storage_port="9000"
+export storage_port=${storage_port:-9000}
 
 # Default database for scripts
 export storage_db="default"
