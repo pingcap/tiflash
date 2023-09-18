@@ -1150,4 +1150,10 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 
     return region_persister->getFileUsageStatistics();
 }
+
+size_t KVStore::getOngoingPrehandleTaskCount() const
+{
+    return std::max(0, ongoing_prehandle_task_count.load());
+}
+
 } // namespace DB

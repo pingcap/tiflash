@@ -341,6 +341,16 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     }
 }
 
+size_t SSTFilesToBlockInputStream::getApproxBytes() const
+{
+    return write_cf_reader->approxSize() + lock_cf_reader->approxSize() + default_cf_reader->approxSize();
+}
+
+std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits_count) const
+{
+    return write_cf_reader->findSplitKeys(splits_count);
+}
+
 /// Methods for BoundedSSTFilesToBlockInputStream
 
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //

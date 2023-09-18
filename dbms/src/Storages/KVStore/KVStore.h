@@ -183,6 +183,7 @@ public:
     template <typename RegionPtrWrap>
     void releasePreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
+    size_t getOngoingPrehandleTaskCount() const;
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
 
@@ -432,6 +433,9 @@ private:
     const bool eager_raft_log_gc_enabled;
     // The index hints for eager RaftLog GC tasks
     RaftLogEagerGcTasks raft_log_gc_hints;
+    // Relates to `queue_size` in `can_apply_snapshot`,
+    // we can't have access to these codes though.
+    std::atomic<int64_t> ongoing_prehandle_task_count{0};
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

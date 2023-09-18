@@ -62,6 +62,33 @@ void MonoSSTReader::next()
     return proxy_helper->sst_reader_interfaces.fn_next(inner, type);
 }
 
+size_t MonoSSTReader::approxSize() const
+{
+    return proxy_helper->sst_reader_interfaces.fn_approx_size(inner, type);
+}
+
+std::vector<std::string> MonoSSTReader::findSplitKeys(uint64_t splits_count) const
+{
+    if (type != ColumnFamilyType::Write)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "findSplitKeys can only be called on write cf");
+    }
+    RustBaseBuffVec v = proxy_helper->sst_reader_interfaces.fn_get_split_keys(inner, splits_count);
+    std::vector<std::string> res;
+    if (v.inner.ptr == nullptr)
+        return res;
+    // Safety: It is prohibited that we:
+    // 1. dereference `v.inner`
+    // 2. point to/refer to/move anything in `v.buffs`
+    for (size_t i = 0; i < v.len; i++)
+    {
+        res.push_back(std::string(v.buffs[i].data, v.buffs[i].len));
+    }
+    RustGcHelper::instance().gcRustPtr(v.inner.ptr, v.inner.type);
+    return res;
+}
+
+
 MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_)
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))

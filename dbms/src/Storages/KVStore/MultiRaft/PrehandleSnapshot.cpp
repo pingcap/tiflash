@@ -52,10 +52,14 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     TMTContext & tmt)
 {
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
+    ongoing_prehandle_task_count.fetch_add(1);
     PrehandleResult result;
     try
     {
-        SCOPE_EXIT({ new_region->afterPrehandleSnapshot(); });
+        SCOPE_EXIT({
+            auto ongoing = ongoing_prehandle_task_count.fetch_sub(1) - 1;
+            new_region->afterPrehandleSnapshot(ongoing);
+        });
         result = preHandleSSTsToDTFiles( //
             new_region,
             snaps,
@@ -153,6 +157,21 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 force_decode,
                 tmt,
                 expected_block_size);
+
+            // Don't change the order of following checks, `getApproxBytes` involves some overhead,
+            // although it is optimized to bring about the minimum overhead.
+            if (new_region->getClusterRaftstoreVer() == RaftstoreVer::V2 && getOngoingPrehandleTaskCount() < 2
+                && sst_stream->getApproxBytes() > 1 * 1024 * 1024 * 1024)
+            {
+                uint64_t split_parts = 4;
+                // Will result in at most 3 keys.
+                auto split_keys = sst_stream->findSplitKeys(split_parts);
+                if (split_keys.size() >= split_parts)
+                {
+                    // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
+                    // it is even better that we still handle it sequantially.
+                }
+            }
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
                 sst_stream,
                 ::DB::TiDBPkColumnID,
@@ -298,16 +317,17 @@ void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t>
     }
 }
 
-void Region::afterPrehandleSnapshot()
+void Region::afterPrehandleSnapshot(int64_t ongoing)
 {
     if (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         data.orphan_keys_info.pre_handling = false;
         LOG_INFO(
             log,
-            "After prehandle, remains orphan keys {} removed orphan keys {} [region_id={}]",
+            "After prehandle, remains orphan keys {} removed orphan keys {} ongoing {} [region_id={}]",
             data.orphan_keys_info.remainedKeyCount(),
             data.orphan_keys_info.removed_remained_keys.size(),
+            ongoing,
             id());
     }
 }

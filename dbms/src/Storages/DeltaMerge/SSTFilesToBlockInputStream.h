@@ -74,6 +74,10 @@ public:
     void readPrefix() override;
     void readSuffix() override;
     Block read() override;
+    // Currently it only takes effect if using tablet sst reader which is usually a raftstore v2 case.
+    // Otherwise will return zero.
+    size_t getApproxBytes() const;
+    std::vector<std::string> findSplitKeys(size_t splits_count) const;
 
 public:
     struct ProcessKeys
