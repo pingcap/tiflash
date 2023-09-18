@@ -237,7 +237,6 @@ void AsynchronousMetrics::update()
                     if (auto store = dt_storage->getStoreIfInited(); store)
                     {
                         auto stat = store->getStoreStats();
-                        const auto stat = store->getStoreStats();
                         if (context.getPageStorageRunMode() == PageStorageRunMode::ONLY_V2)
                         {
                             calculateMax(
