@@ -57,6 +57,8 @@ struct ControlOptions
     StorageType storage_type = StorageType::Unknown; // only useful for universal page storage
     UInt32 keyspace_id = NullspaceID; // only useful for universal page storage
 
+    // Show the entries for each Page
+    bool show_entries = true;
     // Check the CRC checksum for each fields in pages
     // Only effective when mode == CHECK_ALL_DATA_CRC
     bool check_fields = true;
@@ -84,6 +86,9 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  5 is dump entries in WAL log files
  6 is display all region info
 )") //
+        ("show_entries",
+         value<bool>()->default_value(true),
+         "Show the entries for each Page. Only effective when `display_mode` is 2") //
         ("check_fields",
          value<bool>()->default_value(true),
          "Also check the checksum for every field inside a Page. Only effective when `display_mode` is 4.") //
@@ -136,6 +141,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     auto mode_int = options["mode"].as<int>();
     opt.page_id = options["page_id"].as<UInt64>();
     opt.blob_id = options["blob_id"].as<UInt32>();
+    opt.show_entries = options["show_entries"].as<bool>();
     opt.check_fields = options["check_fields"].as<bool>();
     auto storage_type_int = options["storage_type"].as<int>();
     opt.keyspace_id = options["keyspace_id"].as<UInt32>();
@@ -293,13 +299,15 @@ private:
             }
             case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
             {
-                std::cout << getDirectoryInfo(
-                    mvcc_table_directory,
-                    opts.storage_type,
-                    opts.keyspace_id,
-                    opts.namespace_id,
-                    opts.page_id)
-                          << std::endl;
+                fmt::print(
+                    "{}\n",
+                    getDirectoryInfo(
+                        mvcc_table_directory,
+                        opts.show_entries,
+                        opts.storage_type,
+                        opts.keyspace_id,
+                        opts.namespace_id,
+                        opts.page_id));
                 break;
             }
             case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
@@ -417,15 +425,24 @@ private:
 
     static String getDirectoryInfo(
         typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
+        bool show_entries,
         StorageType storage_type,
         KeyspaceID keyspace_id,
         UInt64 ns_id,
         UInt64 page_id)
     {
-        auto page_info = [](const auto & page_internal_id_, const auto & versioned_entries) {
+        auto page_info = [show_entries]( //
+                             const auto & page_internal_id_,
+                             const auto & versioned_entries,
+                             const String & extra_msg) {
             FmtBuffer page_str;
-            page_str.fmtAppend("    page id {}\n", page_internal_id_);
+            page_str.fmtAppend("    page id {} {}\n", page_internal_id_, extra_msg);
             page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
+
+            if (!show_entries)
+            {
+                return page_str.toString();
+            }
 
             size_t count = 0;
             for (const auto & [version, entry_or_del] : versioned_entries->entries)
@@ -439,7 +456,7 @@ private:
                     "       blob id: {}\n"
                     "       offset: {}\n"
                     "       size: {}\n"
-                    "       crc: {}\n", //
+                    "       crc: 0x{:X}\n", //
                     count++, //
                     version.sequence, //
                     version.epoch, //
@@ -467,33 +484,42 @@ private:
         directory_info.append("  Directory specific info: \n\n");
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
-            if (page_id != UINT64_MAX)
+            // Show all page_id
+            if (page_id == UINT64_MAX)
             {
-                if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+                String extra_msg;
+                if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
                 {
-                    if (internal_id.low == page_id && internal_id.high == ns_id)
-                    {
-                        directory_info.append(page_info(internal_id, versioned_entries));
-                        return directory_info.toString();
-                    }
+                    if (auto maybe_region_id = RaftDataReader::tryParseRegionId(internal_id); maybe_region_id)
+                        extra_msg = fmt::format("(region_id={})", *maybe_region_id);
                 }
-                else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
-                {
-                    RUNTIME_CHECK_MSG(
-                        storage_type == StorageType::Log || storage_type == StorageType::Data
-                            || storage_type == StorageType::Meta || storage_type == StorageType::KVStore,
-                        "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
-                    auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
-                    auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
-                    if (full_page_id == internal_id)
-                    {
-                        directory_info.append(page_info(internal_id, versioned_entries));
-                        return directory_info.toString();
-                    }
-                }
+                directory_info.append(page_info(internal_id, versioned_entries, extra_msg));
                 continue;
             }
-            directory_info.append(page_info(internal_id, versioned_entries));
+
+            // Only show the given page_id
+            if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+            {
+                if (internal_id.low == page_id && internal_id.high == ns_id)
+                {
+                    directory_info.append(page_info(internal_id, versioned_entries, ""));
+                    return directory_info.toString();
+                }
+            }
+            else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
+            {
+                RUNTIME_CHECK_MSG(
+                    storage_type == StorageType::Log || storage_type == StorageType::Data
+                        || storage_type == StorageType::Meta || storage_type == StorageType::KVStore,
+                    "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
+                auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
+                auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
+                if (full_page_id == internal_id)
+                {
+                    directory_info.append(page_info(internal_id, versioned_entries, ""));
+                    return directory_info.toString();
+                }
+            }
         }
 
         if (page_id != UINT64_MAX)
