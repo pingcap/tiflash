@@ -3123,6 +3123,11 @@ RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)
     return real_ranges;
 }
 
+static bool hasCacheableColumn(const ColumnDefines & columns)
+{
+    return std::find_if(columns.begin(), columns.end(), DMFileReader::isCacheableColumn) != columns.end();
+}
+
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
@@ -3146,6 +3151,12 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
         build_bitmap_filter_block_rows);
+
+    // If we don't need to read the cacheable columns, release column cache as soon as possible.
+    if (!hasCacheableColumn(columns_to_read))
+    {
+        segment_snap->stable->clearColumnCaches();
+    }
 
     if (filter && filter->before_where)
     {
