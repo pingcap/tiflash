@@ -311,7 +311,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 throw;
             }
         }
-    } // while loop
+    } // while
 
     return prehandle_result;
 }
