@@ -1045,6 +1045,7 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
         region.id());
 }
 
+// Generate a temporary region pointer by the given meta
 RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
 {
     auto meta = ({

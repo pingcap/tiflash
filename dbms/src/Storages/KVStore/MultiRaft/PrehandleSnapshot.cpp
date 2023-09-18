@@ -263,6 +263,24 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     return prehandle_result;
 }
 
+void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
+{
+    UNUSED(tmt);
+    auto cancel_flag = prehandling_trace.deregisterTask(region_id);
+    if (cancel_flag)
+    {
+        // The task is registered, set the cancel flag to true and the generated files
+        // will be clear later by `releasePreHandleSnapshot`
+        LOG_INFO(log, "Try cancel pre-handling from upper layer, region_id={}", region_id);
+        cancel_flag->store(true, std::memory_order_seq_cst);
+    }
+    else
+    {
+        // the task is not registered, continue
+        LOG_INFO(log, "Start cancel pre-handling from upper layer, region_id={}", region_id);
+    }
+}
+
 template <>
 void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(
     const RegionPtrWithSnapshotFiles & s,
@@ -286,24 +304,6 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(
         table_id);
     auto & context = tmt.getContext();
     dm_storage->cleanPreIngestFiles(s.external_files, context.getSettingsRef());
-}
-
-void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
-{
-    UNUSED(tmt);
-    auto cancel_flag = prehandling_trace.deregisterTask(region_id);
-    if (cancel_flag)
-    {
-        // The task is registered, set the cancel flag to true and the generated files
-        // will be clear later by `releasePreHandleSnapshot`
-        LOG_INFO(log, "Try cancel pre-handling from upper layer, region_id={}", region_id);
-        cancel_flag->store(true, std::memory_order_seq_cst);
-    }
-    else
-    {
-        // the task is not registered, continue
-        LOG_INFO(log, "Start cancel pre-handling from upper layer, region_id={}", region_id);
-    }
 }
 
 void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
