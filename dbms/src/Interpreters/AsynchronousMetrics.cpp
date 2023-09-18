@@ -24,12 +24,6 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/FileUsage.h>
-<<<<<<< HEAD
-=======
-#include <Storages/Page/PageConstants.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
->>>>>>> 85285a8e46 (*: Fix max snapshot lifetime is now shown on Grafana (#8102))
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -193,12 +187,6 @@ void AsynchronousMetrics::update()
                 {
                     if (auto store = dt_storage->getStoreIfInited(); store)
                     {
-<<<<<<< HEAD
-                        auto stat = store->getStoreStats();
-                        calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
-=======
                         const auto stat = store->getStoreStats();
                         if (context.getPageStorageRunMode() == PageStorageRunMode::ONLY_V2)
                         {
@@ -212,7 +200,6 @@ void AsynchronousMetrics::update()
                                 max_dt_meta_oldest_snapshot_lifetime,
                                 stat.storage_meta_oldest_snapshot_lifetime);
                         }
->>>>>>> 85285a8e46 (*: Fix max snapshot lifetime is now shown on Grafana (#8102))
                         calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                     }
                 }
@@ -239,16 +226,6 @@ void AsynchronousMetrics::update()
                 set("MaxDTDeltaOldestSnapshotLifetime", log_snap_stat.longest_living_seconds);
                 set("MaxDTMetaOldestSnapshotLifetime", meta_snap_stat.longest_living_seconds);
                 set("MaxDTStableOldestSnapshotLifetime", data_snap_stat.longest_living_seconds);
-            }
-            break;
-        }
-        case PageStorageRunMode::UNI_PS:
-        {
-            if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
-            {
-                // Only set delta snapshot lifetime when UniPS is enabled
-                const auto snap_stat = uni_ps->getSnapshotsStat();
-                set("MaxDTDeltaOldestSnapshotLifetime", snap_stat.longest_living_seconds);
             }
             break;
         }
