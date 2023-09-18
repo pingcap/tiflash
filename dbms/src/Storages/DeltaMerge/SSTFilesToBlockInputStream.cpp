@@ -130,9 +130,13 @@ void SSTFilesToBlockInputStream::readPrefix()
         this->region->id(),
         snapshot_index);
 
+    // Init stat info.
     process_keys.default_cf = 0;
     process_keys.write_cf = 0;
     process_keys.lock_cf = 0;
+    process_keys.default_cf_bytes = 0;
+    process_keys.write_cf_bytes = 0;
+    process_keys.lock_cf_bytes = 0;
 }
 
 void SSTFilesToBlockInputStream::readSuffix()
@@ -165,6 +169,7 @@ Block SSTFilesToBlockInputStream::read()
             BaseBuffView value = write_cf_reader->valueView();
             region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
             ++process_keys.write_cf;
+            process_keys.write_cf_bytes += (key.len + value.len);
             if (process_keys.write_cf % expected_size == 0)
             {
                 loaded_write_cf_key.assign(key.data, key.len);
@@ -202,17 +207,20 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
 {
     SSTReader * reader;
     size_t * p_process_keys;
+    size_t * p_process_keys_bytes;
     DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
         p_process_keys = &process_keys.default_cf;
+        p_process_keys_bytes = &process_keys.default_cf_bytes;
         last_loaded_rowkey = &default_last_loaded_rowkey;
     }
     else if (cf == ColumnFamilyType::Lock)
     {
         reader = lock_cf_reader.get();
         p_process_keys = &process_keys.lock_cf;
+        p_process_keys_bytes = &process_keys.lock_cf_bytes;
         last_loaded_rowkey = &lock_last_loaded_rowkey;
     }
     else
@@ -229,12 +237,15 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len), DupCheck::AllowSame);
             reader->next();
             (*p_process_keys) += 1;
+            (*p_process_keys_bytes) += (key.len + value.len);
         }
         LOG_DEBUG(
             log,
-            "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] [region_id={}] [snapshot_index={}]",
+            "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} "
+            "snapshot_index={}",
             CFToName(cf),
             (*p_process_keys),
+            (*p_process_keys_bytes),
             process_keys.write_cf,
             region->id(),
             snapshot_index);
@@ -250,10 +261,11 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         {
             LOG_DEBUG(
                 log,
-                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] "
-                "[rowkey_to_be_included={}] [region_id={}] [snapshot_index={}]",
+                "Done loading, CF={} offset={} processed_bytes={} write_cf_offset={} last_loaded_rowkey={} "
+                "rowkey_to_be_included={} region_id={} snapshot_index={}",
                 CFToName(cf),
                 (*p_process_keys),
+                (*p_process_keys_bytes),
                 process_keys.write_cf,
                 Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
                 (rowkey_to_be_included
@@ -273,6 +285,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                 // TODO: use doInsert to avoid locking
                 region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
                 (*p_process_keys) += 1;
+                (*p_process_keys_bytes) += (key.len + value.len);
                 if (*p_process_keys == process_keys_offset_end)
                 {
                     *last_loaded_rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(key.data, key.len));

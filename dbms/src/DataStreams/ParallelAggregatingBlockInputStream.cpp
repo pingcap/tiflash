@@ -218,7 +218,7 @@ void ParallelAggregatingBlockInputStream::execute()
     exceptions.resize(max_threads);
 
     for (size_t i = 0; i < max_threads; ++i)
-        threads_data.emplace_back();
+        threads_data.emplace_back(&aggregator);
     aggregator.initThresholdByAggregatedDataVariantsSize(many_data.size());
 
     LOG_TRACE(log, "Aggregating");
