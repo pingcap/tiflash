@@ -14,9 +14,8 @@
 
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/tests/RowCodecTestUtils.h>
 #include <gtest/gtest.h>
-
-#include "RowCodecTestUtils.h"
 
 namespace DB::tests
 {

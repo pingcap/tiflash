@@ -118,8 +118,8 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
     if (auto region = tmt.getKVStore()->getRegion(region_id); region)
     {
-        tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
-        output(fmt::format("region_table try flush region {}", region_id));
+        tmt.getRegionTable().tryWriteBlockByRegion(region);
+        output(fmt::format("region_table try write region {}", region_id));
     }
 }
 
