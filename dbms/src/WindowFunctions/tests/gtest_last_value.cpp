@@ -21,6 +21,8 @@
 #include <optional>
 #include <utility>
 
+#include "tipb/executor.pb.h"
+
 namespace DB::tests
 {
 // TODO support unsigned int as the test framework not supports unsigned int so far.
@@ -106,19 +108,26 @@ public:
             auto order_col = toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
             auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
 
-            for (size_t i = 0; i < frame_end_range.size(); ++i)
+            std::vector<tipb::RangeCmpDataType> cmp_data_type{
+                tipb::RangeCmpDataType::Int,
+                tipb::RangeCmpDataType::DateTime};
+
+            for (auto type : cmp_data_type)
             {
-                mock_frame.end = buildRangeFrameBound(
-                    tipb::WindowBoundType::Following,
-                    tipb::RangeCmpDataType::Int,
-                    ORDER_COL_NAME,
-                    true,
-                    frame_end_range[i]);
-                executeFunctionAndAssert(
-                    toNullableVec<Int64>(res[i]),
-                    LastValue(value_col),
-                    {partition_col, order_col, val_col},
-                    mock_frame);
+                for (size_t i = 0; i < frame_end_range.size(); ++i)
+                {
+                    mock_frame.end = buildRangeFrameBound(
+                        tipb::WindowBoundType::Following,
+                        type,
+                        ORDER_COL_NAME,
+                        true,
+                        frame_end_range[i]);
+                    executeFunctionAndAssert(
+                        toNullableVec<Int64>(res[i]),
+                        LastValue(value_col),
+                        {partition_col, order_col, val_col},
+                        mock_frame);
+                }
             }
         }
 
@@ -305,7 +314,7 @@ public:
         ;
         mock_frame.end = buildRangeFrameBound(
             tipb::WindowBoundType::Following,
-            tipb::RangeCmpDataType::DateTime,
+            tipb::RangeCmpDataType::Int,
             ORDER_COL_NAME,
             true,
             static_cast<Int64>(0));
@@ -326,7 +335,7 @@ public:
             {
                 mock_frame.end = buildRangeFrameBound(
                     tipb::WindowBoundType::Following,
-                    tipb::RangeCmpDataType::DateTime,
+                    tipb::RangeCmpDataType::Int,
                     ORDER_COL_NAME,
                     true,
                     frame_end_range[i]);
