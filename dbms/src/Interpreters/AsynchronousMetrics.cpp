@@ -236,12 +236,7 @@ void AsynchronousMetrics::update()
                 {
                     if (auto store = dt_storage->getStoreIfInited(); store)
                     {
-<<<<<<< HEAD
                         auto stat = store->getStoreStats();
-                        calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
-=======
                         const auto stat = store->getStoreStats();
                         if (context.getPageStorageRunMode() == PageStorageRunMode::ONLY_V2)
                         {
@@ -255,7 +250,6 @@ void AsynchronousMetrics::update()
                                 max_dt_meta_oldest_snapshot_lifetime,
                                 stat.storage_meta_oldest_snapshot_lifetime);
                         }
->>>>>>> 85285a8e46 (*: Fix max snapshot lifetime is now shown on Grafana (#8102))
                         calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                     }
                 }
