@@ -184,7 +184,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 LOG_INFO(logger, "pack_no={}, row_no={}, fields=[{}]", block_no, row_no, buff.toString());
             }
 
-            for (const auto & col: block)
+            for (const auto & col : block)
             {
                 if (auto iter = in_mem_bytes.find(col.column_id); iter != in_mem_bytes.end())
                     iter->second += col.column->byteSize();
