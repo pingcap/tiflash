@@ -117,7 +117,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
-// This function get tiflash replica count from schema.
+// This function get tiflash replica count from local schema.
 std::pair<UInt64, bool> getTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_storage)
 {
     auto struct_lock = dm_storage->lockStructureForShare(getThreadNameAndID());
