@@ -355,7 +355,7 @@ public:
         mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
         mock_frame.end = buildRangeFrameBound(
             tipb::WindowBoundType::Following,
-            tipb::RangeCmpDataType::Int,
+            tipb::RangeCmpDataType::DateTime,
             ORDER_COL_NAME,
             true,
             static_cast<Int64>(0));
@@ -376,7 +376,7 @@ public:
             {
                 mock_frame.start = buildRangeFrameBound(
                     tipb::WindowBoundType::Preceding,
-                    tipb::RangeCmpDataType::Int,
+                    tipb::RangeCmpDataType::DateTime,
                     ORDER_COL_NAME,
                     false,
                     frame_start_range[i]);

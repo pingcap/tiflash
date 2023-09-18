@@ -187,7 +187,7 @@ bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_
 template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_preceding, bool is_desc, bool is_begin>
 bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
-    if constexpr (CmpDataType == tipb::RangeCmpDataType::Int)
+    if constexpr (CmpDataType == tipb::RangeCmpDataType::Int || CmpDataType == tipb::RangeCmpDataType::DateTime)
     {
         // Two operand must be integer
         if constexpr (std::is_integral_v<OrderByColType> && std::is_integral_v<AuxColType>)
@@ -901,6 +901,14 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
                 is_begin,
                 is_desc,
                 true>(cursor, current_row_aux_value);
+        case tipb::RangeCmpDataType::DateTime:
+            return moveCursorAndFindRangeFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::DateTime,
+                is_begin,
+                is_desc,
+                true>(cursor, current_row_aux_value);
         case tipb::RangeCmpDataType::Float:
             return moveCursorAndFindRangeFrameImpl<
                 AuxColType,
@@ -930,6 +938,14 @@ RowNumber WindowTransformAction::moveCursorAndFindRangeFrame(RowNumber cursor, A
                 AuxColType,
                 OrderByColType,
                 tipb::RangeCmpDataType::Int,
+                is_begin,
+                is_desc,
+                false>(cursor, current_row_aux_value);
+        case tipb::RangeCmpDataType::DateTime:
+            return moveCursorAndFindRangeFrameImpl<
+                AuxColType,
+                OrderByColType,
+                tipb::RangeCmpDataType::DateTime,
                 is_begin,
                 is_desc,
                 false>(cursor, current_row_aux_value);

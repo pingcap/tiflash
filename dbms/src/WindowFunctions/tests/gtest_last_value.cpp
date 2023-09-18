@@ -81,7 +81,7 @@ public:
             unbounded_type_frame);
     }
 
-    void testIntOrderByColForRangeFrame()
+    void testIntAndTimeOrderByColForRangeFrame()
     {
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
@@ -305,7 +305,7 @@ public:
         ;
         mock_frame.end = buildRangeFrameBound(
             tipb::WindowBoundType::Following,
-            tipb::RangeCmpDataType::Int,
+            tipb::RangeCmpDataType::DateTime,
             ORDER_COL_NAME,
             true,
             static_cast<Int64>(0));
@@ -326,7 +326,7 @@ public:
             {
                 mock_frame.end = buildRangeFrameBound(
                     tipb::WindowBoundType::Following,
-                    tipb::RangeCmpDataType::Int,
+                    tipb::RangeCmpDataType::DateTime,
                     ORDER_COL_NAME,
                     true,
                     frame_end_range[i]);
@@ -489,7 +489,7 @@ CATCH
 TEST_F(LastValue, lastValueWithRangeFrameType)
 try
 {
-    testIntOrderByColForRangeFrame();
+    testIntAndTimeOrderByColForRangeFrame();
     testFloatOrderByColForRangeFrame();
     testNullableOrderByColForRangeFrame();
     // TODO Implement testDecimalOrderByColForRangeFrame()
