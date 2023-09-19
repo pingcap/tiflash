@@ -187,12 +187,12 @@ size_t ColumnFileSetReader::readRows(
     }
     for (const auto & col : output_columns)
     {
-        const size_t delta_bytes = col->byteSize();
+        const auto delta_bytes = col->byteSize();
         LocalAdmissionController::global_instance->consumeResource(
             context.scan_context->resource_group_name,
             bytesToRU(delta_bytes),
             0);
-        context.scan_context->total_user_read_bytes += col->byteSize();
+        context.scan_context->total_user_read_bytes += delta_bytes;
     }
     return actual_read;
 }
