@@ -25,7 +25,7 @@ OperatorStatus AggregateBuildSinkOp::prepareImpl()
         if (agg_context->needSpill(index))
             return OperatorStatus::IO_OUT;
     }
-    return OperatorStatus::NEED_INPUT;
+    return agg_context->needSpill(index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
