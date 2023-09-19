@@ -28,7 +28,11 @@ namespace tests
 class AutoSpillJoinTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override { ExecutorTest::initializeContext(); }
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        dag_context_ptr->log = Logger::get("AutoSpillJoinTest");
+    }
 };
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \

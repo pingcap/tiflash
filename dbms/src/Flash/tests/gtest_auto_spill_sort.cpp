@@ -29,7 +29,11 @@ namespace tests
 class AutoSpillSortTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override { ExecutorTest::initializeContext(); }
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        dag_context_ptr->log = Logger::get("AutoSpillSortTest");
+    }
 };
 
 /// todo add more tests
