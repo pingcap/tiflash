@@ -344,10 +344,7 @@ public:
         query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
     }
 
-    void setAutoSpillMode()
-    {
-        in_auto_spill_mode = true;
-    }
+    void setAutoSpillMode() { in_auto_spill_mode = true; }
     bool isInAutoSpillMode() const { return in_auto_spill_mode; }
 
 public:
