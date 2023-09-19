@@ -89,8 +89,7 @@ void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
         return;
 
     auto dynamic_tokens = getDynamicTokens(timepoint);
-    RUNTIME_CHECK(dynamic_tokens >= 0.0);
-
+    assert(dynamic_tokens >= 0.0);
     tokens += dynamic_tokens;
     if (tokens >= capacity)
         tokens = capacity;
