@@ -17,11 +17,11 @@
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <tipb/executor.pb.h>
 
 #include <optional>
 #include <utility>
 
-#include "tipb/executor.pb.h"
 
 namespace DB::tests
 {
