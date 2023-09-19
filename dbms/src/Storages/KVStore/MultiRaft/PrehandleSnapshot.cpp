@@ -56,7 +56,7 @@ struct ReadFromStreamResult
     std::string extra_msg;
 };
 
-static inline std::tuple<ReadFromStreamResult, PrehandleResult> readFromStream(
+static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
     RegionPtr new_region,
     std::shared_ptr<std::atomic_bool> prehandle_task,
     DM::FileConvertJobType job_type,
@@ -244,7 +244,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 
             ReadFromStreamResult result;
             std::tie(result, prehandle_result)
-                = readFromStream(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+                = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
 
             if (result.error == ReadFromStreamError::ErrUpdateSchema)
             {
