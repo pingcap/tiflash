@@ -85,12 +85,11 @@ double TokenBucket::getAvgSpeedPerSec()
 
 void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
 {
+    if (timepoint - last_compact_timepoint <= MIN_COMPACT_INTERVAL)
+        return;
+
     auto dynamic_tokens = getDynamicTokens(timepoint);
     RUNTIME_CHECK(dynamic_tokens >= 0.0);
-    // To avoid the interval between each call from being less than 1ms,
-    // resulting in dynamic_tokens always being 0.
-    if (dynamic_tokens == 0.0)
-        return;
 
     tokens += dynamic_tokens;
     if (tokens >= capacity)
@@ -103,7 +102,7 @@ double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) c
     RUNTIME_CHECK(timepoint >= last_compact_timepoint);
     auto elspased = timepoint - last_compact_timepoint;
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elspased).count();
-    return elapsed_ms * fill_rate / 1000;
+    return static_cast<double>(elapsed_ms * fill_rate) / 1000;
 }
 
 } // namespace DB

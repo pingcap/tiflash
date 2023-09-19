@@ -656,13 +656,13 @@ TEST_F(TestResourceControlQueue, tokenBucket)
     }
     {
         TokenBucket bucket(fill_rate, init_tokens, "log_id");
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < 1000; ++i)
         {
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+            std::this_thread::sleep_for(std::chrono::microseconds(5));
             bucket.peek();
         }
         ASSERT_GT(bucket.peek(), init_tokens);
-        ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 10 * std::chrono::microseconds(500).count() / 1000000);
+        ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 1000 * std::chrono::microseconds(5).count() / 1000000);
     }
 }
 
