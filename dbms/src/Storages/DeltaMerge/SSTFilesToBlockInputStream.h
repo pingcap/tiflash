@@ -109,7 +109,7 @@ private:
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     TMTContext & tmt;
-    SSTFilesToBlockInputStreamOpts opts;
+    const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
