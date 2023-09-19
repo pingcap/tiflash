@@ -58,11 +58,11 @@ EngineStoreApplyRes KVStore::handleIngestSST(
     }
 
     const auto func_try_flush = [&]() {
-        if (!region->writeCFCount())
+        if (region->writeCFCount() == 0)
             return;
         try
         {
-            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
+            tmt.getRegionTable().tryWriteBlockByRegion(region);
             tryFlushRegionCacheInStorage(tmt, *region, log);
         }
         catch (Exception & e)
