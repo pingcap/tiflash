@@ -68,7 +68,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> readFromStream(
     auto region_id = new_region->id();
     std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
     // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
-    // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.m;
+    // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
     try
     {
         auto & context = tmt.getContext();
