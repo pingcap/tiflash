@@ -51,10 +51,8 @@ consteval bool checkIfSimpleNumericType()
 template <typename T>
 consteval bool checkIfDecimalFieldType()
 {
-    return std::is_same_v<
-               T,
-               DecimalField<
-                   Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>> || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
+    return std::is_same_v<T, DecimalField<Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>>
+        || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
 }
 
 template <typename LeftType, typename RightType>
