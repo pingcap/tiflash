@@ -203,7 +203,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     while (true)
     {
         // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
-        // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.m;
+        // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
         try
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
