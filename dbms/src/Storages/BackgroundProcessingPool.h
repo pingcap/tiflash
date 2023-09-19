@@ -32,7 +32,6 @@
 
 namespace DB
 {
-class Context;
 
 /** Using a fixed number of threads, perform an arbitrary number of tasks in an infinite loop.
   * In this case, one task can run simultaneously from different threads.

@@ -125,6 +125,7 @@ private:
 
 // Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid` and
 // do some calculation for the `DMFileWriter::BlockProperty` of read blocks.
+// Equals to PKSquashingBlockInputStream + DMVersionFilterBlockInputStream<COMPACT>
 class BoundedSSTFilesToBlockInputStream final
 {
 public:

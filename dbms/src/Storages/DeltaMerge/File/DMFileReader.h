@@ -119,14 +119,14 @@ private:
     bool shouldSeek(size_t pack_id) const;
 
     void readFromDisk(
-        ColumnDefine & column_define,
+        const ColumnDefine & column_define,
         MutableColumnPtr & column,
         size_t start_pack_id,
         size_t read_rows,
         size_t skip_packs,
         bool force_seek);
     void readColumn(
-        ColumnDefine & column_define,
+        const ColumnDefine & column_define,
         ColumnPtr & column,
         size_t start_pack_id,
         size_t pack_count,

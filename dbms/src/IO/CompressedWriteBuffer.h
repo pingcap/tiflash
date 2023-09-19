@@ -36,7 +36,7 @@ private:
     void nextImpl() override;
 
 public:
-    CompressedWriteBuffer(
+    explicit CompressedWriteBuffer(
         WriteBuffer & out_,
         CompressionSettings compression_settings = CompressionSettings(),
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
