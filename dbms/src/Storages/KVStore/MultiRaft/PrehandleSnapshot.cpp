@@ -57,11 +57,11 @@ struct ReadFromStreamResult
 };
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> readFromStream(
-    RegionPtr new_region,
-    std::shared_ptr<std::atomic_bool> prehandle_task,
+    const RegionPtr & new_region,
+    const std::shared_ptr<std::atomic_bool> & prehandle_task,
     DM::FileConvertJobType job_type,
-    std::shared_ptr<StorageDeltaMerge> storage,
-    std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream,
+    const std::shared_ptr<StorageDeltaMerge> & storage,
+    const std::shared_ptr<DM::SSTFilesToBlockInputStream> & sst_stream,
     const DM::SSTFilesToBlockInputStreamOpts & opts,
     TMTContext & tmt)
 {
