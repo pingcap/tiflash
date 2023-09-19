@@ -31,6 +31,7 @@ public:
     virtual void next() = 0;
     virtual size_t approxSize() const = 0;
     virtual std::vector<std::string> findSplitKeys(uint64_t splits_count) const = 0;
+    virtual void seek(BaseBuffView && view) const = 0;
 
     virtual ~SSTReader() = default;
 };
@@ -46,6 +47,7 @@ public:
     SSTFormatKind sst_format_kind() const { return kind; };
     size_t approxSize() const override;
     std::vector<std::string> findSplitKeys(uint64_t splits_count) const override;
+    void seek(BaseBuffView && view) const override;
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
     MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_);
@@ -106,6 +108,14 @@ public:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "MultiSSTReader don't support findSplitKeys for multiple ssts");
         }
         return mono->findSplitKeys(splits_count);
+    }
+    void seek(BaseBuffView && view) const override
+    {
+        if (args.size() > 1)
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "MultiSSTReader don't support seek for multiple ssts");
+        }
+        return mono->seek(std::move(view));
     }
 
     // Switch to next mono reader if current is drained,

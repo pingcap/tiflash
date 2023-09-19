@@ -239,7 +239,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
 }
 
 std::string_view buffToStrView(const BaseBuffView & buf);
-
+BaseBuffView cppStringAsBuff(const std::string & s);
 
 struct RustGcHelper : public ext::Singleton<RustGcHelper>
 {

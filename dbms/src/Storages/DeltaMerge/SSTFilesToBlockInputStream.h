@@ -50,7 +50,39 @@ using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream
 class BoundedSSTFilesToBlockInputStream;
 using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBlockInputStream>;
 
-// Read blocks from TiKV's SSTFiles
+struct SSTScanSoftLimit
+{
+    DecodedTiKVKey start;
+    DecodedTiKVKey end;
+    HandleID start_handle;
+    HandleID end_handle;
+
+    SSTScanSoftLimit(std::string && start_, std::string && end_)
+        : SSTScanSoftLimit(DecodedTiKVKey(std::move(start_)), DecodedTiKVKey(std::move(end_)))
+    {}
+
+    SSTScanSoftLimit(DecodedTiKVKey && start_, DecodedTiKVKey && end_)
+        : start(std::move(start_))
+        , end(std::move(end_))
+    {
+        if (start.size())
+        {
+            start_handle = RecordKVFormat::getHandle(start);
+        }
+        if (end.size())
+        {
+            end_handle = RecordKVFormat::getHandle(end);
+        }
+    }
+
+    HandleID getStartHandle() { return start_handle; }
+
+    HandleID getEndHandle() { return end_handle; }
+
+    std::string toDebugString() const { return fmt::format("{}:{}", start.toDebugString(), end.toDebugString()); }
+};
+
+// Read blocks from TiKV's SSTFiles or Tablets.
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
@@ -64,6 +96,7 @@ public:
         Timestamp gc_safepoint_,
         bool force_decode_,
         TMTContext & tmt_,
+        std::optional<SSTScanSoftLimit> && soft_limit_,
         size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream() override;
 
@@ -78,6 +111,7 @@ public:
     // Otherwise will return zero.
     size_t getApproxBytes() const;
     std::vector<std::string> findSplitKeys(size_t splits_count) const;
+    void resetSoftLimit(std::optional<SSTScanSoftLimit> soft_limit_) { soft_limit = std::move(soft_limit_); }
 
 public:
     struct ProcessKeys
@@ -98,7 +132,10 @@ public:
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
+    // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
+    bool maybeSkipBySoftLimit();
+    bool maybeStopBySoftLimit();
 
 private:
     RegionPtr region;
@@ -123,6 +160,7 @@ private:
 
     const bool force_decode;
     bool is_decode_cancelled = false;
+    std::optional<SSTScanSoftLimit> soft_limit;
 
     ProcessKeys process_keys;
 };

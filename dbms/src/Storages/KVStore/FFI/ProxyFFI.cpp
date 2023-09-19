@@ -954,4 +954,10 @@ std::string_view buffToStrView(const BaseBuffView & buf)
     return std::string_view{buf.data, buf.len};
 }
 
+// `s` must outlive returned base buff view.
+BaseBuffView cppStringAsBuff(const std::string & s)
+{
+    return BaseBuffView{.data = s.data(), .len = s.size()};
+}
+
 } // namespace DB

@@ -88,6 +88,10 @@ std::vector<std::string> MonoSSTReader::findSplitKeys(uint64_t splits_count) con
     return res;
 }
 
+void MonoSSTReader::seek(BaseBuffView && view) const
+{
+    proxy_helper->sst_reader_interfaces.fn_seek(inner, type, EngineIteratorSeekType::Key, view);
+}
 
 MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_)
     : proxy_helper(proxy_helper_)

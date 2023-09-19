@@ -77,6 +77,44 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     return result;
 }
 
+static inline std::vector<std::string> getSplitKey(
+    KVStore * kvstore,
+    RegionPtr new_region,
+    std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream)
+{
+    // We don't use this is the single snapshot is small, due to overhead in decoding.
+    // TODO(split) find solution if the snapshot has too many untrimmed data.
+    constexpr size_t PARALLEL_PREHANDLE_THRESHOLD = 1 * 1024 * 1024 * 1024;
+    // If size is 0, do no parallel prehandle for this snapshot, which is legacy.
+    // If size is non-zero, use extra this many threads to prehandle.
+    std::vector<std::string> split_keys;
+    // Don't change the order of following checks, `getApproxBytes` involves some overhead,
+    // although it is optimized to bring about the minimum overhead.
+    if (new_region->getClusterRaftstoreVer() == RaftstoreVer::V2 && kvstore->getOngoingPrehandleTaskCount() < 2
+        && sst_stream->getApproxBytes() > PARALLEL_PREHANDLE_THRESHOLD)
+    {
+        // TODO(split) use proxy's config, or cpu_num - 1 - getOngoingPrehandleTaskCount().
+        uint64_t split_parts = 4;
+        if (split_parts > 1)
+        {
+            // Will generate at most `split_parts - 1` keys.
+            split_keys = sst_stream->findSplitKeys(split_parts);
+            RUNTIME_CHECK_MSG(
+                split_keys.size() + 1 <= split_parts,
+                "findSplitKeys should generate {} - 1 keys, actual {}",
+                split_parts,
+                split_keys.size());
+            if (split_keys.size() + 1 >= split_parts)
+            {
+                // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
+                // it is even better that we still handle it sequantially.
+                split_keys.clear();
+            }
+        }
+    }
+    return split_keys;
+}
+
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
 /// return the ids of DTFile(s), the uncommitted data will be inserted to `new_region`
 PrehandleResult KVStore::preHandleSSTsToDTFiles(
@@ -156,56 +194,96 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 gc_safepoint,
                 force_decode,
                 tmt,
+                std::nullopt,
                 expected_block_size);
 
-            // Don't change the order of following checks, `getApproxBytes` involves some overhead,
-            // although it is optimized to bring about the minimum overhead.
-            if (new_region->getClusterRaftstoreVer() == RaftstoreVer::V2 && getOngoingPrehandleTaskCount() < 2
-                && sst_stream->getApproxBytes() > 1 * 1024 * 1024 * 1024)
-            {
-                uint64_t split_parts = 4;
-                // Will result in at most 3 keys.
-                auto split_keys = sst_stream->findSplitKeys(split_parts);
-                if (split_keys.size() >= split_parts)
-                {
-                    // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
-                    // it is even better that we still handle it sequantially.
-                }
-            }
-            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-                sst_stream,
-                ::DB::TiDBPkColumnID,
-                schema_snap);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
-                log_prefix,
-                bounded_stream,
-                storage,
-                schema_snap,
-                job_type,
-                /* split_after_rows */ global_settings.dt_segment_limit_rows,
-                /* split_after_size */ global_settings.dt_segment_limit_size,
-                region_id,
-                prehandle_task,
-                context);
+            auto split_keys = getSplitKey(this, new_region, sst_stream);
 
-            stream->writePrefix();
-            stream->write();
-            stream->writeSuffix();
-            if (stream->isAbort())
+            // TODO(split) Safety: No read() should be called to `sst_stream` before.
+            if (split_keys.empty())
             {
-                LOG_INFO(
-                    log,
-                    "Apply snapshot is aborted, cancelling. region_id={} term={} index={}",
+                auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+                    sst_stream,
+                    ::DB::TiDBPkColumnID,
+                    schema_snap);
+                stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
+                    log_prefix,
+                    bounded_stream,
+                    storage,
+                    schema_snap,
+                    job_type,
+                    /* split_after_rows */ global_settings.dt_segment_limit_rows,
+                    /* split_after_size */ global_settings.dt_segment_limit_size,
                     region_id,
-                    term,
-                    index);
-                stream->cancel();
+                    prehandle_task,
+                    context);
+
+                stream->writePrefix();
+                stream->write();
+                stream->writeSuffix();
+                if (stream->isAbort())
+                {
+                    LOG_INFO(
+                        log,
+                        "Apply snapshot is aborted, cancelling. region_id={} term={} index={}",
+                        region_id,
+                        term,
+                        index);
+                    stream->cancel();
+                }
+                prehandle_result.ingest_ids = stream->outputFiles();
+                prehandle_result.stats = PrehandleResult::Stats{
+                    .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                    .dt_disk_bytes = stream->getTotalBytesOnDisk(),
+                    .dt_total_bytes = stream->getTotalCommittedBytes()};
             }
-            prehandle_result.ingest_ids = stream->outputFiles();
-            prehandle_result.stats = PrehandleResult::Stats{
-                .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
-                .dt_disk_bytes = stream->getTotalBytesOnDisk(),
-                .dt_total_bytes = stream->getTotalCommittedBytes()};
+            else
+            {
+                // TODO(split) handle exception
+                auto thread_pool
+                    = std::make_unique<ThreadPool>(split_keys.size(), split_keys.size(), split_keys.size());
+
+                sst_stream->resetSoftLimit(DM::SSTScanSoftLimit(std::string(""), std::string(split_keys[0])));
+
+                auto runInParallel = [&](DM::SSTScanSoftLimit limit) {
+                    thread_pool->trySchedule([&]() {
+                        auto parallel_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
+                            log_prefix,
+                            new_region,
+                            index,
+                            snaps,
+                            proxy_helper,
+                            schema_snap,
+                            gc_safepoint,
+                            force_decode,
+                            tmt,
+                            std::optional(std::move(limit)),
+                            expected_block_size);
+                        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+                            parallel_sst_stream,
+                            ::DB::TiDBPkColumnID,
+                            schema_snap);
+                        auto parallel_stream = std::make_shared<
+                            DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
+                            log_prefix,
+                            bounded_stream,
+                            storage,
+                            schema_snap,
+                            job_type,
+                            /* split_after_rows */ global_settings.dt_segment_limit_rows,
+                            /* split_after_size */ global_settings.dt_segment_limit_size,
+                            region_id,
+                            prehandle_task,
+                            context);
+                    });
+                };
+                for (size_t extra_id = 0; extra_id + 1 < split_keys.size(); extra_id++)
+                {
+                    runInParallel(
+                        DM::SSTScanSoftLimit(std::string(split_keys[extra_id]), std::string(split_keys[extra_id + 1])));
+                }
+                runInParallel(DM::SSTScanSoftLimit(std::string(split_keys.back()), std::string("")));
+            }
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
@@ -220,6 +298,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 
             if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
             {
+                // It will be thrown in `SSTFilesToBlockInputStream`.
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
                 new_region->clearAllData();
 
@@ -244,6 +323,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             }
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
+                // It will be thrown in many places that will lock a table.
                 // We can ignore if storage is dropped.
                 LOG_INFO(
                     log,

@@ -48,6 +48,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     Timestamp gc_safepoint_,
     bool force_decode_,
     TMTContext & tmt_,
+    std::optional<SSTScanSoftLimit> && soft_limit_,
     size_t expected_size_)
     : region(std::move(region_))
     , snapshot_index(snapshot_index_)
@@ -59,12 +60,10 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , expected_size(expected_size_)
     , log(Logger::get(log_prefix_))
     , force_decode(force_decode_)
-{}
-
-SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
-
-void SSTFilesToBlockInputStream::readPrefix()
+    , soft_limit(std::move(soft_limit_))
 {
+    // We have to initialize sst readers at an earlier stage,
+    // due to prehandle snapshot of single region feature in raftstore v2.
     std::vector<SSTView> ssts_default;
     std::vector<SSTView> ssts_write;
     std::vector<SSTView> ssts_lock;
@@ -139,6 +138,10 @@ void SSTFilesToBlockInputStream::readPrefix()
     process_keys.lock_cf_bytes = 0;
 }
 
+SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
+
+void SSTFilesToBlockInputStream::readPrefix() {}
+
 void SSTFilesToBlockInputStream::readSuffix()
 {
     // There must be no data left when we write suffix
@@ -155,34 +158,42 @@ void SSTFilesToBlockInputStream::readSuffix()
 Block SSTFilesToBlockInputStream::read()
 {
     std::string loaded_write_cf_key;
+
+    maybeSkipBySoftLimit();
     while (write_cf_reader && write_cf_reader->remained())
     {
-        // To decode committed rows from key-value pairs into block, we need to load
-        // all need key-value pairs from default and lock column families.
-        // Check the MVCC (key-format and transaction model) for details
-        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
-        // To ensure correctness, when loading key-values pairs from the default and
-        // the lock column family, we will load all key-values which rowkeys are equal
-        // or less that the last rowkey from the write column family.
+        bool should_stop_advancing = maybeStopBySoftLimit();
+        if (!should_stop_advancing)
         {
-            BaseBuffView key = write_cf_reader->keyView();
-            BaseBuffView value = write_cf_reader->valueView();
-            region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-            ++process_keys.write_cf;
-            process_keys.write_cf_bytes += (key.len + value.len);
-            if (process_keys.write_cf % expected_size == 0)
+            // To decode committed rows from key-value pairs into block, we need to load
+            // all need key-value pairs from default and lock column families.
+            // Check the MVCC (key-format and transaction model) for details
+            // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
+            // To ensure correctness, when loading key-values pairs from the default and
+            // the lock column family, we will load all key-values which rowkeys are equal
+            // or less that the last rowkey from the write column family.
             {
-                loaded_write_cf_key.assign(key.data, key.len);
-            }
-        } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
-        write_cf_reader->next();
+                BaseBuffView key = write_cf_reader->keyView();
+                BaseBuffView value = write_cf_reader->valueView();
+                region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+                ++process_keys.write_cf;
+                process_keys.write_cf_bytes += (key.len + value.len);
+                if (process_keys.write_cf % expected_size == 0)
+                {
+                    loaded_write_cf_key.assign(key.data, key.len);
+                }
+            } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
+            write_cf_reader->next();
+        }
 
-        if (process_keys.write_cf % expected_size == 0)
+        // If there is enough data to form a Block, we will load all keys before `loaded_write_cf_key` in other cf.
+        if (should_stop_advancing || process_keys.write_cf % expected_size == 0)
         {
             // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
             loaded_write_cf_key.clear();
             // Batch the loading from other CFs until we need to decode data
+            // TODO(split) skip keys before soft limit when load from other cfs.
             loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
             loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
 
@@ -193,7 +204,9 @@ Block SSTFilesToBlockInputStream::read()
         }
     }
 
-    // Load all key-value pairs from other CFs
+    // We emit the last block of this sst decode stream here.
+    // Load all key-value pairs from other CFs.
+    // TODO(split) skip keys before soft limit when load from other cfs.
     loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
     loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);
 
@@ -349,6 +362,71 @@ size_t SSTFilesToBlockInputStream::getApproxBytes() const
 std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits_count) const
 {
     return write_cf_reader->findSplitKeys(splits_count);
+}
+
+// Returning false means no skip is performed, the reader is intact.
+// Returning true means skip is performed, must read from current value.
+bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
+{
+    // TODO(split) optimize to use fn_seek after miss for some iterations.
+    if (!soft_limit.has_value())
+        return false;
+    auto start_limit_handle = soft_limit.value().getStartHandle();
+    // If start is set to "", then there is no soft limit for start.
+    if (!start_limit_handle)
+        return false;
+    // TODO(split) use seek to optimize
+    // Safety `soft_limit` outlives returned base buff view.
+    write_cf_reader->seek(cppStringAsBuff(soft_limit.value().start));
+    // Skip the current key, which must not be a match.
+    write_cf_reader->next();
+    while (write_cf_reader && write_cf_reader->remained())
+    {
+        // Read until find the next pk.
+        auto key = write_cf_reader->keyView();
+        // TODO the copy could be eliminated, but with many modifications.
+        auto tikv_key = TiKVKey(key.data, key.len);
+        auto handle = RecordKVFormat::getHandle(tikv_key);
+        if (handle != start_limit_handle)
+        {
+            RUNTIME_CHECK_MSG(
+                handle < start_limit_handle,
+                "handle decreases as cf advances, start_limit_handle {} handle {}, region_id={}",
+                start_limit_handle,
+                handle,
+                region->id());
+            return true;
+        }
+        write_cf_reader->next();
+    }
+    // `start_limit_handle` is the last pk of the sst file.
+    return false;
+}
+
+bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
+{
+    if (!soft_limit.has_value())
+        return false;
+    const SSTScanSoftLimit & sl = soft_limit.value();
+    auto end_limit_handle = soft_limit.value().getEndHandle();
+    if (!end_limit_handle)
+        return false;
+    auto key = write_cf_reader->keyView();
+    // TODO the copy could be eliminated, but with many modifications.
+    auto tikv_key = TiKVKey(key.data, key.len);
+    auto handle = RecordKVFormat::getHandle(tikv_key);
+    if (handle != end_limit_handle)
+    {
+        RUNTIME_CHECK_MSG(
+            handle < end_limit_handle,
+            "handle decreases as cf advances, end_limit_handle {} handle {}, region_id={}",
+            end_limit_handle,
+            handle,
+            region->id());
+        LOG_INFO(log, "Reach end for this split {}, region_id={}", sl.toDebugString(), region->id());
+        return true;
+    }
+    return false;
 }
 
 /// Methods for BoundedSSTFilesToBlockInputStream
