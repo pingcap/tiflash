@@ -235,9 +235,9 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtrWithBlock & region)
 {
-    RegionID region_id = region->id();
+    const RegionID region_id = region->id();
 
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
         std::lock_guard lock(mutex);

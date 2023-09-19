@@ -774,7 +774,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
             try
             {
-                tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
+                tmt.getRegionTable().tryWriteBlockByRegion(region);
             }
             catch (...)
             {

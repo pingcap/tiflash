@@ -15,6 +15,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
+#include <Columns/VirtualColumnUtils.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -23,7 +24,6 @@
 #include <Parsers/queryToString.h>
 #include <Storages/ColumnDefault.h>
 #include <Storages/System/StorageSystemColumns.h>
-#include <Storages/VirtualColumnUtils.h>
 
 
 namespace DB

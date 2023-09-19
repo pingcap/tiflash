@@ -50,26 +50,33 @@ using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream
 class BoundedSSTFilesToBlockInputStream;
 using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBlockInputStream>;
 
+struct SSTFilesToBlockInputStreamOpts
+{
+    std::string log_prefix;
+    DecodingStorageSchemaSnapshotConstPtr schema_snap;
+    Timestamp gc_safepoint;
+    // Whether abort when meeting an error in decoding.
+    bool force_decode;
+    // The expected size of emitted `Block`.
+    size_t expected_size;
+};
+
 // Read blocks from TiKV's SSTFiles
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
     SSTFilesToBlockInputStream( //
-        const std::string & log_prefix_,
         RegionPtr region_,
         UInt64 snapshot_index_,
         const SSTViewVec & snaps_,
         const TiFlashRaftProxyHelper * proxy_helper_,
-        DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-        Timestamp gc_safepoint_,
-        bool force_decode_,
         TMTContext & tmt_,
-        size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
+        SSTFilesToBlockInputStreamOpts && opts_);
     ~SSTFilesToBlockInputStream() override;
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override { return toEmptyBlock(*(schema_snap->column_defines)); }
+    Block getHeader() const override { return toEmptyBlock(*(opts.schema_snap->column_defines)); }
 
     void readPrefix() override;
     void readSuffix() override;
@@ -81,9 +88,15 @@ public:
         size_t default_cf = 0;
         size_t write_cf = 0;
         size_t lock_cf = 0;
+        size_t default_cf_bytes = 0;
+        size_t write_cf_bytes = 0;
+        size_t lock_cf_bytes = 0;
 
         inline size_t total() const { return default_cf + write_cf + lock_cf; }
+        inline size_t total_bytes() const { return default_cf_bytes + write_cf_bytes + lock_cf_bytes; }
     };
+
+    const ProcessKeys & getProcessKeys() const { return process_keys; }
 
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
@@ -95,10 +108,8 @@ private:
     UInt64 snapshot_index;
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    DecodingStorageSchemaSnapshotConstPtr schema_snap;
     TMTContext & tmt;
-    const Timestamp gc_safepoint;
-    size_t expected_size;
+    const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
@@ -111,7 +122,6 @@ private:
 
     friend class BoundedSSTFilesToBlockInputStream;
 
-    const bool force_decode;
     bool is_decode_cancelled = false;
 
     ProcessKeys process_keys;
@@ -119,6 +129,7 @@ private:
 
 // Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid` and
 // do some calculation for the `DMFileWriter::BlockProperty` of read blocks.
+// Equals to PKSquashingBlockInputStream + DMVersionFilterBlockInputStream<COMPACT>
 class BoundedSSTFilesToBlockInputStream final
 {
 public:

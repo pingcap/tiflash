@@ -856,7 +856,7 @@ void Aggregator::prepareAggregateInstructions(
     }
 }
 
-void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
+void Aggregator::AggProcessInfo::prepareForAgg()
 {
     if (prepare_for_agg_done)
         return;
@@ -909,7 +909,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
         LOG_TRACE(log, "Aggregation method: `{}`", result.getMethodName());
     }
 
-    agg_process_info.prepareForAgg(this);
+    agg_process_info.prepareForAgg();
 
     if (is_cancelled())
         return true;
@@ -1137,7 +1137,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     size_t src_rows = 0;
     size_t src_bytes = 0;
-    AggProcessInfo agg_process_info;
+    AggProcessInfo agg_process_info(this);
 
     /// Read all the data
     while (Block block = stream->read())
