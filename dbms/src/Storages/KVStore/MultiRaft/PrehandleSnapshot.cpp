@@ -42,6 +42,96 @@ extern const int TABLE_IS_DROPPED;
 extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
+enum class ReadFromStreamError
+{
+    Ok,
+    Aborted,
+    ErrUpdateSchema,
+    ErrTableDropped,
+};
+
+struct ReadFromStreamResult
+{
+    ReadFromStreamError error = ReadFromStreamError::Ok;
+    std::string extra_msg;
+};
+
+static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
+    const RegionPtr & new_region,
+    const std::shared_ptr<std::atomic_bool> & prehandle_task,
+    DM::FileConvertJobType job_type,
+    const std::shared_ptr<StorageDeltaMerge> & storage,
+    const std::shared_ptr<DM::SSTFilesToBlockInputStream> & sst_stream,
+    const DM::SSTFilesToBlockInputStreamOpts & opts,
+    TMTContext & tmt)
+{
+    auto region_id = new_region->id();
+    std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
+    // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
+    // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
+    try
+    {
+        auto & context = tmt.getContext();
+        auto & global_settings = context.getGlobalContext().getSettingsRef();
+        // Read from SSTs and refine the boundary of blocks output to DTFiles
+        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+            sst_stream,
+            ::DB::TiDBPkColumnID,
+            opts.schema_snap);
+
+        stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
+            opts.log_prefix,
+            bounded_stream,
+            storage,
+            opts.schema_snap,
+            job_type,
+            /* split_after_rows */ global_settings.dt_segment_limit_rows,
+            /* split_after_size */ global_settings.dt_segment_limit_size,
+            region_id,
+            prehandle_task,
+            context);
+
+        stream->writePrefix();
+        stream->write();
+        stream->writeSuffix();
+        auto res = ReadFromStreamResult{.error = ReadFromStreamError::Ok, .extra_msg = ""};
+        if (stream->isAbort())
+        {
+            stream->cancel();
+            res = ReadFromStreamResult{.error = ReadFromStreamError::Aborted, .extra_msg = ""};
+        }
+        return std::make_pair(
+            std::move(res),
+            PrehandleResult{
+                .ingest_ids = stream->outputFiles(),
+                .stats = PrehandleResult::Stats{
+                    .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                    .dt_disk_bytes = stream->getTotalBytesOnDisk(),
+                    .dt_total_bytes = stream->getTotalCommittedBytes()}});
+    }
+    catch (DB::Exception & e)
+    {
+        if (stream != nullptr)
+        {
+            // Remove all DMFiles.
+            stream->cancel();
+        }
+        if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
+        {
+            return std::make_pair(
+                ReadFromStreamResult{.error = ReadFromStreamError::ErrUpdateSchema, .extra_msg = e.displayText()},
+                PrehandleResult{});
+        }
+        else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+        {
+            return std::make_pair(
+                ReadFromStreamResult{.error = ReadFromStreamError::ErrTableDropped, .extra_msg = e.displayText()},
+                PrehandleResult{});
+        }
+        throw;
+    }
+}
+
 // It is currently a wrapper for preHandleSSTsToDTFiles.
 PrehandleResult KVStore::preHandleSnapshotToFiles(
     RegionPtr new_region,
@@ -156,7 +246,6 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     {
         // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
         // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
-        std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
         try
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
@@ -179,124 +268,27 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     context.getSettingsRef().safe_point_update_interval_seconds);
             }
             physical_table_id = storage->getTableInfo().id;
-            auto log_prefix = fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id);
 
-            auto & global_settings = context.getGlobalContext().getSettingsRef();
+            auto opt = DM::SSTFilesToBlockInputStreamOpts{
+                .log_prefix = fmt::format("keyspace={} table_id={}", keyspace_id, physical_table_id),
+                .schema_snap = schema_snap,
+                .gc_safepoint = gc_safepoint,
+                .force_decode = force_decode,
+                .expected_size = expected_block_size};
 
-            // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
-                log_prefix,
                 new_region,
                 index,
                 snaps,
                 proxy_helper,
-                schema_snap,
-                gc_safepoint,
-                force_decode,
                 tmt,
-                std::nullopt,
-                expected_block_size);
+                DM::SSTFilesToBlockInputStreamOpts(opt));
 
-            auto split_keys = getSplitKey(this, new_region, sst_stream);
+            ReadFromStreamResult result;
+            std::tie(result, prehandle_result)
+                = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
 
-            // TODO(split) Safety: No read() should be called to `sst_stream` before.
-            if (split_keys.empty())
-            {
-                auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-                    sst_stream,
-                    ::DB::TiDBPkColumnID,
-                    schema_snap);
-                stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
-                    log_prefix,
-                    bounded_stream,
-                    storage,
-                    schema_snap,
-                    job_type,
-                    /* split_after_rows */ global_settings.dt_segment_limit_rows,
-                    /* split_after_size */ global_settings.dt_segment_limit_size,
-                    region_id,
-                    prehandle_task,
-                    context);
-
-                stream->writePrefix();
-                stream->write();
-                stream->writeSuffix();
-                if (stream->isAbort())
-                {
-                    LOG_INFO(
-                        log,
-                        "Apply snapshot is aborted, cancelling. region_id={} term={} index={}",
-                        region_id,
-                        term,
-                        index);
-                    stream->cancel();
-                }
-                prehandle_result.ingest_ids = stream->outputFiles();
-                prehandle_result.stats = PrehandleResult::Stats{
-                    .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
-                    .dt_disk_bytes = stream->getTotalBytesOnDisk(),
-                    .dt_total_bytes = stream->getTotalCommittedBytes()};
-            }
-            else
-            {
-                // TODO(split) handle exception
-                auto thread_pool
-                    = std::make_unique<ThreadPool>(split_keys.size(), split_keys.size(), split_keys.size());
-
-                sst_stream->resetSoftLimit(DM::SSTScanSoftLimit(std::string(""), std::string(split_keys[0])));
-
-                auto runInParallel = [&](DM::SSTScanSoftLimit limit) {
-                    thread_pool->trySchedule([&]() {
-                        auto parallel_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
-                            log_prefix,
-                            new_region,
-                            index,
-                            snaps,
-                            proxy_helper,
-                            schema_snap,
-                            gc_safepoint,
-                            force_decode,
-                            tmt,
-                            std::optional(std::move(limit)),
-                            expected_block_size);
-                        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-                            parallel_sst_stream,
-                            ::DB::TiDBPkColumnID,
-                            schema_snap);
-                        auto parallel_stream = std::make_shared<
-                            DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
-                            log_prefix,
-                            bounded_stream,
-                            storage,
-                            schema_snap,
-                            job_type,
-                            /* split_after_rows */ global_settings.dt_segment_limit_rows,
-                            /* split_after_size */ global_settings.dt_segment_limit_size,
-                            region_id,
-                            prehandle_task,
-                            context);
-                    });
-                };
-                for (size_t extra_id = 0; extra_id + 1 < split_keys.size(); extra_id++)
-                {
-                    runInParallel(
-                        DM::SSTScanSoftLimit(std::string(split_keys[extra_id]), std::string(split_keys[extra_id + 1])));
-                }
-                runInParallel(DM::SSTScanSoftLimit(std::string(split_keys.back()), std::string("")));
-            }
-
-            (void)table_drop_lock; // the table should not be dropped during ingesting file
-            break;
-        }
-        catch (DB::Exception & e)
-        {
-            if (stream != nullptr)
-            {
-                // Remove all DMFiles.
-                stream->cancel();
-            }
-
-            if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
+            if (result.error == ReadFromStreamError::ErrUpdateSchema)
             {
                 // It will be thrown in `SSTFilesToBlockInputStream`.
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
@@ -313,7 +305,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     log,
                     "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]",
                     new_region->toString(true),
-                    e.displayText());
+                    result.extra_msg);
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
@@ -321,7 +313,31 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 
                 continue;
             }
-            else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            else if (result.error == ReadFromStreamError::ErrTableDropped)
+            {
+                // We can ignore if storage is dropped.
+                LOG_INFO(
+                    log,
+                    "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}",
+                    new_region->toString(true));
+                break;
+            }
+            else if (result.error == ReadFromStreamError::Aborted)
+            {
+                LOG_INFO(
+                    log,
+                    "Apply snapshot is aborted, cancelling. region_id={} term={} index={}",
+                    region_id,
+                    term,
+                    index);
+            }
+
+            (void)table_drop_lock; // the table should not be dropped during ingesting file
+            break;
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
                 // It will be thrown in many places that will lock a table.
                 // We can ignore if storage is dropped.
@@ -338,7 +354,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 throw;
             }
         }
-    }
+    } // while
 
     return prehandle_result;
 }

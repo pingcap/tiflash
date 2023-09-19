@@ -15,11 +15,8 @@
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
-#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
@@ -39,29 +36,21 @@ extern const int ILLFORMAT_RAFT_ROW;
 namespace DM
 {
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
-    const std::string & log_prefix_,
     RegionPtr region_,
     UInt64 snapshot_index_,
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
-    DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-    Timestamp gc_safepoint_,
-    bool force_decode_,
     TMTContext & tmt_,
-    std::optional<SSTScanSoftLimit> && soft_limit_,
-    size_t expected_size_)
+    SSTFilesToBlockInputStreamOpts && opts_)
     : region(std::move(region_))
     , snapshot_index(snapshot_index_)
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
-    , schema_snap(std::move(schema_snap_))
     , tmt(tmt_)
-    , gc_safepoint(gc_safepoint_)
-    , expected_size(expected_size_)
-    , log(Logger::get(log_prefix_))
-    , force_decode(force_decode_)
-    , soft_limit(std::move(soft_limit_))
+    , opts(std::move(opts_))
 {
+    log = Logger::get(opts.log_prefix);
+
     // We have to initialize sst readers at an earlier stage,
     // due to prehandle snapshot of single region feature in raftstore v2.
     std::vector<SSTView> ssts_default;
@@ -142,6 +131,10 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix() {}
 
+SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
+
+void SSTFilesToBlockInputStream::readPrefix() {}
+
 void SSTFilesToBlockInputStream::readSuffix()
 {
     // There must be no data left when we write suffix
@@ -187,7 +180,7 @@ Block SSTFilesToBlockInputStream::read()
         }
 
         // If there is enough data to form a Block, we will load all keys before `loaded_write_cf_key` in other cf.
-        if (should_stop_advancing || process_keys.write_cf % expected_size == 0)
+        if (should_stop_advancing || process_keys.write_cf % opts.expected_size == 0)
         {
             // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
@@ -310,7 +303,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // Update the end offset.
         // If there are no more key-value, the outer while loop will be break.
         // Else continue to read next batch from current CF.
-        process_keys_offset_end += expected_size;
+        process_keys_offset_end += opts.expected_size;
     }
 }
 
@@ -323,7 +316,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDataWithSchema(region, schema_snap, gc_safepoint, force_decode, tmt);
+        return GenRegionBlockDataWithSchema(region, opts.schema_snap, opts.gc_safepoint, opts.force_decode, tmt);
     }
     catch (DB::Exception & e)
     {

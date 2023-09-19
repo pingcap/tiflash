@@ -45,7 +45,6 @@ class KVStore;
 class RegionTable;
 class RegionRaftCommandDelegate;
 class KVStoreTaskLock;
-class Context;
 class TMTContext;
 struct WriteCmdsView;
 enum class EngineStoreApplyRes : uint32_t;

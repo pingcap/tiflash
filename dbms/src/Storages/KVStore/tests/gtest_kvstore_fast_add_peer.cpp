@@ -16,8 +16,8 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
