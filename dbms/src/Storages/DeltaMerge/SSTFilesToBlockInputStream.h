@@ -55,7 +55,7 @@ struct SSTFilesToBlockInputStreamOpts
     std::string log_prefix;
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
     Timestamp gc_safepoint;
-    // If we abort when meet error in decoding.
+    // Whether abort when meeting an error in decoding.
     bool force_decode;
     // The expected size of emitted `Block`.
     size_t expected_size;
