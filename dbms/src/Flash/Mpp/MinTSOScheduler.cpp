@@ -203,7 +203,7 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
     scheduleWaitingQueries(entry, task_manager, log);
     if (entry.active_set.size() + entry.waiting_set.size() == 0 && entry.estimated_thread_usage == 0)
     {
-        LOG_INFO(log, "min tso scheduler_entry of resouce group {} deleted", resource_group_name);
+        LOG_DEBUG(log, "min tso scheduler_entry of resouce group {} deleted", resource_group_name);
         scheduler_entries.erase(resource_group_name);
     }
 }
