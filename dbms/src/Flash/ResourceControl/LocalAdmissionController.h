@@ -399,7 +399,10 @@ public:
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         // When tidb_enable_resource_control is disabled, resource group name is empty.
-        if (name.empty() || stopped)
+        if (name.empty())
+            return;
+
+        if unlikely (stopped)
             return;
 
         ResourceGroupPtr group = findResourceGroup(name);
@@ -422,7 +425,10 @@ public:
 
     std::optional<uint64_t> getPriority(const std::string & name)
     {
-        if (name.empty() || stopped)
+        if (name.empty())
+            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
+
+        if unlikely (stopped)
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
         ResourceGroupPtr group = findResourceGroup(name);
