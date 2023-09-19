@@ -53,7 +53,7 @@ enum class ReadFromStreamError
 struct ReadFromStreamResult
 {
     ReadFromStreamError error = ReadFromStreamError::Ok;
-    std::string extra_msg = "";
+    std::string extra_msg;
 };
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> readFromStream(
