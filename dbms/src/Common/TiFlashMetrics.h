@@ -377,8 +377,8 @@ namespace DB
       F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                        \
       F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
-      F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 10}),                                  \
-      F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                    \
+      F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
+      F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
       F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets{0.05, 2, 10}),                    \
       F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                          \
     M(tiflash_raft_process_keys,                                                                                                    \
@@ -410,9 +410,9 @@ namespace DB
     M(tiflash_raft_raft_log_gap_count,                                                                                              \
       "Bucketed histogram raft index gap between applied and truncated index",                                                      \
       Histogram,                                                                                                                    \
-      F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 100, 10}),                                            \
+      F(type_applied_index, {{"type", "applied_index"}}, EqualWidthBuckets{0, 100, 15}),                                            \
       F(type_eager_gc_applied_index, {{"type", "eager_gc_applied_index"}}, EqualWidthBuckets{0, 100, 10}),                          \
-      F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 100, 10}))                        \
+      F(type_unflushed_applied_index, {{"type", "unflushed_applied_index"}}, EqualWidthBuckets{0, 100, 15}))                        \
     M(tiflash_raft_raft_events_count,                                                                                               \
       "Raft event counter",                                                                                                         \
       Counter,                                                                                                                      \
@@ -440,6 +440,12 @@ namespace DB
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
       F(type_normal, {{"type", "normal"}}, ExpBuckets{1, 2, 13}))                                                                   \
+    M(tiflash_raft_ongoing_snapshot_total_bytes,                                                                                    \
+      "Ongoing snapshot total size",                                                                                                \
+      Gauge,                                                                                                                        \
+      F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
+      F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
+      F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \

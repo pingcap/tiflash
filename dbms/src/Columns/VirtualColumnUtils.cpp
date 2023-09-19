@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/VirtualColumnUtils.h>
 #include <Common/typeid_cast.h>
 #include <Core/NamesAndTypes.h>
 #include <Interpreters/Context.h>
@@ -22,81 +23,11 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Storages/VirtualColumnUtils.h>
 
 
-namespace DB
+namespace DB::VirtualColumnUtils
 {
-
-namespace VirtualColumnUtils
-{
-
-String chooseSuffix(const NamesAndTypesList & columns, const String & name)
-{
-    int id = 0;
-    String current_suffix;
-    while (true)
-    {
-        bool done = true;
-        for (const auto & it : columns)
-            if (it.name == name + current_suffix)
-            {
-                done = false;
-                break;
-            }
-        if (done)
-            break;
-        ++id;
-        current_suffix = toString<Int32>(id);
-    }
-    return current_suffix;
-}
-
-String chooseSuffixForSet(const NamesAndTypesList & columns, const std::vector<String> & names)
-{
-    int id = 0;
-    String current_suffix;
-    while (true)
-    {
-        bool done = true;
-        for (const auto & it : columns)
-        {
-            for (size_t i = 0; i < names.size(); ++i) // NOLINT
-            {
-                if (it.name == names[i] + current_suffix)
-                {
-                    done = false;
-                    break;
-                }
-            }
-            if (!done)
-                break;
-        }
-        if (done)
-            break;
-        ++id;
-        current_suffix = toString<Int32>(id);
-    }
-    return current_suffix;
-}
-
-void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & value)
-{
-    ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*ast);
-    if (!select.with_expression_list)
-    {
-        select.with_expression_list = std::make_shared<ASTExpressionList>();
-        select.children.insert(select.children.begin(), select.with_expression_list);
-    }
-
-    ASTExpressionList & with = typeid_cast<ASTExpressionList &>(*select.with_expression_list);
-    auto literal = std::make_shared<ASTLiteral>(value);
-    literal->alias = column_name;
-    literal->prefer_alias_to_column_name = true;
-    with.children.push_back(literal);
-}
 
 /// Verifying that the function depends only on the specified columns
 static bool isValidFunction(const ASTPtr & expression, const NameSet & columns)
@@ -146,7 +77,7 @@ static ASTPtr buildWhereExpression(const ASTs & functions)
 
 void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & context)
 {
-    const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery &>(*query);
+    const auto & select = typeid_cast<const ASTSelectQuery &>(*query);
     if (!select.where_expression && !select.prewhere_expression)
         return;
 
@@ -186,6 +117,4 @@ void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & c
     }
 }
 
-} // namespace VirtualColumnUtils
-
-} // namespace DB
+} // namespace DB::VirtualColumnUtils

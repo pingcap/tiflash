@@ -14,11 +14,13 @@
 
 #pragma once
 
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 
 namespace DB
 {
-struct AsyncTasks;
+using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
 
 class FastAddPeerContext
 {
@@ -32,7 +34,7 @@ public:
         UInt64 required_seq);
 
 public:
-    std::shared_ptr<AsyncTasks> tasks_trace;
+    std::shared_ptr<FAPAsyncTasks> tasks_trace;
 
 private:
     class CheckpointCacheElement

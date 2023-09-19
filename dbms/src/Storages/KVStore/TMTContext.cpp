@@ -91,7 +91,7 @@ void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitor
     }
 
     if (!log_info.empty())
-        LOG_INFO(log, log_info);
+        LOG_WARNING(log, log_info);
     GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
 }
 

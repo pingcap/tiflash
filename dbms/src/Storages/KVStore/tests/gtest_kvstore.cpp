@@ -1195,9 +1195,9 @@ try
                 RecordKVFormat::genKey(table_id, 50),
                 RecordKVFormat::genKey(table_id, 100),
                 kvs.getProxyHelper());
-            auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
+            auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
-                RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)},
+                RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
                 ctx.getTMTContext());
             auto region_applied_22 = kvs.getRegion(22);
             ASSERT_NE(region_applied_22, nullptr);
@@ -1212,9 +1212,9 @@ try
                 RecordKVFormat::genKey(table_id, 50),
                 RecordKVFormat::genKey(table_id, 100),
                 kvs.getProxyHelper());
-            auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
+            auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
-                RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)},
+                RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
                 ctx.getTMTContext()); // overlap, but not tombstone
             ASSERT_TRUE(false);
         }
@@ -1237,10 +1237,10 @@ try
                 RecordKVFormat::genKey(table_id, 100),
                 kvs.getProxyHelper());
             // preHandleSnapshotToFiles will assert proxy_ptr is not null.
-            auto ingest_ids = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
+            auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
             proxy_helper->proxy_ptr.inner = nullptr;
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
-                RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)},
+                RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
                 ctx.getTMTContext());
             ASSERT_TRUE(false);
         }
@@ -1262,9 +1262,9 @@ try
             RecordKVFormat::genKey(table_id, 50),
             RecordKVFormat::genKey(table_id, 100),
             kvs.getProxyHelper());
-        auto ingest_files = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
+        auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
         kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
-            RegionPtrWithSnapshotFiles{region, std::move(ingest_files)},
+            RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
             ctx.getTMTContext()); // overlap, tombstone, remove previous one
 
         auto state = proxy_helper->getRegionLocalState(22);

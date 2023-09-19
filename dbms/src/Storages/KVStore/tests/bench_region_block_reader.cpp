@@ -15,10 +15,9 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/tests/RowCodecTestUtils.h>
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
-
-#include "RowCodecTestUtils.h"
 
 using TableInfo = TiDB::TableInfo;
 namespace DB::tests

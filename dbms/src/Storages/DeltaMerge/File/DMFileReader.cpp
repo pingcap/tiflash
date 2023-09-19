@@ -247,7 +247,7 @@ DMFileReader::Stream::Stream(
 
             buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
             // read from the buffer based on the raw data
-            buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+            buf = std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
                 std::move(raw_data),
                 file_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
@@ -257,7 +257,7 @@ DMFileReader::Stream::Stream(
     }
     else
     { // v2
-        buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+        buf = std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
@@ -603,7 +603,7 @@ Block DMFileReader::read()
         try
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
-            auto & cd = read_columns[i];
+            const auto & cd = read_columns[i];
             if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle_on_fast_mode)
             {
                 // Return the first row's handle
@@ -618,17 +618,15 @@ Block DMFileReader::read()
                     Handle min_handle = pack_filter.getMinHandle(start_pack_id);
                     column = cd.type->createColumnConst(read_rows, Field(min_handle));
                 }
-                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
                 skip_packs_by_column[i] = read_packs;
             }
             else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_fast_mode)
             {
-                ColumnPtr column;
-
-                column = cd.type->createColumnConst(
+                ColumnPtr column = cd.type->createColumnConst(
                     read_rows,
                     Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
-                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
 
                 skip_packs_by_column[i] = read_packs;
             }
@@ -767,7 +765,7 @@ Block DMFileReader::read()
 }
 
 void DMFileReader::readFromDisk(
-    ColumnDefine & column_define,
+    const ColumnDefine & column_define,
     MutableColumnPtr & column,
     size_t start_pack_id,
     size_t read_rows,
@@ -804,7 +802,7 @@ void DMFileReader::readFromDisk(
 }
 
 void DMFileReader::readColumn(
-    ColumnDefine & column_define,
+    const ColumnDefine & column_define,
     ColumnPtr & column,
     size_t start_pack_id,
     size_t pack_count,
