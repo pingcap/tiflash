@@ -236,7 +236,7 @@ public:
 
     bool checkAndMarkPartitionSpilledIfNeeded(size_t stream_index);
 
-    bool checkAndMarkPartitionSpilledIfNeeded(
+    bool checkAndMarkPartitionSpilledIfNeededInternal(
         JoinPartition & join_partition,
         std::unique_lock<std::mutex> & partition_lock,
         size_t partition_index,
