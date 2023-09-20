@@ -199,7 +199,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
-    dag_context.setEnableResourceControl(context.getSettingsRef().enable_resource_control);
+    dag_context.enableResourceControl();
     return {std::move(executor)};
 }
 
