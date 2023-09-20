@@ -96,6 +96,9 @@ public:
 
     bool isAbort() const { return abort_flag->load(std::memory_order_seq_cst); }
 
+    size_t getTotalCommittedBytes() const { return total_committed_bytes; }
+    size_t getTotalBytesOnDisk() const { return total_bytes_on_disk; }
+
 private:
     /**
      * Generate a DMFilePtr and its DMFileBlockOutputStream.

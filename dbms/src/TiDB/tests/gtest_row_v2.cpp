@@ -13,9 +13,8 @@
 // limitations under the License.
 
 #include <TiDB/Decode/RowCodec.h>
+#include <TiDB/tests/RowCodecTestUtils.h>
 #include <gtest/gtest.h>
-
-#include "RowCodecTestUtils.h"
 
 namespace DB::tests
 {

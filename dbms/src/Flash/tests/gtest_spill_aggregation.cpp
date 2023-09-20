@@ -29,7 +29,11 @@ namespace tests
 class SpillAggregationTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override { ExecutorTest::initializeContext(); }
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        dag_context_ptr->log = Logger::get("AggSpillTest");
+    }
 };
 
 #define WRAP_FOR_AGG_PARTIAL_BLOCK_START                                              \

@@ -20,10 +20,11 @@
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -49,7 +50,7 @@ FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
         static constexpr int region_per_sec = 2;
         thread_count = ffi_handle_sec * region_per_sec;
     }
-    tasks_trace = std::make_shared<AsyncTasks>(thread_count);
+    tasks_trace = std::make_shared<FAPAsyncTasks>(thread_count);
 }
 
 ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData(Context & context)

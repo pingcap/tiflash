@@ -19,7 +19,7 @@
 namespace DB::tests
 {
 
-TEST(CyclicRenameResolver_test, resolve_normal)
+TEST(CyclicRenameResolverTest, resolveNormal)
 {
     using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
     std::map<String, String> rename_map;
@@ -37,7 +37,7 @@ TEST(CyclicRenameResolver_test, resolve_normal)
     ASSERT_EQ(rename_result[1].second, "bb");
 }
 
-TEST(CyclicRenameResolver_test, resolve_linked)
+TEST(CyclicRenameResolverTest, resolveLinked)
 {
     using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
     std::map<String, String> rename_map;
@@ -55,7 +55,7 @@ TEST(CyclicRenameResolver_test, resolve_linked)
     ASSERT_EQ(rename_result[1].second, "a");
 }
 
-TEST(CyclicRenameResolver_test, resolve_linked_2)
+TEST(CyclicRenameResolverTest, resolveLinked2)
 {
     using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
     std::map<String, String> rename_map;
@@ -82,7 +82,7 @@ bool isEqualPairs(const std::pair<T, T> & lhs, const std::pair<T, T> & rhs)
 }
 } // namespace
 
-TEST(CyclicRenameResolver_test, resolve_long_linked)
+TEST(CyclicRenameResolverTest, ResolveLongLinked)
 {
     using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
     std::map<String, String> rename_map;
@@ -104,7 +104,7 @@ TEST(CyclicRenameResolver_test, resolve_long_linked)
     ASSERT_TRUE(isEqualPairs(rename_result[5], std::make_pair(String("a"), String("b"))));
 }
 
-TEST(CyclicRenameResolver_test, resolve_simple_cycle)
+TEST(CyclicRenameResolverTest, ResolveSimpleCycle)
 {
     using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
     std::map<String, String> rename_map;
@@ -147,7 +147,7 @@ inline ::testing::AssertionResult ColumnNameWithIDPairsCompare( //
 #define ASSERT_COLUMN_NAME_ID_PAIR_EQ(val1, val2) \
     ASSERT_PRED_FORMAT2(::DB::tests::ColumnNameWithIDPairsCompare, val1, val2)
 
-TEST(CyclicRenameResolver_test, resolve_id_simple_cycle)
+TEST(CyclicRenameResolverTest, ResolveIDSimpleCycle)
 {
     using Resolver = CyclicRenameResolver<ColumnNameWithID, TmpColNameWithIDGenerator>;
     std::map<ColumnNameWithID, ColumnNameWithID> rename_map;

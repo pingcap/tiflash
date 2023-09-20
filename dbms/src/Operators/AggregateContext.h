@@ -27,7 +27,10 @@ struct ThreadData
     size_t src_rows = 0;
     size_t src_bytes = 0;
 
-    Aggregator::AggProcessInfo agg_process_info{};
+    Aggregator::AggProcessInfo agg_process_info;
+    ThreadData(Aggregator * aggregator)
+        : agg_process_info(aggregator)
+    {}
 };
 
 /// Aggregated data shared between AggBuild and AggConvergent Pipeline.
