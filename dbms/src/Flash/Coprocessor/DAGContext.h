@@ -452,7 +452,7 @@ private:
     const KeyspaceID keyspace_id = NullspaceID;
 
     const String resource_group_name;
-    bool enable_resource_control;
+    bool enable_resource_control = false;
 
     // Used to determine the execution mode
     // - None: request has not been executed yet
