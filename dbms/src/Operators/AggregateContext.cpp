@@ -54,6 +54,17 @@ void AggregateContext::buildOnLocalData(size_t task_index)
     }
 }
 
+bool AggregateContext::isTaskMarkedForSpill(size_t task_index)
+{
+    if (needSpill(task_index))
+        return true;
+    if (getAggSpillContext()->updatePerThreadRevocableMemory(many_data[task_index]->revocableBytes(), task_index))
+    {
+        return many_data[task_index]->tryMarkNeedSpill();
+    }
+    return false;
+}
+
 bool AggregateContext::hasLocalDataToBuild(size_t task_index)
 {
     return !threads_data[task_index]->agg_process_info.allBlockDataHandled();

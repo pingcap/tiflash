@@ -39,6 +39,8 @@ public:
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus prepareImpl() override;
+
     OperatorStatus executeIOImpl() override;
 
 private:
