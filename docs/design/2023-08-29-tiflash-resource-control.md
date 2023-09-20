@@ -1,75 +1,77 @@
 # TiFlash Resource Control
 ## Introduction
-本文介绍 TiFlash 的资源管理功能的设计与实现
+This document introduces the design and implementation of TiFlash's resource management feature.
 
-## Motivation and Backgroud
-TiDB 目前支持全局资源管理，用于在一个集群中支撑多个业务，并达到各个业务之间相互隔离的效果。
+## Motivation and Background
+TiDB currently supports global resource management to support multiple businesses in a cluster and achieve isolation between them.
 
-TiFlash 作为 TiDB 架构的一部分，也需要支持资源管理，这样针对 AP/HTAP 场景，也能达到隔离不同业务的能力
+As part of the TiDB architecture, TiFlash also needs to support resource management to achieve the capability of isolating different businesses, especially in AP/HTAP scenarios.
 
 ## Detailed Design
-基本思想类似 TiDB/TiKV 的 resource control. 采用流控+优先级调度的方式:
-1. 流控: 对 task 进行调度时, 根据 TokenBucket 算法进行限流
-2. 优先级: 当物理资源不足时, 根据 task 的优先级进行调度, 决定先运行哪个 task
+The basic idea is similar to TiDB/TiKV's resource control. It adopts a combination of rate limiting and priority scheduling:
+1. Rate Limiting: When scheduling tasks, it limits them based on the Token Bucket algorithm.
+2. Priority: When physical resources are scarce, tasks are scheduled based on their priority, determining which task should run first.
 
-这个设计背后的思想是: 如果各个 resource group 的 `RU_PER_SEC` 设置比较小, 其总和没有超过真实的物理资源上限, 则流控发挥主要作用, 对各个 resource group 进行限速. 而为了让资源更有效的得到利用，防止因为 `RU_PER_SEC` 设置过小导致有空闲的物理资源没法利用, TiDB 资源管理机制允许超卖, 即 `RU_PER_SEC` 的值超过物理资源, 这种情况下, 就需要优先级调度发挥作用, 防止各个 resource group 相互争抢资源。
+The underlying idea behind this design is as follows: If the `RU_PER_SEC` setting for each resource group is relatively small, and the sum of these settings does not exceed the real physical resource limit, rate limiting plays the primary role in throttling each resource group. However, to ensure that resources are used more efficiently and to prevent situations where a small `RU_PER_SEC` setting leads to unused physical resources, TiDB's resource management mechanism allows oversubscription, meaning that the total `RU_PER_SEC` values can exceed the physical resources. In such cases, priority scheduling comes into play to prevent resource contention among resource groups.
 
-为了能更充分地利用物理资源, resource control 机制允许超卖, 即允许 `RU_PER_SEC` 总和超过物理资源上限. 这样当有的 resource group 没有查询时, 其他 resource group 就可以更充分地利用资源, 而不会导致有空闲的物理资源被白白浪费.
+To make better use of physical resources, the resource control mechanism allows oversubscription, where the total `RU_PER_SEC` can exceed the physical resource limits. This way, when some resource groups have no queries, other resource groups can more fully utilize the resources without wasting idle physical resources.
 
-但是当所有 resource group 都使用时开始使用时, 各个 resource group 的查询会开始争抢资源, 为了处理这种情况, 引入了优先级机制, 即按照 user_priority + `RU_PER_SEC` 来规定优先级, 优先执行优先级高的任务.
+However, when all resource groups start using resources, they may compete for resources. To address this situation, a priority mechanism is introduced, prioritizing tasks based on user_priority and `RU_PER_SEC`.
 
-### 基本概念
-1. Pipeline Execution Engine: 借鉴 [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://dl.acm.org/doi/10.1145/2588555.2610507) 实现的新的执行模型, 提供了更加精细的任务调度模型
-2. pipeline task: Pipeline 执行模型的最小执行单元
-3. TaskScheduler: 负责调度 Pipeline Task
-4. TaskQueue: 负责保存所有 Pipeline Task 的队列, TaskScheduler 会从中取 task 并执行
-4. LocalAdmissionController(LAC): 作为分布式令牌桶算法的一部分, 会从 GAC 获取 token 并进行流控
-5. GlobalAdmissionController(GAC): 作为分布式令牌桶算法的中心节点, 控制各个 LAC 的 token 发放
-6. resource group: 一个 [resource group](https://github.com/pingcap/tidb/blob/master/docs/design/2022-11-25-global-resource-control.md#detailed-design) 对应一组业务集合, 在每个 LAC 上都会对应各自的令牌桶
+### Basic Concepts
+1. **Pipeline Execution Engine:** A new execution model inspired by [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://dl.acm.org/doi/10.1145/2588555.2610507), providing a more refined task scheduling model.
+2. **Pipeline task:** The smallest execution unit in the Pipeline execution model.
+3. **TaskScheduler:** Responsible for scheduling Pipeline tasks.
+4. **TaskQueue:** Responsible for storing all Pipeline tasks in a queue, from which TaskScheduler retrieves tasks and executes them.
+5. **LocalAdmissionController (LAC):** As part of the distributed token bucket algorithm, it retrieves tokens from GAC and performs flow control.
+6. **GlobalAdmissionController (GAC):** As the central node of the distributed token bucket algorithm, it controls token distribution to various LACs.
+7. **Resource group:** A [resource group](https://github.com/pingcap/tidb/blob/master/docs/design/2022-11-25-global-resource-control.md#detailed-design) corresponds to a set of business collections, and each LAC has its token bucket associated with it.
 
-### 整体架构
-整体设计包括如下两部分:
-1. ResourceControlQueue: 包含主要的流控以及优先级调度逻辑
-2. LocalAdmissionController: 用于与 [GAC](https://github.com/pingcap/tidb/blob/master/docs/design/2022-11-25-global-resource-control.md#global-quota-control--global-admission-control) 通信，获取 token
+### Overall Architecture
+The overall design consists of the following two parts:
 
-### ResourceControlQueue
-#### task 的获取
-为了支持 resource control, 新增了一种 TaskQueue, 即 ResourceControlQueue. 流控以及优先级调度的核心逻辑封装在该 TaskQueue 中.
+1. **ResourceControlQueue:** This includes the main flow control and priority scheduling logic.
+2. **LocalAdmissionController:** Used for communication with [GAC](https://github.com/pingcap/tidb/blob/master/docs/design/2022-11-25-global-resource-control.md#global-quota-control--global-admission-control) to obtain tokens.
 
-ResourceControlQueue 中的核心数据结构是一个优先队列, 队列中每个元素代表一个 ResourceGroupInfo, 该优先队列以 resource group 的优先级排序. 
+#### ResourceControlQueue
+##### Task Retrieval
+To support resource control, a new type of TaskQueue, called ResourceControlQueue, has been introduced. The core logic for flow control and priority scheduling is encapsulated in this TaskQueue.
 
-TaskScheduler 从 ResourceControlQueue 中获取 task 执行时, 会优先拿优先级高的 resource group . 同时为了达到流控的效果, 如果该 resource group 对应的 token 已经消耗完, 则会等待直到 token 重新填充.
+The core data structure in ResourceControlQueue is a priority queue, where each element represents a ResourceGroupInfo. This priority queue is sorted by the priority of resource groups.
 
-ResourceControlQueue 中使用 MultiLevelFeedbackQueue 保存某个 resource group 的所有 pipeline task. 根据优先级策略获取到特定 resource group 对应的 MultiLevelFeedbackQueue 后, 调用其 take() 方法就可以拿到具体的 task.
+When TaskScheduler retrieves a task to execute from the ResourceControlQueue, it gives priority to resource groups with higher priorities. Additionally, to achieve flow control, if the tokens for the corresponding resource group have been depleted, it will wait until tokens are refilled.
 
-#### resource usage 的更新
-TaskScheduler 拿到 task 后, 会执行 100ms 并更新其 cpu 使用情况. 此时会调用 LAC 相关接口负责更新 token 消耗.
+ResourceControlQueue uses a MultiLevelFeedbackQueue to store all pipeline tasks for a specific resource group. After obtaining the MultiLevelFeedbackQueue corresponding to a specific resource group based on priority strategy, calling its take() method can fetch the specific task.
 
-### LocalAdmissionController(LAC)
-LAC 负责管理某个 TiFlash 节点上所有 resource group 的元信息, 具体包括:
-1. 记录所有目前已知的 resource group 的优先级, 配置, TokenBucket
-2. 负责 watch GAC etcd, 即使更新 resource group 配置, 感知 resource group 的删除
-3. 同 GAC 通信, 定期获取 token
+##### Updating Resource Usage
+After TaskScheduler obtains a task, it will execute for 100ms and update its CPU usage status. During this time, it will call relevant interfaces of the LocalAdmissionController (LAC) to update token consumption.
+Feel free to copy and use this Markdown text as needed.
+
+### LocalAdmissionController (LAC)
+LAC is responsible for managing the metadata of all resource groups on a TiFlash node, including:
+1. Recording the priorities, configurations, and TokenBuckets of all currently known resource groups.
+2. Watching GAC etcd, even updating resource group configurations and detecting resource group deletions.
+3. Communicating with GAC to periodically obtain tokens.
 
 ## Test Design
 ### ResourceControlQueue Test
-1. 测试 RU 充足但是物理资源不足时, 不同 resource group 之间的调度基本符合优先级调度
-2. 测试 RU 不足但是物理资源充足时, 不同 resource group 之间的物理资源用量比例基本等于 `RU_PER_SEC` 比例
-3. 测试 RU 和物理资源交替不足时, 不同 resource group 之间物理资源的用量依然符合预期, 即 `RU_PER_SEC` 大的物理资源使用更多
+1. Test when Resource Units (RU) are sufficient but physical resources are insufficient, the scheduling between different resource groups generally adheres to priority scheduling.
+2. Test when RU is insufficient but physical resources are sufficient, the proportion of physical resource usage between different resource groups is roughly equal to the `RU_PER_SEC` ratio.
+3. Test when RU and physical resources alternately become insufficient, the physical resource usage between different resource groups still meets expectations, meaning that the resource group with a higher `RU_PER_SEC` uses more physical resources.
 
 ### LAC Test
-1. 创建两个 resource group(rg1, rg2), 都设置比较大的 `RU_PER_SEC` , 例如 3000, 跑 tpch workload, 观察 CPU 使用情况以及查询耗时. 预期两个 rg 的查询耗时基本一致.
-2. 将 rg1 `RU_PER_SEC` 改为 1000, 观察 CPU 用量以及查询耗时, 预期 CPU 用量减少且 rg1 查询耗时增加
-3. 将 rg2 `RU_PER_SEC` 改为 1000, 观察 CPU 用量以及查询耗时, 预期 CPU 用量减少且 rg2 查询耗时增加, 且与 rg1 耗时基本一致
-4. 将 rg1 burstable 设置为 true, 观察 CPU 用量以及查询耗时, 预期 CPU 用量增加且 rg1 查询耗时降低很多
-5. 测试 LAC 汇报给 GAC 的 RU 用量是准确的
-6. 测试 TokenBucket 的三种模式的相互转换是符合预期的:
-7. 测试多个 TiFlash 节点情况, 使用 tpch 跑上述 1/2/3 测试同样符合预期
-8. 测试反复删除, 重建 resource group. 预期查询会报错 resource group not found 
+1. Create two resource groups (rg1, rg2), both with relatively large `RU_PER_SEC`, e.g., 3000, run a tpch workload, observe CPU usage, and query execution times. Expect that the query execution times of the two resource groups are roughly the same.
+2. Change the `RU_PER_SEC` of rg1 to 1000, observe CPU usage, and query execution times. Expect reduced CPU usage and increased query execution times for rg1.
+3. Change the `RU_PER_SEC` of rg2 to 1000, observe CPU usage, and query execution times. Expect reduced CPU usage and increased query execution times for rg2, similar to rg1.
+4. Set the burstable attribute of rg1 to true, observe CPU usage, and query execution times. Expect increased CPU usage and significantly reduced query execution times for rg1.
+5. Test that LAC reports accurate RU usage to GAC.
+6. Test that the conversion between the three TokenBucket modes works as expected.
+7. Test with multiple TiFlash nodes, running the above tests (1/2/3) with tpch workload, expecting similar results.
+8. Test repeated deletion and reconstruction of resource groups. Expect queries to fail with "resource group not found" errors.
 
 ## Impacts & Risks
-1. ResourceControlQueue 的引入可能会导致性能回退. 因为TaskScheduler 的调度多了一层 TaskQueue
+1. The introduction of ResourceControlQueue may lead to performance degradation as TaskScheduler's scheduling adds an extra layer of TaskQueue.
 
 ## Unresolved Questions
-1. 目前 resource control 只有在开启 pipeline execution engine 时才能使用
-2. resource control 只追踪了 cpu 用量, 没有根据对其他维度的资源进行控制. 例如 read bytes, storage size, network io 等
+1. Currently, resource control can only be used when the pipeline execution engine is enabled.
+2. Resource control only tracks CPU usage and does not control other resource dimensions. For example, read bytes, storage size, network IO, etc.
