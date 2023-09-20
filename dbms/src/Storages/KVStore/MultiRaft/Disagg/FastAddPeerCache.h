@@ -24,8 +24,6 @@ namespace DB
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
-struct AsyncTasks;
-
 // A mapping from segment end key to segment id,
 // The main usage:
 // auto lock = lock();

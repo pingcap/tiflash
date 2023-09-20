@@ -15,19 +15,15 @@
 #pragma once
 
 #include <Common/UniThreadPool.h>
-#include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 
 #include <future>
 
 namespace DB
 {
+template <typename Key, typename Func, typename R>
 struct AsyncTasks
 {
-    using Key = uint64_t;
-    using Func = std::function<FastAddPeerRes()>;
-
-    // We use a big queue to cache, to reduce ass task failures.
+    // We use a big queue to cache, to reduce add task failures.
     explicit AsyncTasks(uint64_t pool_size)
         : thread_pool(std::make_unique<ThreadPool>(pool_size, pool_size, 300))
     {}
@@ -37,7 +33,7 @@ struct AsyncTasks
 
     bool addTask(Key k, Func f)
     {
-        using P = std::packaged_task<FastAddPeerRes()>;
+        using P = std::packaged_task<R()>;
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
 
         auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
@@ -64,7 +60,7 @@ struct AsyncTasks
         return futures.at(key).wait_for(0ms) == std::future_status::ready;
     }
 
-    FastAddPeerRes fetchResult(Key key)
+    R fetchResult(Key key)
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = futures.find(key);
@@ -75,7 +71,7 @@ struct AsyncTasks
     }
 
 protected:
-    std::map<Key, std::future<FastAddPeerRes>> futures;
+    std::map<Key, std::future<R>> futures;
     std::unique_ptr<ThreadPool> thread_pool;
     mutable std::mutex mtx;
 };
