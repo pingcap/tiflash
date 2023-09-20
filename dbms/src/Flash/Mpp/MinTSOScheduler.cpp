@@ -201,9 +201,9 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
     GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_active_tasks_count, resource_group_name).Decrement();
     /// as tasks release some threads, so some tasks would get scheduled.
     scheduleWaitingQueries(entry, task_manager, log);
-    if (entry.active_set.size() + entry.waiting_set.size() == 0 && entry.estimated_thread_usage == 0)
+    if ((entry.active_set.size() + entry.waiting_set.size()) == 0 && entry.estimated_thread_usage == 0)
     {
-        LOG_INFO(log, "min tso scheduler_entry of resouce group {} deleted", resource_group_name);
+        LOG_DEBUG(log, "min tso scheduler_entry of resouce group {} deleted", resource_group_name);
         scheduler_entries.erase(resource_group_name);
     }
 }
