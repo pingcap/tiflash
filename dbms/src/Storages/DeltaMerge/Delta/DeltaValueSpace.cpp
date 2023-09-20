@@ -389,7 +389,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
             // Indicate that the index with old epoch should not be used anymore.
             // This is useful in disaggregated mode which will invalidate the delta index cache in RN.
-            delta_index_epoch = std::chrono::steady_clock::now().time_since_epoch().count();;
+            delta_index_epoch = std::chrono::steady_clock::now().time_since_epoch().count();
         }
 
         LOG_DEBUG(
