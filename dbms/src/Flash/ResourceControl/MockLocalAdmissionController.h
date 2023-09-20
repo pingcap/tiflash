@@ -50,8 +50,7 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns)
-        const
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
         if (name.empty())
             return;

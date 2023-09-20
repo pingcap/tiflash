@@ -392,10 +392,7 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(
-        const std::string & name,
-        double ru,
-        uint64_t cpu_time_in_ns)
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
