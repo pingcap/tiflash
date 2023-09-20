@@ -29,4 +29,4 @@ level = "trace"
 
 [profiles]
 [profiles.default]
-enable_pipeline = 0
+enable_resource_control = 0
