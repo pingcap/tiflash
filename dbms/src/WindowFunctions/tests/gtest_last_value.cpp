@@ -110,7 +110,8 @@ public:
 
             std::vector<tipb::RangeCmpDataType> cmp_data_type{
                 tipb::RangeCmpDataType::Int,
-                tipb::RangeCmpDataType::DateTime};
+                tipb::RangeCmpDataType::DateTime,
+                tipb::RangeCmpDataType::Duration};
 
             for (auto type : cmp_data_type)
             {
