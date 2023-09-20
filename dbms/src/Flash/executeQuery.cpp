@@ -219,7 +219,7 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    if (context.getSettingsRef().enforce_enable_pipeline)
+    if (context.getSettingsRef().enforce_enable_resource_control)
     {
         RUNTIME_CHECK_MSG(
             TaskScheduler::instance,
@@ -229,10 +229,10 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
         RUNTIME_CHECK_MSG(
             res,
             "Failed to execute query using pipeline model, and an error is reported because the setting "
-            "enforce_enable_pipeline is true.");
+            "enforce_enable_resource_control is true.");
         return std::move(*res);
     }
-    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
+    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_resource_control)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
