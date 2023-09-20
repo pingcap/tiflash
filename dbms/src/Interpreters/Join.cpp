@@ -502,23 +502,18 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index)
     data.clear();
 }
 
-bool Join::checkAndMarkPartitionSpilledIfNeeded(size_t stream_index)
+void Join::checkAndMarkPartitionSpilledIfNeeded(size_t stream_index)
 {
     /// todo need to check more partitions if partition_size is not equal to total stream size
     size_t partition_index = stream_index;
     const auto & join_partition = partitions[partition_index];
     auto partition_lock = join_partition->tryLockPartition();
     if (partition_lock)
-        return checkAndMarkPartitionSpilledIfNeededInternal(
-            *join_partition,
-            partition_lock,
-            partition_index,
-            stream_index);
+        checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, partition_index, stream_index);
     /// if someone already hold the lock, it will check the spill
-    return false;
 }
 
-bool Join::checkAndMarkPartitionSpilledIfNeededInternal(
+void Join::checkAndMarkPartitionSpilledIfNeededInternal(
     JoinPartition & join_partition,
     std::unique_lock<std::mutex> & partition_lock,
     size_t partition_index,
@@ -537,9 +532,7 @@ bool Join::checkAndMarkPartitionSpilledIfNeededInternal(
         }
         auto blocks_to_spill = join_partition.trySpillBuildPartition(partition_lock);
         markBuildSideSpillData(partition_index, std::move(blocks_to_spill), stream_index);
-        return true;
     }
-    return false;
 }
 
 /// the block should be valid.

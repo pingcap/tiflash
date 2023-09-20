@@ -37,8 +37,8 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 
 OperatorStatus HashJoinBuildSink::prepareImpl()
 {
-    return join_ptr->checkAndMarkPartitionSpilledIfNeeded(op_index) ? OperatorStatus::IO_OUT
-                                                                    : OperatorStatus::NEED_INPUT;
+    join_ptr->checkAndMarkPartitionSpilledIfNeeded(op_index);
+    return join_ptr->hasBuildSideMarkedSpillData(op_index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus HashJoinBuildSink::executeIOImpl()
