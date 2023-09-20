@@ -26,3 +26,7 @@ errorlog = "/tmp/tiflash/log/error.log"
 size = "1000M"
 log = "/tmp/tiflash/log/server.log"
 level = "trace"
+
+[profiles]
+[profiles.default]
+enable_pipeline = 0
