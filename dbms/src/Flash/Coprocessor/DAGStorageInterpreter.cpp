@@ -613,7 +613,8 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     DAGContext & dag_context = *context.getDAGContext();
-    auto scan_context = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName(), dag_context.enableResourceControl());
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName(), dag_context.enableResourceControl());
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
 

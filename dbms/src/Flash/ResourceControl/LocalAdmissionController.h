@@ -392,7 +392,11 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns, bool enable_resource_control = true)
+    void consumeResource(
+        const std::string & name,
+        double ru,
+        uint64_t cpu_time_in_ns,
+        bool enable_resource_control = true)
     {
         if (!enable_resource_control)
             return;
