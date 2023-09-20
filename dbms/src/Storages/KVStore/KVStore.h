@@ -111,6 +111,12 @@ constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegi
 
 static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistRegionReasonMap) / sizeof(const char *));
 
+struct ProxyConfigSummary
+{
+    bool valid = false;
+    size_t snap_handle_pool_size = 0;
+};
+
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
@@ -241,6 +247,7 @@ public:
 
     RaftLogEagerGcTasks::Hints getRaftLogGcHints();
     void applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const;
+    const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -436,6 +443,7 @@ private:
     // Relates to `queue_size` in `can_apply_snapshot`,
     // we can't have access to these codes though.
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
+    ProxyConfigSummary proxy_config_summary;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

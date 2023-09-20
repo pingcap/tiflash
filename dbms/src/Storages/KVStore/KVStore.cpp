@@ -108,6 +108,28 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
                 LOG_INFO(log, "{}", str);
         }
     }
+
+    // Try fetch proxy's config as a json string
+    if (proxy_helper && proxy_helper->fn_get_config_json)
+    {
+        RustStrWithView rust_string = proxy_helper->fn_get_config_json(proxy_helper->proxy_ptr, 1);
+        std::string cpp_string(rust_string.buff.data, rust_string.buff.len);
+        RustGcHelper::instance().gcRustPtr(rust_string.inner.ptr, rust_string.inner.type);
+        try
+        {
+            Poco::JSON::Parser parser;
+            auto obj = parser.parse(cpp_string);
+            auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
+            auto raftstore = ptr->getObject("raftstore");
+            proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
+            proxy_config_summary.valid = true;
+        }
+        catch (...)
+        {
+            proxy_config_summary.valid = false;
+            // we don't care
+        }
+    }
 }
 
 RegionPtr KVStore::getRegion(RegionID region_id) const

@@ -36,6 +36,17 @@ struct PrehandleResult
         size_t raft_snapshot_bytes;
         size_t dt_disk_bytes;
         size_t dt_total_bytes;
+        size_t total_keys;
+        size_t write_cf_keys;
+
+        void mergeFrom(const Stats & other)
+        {
+            raft_snapshot_bytes += other.raft_snapshot_bytes;
+            dt_disk_bytes += other.dt_disk_bytes;
+            dt_total_bytes += other.dt_total_bytes;
+            total_keys += other.total_keys;
+            write_cf_keys += other.write_cf_keys;
+        }
     };
     Stats stats;
 };

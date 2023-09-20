@@ -52,34 +52,58 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 
 struct SSTScanSoftLimit
 {
+    constexpr static size_t HEAD_SPLIT = SIZE_MAX;
+    size_t split_id;
     DecodedTiKVKey start;
     DecodedTiKVKey end;
-    HandleID start_handle;
-    HandleID end_handle;
+    std::optional<RawTiDBPK> start_limit;
+    std::optional<RawTiDBPK> end_limit;
 
-    SSTScanSoftLimit(std::string && start_, std::string && end_)
-        : SSTScanSoftLimit(DecodedTiKVKey(std::move(start_)), DecodedTiKVKey(std::move(end_)))
+    SSTScanSoftLimit(size_t extra_id, std::string && start_, std::string && end_)
+        : SSTScanSoftLimit(extra_id, DecodedTiKVKey(std::move(start_)), DecodedTiKVKey(std::move(end_)))
     {}
 
-    SSTScanSoftLimit(DecodedTiKVKey && start_, DecodedTiKVKey && end_)
-        : start(std::move(start_))
+    SSTScanSoftLimit(size_t extra_id, DecodedTiKVKey && start_, DecodedTiKVKey && end_)
+        : split_id(extra_id)
+        , start(std::move(start_))
         , end(std::move(end_))
     {
         if (start.size())
         {
-            start_handle = RecordKVFormat::getHandle(start);
+            start_limit = RecordKVFormat::getRawTiDBPK(start);
         }
         if (end.size())
         {
-            end_handle = RecordKVFormat::getHandle(end);
+            end_limit = RecordKVFormat::getRawTiDBPK(end);
         }
     }
 
-    HandleID getStartHandle() { return start_handle; }
+    std::optional<RawTiDBPK> getStartLimit() { return start_limit; }
 
-    HandleID getEndHandle() { return end_handle; }
+    std::optional<RawTiDBPK> getEndLimit() { return end_limit; }
 
-    std::string toDebugString() const { return fmt::format("{}:{}", start.toDebugString(), end.toDebugString()); }
+    std::string toDebugString() const
+    {
+        return fmt::format(
+            "{}({}):{}({})",
+            start.toDebugString(),
+            limitToDebugString(start_limit),
+            end.toDebugString(),
+            limitToDebugString(end_limit));
+    }
+
+private:
+    static std::string limitToDebugString(const std::optional<RawTiDBPK> & l)
+    {
+        if (l)
+        {
+            return fmt::format("{}[{}]", l.value().toDebugString(), (HandleID)l.value());
+        }
+        else
+        {
+            return "";
+        }
+    }
 };
 
 struct SSTFilesToBlockInputStreamOpts
@@ -103,6 +127,7 @@ public:
         const SSTViewVec & snaps_,
         const TiFlashRaftProxyHelper * proxy_helper_,
         TMTContext & tmt_,
+        std::optional<SSTScanSoftLimit> && soft_limit_,
         SSTFilesToBlockInputStreamOpts && opts_);
     ~SSTFilesToBlockInputStream() override;
 
@@ -118,6 +143,7 @@ public:
     size_t getApproxBytes() const;
     std::vector<std::string> findSplitKeys(size_t splits_count) const;
     void resetSoftLimit(std::optional<SSTScanSoftLimit> soft_limit_) { soft_limit = std::move(soft_limit_); }
+    const std::optional<SSTScanSoftLimit> & getSoftLimit() const { return soft_limit; }
 
 public:
     struct ProcessKeys
@@ -135,12 +161,13 @@ public:
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
 
+    bool maybeSkipBySoftLimit();
+
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
-    bool maybeSkipBySoftLimit();
     bool maybeStopBySoftLimit();
 
 private:
@@ -149,6 +176,7 @@ private:
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     TMTContext & tmt;
+    std::optional<SSTScanSoftLimit> soft_limit;
     const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
@@ -163,7 +191,6 @@ private:
     friend class BoundedSSTFilesToBlockInputStream;
 
     bool is_decode_cancelled = false;
-    std::optional<SSTScanSoftLimit> soft_limit;
 
     ProcessKeys process_keys;
 };

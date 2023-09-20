@@ -73,7 +73,8 @@ std::vector<std::string> MonoSSTReader::findSplitKeys(uint64_t splits_count) con
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "findSplitKeys can only be called on write cf");
     }
-    RustBaseBuffVec v = proxy_helper->sst_reader_interfaces.fn_get_split_keys(inner, splits_count);
+    LOG_INFO(log, "!!!!! findSplitKeys {}", splits_count);
+    RustStrWithViewVec v = proxy_helper->sst_reader_interfaces.fn_get_split_keys(inner, splits_count);
     std::vector<std::string> res;
     if (v.inner.ptr == nullptr)
         return res;

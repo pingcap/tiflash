@@ -24,6 +24,7 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -34,6 +35,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
+extern const char force_set_parallel_prehandle_threshold[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -91,6 +93,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             prehandle_task,
             context);
 
+        sst_stream->maybeSkipBySoftLimit();
         stream->writePrefix();
         stream->write();
         stream->writeSuffix();
@@ -107,7 +110,9 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                 .stats = PrehandleResult::Stats{
                     .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
                     .dt_disk_bytes = stream->getTotalBytesOnDisk(),
-                    .dt_total_bytes = stream->getTotalCommittedBytes()}});
+                    .dt_total_bytes = stream->getTotalCommittedBytes(),
+                    .total_keys = sst_stream->getProcessKeys().total(),
+                    .write_cf_keys = sst_stream->getProcessKeys().write_cf}});
     }
     catch (DB::Exception & e)
     {
@@ -168,6 +173,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 }
 
 static inline std::vector<std::string> getSplitKey(
+    LoggerPtr log,
     KVStore * kvstore,
     RegionPtr new_region,
     std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream)
@@ -175,31 +181,92 @@ static inline std::vector<std::string> getSplitKey(
     // We don't use this is the single snapshot is small, due to overhead in decoding.
     // TODO(split) find solution if the snapshot has too many untrimmed data.
     constexpr size_t PARALLEL_PREHANDLE_THRESHOLD = 1 * 1024 * 1024 * 1024;
+    size_t parallel_prehandle_threshold = PARALLEL_PREHANDLE_THRESHOLD;
+    fiu_do_on(FailPoints::force_set_parallel_prehandle_threshold, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_parallel_prehandle_threshold); v)
+            parallel_prehandle_threshold = std::any_cast<size_t>(v.value());
+    });
     // If size is 0, do no parallel prehandle for this snapshot, which is legacy.
     // If size is non-zero, use extra this many threads to prehandle.
     std::vector<std::string> split_keys;
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
+
     if (new_region->getClusterRaftstoreVer() == RaftstoreVer::V2 && kvstore->getOngoingPrehandleTaskCount() < 2
-        && sst_stream->getApproxBytes() > PARALLEL_PREHANDLE_THRESHOLD)
+        && sst_stream->getApproxBytes() > parallel_prehandle_threshold)
     {
-        // TODO(split) use proxy's config, or cpu_num - 1 - getOngoingPrehandleTaskCount().
-        uint64_t split_parts = 4;
-        if (split_parts > 1)
+        // Get this info again, since getApproxBytes maybe take some time.
+        auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
+        const auto & proxy_config = kvstore->getProxyConfigSummay();
+        uint64_t want_split_parts = 0;
+        size_t total_concurrentcy = 0;
+        if (proxy_config.valid)
         {
-            // Will generate at most `split_parts - 1` keys.
-            split_keys = sst_stream->findSplitKeys(split_parts);
+            total_concurrentcy = proxy_config.snap_handle_pool_size;
+        }
+        else
+        {
+            total_concurrentcy = std::thread::hardware_concurrency();
+        }
+        if (total_concurrentcy > ongoing_count)
+        {
+            // Current thread takes 1 which is in `ongoing_count`.
+            // We use all threads to prehandle, since there is potentially no read and no delta merge when prehandling the only region.
+            want_split_parts = total_concurrentcy - ongoing_count;
+        }
+
+        if (want_split_parts > 1)
+        {
+            // Will generate at most `want_split_parts - 1` keys.
+            split_keys = sst_stream->findSplitKeys(want_split_parts);
+
             RUNTIME_CHECK_MSG(
-                split_keys.size() + 1 <= split_parts,
+                split_keys.size() + 1 <= want_split_parts,
                 "findSplitKeys should generate {} - 1 keys, actual {}",
-                split_parts,
+                want_split_parts,
                 split_keys.size());
-            if (split_keys.size() + 1 >= split_parts)
+            FmtBuffer fmt_buf;
+            if (split_keys.size() + 1 < want_split_parts)
             {
                 // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
                 // it is even better that we still handle it sequantially.
                 split_keys.clear();
+                LOG_INFO(
+                    log,
+                    "getSplitKey failed to split, ongoing={} want={} got={} region_id={}",
+                    ongoing_count,
+                    want_split_parts,
+                    split_keys.size(),
+                    new_region->id());
             }
+            else
+            {
+                fmt_buf.joinStr(
+                    split_keys.cbegin(),
+                    split_keys.cend(),
+                    [](const auto & arg, FmtBuffer & fb) {
+                        // TODO(split) reduce copy here
+                        fb.append(DecodedTiKVKey(std::string(arg)).toDebugString());
+                    },
+                    ":");
+                LOG_INFO(
+                    log,
+                    "getSplitKey result {}, ongoing={} want={} got={} region_id={}",
+                    fmt_buf.toString(),
+                    ongoing_count,
+                    want_split_parts,
+                    split_keys.size(),
+                    new_region->id());
+            }
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "getSplitKey refused to split, ongoing={} total_concurrentcy={} region_id={}",
+                ongoing_count,
+                total_concurrentcy,
+                new_region->id());
         }
     }
     return split_keys;
@@ -282,11 +349,174 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 snaps,
                 proxy_helper,
                 tmt,
+                std::nullopt,
                 DM::SSTFilesToBlockInputStreamOpts(opt));
 
+            auto split_keys = getSplitKey(log, this, new_region, sst_stream);
+
             ReadFromStreamResult result;
-            std::tie(result, prehandle_result)
-                = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+            using SingleSnapshotAsyncTasks = AsyncTasks<uint64_t, std::function<bool()>, bool>;
+            if (split_keys.empty())
+            {
+                std::tie(result, prehandle_result)
+                    = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+            }
+            else
+            {
+                auto split_key_count = split_keys.size();
+                RUNTIME_CHECK_MSG(
+                    split_key_count >= 1,
+                    "split_key_count should be more or equal than 1, actual {}",
+                    split_key_count);
+                LOG_INFO(
+                    log,
+                    "Parallel prehandling for single big region, split keys={} region_id={}",
+                    split_key_count,
+                    new_region->id());
+                auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
+                sst_stream->resetSoftLimit(DM::SSTScanSoftLimit(
+                    DM::SSTScanSoftLimit::HEAD_SPLIT,
+                    std::string(""),
+                    std::string(split_keys[0])));
+                std::unordered_map<uint64_t, ReadFromStreamResult> gather_res;
+                std::unordered_map<uint64_t, PrehandleResult> gather_prehandle_res;
+                std::mutex mut;
+                auto runInParallel = [&](uint64_t extra_id,
+                                         DM::SSTScanSoftLimit && limit,
+                                         std::shared_ptr<StorageDeltaMerge> dm_storage) {
+                    try
+                    {
+                        std::string limit_tag = limit.toDebugString();
+                        auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
+                            new_region,
+                            index,
+                            snaps,
+                            proxy_helper,
+                            tmt,
+                            std::move(limit),
+                            DM::SSTFilesToBlockInputStreamOpts(opt));
+                        auto [part_result, part_prehandle_result] = executeTransform(
+                            new_region,
+                            prehandle_task,
+                            job_type,
+                            dm_storage,
+                            part_sst_stream,
+                            opt,
+                            tmt);
+                        LOG_INFO(
+                            log,
+                            "Finished extra parallel prehandle task limit {} write cf {} dmfiles {} error {}, "
+                            "split_id={} region_id={}",
+                            limit_tag,
+                            part_prehandle_result.stats.write_cf_keys,
+                            part_prehandle_result.ingest_ids.size(),
+                            magic_enum::enum_name(part_result.error),
+                            extra_id,
+                            new_region->id());
+                        if (part_result.error == ReadFromStreamError::ErrUpdateSchema)
+                        {
+                            prehandle_task->store(true);
+                        }
+                        {
+                            std::scoped_lock l(mut);
+                            gather_res[extra_id] = std::move(part_result);
+                            gather_prehandle_res[extra_id] = std::move(part_prehandle_result);
+                        }
+                    }
+                    catch (Exception & e)
+                    {
+                        // The exception can be wrapped in the future, however, we abort here.
+                        prehandle_task->store(true);
+                        throw;
+                    }
+                };
+                auto dm_storage = storage; // Make C++ happy.
+                for (size_t extra_id = 0; extra_id + 1 < split_key_count; extra_id++)
+                {
+                    LOG_INFO(log, "!!!!! prehandle task {}/{}", extra_id, split_keys.size());
+                    auto add_result = async_tasks.addTask(extra_id, [&, extra_id]() {
+                        auto limit = DM::SSTScanSoftLimit(
+                            extra_id,
+                            std::string(split_keys[extra_id]),
+                            std::string(split_keys[extra_id + 1]));
+                        LOG_INFO(
+                            log,
+                            "Add extra parallel prehandle task {}/{} limit {}",
+                            extra_id,
+                            split_keys.size(),
+                            limit.toDebugString());
+                        runInParallel(extra_id, std::move(limit), dm_storage);
+                        return true;
+                    });
+                    RUNTIME_CHECK_MSG(
+                        add_result,
+                        "Failed when add {}-th task for prehandling region_id={}",
+                        extra_id,
+                        new_region->id());
+                }
+                auto add_result = async_tasks.addTask(split_key_count - 1, [&]() {
+                    auto limit
+                        = DM::SSTScanSoftLimit(split_key_count - 1, std::string(split_keys.back()), std::string(""));
+                    LOG_INFO(
+                        log,
+                        "Add extra parallel prehandle task {}/{} limit {}",
+                        split_key_count - 1,
+                        split_keys.size(),
+                        limit.toDebugString());
+                    runInParallel(split_key_count - 1, std::move(limit), dm_storage);
+                    return true;
+                });
+                RUNTIME_CHECK_MSG(
+                    add_result,
+                    "Failed when add {}-th task for prehandling region_id={}",
+                    split_key_count - 1,
+                    new_region->id());
+
+                auto [head_result, head_prehandle_result]
+                    = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+                LOG_INFO(
+                    log,
+                    "Finished extra parallel prehandle task limit {} write cf {} dmfiles {}, split_id={}, region_id={}",
+                    sst_stream->getSoftLimit()->toDebugString(),
+                    head_prehandle_result.stats.write_cf_keys,
+                    head_prehandle_result.ingest_ids.size(),
+                    DM::SSTScanSoftLimit::HEAD_SPLIT,
+                    new_region->id());
+
+                if (head_result.error == ReadFromStreamError::Ok)
+                {
+                    prehandle_result = std::move(head_prehandle_result);
+                    // Wait all threads to join.
+                    for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
+                    {
+                        // May get exception.
+                        async_tasks.fetchResult(extra_id);
+                    }
+                    // Aggregate results.
+                    for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
+                    {
+                        std::scoped_lock l(mut);
+                        if (gather_res[extra_id].error == ReadFromStreamError::Ok)
+                        {
+                            result.error = ReadFromStreamError::Ok;
+                            auto & v = gather_prehandle_res[extra_id];
+                            prehandle_result.ingest_ids.insert(
+                                prehandle_result.ingest_ids.end(),
+                                std::make_move_iterator(v.ingest_ids.begin()),
+                                std::make_move_iterator(v.ingest_ids.end()));
+                            v.ingest_ids.clear();
+                            prehandle_result.stats.mergeFrom(v.stats);
+                        }
+                        else
+                        {
+                            // Once a prehandle has non-ok result, we quit further loop
+                            result = gather_res[extra_id];
+                            break;
+                        }
+                    }
+                }
+                // Otherwise, fallback to error handling or exception handling.
+            }
 
             if (result.error == ReadFromStreamError::ErrUpdateSchema)
             {

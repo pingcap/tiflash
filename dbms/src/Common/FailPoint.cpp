@@ -102,6 +102,7 @@ namespace DB
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
+    M(force_set_parallel_prehandle_threshold)                \
     M(force_agg_on_partial_block)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \

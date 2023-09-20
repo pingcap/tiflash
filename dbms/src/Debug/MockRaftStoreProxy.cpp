@@ -111,6 +111,13 @@ void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
     case RawObjType::MockAsyncWaker:
         delete reinterpret_cast<MockAsyncWaker *>(ptr);
         break;
+    case RawObjType::MockString:
+        delete reinterpret_cast<std::string *>(ptr);
+        break;
+    case RawObjType::MockVecOfString:
+        auto * inner = reinterpret_cast<RustStrWithViewVecInner *>(ptr);
+        delete inner;
+        break;
     }
 }
 
@@ -167,10 +174,18 @@ void fn_notify_compact_log(
     }
 }
 
-RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint8_t, int64_t)
+static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint8_t, int64_t)
 {
     auto & x = as_ref(ptr);
     return x.cluster_ver;
+}
+
+static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, uint64_t)
+{
+    std::string * s = new std::string("{\"raftstore\":{\"snap-handle-pool-size\":5}}");
+    return RustStrWithView{
+        .buff = cppStringAsBuff(*s),
+        .inner = RawRustPtr{.ptr = s, .type = static_cast<RawRustPtrType>(RawObjType::MockString)}};
 }
 
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
@@ -184,6 +199,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     res.fn_get_region_local_state = fn_get_region_local_state;
     res.fn_notify_compact_log = fn_notify_compact_log;
     res.fn_get_cluster_raftstore_version = fn_get_cluster_raftstore_version;
+    res.fn_get_config_json = fn_get_config_json;
     {
         // make sure such function pointer will be set at most once.
         static std::once_flag flag;
@@ -941,7 +957,7 @@ void MockRaftStoreProxy::Cf::insert_raw(std::string key, std::string val)
     kvs.emplace_back(std::move(key), std::move(val));
 }
 
-RegionPtr MockRaftStoreProxy::snapshot(
+std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     KVStore & kvs,
     TMTContext & tmt,
     UInt64 region_id,
@@ -978,11 +994,11 @@ RegionPtr MockRaftStoreProxy::snapshot(
     SSTViewVec snaps{ssts.data(), ssts.size()};
     auto prehandle_result = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
 
-    auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::move(prehandle_result.ingest_ids)};
+    auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::vector(prehandle_result.ingest_ids)};
     if (cancel_after_prehandle)
     {
         kvs.releasePreHandledSnapshot(rg, tmt);
-        return kvs.getRegion(region_id);
+        return std::make_tuple(kvs.getRegion(region_id), prehandle_result);
     }
     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(rg, tmt);
     region->updateAppliedIndex(index);
@@ -990,7 +1006,7 @@ RegionPtr MockRaftStoreProxy::snapshot(
     new_kv_region->setApplied(index, term);
 
     // Region changes during applying snapshot, must re-get.
-    return kvs.getRegion(region_id);
+    return std::make_tuple(kvs.getRegion(region_id), prehandle_result);
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTContext & tmt, bool drop_at_first)
