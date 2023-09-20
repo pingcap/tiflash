@@ -29,6 +29,11 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char random_fail_in_resize_callback[];
+} // namespace FailPoints
+
 namespace
 {
 template <typename List, typename Elem>
@@ -236,9 +241,17 @@ void JoinPartition::setResizeCallbackIfNeeded()
     if (hash_join_spill_context->isSpillEnabled() && hash_join_spill_context->isInAutoSpillMode())
     {
         auto resize_callback = [this]() {
-            return !(
-                hash_join_spill_context->supportFurtherSpill()
-                && hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index));
+            if (hash_join_spill_context->supportFurtherSpill()
+                && hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index))
+                return false;
+            bool ret = true;
+            fiu_do_on(FailPoints::random_fail_in_resize_callback, {
+                if (hash_join_spill_context->supportFurtherSpill())
+                {
+                    ret = !hash_join_spill_context->markPartitionForAutoSpill(partition_index);
+                }
+            });
+            return ret;
         };
         assert(pool != nullptr);
         pool->setResizeCallback(resize_callback);
