@@ -88,9 +88,7 @@ void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
     if (timepoint - last_compact_timepoint <= MIN_COMPACT_INTERVAL)
         return;
 
-    auto dynamic_tokens = getDynamicTokens(timepoint);
-    assert(dynamic_tokens >= 0.0);
-    tokens += dynamic_tokens;
+    tokens += getDynamicTokens(timepoint);
     if (tokens >= capacity)
         tokens = capacity;
     last_compact_timepoint = timepoint;

@@ -80,8 +80,9 @@ private:
     void scheduleWaitingQueries(GroupEntry & entry, MPPTaskManager & task_manager, LoggerPtr log);
     GroupEntry & mustGetGroupEntry(const String & resource_group_name);
     GroupEntry & getOrCreateGroupEntry(const String & resource_group_name);
+    GroupEntry & mustGetGroupEntry(const String & resource_group_name) const;
 
-    std::unordered_map<String, GroupEntry> scheduler_entries;
+    std::unordered_map<String, GroupEntry> group_entries;
     UInt64 thread_soft_limit;
     UInt64 thread_hard_limit;
     UInt64 global_estimated_thread_usage;
