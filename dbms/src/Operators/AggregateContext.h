@@ -78,6 +78,8 @@ public:
 
     void buildOnLocalData(size_t task_index);
 
+    bool isTaskMarkedForSpill(size_t task_index);
+
     size_t getTotalBuildRows(size_t task_index) { return threads_data[task_index]->src_rows; }
 
 private:
