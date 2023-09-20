@@ -319,7 +319,7 @@ public:
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getResourceGroupName() { return resource_group_name; }
     void enableResourceControl() { enable_resource_control = true; }
-    bool enableResourceControl() const { return enable_resource_control; }
+    bool isResourceControlEnabled() const { return enable_resource_control; }
 
     RU getReadRU() const;
 
