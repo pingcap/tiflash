@@ -435,6 +435,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
+    dag_context->setEnableResourceControl(context->getSettingsRef().enable_resource_control);
 
     context->setDAGContext(dag_context.get());
 

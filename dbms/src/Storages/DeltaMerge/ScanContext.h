@@ -55,8 +55,9 @@ public:
     std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
 
-    explicit ScanContext(const String & name = "")
+    explicit ScanContext(const String & name = "", bool enable_resource_control_)
         : resource_group_name(name)
+        , enable_resource_control(enable_resource_control_)
     {}
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
@@ -133,6 +134,7 @@ public:
     }
 
     const String resource_group_name;
+    const bool enable_resource_control;
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

@@ -162,6 +162,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                 kind,
                 resource_group_name,
                 Logger::get(msg));
+            dag_context.setEnableResourceControl(cop_context.db_context.getSettingsRef().enable_resource_control);
             cop_context.db_context.setDAGContext(&dag_context);
 
             if constexpr (is_stream)

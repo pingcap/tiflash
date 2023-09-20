@@ -191,7 +191,8 @@ size_t ColumnFileSetReader::readRows(
         LocalAdmissionController::global_instance->consumeResource(
             context.scan_context->resource_group_name,
             bytesToRU(delta_bytes),
-            0);
+            0,
+            context.scan_context->enable_resource_control);
         context.scan_context->total_user_read_bytes += delta_bytes;
     }
     return actual_read;

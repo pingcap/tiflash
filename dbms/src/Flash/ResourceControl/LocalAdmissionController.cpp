@@ -20,12 +20,12 @@
 
 namespace DB
 {
-void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
+void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name, bool enable_resource_control)
 {
-    if (name.empty())
+    if (!enable_resource_control)
         return;
 
-    if unlikely (stopped)
+    if (name.empty())
         return;
 
     ResourceGroupPtr group = findResourceGroup(name);

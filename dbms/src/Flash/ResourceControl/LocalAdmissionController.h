@@ -383,26 +383,22 @@ public:
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_, bool enable = true)
-        : stopped(!enable)
-        , cluster(cluster_)
+        : cluster(cluster_)
         , etcd_client(etcd_client_)
     {
-        if (enable)
-        {
-            background_threads.emplace_back([this] { this->startBackgroudJob(); });
-            background_threads.emplace_back([this] { this->watchGAC(); });
-        }
+        background_threads.emplace_back([this] { this->startBackgroudJob(); });
+        background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns, bool enable_resource_control = true)
     {
-        // When tidb_enable_resource_control is disabled, resource group name is empty.
-        if (name.empty())
+        if (!enable_resource_control)
             return;
 
-        if unlikely (stopped)
+        // When tidb_enable_resource_control is disabled, resource group name is empty.
+        if (name.empty())
             return;
 
         ResourceGroupPtr group = findResourceGroup(name);
@@ -423,12 +419,12 @@ public:
         }
     }
 
-    std::optional<uint64_t> getPriority(const std::string & name)
+    std::optional<uint64_t> getPriority(const std::string & name, bool enable_resource_control = true)
     {
-        if (name.empty())
+        if (!enable_resource_control)
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
-        if unlikely (stopped)
+        if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
         ResourceGroupPtr group = findResourceGroup(name);
@@ -443,7 +439,7 @@ public:
 
     // Fetch resource group info from GAC if necessary and store in local cache.
     // Throw exception if got error when fetching from GAC.
-    void warmupResourceGroupInfoCache(const std::string & name);
+    void warmupResourceGroupInfoCache(const std::string & name, bool enable_resource_control = true);
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 

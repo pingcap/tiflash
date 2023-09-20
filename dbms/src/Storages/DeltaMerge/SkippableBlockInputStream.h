@@ -221,7 +221,8 @@ private:
             LocalAdmissionController::global_instance->consumeResource(
                 scan_context->resource_group_name,
                 bytesToRU(bytes),
-                0);
+                0,
+                scan_context.enable_resource_control);
             scan_context->total_user_read_bytes += bytes;
         }
     }
