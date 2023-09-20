@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/ThresholdUtils.h>
 #include <Interpreters/AggSpillContext.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_marked_for_auto_spill[];
+} // namespace FailPoints
+
 AggSpillContext::AggSpillContext(
     size_t concurrency,
     const SpillConfig & spill_config_,
@@ -43,7 +49,7 @@ void AggSpillContext::buildSpiller(const Block & input_schema)
 
 bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num)
 {
-    if (!in_spillable_stage || !enable_spill)
+    if (!in_spillable_stage || !isSpillEnabled())
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
     if (auto_spill_mode)
@@ -55,6 +61,16 @@ bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thr
             /// in auto spill mode, don't set revocable_memory to 0 here, so in triggerSpill it will take
             /// the revocable_memory into account if current spill is on the way
             return true;
+        bool ret = false;
+        fiu_do_on(FailPoints::random_marked_for_auto_spill, {
+            old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+            if (new_value > 0
+                && per_thread_auto_spill_status[thread_num].compare_exchange_strong(
+                    old_value,
+                    AutoSpillStatus::WAIT_SPILL_FINISH))
+                ret = true;
+        });
+        return ret;
     }
     else
     {
@@ -126,5 +142,17 @@ void AggSpillContext::finishOneSpill(size_t thread_num)
 {
     per_thread_auto_spill_status[thread_num] = AutoSpillStatus::NO_NEED_AUTO_SPILL;
     per_thread_revocable_memories[thread_num] = 0;
+}
+
+bool AggSpillContext::markThreadForAutoSpill(size_t thread_num)
+{
+    if (in_spillable_stage && isSpillEnabled())
+    {
+        auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+        return per_thread_auto_spill_status[thread_num].compare_exchange_strong(
+            old_value,
+            AutoSpillStatus::NEED_AUTO_SPILL);
+    }
+    return false;
 }
 } // namespace DB
