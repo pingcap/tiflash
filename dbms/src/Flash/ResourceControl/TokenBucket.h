@@ -39,6 +39,7 @@ public:
         const std::string & log_id,
         double capacity_ = std::numeric_limits<double>::max())
         : fill_rate(fill_rate_)
+        , fill_rate_ms(fill_rate_ / 1000)
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
@@ -109,6 +110,7 @@ private:
     double getDynamicTokens(const TimePoint & timepoint) const;
 
     double fill_rate;
+    double fill_rate_ms;
     double tokens;
     double capacity;
 

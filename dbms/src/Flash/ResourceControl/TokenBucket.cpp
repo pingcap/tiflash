@@ -49,6 +49,7 @@ void TokenBucket::reConfig(const TokenBucketConfig & config)
     auto now = std::chrono::steady_clock::now();
     tokens = config.tokens;
     fill_rate = config.fill_rate;
+    fill_rate_ms = config.fill_rate / 1000;
     capacity = config.capacity;
 
     compact(now);
@@ -99,7 +100,7 @@ double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) c
     RUNTIME_CHECK(timepoint >= last_compact_timepoint);
     auto elspased = timepoint - last_compact_timepoint;
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elspased).count();
-    return static_cast<double>(elapsed_ms * fill_rate) / 1000;
+    return elapsed_ms * fill_rate_ms;
 }
 
 } // namespace DB
