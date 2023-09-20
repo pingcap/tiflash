@@ -85,7 +85,6 @@ grpc::Status BatchCoprocessorHandler::execute()
                 DAGRequestKind::BatchCop,
                 resource_group_name,
                 Logger::get("BatchCoprocessorHandler"));
-            dag_context.setEnableResourceControl(cop_context.db_context.getSettingsRef().enable_resource_control);
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver<DAGRequestKind::BatchCop> driver(
