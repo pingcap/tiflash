@@ -21,6 +21,7 @@
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 
 #include <atomic>
+#include <ext/singleton.h>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -238,5 +239,18 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
 }
 
 std::string_view buffToStrView(const BaseBuffView & buf);
+BaseBuffView cppStringAsBuff(const std::string & s);
+
+struct RustGcHelper : public ext::Singleton<RustGcHelper>
+{
+    void gcRustPtr(RawVoidPtr ptr, RawRustPtrType type) const { fn_gc_rust_ptr(ptr, type); }
+
+    RustGcHelper() = default;
+
+    void setRustPtrGcFn(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType)) { this->fn_gc_rust_ptr = fn_gc_rust_ptr; }
+
+private:
+    void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType);
+};
 
 } // namespace DB
