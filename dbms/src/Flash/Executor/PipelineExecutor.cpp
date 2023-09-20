@@ -110,11 +110,6 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
     }
     LOG_TRACE(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
 
-    // For read_ru, only report it to GAC for now.
-    LocalAdmissionController::global_instance->consumeResource(
-        exec_context.getResourceGroupName(),
-        dagContext().getReadRU(),
-        0);
     return exec_context.toExecutionResult();
 }
 
