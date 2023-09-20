@@ -447,11 +447,19 @@ MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const Strin
     auto iter = group_entries.find(resource_group_name);
     if (iter == group_entries.end())
     {
+        iter = group_entries.insert({resource_group_name, GroupEntry(resource_group_name)}).first;
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_min_tso, resource_group_name)
+            .Set(iter->second.min_query_id.query_ts);
         GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_hard_limit, resource_group_name)
             .Set(thread_hard_limit);
         GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_soft_limit, resource_group_name)
             .Set(thread_soft_limit);
-        iter = group_entries.insert({resource_group_name, GroupEntry(resource_group_name)}).first;
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_estimated_thread_usage, resource_group_name).Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_waiting_queries_count, resource_group_name).Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_active_queries_count, resource_group_name).Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_waiting_tasks_count, resource_group_name).Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_active_tasks_count, resource_group_name).Set(0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count, resource_group_name).Set(0);
         GET_METRIC(tiflash_task_scheduler, type_group_entry_count).Increment();
     }
     return iter->second;
