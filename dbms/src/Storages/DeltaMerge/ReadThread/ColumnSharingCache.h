@@ -53,6 +53,16 @@ public:
         auto & value = packs[start_pack_id];
         if (value.pack_count < pack_count)
         {
+            // Alloc/free memory usage in shared_column_data_mem_tracker every time although we just
+            // increase/decrease a reference count of a pointer. This is because check use count of `col_data`
+            // and alloc/free memory usage in shared_column_data_mem_tracker are not atomic.
+            // So, the actual memory usage is smaller than statics in shared_column_data_mem_tracker
+            // if `col_data` is sharing between more than two requests.
+            if (value.col_data != nullptr)
+            {
+                shared_column_data_mem_tracker->free(value.col_data->byteSize());
+            }
+            shared_column_data_mem_tracker->alloc(col_data->byteSize());
             value.pack_count = pack_count;
             value.col_data = col_data;
         }
@@ -102,6 +112,7 @@ public:
         {
             if (itr->first + itr->second.pack_count <= upper_start_pack_id)
             {
+                shared_column_data_mem_tracker->free(itr->second.col_data->byteSize());
                 itr = packs.erase(itr);
             }
             else
@@ -109,6 +120,12 @@ public:
                 break;
             }
         }
+    }
+
+    ~ColumnSharingCache()
+    {
+        // Deleta all.
+        del(std::numeric_limits<size_t>::max());
     }
 
 private:
@@ -230,6 +247,7 @@ public:
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);
     void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
+    bool hasConcurrentReader(DMFileReader & from_reader);
     // `get` is just for test.
     DMFileReader * get(const std::string & name);
 

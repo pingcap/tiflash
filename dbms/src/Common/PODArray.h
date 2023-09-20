@@ -17,6 +17,7 @@
 #include <Common/Allocator.h>
 #include <Common/BitHelpers.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Common/memcpySmall.h>
 #include <common/likely.h>
 #include <common/strong_typedef.h>
@@ -106,6 +107,8 @@ protected:
     char * c_end = null;
     char * c_end_of_storage = null; /// Does not include pad_right.
 
+    bool disable_mem_tracing;
+
     /// The amount of memory occupied by the num_elements of the elements.
     static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
 
@@ -147,6 +150,7 @@ protected:
 
         unprotect();
 
+        MemoryTrackerSetter mem_tracker_guard(true, disable_mem_tracing ? nullptr : current_memory_tracker);
         TAllocator::free(c_start - pad_left, allocated_bytes());
     }
 
@@ -286,6 +290,10 @@ public:
     }
 
     ~PODArrayBase() { dealloc(); }
+
+    PODArrayBase()
+        : disable_mem_tracing(current_memory_tracker == nullptr)
+    {}
 };
 
 template <
