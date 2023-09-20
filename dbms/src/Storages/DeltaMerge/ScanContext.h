@@ -55,7 +55,7 @@ public:
     std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
 
-    explicit ScanContext(const String & name = "", bool enable_resource_control_)
+    explicit ScanContext(const String & name = "", bool enable_resource_control_ = false)
         : resource_group_name(name)
         , enable_resource_control(enable_resource_control_)
     {}

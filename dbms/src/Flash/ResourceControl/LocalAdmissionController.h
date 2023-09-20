@@ -382,7 +382,7 @@ public:
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
-    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_, bool enable = true)
+    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
     {
