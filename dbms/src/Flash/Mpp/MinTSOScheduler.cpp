@@ -206,6 +206,7 @@ void MinTSOScheduler::releaseThreadsThenSchedule(
     {
         LOG_DEBUG(log, "min tso scheduler_entry of resouce group {} deleted", resource_group_name);
         group_entries.erase(resource_group_name);
+        GET_METRIC(tiflash_task_scheduler, type_group_entry_count).Decrement();
     }
 }
 
@@ -451,6 +452,7 @@ MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const Strin
         GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler, type_thread_soft_limit, resource_group_name)
             .Set(thread_soft_limit);
         iter = group_entries.insert({resource_group_name, GroupEntry(resource_group_name)}).first;
+        GET_METRIC(tiflash_task_scheduler, type_group_entry_count).Increment();
     }
     return iter->second;
 }
@@ -458,7 +460,10 @@ MinTSOScheduler::GroupEntry & MinTSOScheduler::getOrCreateGroupEntry(const Strin
 MinTSOScheduler::GroupEntry & MinTSOScheduler::mustGetGroupEntry(const String & resource_group_name)
 {
     auto iter = group_entries.find(resource_group_name);
-    RUNTIME_CHECK_MSG(iter != group_entries.end(), "cannot find min tso scheduler for resource group {}", resource_group_name);
+    RUNTIME_CHECK_MSG(
+        iter != group_entries.end(),
+        "cannot find min tso scheduler for resource group {}",
+        resource_group_name);
     return iter->second;
 }
 

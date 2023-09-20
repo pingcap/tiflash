@@ -4333,7 +4333,16 @@
               "interval": "",
               "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
-              "refId": "C"
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"group_entry_count\"}) by (instance, type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-{{type}}",
+              "queryType": "randomWalk",
+              "refId": "E"
             }
           ],
           "thresholds": [],
