@@ -234,7 +234,9 @@ public:
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
 
-    void checkAndMarkPartitionSpilledIfNeeded(
+    void checkAndMarkPartitionSpilledIfNeeded(size_t stream_index);
+
+    void checkAndMarkPartitionSpilledIfNeededInternal(
         JoinPartition & join_partition,
         std::unique_lock<std::mutex> & partition_lock,
         size_t partition_index,

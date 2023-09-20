@@ -502,7 +502,18 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index)
     data.clear();
 }
 
-void Join::checkAndMarkPartitionSpilledIfNeeded(
+void Join::checkAndMarkPartitionSpilledIfNeeded(size_t stream_index)
+{
+    /// todo need to check more partitions if partition_size is not equal to total stream size
+    size_t partition_index = stream_index;
+    const auto & join_partition = partitions[partition_index];
+    auto partition_lock = join_partition->tryLockPartition();
+    if (partition_lock)
+        checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, partition_index, stream_index);
+    /// if someone already hold the lock, it will check the spill
+}
+
+void Join::checkAndMarkPartitionSpilledIfNeededInternal(
     JoinPartition & join_partition,
     std::unique_lock<std::mutex> & partition_lock,
     size_t partition_index,
@@ -576,7 +587,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                 auto partition_lock = join_partition->lockPartition();
                 join_partition->insertBlockForBuild(std::move(dispatch_blocks[i]));
                 /// to release memory before insert if already marked spill
-                checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
+                checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, i, stream_index);
                 if (!hash_join_spill_context->isPartitionSpilled(i))
                 {
                     bool meet_resize_exception = false;
@@ -591,7 +602,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                         LOG_DEBUG(log, "Meet resize exception when insert into partition {}", i);
                     }
                     /// double check here to release memory
-                    checkAndMarkPartitionSpilledIfNeeded(*join_partition, partition_lock, i, stream_index);
+                    checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, i, stream_index);
                     if (meet_resize_exception)
                         RUNTIME_CHECK_MSG(
                             hash_join_spill_context->isPartitionSpilled(i),
