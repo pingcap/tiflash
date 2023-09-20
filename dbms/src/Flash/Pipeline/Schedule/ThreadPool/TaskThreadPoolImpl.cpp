@@ -26,7 +26,7 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
 {
     switch (type)
     {
-    // the default queue is RC_MLFQ.
+    // the default queue is RCQ_MLFQ.
     case TaskQueueType::DEFAULT:
     case TaskQueueType::RCQ_MLFQ:
         return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
