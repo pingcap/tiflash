@@ -35,6 +35,8 @@ inline uint64_t nopGetPriority(const std::string &)
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
+    static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
+
     MockLocalAdmissionController()
         : consume_resource_func(nopConsumeResource)
         , get_priority_func(nopGetPriority)
@@ -48,12 +50,31 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns, bool enable_resource_control = true)
+        const
     {
+        if (!enable_resource_control)
+            return;
+
+        if (name.empty())
+            return;
+
         consume_resource_func(name, ru, cpu_time_ns);
     }
-    std::optional<uint64_t> getPriority(const std::string & name) const { return {get_priority_func(name)}; }
-    void warmupResourceGroupInfoCache(const std::string &) {}
+    std::optional<uint64_t> getPriority(const std::string & name, bool enable_resource_control = true) const
+    {
+        if (!enable_resource_control)
+            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
+
+        if (name.empty())
+            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
+
+        return {get_priority_func(name)};
+    }
+    void warmupResourceGroupInfoCache(const std::string &, bool enable_resource_control = true)
+    {
+        (void)enable_resource_control;
+    }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
