@@ -20,7 +20,6 @@
 namespace DB
 {
 
-class Context;
 class AsynchronousMetrics;
 class IDatabase;
 

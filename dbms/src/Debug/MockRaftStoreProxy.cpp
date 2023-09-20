@@ -976,9 +976,9 @@ RegionPtr MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
-    auto ingest_ids = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
+    auto prehandle_result = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
 
-    auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)};
+    auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::move(prehandle_result.ingest_ids)};
     if (cancel_after_prehandle)
     {
         kvs.releasePreHandledSnapshot(rg, tmt);

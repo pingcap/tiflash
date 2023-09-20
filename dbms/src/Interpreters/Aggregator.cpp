@@ -42,6 +42,7 @@ namespace FailPoints
 extern const char random_aggregate_create_state_failpoint[];
 extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
+extern const char random_fail_in_resize_callback[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
@@ -159,9 +160,17 @@ void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
         if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
         {
             auto resize_callback = [agg_spill_context, thread_num]() {
-                return !(
-                    agg_spill_context->supportFurtherSpill()
-                    && agg_spill_context->isThreadMarkedForAutoSpill(thread_num));
+                if (agg_spill_context->supportFurtherSpill()
+                    && agg_spill_context->isThreadMarkedForAutoSpill(thread_num))
+                    return false;
+                bool ret = true;
+                fiu_do_on(FailPoints::random_fail_in_resize_callback, {
+                    if (agg_spill_context->supportFurtherSpill())
+                    {
+                        ret = !agg_spill_context->markThreadForAutoSpill(thread_num);
+                    }
+                });
+                return ret;
             };
 #define M(NAME)                                                                                         \
     case AggregationMethodType(NAME):                                                                   \
@@ -856,7 +865,7 @@ void Aggregator::prepareAggregateInstructions(
     }
 }
 
-void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
+void Aggregator::AggProcessInfo::prepareForAgg()
 {
     if (prepare_for_agg_done)
         return;
@@ -909,7 +918,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
         LOG_TRACE(log, "Aggregation method: `{}`", result.getMethodName());
     }
 
-    agg_process_info.prepareForAgg(this);
+    agg_process_info.prepareForAgg();
 
     if (is_cancelled())
         return true;
@@ -1137,7 +1146,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     size_t src_rows = 0;
     size_t src_bytes = 0;
-    AggProcessInfo agg_process_info;
+    AggProcessInfo agg_process_info(this);
 
     /// Read all the data
     while (Block block = stream->read())

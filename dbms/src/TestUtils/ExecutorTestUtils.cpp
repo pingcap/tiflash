@@ -326,16 +326,24 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     const std::shared_ptr<tipb::DAGRequest> & request,
     size_t concurrency)
 {
-    DAGContext dag_context(*request, "executor_test", concurrency);
+    DAGContext dag_context(*request, dag_context_ptr->log->identifier(), concurrency);
     return executeStreams(&dag_context);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
+ColumnsWithTypeAndName ExecutorTest::executeStreamsWithMemoryTracker(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
+{
+    DAGContext dag_context(*request, dag_context_ptr->log->identifier(), concurrency);
+    return executeStreams(&dag_context, false);
+}
+
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool is_internal)
 {
     TiFlashTestEnv::setUpTestContext(*context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(*context.context, /*internal=*/true)
+    queryExecute(*context.context, is_internal)
         ->execute([&blocks](const Block & block) { blocks.push_back(block); })
         .verify();
     return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
@@ -345,7 +353,7 @@ Blocks ExecutorTest::getExecuteStreamsReturnBlocks(
     const std::shared_ptr<tipb::DAGRequest> & request,
     size_t concurrency)
 {
-    DAGContext dag_context(*request, "executor_test", concurrency);
+    DAGContext dag_context(*request, dag_context_ptr->log->identifier(), concurrency);
     TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;

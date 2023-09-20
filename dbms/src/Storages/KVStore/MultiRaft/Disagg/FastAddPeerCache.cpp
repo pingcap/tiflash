@@ -16,11 +16,13 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
