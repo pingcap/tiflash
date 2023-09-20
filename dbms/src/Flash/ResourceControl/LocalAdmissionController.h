@@ -395,12 +395,8 @@ public:
     void consumeResource(
         const std::string & name,
         double ru,
-        uint64_t cpu_time_in_ns,
-        bool enable_resource_control = true)
+        uint64_t cpu_time_in_ns)
     {
-        if (!enable_resource_control)
-            return;
-
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return;
@@ -423,11 +419,8 @@ public:
         }
     }
 
-    std::optional<uint64_t> getPriority(const std::string & name, bool enable_resource_control = true)
+    std::optional<uint64_t> getPriority(const std::string & name)
     {
-        if (!enable_resource_control)
-            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
-
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
@@ -443,7 +436,7 @@ public:
 
     // Fetch resource group info from GAC if necessary and store in local cache.
     // Throw exception if got error when fetching from GAC.
-    void warmupResourceGroupInfoCache(const std::string & name, bool enable_resource_control = true);
+    void warmupResourceGroupInfoCache(const std::string & name);
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 

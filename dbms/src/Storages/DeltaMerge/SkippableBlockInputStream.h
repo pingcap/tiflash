@@ -218,12 +218,13 @@ private:
     {
         if (likely(scan_context != nullptr))
         {
-            LocalAdmissionController::global_instance->consumeResource(
-                scan_context->resource_group_name,
-                bytesToRU(bytes),
-                0,
-                scan_context->enable_resource_control);
             scan_context->total_user_read_bytes += bytes;
+
+            if (scan_context->enable_resource_control)
+                LocalAdmissionController::global_instance->consumeResource(
+                    scan_context->resource_group_name,
+                    bytesToRU(bytes),
+                    0);
         }
     }
     BlockInputStreams::iterator current_stream;
