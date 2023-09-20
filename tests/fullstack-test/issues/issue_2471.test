@@ -1,0 +1,62 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#TODO: tidb sys variable `tiflash_enable_pipeline` is deleted, so this test should not be used
+#RETURN
+
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.a
+mysql> create table test.a (pk int not null, id int, value varchar(64))
+mysql> insert into test.a values(0,1,'a'),(1,2,'b')
+
+mysql> alter table test.a set tiflash replica 1
+
+func> wait_table test a
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
++----+------+-------+------+------+-------+
+| pk | id   | value | pk   | id   | value |
++----+------+-------+------+------+-------+
+|  0 |    1 | a     |    0 |    1 | a     |
+|  1 |    2 | b     |    1 |    2 | b     |
++----+------+-------+------+------+-------+
+
+=> DBGInvoke __enable_fail_point(exception_in_creating_set_input_stream)
+
+mysql> set global tiflash_enable_pipeline_model = OFF;
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
+{#REGEXP}.*point FailPoints::exception_in_creating_set_input_stream is triggered.*
+
+=> DBGInvoke __disable_fail_point(exception_in_creating_set_input_stream)
+
+mysql> use test; select sleep(5);
++----------+
+| sleep(5) |
++----------+
+|        0 |
++----------+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
++----+------+-------+------+------+-------+
+| pk | id   | value | pk   | id   | value |
++----+------+-------+------+------+-------+
+|  0 |    1 | a     |    0 |    1 | a     |
+|  1 |    2 | b     |    1 |    2 | b     |
++----+------+-------+------+------+-------+
+
+# Clean up.
+# mysql> drop table if exists test.a
+mysql> set global tiflash_enable_pipeline_model = ON;
