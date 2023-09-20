@@ -640,4 +640,30 @@ TEST_F(TestResourceControlQueue, cancel)
     }
 }
 
+TEST_F(TestResourceControlQueue, tokenBucket)
+{
+    const double fill_rate = 10.0;
+    const double init_tokens = 10.0;
+    {
+        TokenBucket bucket(fill_rate, init_tokens, "log_id");
+        for (int i = 0; i < 10; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            bucket.peek();
+        }
+        ASSERT_GT(bucket.peek(), init_tokens);
+        ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 10 * std::chrono::milliseconds(10).count() / 1000);
+    }
+    {
+        TokenBucket bucket(fill_rate, init_tokens, "log_id");
+        for (int i = 0; i < 1000; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(5));
+            bucket.peek();
+        }
+        ASSERT_GT(bucket.peek(), init_tokens);
+        ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 1000 * std::chrono::microseconds(5).count() / 1000000);
+    }
+}
+
 } // namespace DB::tests
