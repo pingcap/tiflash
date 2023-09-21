@@ -20,8 +20,8 @@
 TIFLASH_PATH="dbms/src/Server/tiflash"
 
 if [ -z ${storage_bin+x} ]; then
-	if [ -f "../cmake-build-debug/${TIFLASH_PATH}" ]; then
-		build_dir="../cmake-build-debug"
+	if [ -f "../build/${TIFLASH_PATH}" ]; then
+		build_dir="../build"
 	else
 		echo 'Error: Cannot find TiFlash binary. Specify via: export storage_bin=xxx' >&2
 		exit 1
@@ -33,7 +33,7 @@ fi
 export storage_server="127.0.0.1"
 
 # Server port for connecting
-export storage_port=${storage_port:-9000}
+export storage_port="7003"
 
 # Default database for scripts
 export storage_db="system"
@@ -42,10 +42,10 @@ export storage_db="system"
 export tidb_server="127.0.0.1"
 
 # TiDB port
-export tidb_port="4000"
+export tidb_port="7001"
 
 # TiDB status port
-export tidb_status_port="10080"
+export tidb_status_port="7002"
 
 # TiDB default database
 export tidb_db="test"
