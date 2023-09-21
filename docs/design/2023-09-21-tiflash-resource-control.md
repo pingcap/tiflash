@@ -12,7 +12,7 @@ The basic idea is similar to TiDB/TiKV's resource control. It adopts a combinati
 1. Rate Limiting: When scheduling tasks, it limits them based on the Token Bucket algorithm.
 2. Priority: When physical resources are scarce, tasks are scheduled based on their priority, determining which task should run first.
 
-The underlying idea behind this design is as follows: If the `RU_PER_SEC` setting for each resource group is relatively small, and the sum of these settings does not exceed the real physical resource limit, rate limiting plays the primary role in throttling each resource group. However, to ensure that resources are used more efficiently and to prevent situations where a small `RU_PER_SEC` setting leads to unused physical resources, TiDB's resource management mechanism allows oversubscription, meaning that the total `RU_PER_SEC` values can exceed the physical resources. In such cases, priority scheduling comes into play to prevent resource contention among resource groups.
+The underlying idea behind this design is as follows: If the `RU_PER_SEC` setting for each resource group is relatively small(a.k.a. the sum of these settings does not exceed the real physical resource limit), then rate limiting plays the primary role in throttling each resource group. However, to ensure that resources are used more efficiently and to prevent situations where a small `RU_PER_SEC` setting leads to unused physical resources, TiDB's resource management mechanism allows oversubscription, meaning that the total `RU_PER_SEC` values can exceed the physical resources. In such cases, priority scheduling comes into play to prevent resource contention among resource groups.
 
 ### Basic Concepts
 1. **Pipeline Execution Engine:** A new execution model inspired by [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://dl.acm.org/doi/10.1145/2588555.2610507), providing a more refined task scheduling model.
@@ -45,7 +45,7 @@ After TaskScheduler obtains a task, it will execute for 100ms and update its CPU
 ### LocalAdmissionController (LAC)
 LAC is responsible for managing the metadata of all resource groups on a TiFlash node, including:
 1. Recording the priorities, configurations, and TokenBuckets of all currently known resource groups.
-2. Watching GAC etcd, updating resource group configurations and detecting resource group deletions.
+2. Watching GAC etcd, updating resource group configurations and detecting resource group deletions.(Creation is not managed by watching etcd, it will be created when the first query comes to TiFlash)
 3. Communicating with GAC to periodically obtain tokens.
 
 ## Test Design
