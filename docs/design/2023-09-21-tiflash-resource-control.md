@@ -66,7 +66,7 @@ LAC is responsible for managing the metadata of all resource groups on a TiFlash
 
 ## Impacts & Risks
 1. The introduction of ResourceControlQueue may lead to performance degradation as TaskScheduler's scheduling adds an extra layer of TaskQueue.
-2. TiFlash config of `enable_resource_control` is used to control whether tiflash resource control works or not.
+2. TiFlash resource control only works when TiDB system variable `tidb_enable_resource_control` and TiFlash config `enable_resource_control` are both true. Other, flow control and priority scheduling will not take effects.
 
 ## Unresolved Questions
 1. Currently, resource control can only be used when the pipeline execution engine is enabled.
