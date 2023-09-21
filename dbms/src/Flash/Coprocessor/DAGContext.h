@@ -40,7 +40,7 @@
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 namespace DB
 {
 class Context;
@@ -309,11 +309,17 @@ public:
     {
         auto_spill_trigger = auto_spill_trigger_;
     }
+    AutoSpillTrigger * getAutoSpillTrigger()
+    {
+        return auto_spill_trigger == nullptr ? nullptr : auto_spill_trigger.get();
+    }
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getResourceGroupName() { return resource_group_name; }
+    void enableResourceControl() { enable_resource_control = true; }
+    bool isResourceControlEnabled() const { return enable_resource_control; }
 
     RU getReadRU() const;
 
@@ -331,13 +337,17 @@ public:
 
     void registerOperatorSpillContext(const OperatorSpillContextPtr & operator_spill_context)
     {
-        operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
+        if (in_auto_spill_mode)
+            operator_spill_contexts->registerOperatorSpillContext(operator_spill_context);
     }
 
     void registerTaskOperatorSpillContexts()
     {
         query_operator_spill_contexts->registerTaskOperatorSpillContexts(operator_spill_contexts);
     }
+
+    void setAutoSpillMode() { in_auto_spill_mode = true; }
+    bool isInAutoSpillMode() const { return in_auto_spill_mode; }
 
 public:
     DAGRequest dag_request;
@@ -390,6 +400,7 @@ private:
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    bool in_auto_spill_mode = false;
     std::shared_ptr<TaskOperatorSpillContexts> operator_spill_contexts;
     std::shared_ptr<QueryOperatorSpillContexts> query_operator_spill_contexts;
     std::shared_ptr<AutoSpillTrigger> auto_spill_trigger;
@@ -441,6 +452,7 @@ private:
     const KeyspaceID keyspace_id = NullspaceID;
 
     const String resource_group_name;
+    bool enable_resource_control = false;
 
     // Used to determine the execution mode
     // - None: request has not been executed yet

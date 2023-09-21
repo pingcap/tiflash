@@ -17,6 +17,7 @@
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -42,6 +43,7 @@ PipelineExecutor::PipelineExecutor(
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
 }
 
 void PipelineExecutor::scheduleEvents()
@@ -137,7 +139,7 @@ RU PipelineExecutor::collectRequestUnit()
     // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
     const auto & query_profile_info = exec_context.getQueryProfileInfo();
     auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
-    return toRU(ceil(cpu_time_ns));
+    return cpuTimeToRU(cpu_time_ns);
 }
 
 Block PipelineExecutor::getSampleBlock() const

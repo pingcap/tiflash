@@ -31,7 +31,8 @@ constexpr size_t task_index = 0;
 LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
-    const Aggregator::Params & params_)
+    const Aggregator::Params & params_,
+    const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context)
     : TransformOp(exec_context_, req_id)
     , params(params_)
     , agg_context(req_id)
@@ -40,7 +41,12 @@ LocalAggregateTransform::LocalAggregateTransform(
         params,
         local_concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
-        exec_context.getRegisterOperatorSpillContext());
+        [&](const OperatorSpillContextPtr & operator_spill_context) {
+            if (fine_grained_spill_context != nullptr)
+                fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
+            else if (exec_context.getRegisterOperatorSpillContext() != nullptr)
+                exec_context.getRegisterOperatorSpillContext()(operator_spill_context);
+        });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -51,12 +57,11 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         if unlikely (!block)
         {
             agg_context.getAggSpillContext()->finishSpillableStage();
-            return agg_context.hasSpilledData() || agg_context.getAggSpillContext()->needFinalSpill(0)
+            return agg_context.hasSpilledData() || agg_context.getAggSpillContext()->isThreadMarkedForAutoSpill(0)
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);
         }
         agg_context.buildOnBlock(task_index, block);
-        block.clear();
         return tryFromBuildToSpill();
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
@@ -106,7 +111,13 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     switch (status)
     {
     case LocalAggStatus::build:
-        return OperatorStatus::NEED_INPUT;
+        while (agg_context.hasLocalDataToBuild(task_index))
+        {
+            agg_context.buildOnLocalData(task_index);
+            if (tryFromBuildToSpill() == OperatorStatus::IO_OUT)
+                return OperatorStatus::IO_OUT;
+        }
+        return agg_context.isTaskMarkedForSpill(task_index) ? tryFromBuildToSpill() : OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convergent:
         block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;

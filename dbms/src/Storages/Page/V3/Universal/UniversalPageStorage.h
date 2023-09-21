@@ -41,7 +41,6 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
-class Context;
 class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
@@ -85,13 +84,7 @@ public:
         String name,
         PSDiskDelegatorPtr delegator_,
         const PageStorageConfig & config_,
-        const FileProviderPtr & file_provider_)
-        : storage_name(std::move(name))
-        , delegator(std::move(delegator_))
-        , config(config_)
-        , file_provider(file_provider_)
-        , log(Logger::get("UniversalPageStorage", name))
-    {}
+        const FileProviderPtr & file_provider_);
 
     ~UniversalPageStorage();
 

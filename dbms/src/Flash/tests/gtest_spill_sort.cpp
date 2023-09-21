@@ -24,7 +24,11 @@ namespace tests
 class SpillSortTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override { ExecutorTest::initializeContext(); }
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        dag_context_ptr->log = Logger::get("SortSpillTest");
+    }
 };
 
 /// todo add more tests
@@ -124,7 +128,9 @@ try
     std::vector<Int64> collators{
         TiDB::ITiDBCollator::UTF8MB4_BIN,
         TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
-        TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI};
+        TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
+        TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
+        TiDB::ITiDBCollator::UTF8MB4_0900_BIN};
     for (const auto & collator_id : collators)
     {
         context.setCollation(collator_id);

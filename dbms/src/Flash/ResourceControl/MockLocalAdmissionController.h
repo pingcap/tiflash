@@ -30,20 +30,16 @@ inline uint64_t nopGetPriority(const std::string &)
 {
     return 1.0;
 }
-inline bool nopIsResourceGroupThrottled(const std::string &)
-{
-    return false;
-}
-
 
 // This is only for ResourceControlQueue gtest.
 class MockLocalAdmissionController final : private boost::noncopyable
 {
 public:
+    static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
+
     MockLocalAdmissionController()
         : consume_resource_func(nopConsumeResource)
         , get_priority_func(nopGetPriority)
-        , is_resource_group_throttled_func(nopIsResourceGroupThrottled)
     {
         refill_token_thread = std::thread([&]() { refillTokenBucket(); });
     }
@@ -56,12 +52,19 @@ public:
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
+        if (name.empty())
+            return;
+
         consume_resource_func(name, ru, cpu_time_ns);
     }
+    std::optional<uint64_t> getPriority(const std::string & name) const
+    {
+        if (name.empty())
+            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
-    uint64_t getPriority(const std::string & name) const { return get_priority_func(name); }
-
-    bool isResourceGroupThrottled(const std::string & name) const { return is_resource_group_throttled_func(name); }
+        return {get_priority_func(name)};
+    }
+    void warmupResourceGroupInfoCache(const std::string &) {}
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
@@ -69,7 +72,6 @@ public:
         RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
     }
-
     void unregisterRefillTokenCallback()
     {
         std::lock_guard lock(call_back_mutex);
@@ -86,7 +88,8 @@ public:
             stopped = true;
             cv.notify_all();
         }
-        refill_token_thread.join();
+        if (refill_token_thread.joinable())
+            refill_token_thread.join();
     }
 
     void refillTokenBucket();
@@ -99,7 +102,6 @@ public:
 
     ConsumeResourceFuncType consume_resource_func;
     GetPriorityFuncType get_priority_func;
-    IsResourceGroupThrottledFuncType is_resource_group_throttled_func;
 
     uint64_t max_ru_per_sec = 0;
     bool stopped = false;

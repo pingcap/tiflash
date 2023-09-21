@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/TiKVHandle.h>
 
 #include <algorithm>
 #include <numeric>

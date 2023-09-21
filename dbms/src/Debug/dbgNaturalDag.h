@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Flash/Coprocessor/RegionInfo.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/RegionMeta.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/mpp.pb.h>
 

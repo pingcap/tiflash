@@ -27,10 +27,10 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/StringTokenizer.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <mutex>
 

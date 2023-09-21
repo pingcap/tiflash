@@ -89,5 +89,4 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru_family->Remove(itr->second);
     registered_keyspace_sync_replica_ru.erase(itr);
 }
-
 } // namespace DB

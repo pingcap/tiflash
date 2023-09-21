@@ -69,9 +69,6 @@ private:
     Int64 max_buffered_bytes;
     size_t temporary_data_merge_threads;
 
-    size_t keys_size;
-    size_t aggregates_size;
-
     std::atomic<bool> executed{false};
 
     ManyAggregatedDataVariants many_data;
@@ -82,15 +79,11 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
+        Aggregator::AggProcessInfo agg_process_info;
 
-        ColumnRawPtrs key_columns;
-        Aggregator::AggregateColumns aggregate_columns;
-
-        ThreadData(size_t keys_size, size_t aggregates_size)
-        {
-            key_columns.resize(keys_size);
-            aggregate_columns.resize(aggregates_size);
-        }
+        ThreadData(Aggregator * aggregator)
+            : agg_process_info(aggregator)
+        {}
     };
 
     std::vector<ThreadData> threads_data;

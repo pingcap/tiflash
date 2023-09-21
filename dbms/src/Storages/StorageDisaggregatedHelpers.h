@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/disaggregated.pb.h>
 

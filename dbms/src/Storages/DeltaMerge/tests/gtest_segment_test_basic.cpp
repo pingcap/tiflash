@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -843,7 +843,12 @@ SegmentPtr SegmentTestBasic::reload(
 
 void SegmentTestBasic::reloadDMContext()
 {
-    dm_context = std::make_unique<DMContext>(
+    dm_context = createDMContext();
+}
+
+std::unique_ptr<DMContext> SegmentTestBasic::createDMContext()
+{
+    return std::make_unique<DMContext>(
         *db_context,
         storage_path_pool,
         storage_pool,

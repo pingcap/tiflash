@@ -23,14 +23,14 @@ class TestToRU : public ::testing::Test
 
 TEST_F(TestToRU, base)
 {
-    ASSERT_EQ(0, toRU(0));
+    ASSERT_EQ(0, cpuTimeToRU(0));
 
-    auto base_ru = toRU(1);
+    auto base_ru = cpuTimeToRU(1);
     ASSERT_TRUE(base_ru > 0);
 
     for (size_t i = 1; i < 10; ++i)
     {
-        auto ru = toRU(i);
+        auto ru = cpuTimeToRU(i);
         ASSERT_TRUE(ru >= base_ru);
         base_ru = ru;
     }
@@ -38,7 +38,7 @@ TEST_F(TestToRU, base)
     constexpr auto ten_ms = 10'000'000;
     for (size_t i = 1; i < 20; ++i)
     {
-        auto ru = toRU(i * ten_ms);
+        auto ru = cpuTimeToRU(i * ten_ms);
         ASSERT_TRUE(ru > base_ru);
         base_ru = ru;
     }

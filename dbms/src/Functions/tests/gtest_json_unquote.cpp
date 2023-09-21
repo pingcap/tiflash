@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
-#include <Storages/Transaction/JsonBinary.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/JsonBinary.h>
 
 #include <string>
 #include <vector>

@@ -41,14 +41,14 @@
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/disaggregated.pb.h>
 #include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>
@@ -499,12 +499,14 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
     const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     LOG_INFO(
         log,
-        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
+        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={} "
+        "column_defines={}",
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         read_task->segment_read_tasks.size(),
-        num_streams);
+        num_streams,
+        *column_defines);
 
     return DM::Remote::RNWorkers::create(
         db_context,

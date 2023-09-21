@@ -41,6 +41,10 @@ struct RNPreparerTrait
 struct RNWritePageCacheTrait
 {
 };
+
+struct WNEstablishDisaggTaskTrait
+{
+};
 } // namespace io_pool_details
 
 // TODO: Move these out.
@@ -49,4 +53,5 @@ using S3FileCachePool = IOThreadPool<io_pool_details::S3FileCacheTrait>;
 using RNRemoteReadTaskPool = IOThreadPool<io_pool_details::RemoteReadTaskTrait>;
 using RNPagePreparerPool = IOThreadPool<io_pool_details::RNPreparerTrait>;
 using RNWritePageCachePool = IOThreadPool<io_pool_details::RNWritePageCacheTrait>;
+using WNEstablishDisaggTaskPool = IOThreadPool<io_pool_details::WNEstablishDisaggTaskTrait>;
 } // namespace DB

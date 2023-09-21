@@ -17,8 +17,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
-#include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/types.h>
 
 #pragma GCC diagnostic push

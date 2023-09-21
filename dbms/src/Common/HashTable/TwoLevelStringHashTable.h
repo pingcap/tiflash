@@ -38,6 +38,12 @@ public:
         });
     }
 
+    void setResizeCallback(const ResizeCallback & resize_callback)
+    {
+        for (auto & impl : impls)
+            impl.setResizeCallback(resize_callback);
+    }
+
     size_t operator()(const Key & x) const { return hash(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.

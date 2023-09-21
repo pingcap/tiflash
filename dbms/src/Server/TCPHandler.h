@@ -26,7 +26,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/Net/TCPServerConnection.h>
-#include <Storages/Transaction/RegionLockInfo.h>
+#include <Storages/KVStore/Read/RegionLockInfo.h>
 
 #include "IServer.h"
 

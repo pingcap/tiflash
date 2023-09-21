@@ -24,8 +24,8 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
 

@@ -33,6 +33,8 @@ static inline ASTPtr buildPlusFunction(
     switch (cmp_data_type)
     {
     case tipb::RangeCmpDataType::Int:
+    case tipb::RangeCmpDataType::DateTime:
+    case tipb::RangeCmpDataType::Duration:
         return plusInt(col(order_by_col_name), lit(range_val_field));
     case tipb::RangeCmpDataType::Float:
         return plusReal(col(order_by_col_name), lit(range_val_field));
@@ -51,6 +53,8 @@ static inline ASTPtr buildMinusFunction(
     switch (cmp_data_type)
     {
     case tipb::RangeCmpDataType::Int:
+    case tipb::RangeCmpDataType::DateTime:
+    case tipb::RangeCmpDataType::Duration:
         return minusInt(col(order_by_col_name), lit(range_val_field));
     case tipb::RangeCmpDataType::Float:
         return minusReal(col(order_by_col_name), lit(range_val_field));
@@ -94,13 +98,17 @@ protected:
     // so that caller could configure it and choose block_size and concurrency.
     void executeWithConcurrencyAndBlockSize(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & expect_columns)
+        const ColumnsWithTypeAndName & expect_columns,
+        bool is_restrict = true)
     {
         std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-            ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+            if (is_restrict)
+                ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+            else
+                ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, MAX_CONCURRENCY_LEVEL));
         }
@@ -110,7 +118,8 @@ protected:
         const ColumnWithTypeAndName & result,
         const ASTPtr & function,
         const ColumnsWithTypeAndName & input,
-        MockWindowFrame mock_frame = MockWindowFrame())
+        MockWindowFrame mock_frame = MockWindowFrame(),
+        bool is_restrict = true)
     {
         ColumnsWithTypeAndName actual_input = input;
         assert(actual_input.size() == 3);
@@ -135,7 +144,7 @@ protected:
 
         ColumnsWithTypeAndName expect = input;
         expect.push_back(result);
-        executeWithConcurrencyAndBlockSize(request, expect);
+        executeWithConcurrencyAndBlockSize(request, expect, is_restrict);
     }
 };
 } // namespace DB::tests

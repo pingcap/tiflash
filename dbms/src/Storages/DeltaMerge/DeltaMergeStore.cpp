@@ -46,12 +46,12 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -2049,12 +2049,13 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} "
-        "n_ranges_final={}",
+        "n_ranges_final={} segments={}",
         watch.elapsedMilliseconds(),
         sorted_ranges.size(),
         tasks_before_split,
         tasks.size(),
-        total_ranges);
+        total_ranges,
+        tasks);
 
     return tasks;
 }

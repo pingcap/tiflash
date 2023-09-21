@@ -19,11 +19,11 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
-#include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Schema/TiDB.h>
 #include <grpcpp/support/status.h>
 #include <gtest/gtest.h>
 

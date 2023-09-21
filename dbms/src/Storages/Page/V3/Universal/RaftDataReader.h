@@ -25,7 +25,9 @@ public:
         : uni_ps(storage)
     {}
 
-    Page read(const UniversalPageId & page_id);
+    Page read(const UniversalPageId & page_id) const;
+
+    std::optional<raft_serverpb::RaftApplyState> readRegionApplyState(RegionID region_id) const;
 
     // scan all pages in range [start, end)
     // if end is empty, it will be transformed to a key larger than all raft data key

@@ -16,8 +16,8 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/Page/PageDefinesBase.h>
-
 namespace DB
 {
 namespace DM
@@ -30,8 +30,10 @@ static std::atomic_uint64_t NEXT_DELTA_INDEX_ID{0};
 class DeltaIndex
 {
 private:
-    // This id is only used as Key in LRUCache.
+    // `id` is used as Key in LRUCache in non-disaggregated mode.
     const UInt64 id;
+    // `rn_cache_key` is used as Key in RNDeltaIndexCache in disaggregated mode.
+    const std::optional<Remote::RNDeltaIndexCache::CacheKey> rn_cache_key;
 
     DeltaTreePtr delta_tree;
 
@@ -62,7 +64,7 @@ public:
 private:
     void applyUpdates(const Updates & updates)
     {
-        for (auto & update : updates)
+        for (const auto & update : updates)
         {
             if (placed_rows <= update.rows_offset)
             {
@@ -105,7 +107,8 @@ private:
         if (delta_tree_copy)
         {
             auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            auto new_index = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            auto new_index
+                = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy, rn_cache_key);
             // try to do some updates before return it if need
             if (updates)
                 new_index->applyUpdates(*updates);
@@ -114,20 +117,26 @@ private:
         else
         {
             // Otherwise, create an empty new DeltaIndex.
-            return std::make_shared<DeltaIndex>();
+            return std::make_shared<DeltaIndex>(rn_cache_key);
         }
     }
 
 public:
-    DeltaIndex()
+    explicit DeltaIndex(const std::optional<Remote::RNDeltaIndexCache::CacheKey> & rn_cache_key_ = std::nullopt)
         : id(++NEXT_DELTA_INDEX_ID)
+        , rn_cache_key(rn_cache_key_)
         , delta_tree(std::make_shared<DefaultDeltaTree>())
         , placed_rows(0)
         , placed_deletes(0)
     {}
 
-    DeltaIndex(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
+    DeltaIndex(
+        const DeltaTreePtr & delta_tree_,
+        size_t placed_rows_,
+        size_t placed_deletes_,
+        const std::optional<Remote::RNDeltaIndexCache::CacheKey> & rn_cache_key_ = std::nullopt)
         : id(++NEXT_DELTA_INDEX_ID)
+        , rn_cache_key(rn_cache_key_)
         , delta_tree(delta_tree_)
         , placed_rows(placed_rows_)
         , placed_deletes(placed_deletes_)
@@ -206,6 +215,8 @@ public:
 
         return tryCloneInner(updates.front().delete_ranges_offset, &updates);
     }
+
+    const std::optional<Remote::RNDeltaIndexCache::CacheKey> & getRNCacheKey() const { return rn_cache_key; }
 };
 
 } // namespace DM

@@ -18,8 +18,8 @@
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
 #include <future>
