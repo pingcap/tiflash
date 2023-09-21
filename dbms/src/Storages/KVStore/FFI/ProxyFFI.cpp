@@ -445,18 +445,6 @@ void HandlePurgePageStorage(const EngineStoreServerWrap * server)
 static_assert(sizeof(RaftStoreProxyFFIHelper) == sizeof(TiFlashRaftProxyHelper));
 static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper));
 
-struct RustGcHelper : public ext::Singleton<RustGcHelper>
-{
-    void gcRustPtr(RawVoidPtr ptr, RawRustPtrType type) const { fn_gc_rust_ptr(ptr, type); }
-
-    RustGcHelper() = default;
-
-    void setRustPtrGcFn(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType)) { this->fn_gc_rust_ptr = fn_gc_rust_ptr; }
-
-private:
-    void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType);
-};
-
 void AtomicUpdateProxy(DB::EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy)
 {
     // any usage towards proxy helper must happen after this function.
@@ -966,4 +954,9 @@ std::string_view buffToStrView(const BaseBuffView & buf)
     return std::string_view{buf.data, buf.len};
 }
 
+// `s` must outlive returned base buff view.
+BaseBuffView cppStringAsBuff(const std::string & s)
+{
+    return BaseBuffView{.data = s.data(), .len = s.size()};
+}
 } // namespace DB
