@@ -14,10 +14,6 @@ The basic idea is similar to TiDB/TiKV's resource control. It adopts a combinati
 
 The underlying idea behind this design is as follows: If the `RU_PER_SEC` setting for each resource group is relatively small, and the sum of these settings does not exceed the real physical resource limit, rate limiting plays the primary role in throttling each resource group. However, to ensure that resources are used more efficiently and to prevent situations where a small `RU_PER_SEC` setting leads to unused physical resources, TiDB's resource management mechanism allows oversubscription, meaning that the total `RU_PER_SEC` values can exceed the physical resources. In such cases, priority scheduling comes into play to prevent resource contention among resource groups.
 
-To make better use of physical resources, the resource control mechanism allows oversubscription, where the total `RU_PER_SEC` can exceed the physical resource limits. This way, when some resource groups have no queries, other resource groups can more fully utilize the resources without wasting idle physical resources.
-
-However, when all resource groups start using resources, they may compete for resources. To address this situation, a priority mechanism is introduced, prioritizing tasks based on user_priority and `RU_PER_SEC`.
-
 ### Basic Concepts
 1. **Pipeline Execution Engine:** A new execution model inspired by [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://dl.acm.org/doi/10.1145/2588555.2610507), providing a more refined task scheduling model.
 2. **Pipeline task:** The smallest execution unit in the Pipeline execution model.
@@ -45,12 +41,11 @@ ResourceControlQueue uses a MultiLevelFeedbackQueue to store all pipeline tasks 
 
 ##### Updating Resource Usage
 After TaskScheduler obtains a task, it will execute for 100ms and update its CPU usage status. During this time, it will call relevant interfaces of the LocalAdmissionController (LAC) to update token consumption.
-Feel free to copy and use this Markdown text as needed.
 
 ### LocalAdmissionController (LAC)
 LAC is responsible for managing the metadata of all resource groups on a TiFlash node, including:
 1. Recording the priorities, configurations, and TokenBuckets of all currently known resource groups.
-2. Watching GAC etcd, even updating resource group configurations and detecting resource group deletions.
+2. Watching GAC etcd, updating resource group configurations and detecting resource group deletions.
 3. Communicating with GAC to periodically obtain tokens.
 
 ## Test Design
@@ -62,7 +57,7 @@ LAC is responsible for managing the metadata of all resource groups on a TiFlash
 ### LAC Test
 1. Create two resource groups (rg1, rg2), both with relatively large `RU_PER_SEC`, e.g., 3000, run a tpch workload, observe CPU usage, and query execution times. Expect that the query execution times of the two resource groups are roughly the same.
 2. Change the `RU_PER_SEC` of rg1 to 1000, observe CPU usage, and query execution times. Expect reduced CPU usage and increased query execution times for rg1.
-3. Change the `RU_PER_SEC` of rg2 to 1000, observe CPU usage, and query execution times. Expect reduced CPU usage and increased query execution times for rg2, similar to rg1.
+3. Change the `RU_PER_SEC` of rg2 to 1000, observe CPU usage, and query execution times. Expect reduced CPU usage and increased query execution times for rg2.
 4. Set the burstable attribute of rg1 to true, observe CPU usage, and query execution times. Expect increased CPU usage and significantly reduced query execution times for rg1.
 5. Test that LAC reports accurate RU usage to GAC.
 6. Test that the conversion between the three TokenBucket modes works as expected.
@@ -74,4 +69,4 @@ LAC is responsible for managing the metadata of all resource groups on a TiFlash
 
 ## Unresolved Questions
 1. Currently, resource control can only be used when the pipeline execution engine is enabled.
-2. Resource control only tracks CPU usage and does not control other resource dimensions. For example, read bytes, storage size, network IO, etc.
+2. Resource control only tracks CPU usage and read bytes, it does not control other resource dimensions. For example, storage size, network IO, etc.
