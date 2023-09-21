@@ -22,8 +22,8 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Types.h>
 
 #include <limits>
 #include <memory>
@@ -176,3 +176,14 @@ static constexpr bool DM_RUN_CHECK = true;
 
 } // namespace DM
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::DM::ColumnDefine>
+{
+    template <typename FormatContext>
+    auto format(const DB::DM::ColumnDefine & cd, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        // Use '/' as separators because column names often have '_'.
+        return format_to(ctx.out(), "{}/{}/{}", cd.id, cd.name, cd.type->getName());
+    }
+};

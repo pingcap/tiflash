@@ -500,6 +500,8 @@ public:
 
     size_t getBufferSizeInBytes() const { return NUM_CELLS * sizeof(Cell); }
 
+    void setResizeCallback(const ResizeCallback &) {}
+
     size_t getBufferSizeInCells() const { return NUM_CELLS; }
 
     /// Return offset for result in internal buffer.

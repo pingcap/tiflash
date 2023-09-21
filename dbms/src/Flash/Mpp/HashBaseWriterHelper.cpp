@@ -14,7 +14,7 @@
 
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB::HashBaseWriterHelper
 {

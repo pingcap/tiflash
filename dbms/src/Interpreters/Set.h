@@ -25,7 +25,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SetVariants.h>
 #include <Parsers/IAST.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>

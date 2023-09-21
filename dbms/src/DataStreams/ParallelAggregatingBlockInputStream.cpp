@@ -40,8 +40,6 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , final(final_)
     , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
-    , keys_size(params.keys_size)
-    , aggregates_size(params.aggregates_size)
     , handler(*this)
     , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
 {
@@ -147,14 +145,14 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
     auto & data = *parent.many_data[thread_num];
-    parent.aggregator.executeOnBlock(
-        block,
-        data,
-        parent.threads_data[thread_num].key_columns,
-        parent.threads_data[thread_num].aggregate_columns,
-        thread_num);
-    if (data.need_spill)
-        parent.aggregator.spill(data, thread_num);
+    auto & agg_process_info = parent.threads_data[thread_num].agg_process_info;
+    agg_process_info.resetBlock(block);
+    do
+    {
+        parent.aggregator.executeOnBlock(agg_process_info, data, thread_num);
+        if (data.need_spill)
+            parent.aggregator.spill(data, thread_num);
+    } while (!agg_process_info.allBlockDataHandled());
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -178,7 +176,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
     bool need_final_spill = false;
     for (size_t i = 0; i < parent.many_data.size(); ++i)
     {
-        if (parent.aggregator.getAggSpillContext()->needFinalSpill(i))
+        if (parent.aggregator.getAggSpillContext()->isThreadMarkedForAutoSpill(i))
         {
             /// corner case, auto spill is triggered at the last time
             need_final_spill = true;
@@ -220,7 +218,7 @@ void ParallelAggregatingBlockInputStream::execute()
     exceptions.resize(max_threads);
 
     for (size_t i = 0; i < max_threads; ++i)
-        threads_data.emplace_back(keys_size, aggregates_size);
+        threads_data.emplace_back(&aggregator);
     aggregator.initThresholdByAggregatedDataVariantsSize(many_data.size());
 
     LOG_TRACE(log, "Aggregating");
@@ -273,14 +271,12 @@ void ParallelAggregatingBlockInputStream::execute()
     if (total_src_rows == 0 && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
     {
         auto & data = *many_data[0];
-        aggregator.executeOnBlock(
-            children.at(0)->getHeader(),
-            data,
-            threads_data[0].key_columns,
-            threads_data[0].aggregate_columns,
-            0);
+        auto & agg_process_info = threads_data[0].agg_process_info;
+        agg_process_info.resetBlock(children.at(0)->getHeader());
+        aggregator.executeOnBlock(agg_process_info, data, 0);
         if (data.need_spill)
             aggregator.spill(data, 0);
+        assert(agg_process_info.allBlockDataHandled());
     }
 }
 

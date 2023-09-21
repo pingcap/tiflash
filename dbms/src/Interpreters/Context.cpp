@@ -59,13 +59,13 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
+#include <Storages/KVStore/BackgroundService.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/BackgroundService.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
@@ -1773,7 +1773,7 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
             PageStorageConfig config;
             shared->ps_write = UniversalPageStorageService::create( //
                 *this,
-                "write",
+                "uni_write",
                 path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
                 config);
             LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");

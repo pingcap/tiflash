@@ -94,7 +94,10 @@ private:
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
     DeltaIndexPtr delta_index;
-    UInt64 delta_index_epoch = 0;
+    // `delta_index_epoch` is used in disaggregated mode by compute-nodes to identify if the delta_index has changed.
+    // To avoid persisting it, we use `std::chrono::steady_clock` to make it monotonic increase.
+    // Accuracy of `std::chrono::steady_clock` in Linux is nanosecond. This is much smaller than the interval between two flushes.
+    UInt64 delta_index_epoch = std::chrono::steady_clock::now().time_since_epoch().count();
 
     // Protects the operations in this instance.
     // It is a recursive_mutex because the lock may be also used by the parent segment as its update lock.
@@ -325,7 +328,11 @@ class DeltaValueSnapshot
     friend class DeltaValueSpace;
     friend struct DB::DM::Remote::Serializer;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     bool is_update{false};
 
     // The delta index of cached.

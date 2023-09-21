@@ -35,6 +35,7 @@
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
+#include <IO/IOThreadPools.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -43,15 +44,16 @@
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>
 #include <grpcpp/support/status_code_enum.h>
 #include <kvproto/disaggregated.pb.h>
 
+#include <chrono>
 #include <ext/scope_guard.h>
 
 namespace DB
@@ -156,7 +158,8 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
-        std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
+        std::make_pair("tiflash_mem_quota_query_per_node", "max_memory_usage"),
+        std::make_pair("tiflash_query_spill_ratio", "auto_memory_revoke_trigger_threshold"),
     };
     for (const auto & names : tidb_varname_to_tiflash_varname)
     {
@@ -166,6 +169,33 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
             context->setSetting(names.second, value_from_tidb);
             LOG_DEBUG(log, "set context setting {} to {}", names.second, value_from_tidb);
         }
+    }
+}
+
+void updateSettingsForAutoSpill(ContextPtr & context, const LoggerPtr & log)
+{
+    if (context->getSettingsRef().max_memory_usage.getActualBytes(1024 * 1024 * 1024ULL) > 0
+        && context->getSettingsRef().auto_memory_revoke_trigger_threshold.get() > 0)
+    {
+        /// auto spill is set, disable operator spill threshold
+        bool need_log_warning = false;
+        if (context->getSettingsRef().max_bytes_before_external_sort > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_external_sort", "0");
+        }
+        if (context->getSettingsRef().max_bytes_before_external_group_by > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_external_group_by", "0");
+        }
+        if (context->getSettingsRef().max_bytes_before_external_join > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_external_join", "0");
+        }
+        if (need_log_warning)
+            LOG_WARNING(log, "auto spill is enabled, so per operator's memory threshold is disabled");
     }
 }
 } // namespace
@@ -683,7 +713,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
     LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
-    auto [context, status] = createDBContextForTest();
+    auto [test_context, status] = createDBContextForTest();
     if (!status.ok())
     {
         auto err = std::make_unique<mpp::Error>();
@@ -692,7 +722,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
         response->set_allocated_error(err.release());
         return status;
     }
-    auto & tmt_context = context->getTMTContext();
+    auto & tmt_context = test_context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->abortMPPGather(
         MPPGatherId(request->meta()),
@@ -756,6 +786,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         }
 
         updateSettingsFromTiDB(grpc_context, tmp_context, log);
+        updateSettingsForAutoSpill(tmp_context, log);
 
         tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
         tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
@@ -873,8 +904,15 @@ grpc::Status FlashService::EstablishDisaggTask(
 
     try
     {
-        handler->prepare(request);
-        handler->execute(response);
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&handler, &request, &response, deadline = grpc_context->deadline()]() {
+                auto current = std::chrono::system_clock::now();
+                RUNTIME_CHECK(current < deadline, current, deadline);
+                handler->prepare(request);
+                handler->execute(response);
+            });
+        WNEstablishDisaggTaskPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        task->get_future().get();
     }
     catch (const RegionException & e)
     {

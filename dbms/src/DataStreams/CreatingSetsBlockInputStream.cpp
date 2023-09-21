@@ -176,7 +176,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         LOG_INFO(log, "{}", gen_log_msg());
         BlockOutputStreamPtr table_out;
         if (subquery.table)
-            table_out = subquery.table->write({}, {});
+            table_out = subquery.table->write({}, Settings{});
 
         bool done_with_set = !subquery.set;
         bool done_with_join = !subquery.join;

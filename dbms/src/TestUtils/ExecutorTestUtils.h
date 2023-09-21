@@ -119,9 +119,13 @@ public:
         }
     }
 
-    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context);
+    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool is_internal = true);
 
     ColumnsWithTypeAndName executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency = 1);
+
+    ColumnsWithTypeAndName executeStreamsWithMemoryTracker(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        size_t concurrency = 1);
 
     Blocks getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency = 1);
 

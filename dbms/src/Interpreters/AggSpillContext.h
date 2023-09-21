@@ -40,13 +40,15 @@ public:
     bool hasSpilledData() const { return isSpilled() && spiller->hasSpilledData(); }
     bool updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num);
     Int64 getTotalRevocableMemoryImpl() override;
-    Int64 triggerSpill(Int64 expected_released_memories) override;
+    Int64 triggerSpillImpl(Int64 expected_released_memories) override;
     bool supportAutoTriggerSpill() const override { return true; }
     void finishOneSpill(size_t thread_num);
-    bool needFinalSpill(size_t thread_num) const
+    bool isThreadMarkedForAutoSpill(size_t thread_num) const
     {
-        return per_thread_auto_spill_status[thread_num] == AutoSpillStatus::NEED_AUTO_SPILL;
+        return per_thread_auto_spill_status[thread_num] != AutoSpillStatus::NO_NEED_AUTO_SPILL;
     }
+    /// only used in random failpoint
+    bool markThreadForAutoSpill(size_t thread_num);
 };
 
 using AggSpillContextPtr = std::shared_ptr<AggSpillContext>;

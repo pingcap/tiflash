@@ -3,7 +3,7 @@
 This document introduces the design and implementation of TiFlash's resource management feature.
 
 ## Motivation and Background
-TiDB currently supports global resource management to support multiple businesses in a cluster and achieve isolation between them.
+TiDB currently supports global resource management to support multiple businesses in a cluster and achieve isolation among them.
 
 As part of the TiDB architecture, TiFlash also needs to support resource management to achieve the capability of isolating different businesses, especially in AP/HTAP scenarios.
 

@@ -29,6 +29,11 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char random_fail_in_resize_callback[];
+} // namespace FailPoints
+
 namespace
 {
 template <typename List, typename Elem>
@@ -156,6 +161,27 @@ static size_t getByteCountImpl(const Maps & maps, JoinMapMethod method)
 }
 
 template <typename Maps>
+static void setResizeCallbackImpl(const Maps & maps, JoinMapMethod method, const ResizeCallback & resize_callback)
+{
+    switch (method)
+    {
+    case JoinMapMethod::EMPTY:
+    case JoinMapMethod::CROSS:
+        return;
+#define M(NAME)                                            \
+    case JoinMapMethod::NAME:                              \
+        if (maps.NAME)                                     \
+            maps.NAME->setResizeCallback(resize_callback); \
+        return;
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+}
+
+template <typename Maps>
 static size_t clearMaps(Maps & maps, JoinMapMethod method)
 {
     size_t ret = 0;
@@ -193,6 +219,11 @@ size_t JoinPartition::getRowCount()
     return ret;
 }
 
+void JoinPartition::updateHashMapAndPoolMemoryUsage()
+{
+    hash_table_pool_memory_usage = getHashMapAndPoolByteCount();
+}
+
 size_t JoinPartition::getHashMapAndPoolByteCount()
 {
     size_t ret = 0;
@@ -203,6 +234,33 @@ size_t JoinPartition::getHashMapAndPoolByteCount()
     ret += getByteCountImpl(maps_all_full_with_row_flag, join_map_method);
     ret += pool->size();
     return ret;
+}
+
+void JoinPartition::setResizeCallbackIfNeeded()
+{
+    if (hash_join_spill_context->isSpillEnabled() && hash_join_spill_context->isInAutoSpillMode())
+    {
+        auto resize_callback = [this]() {
+            if (hash_join_spill_context->supportFurtherSpill()
+                && hash_join_spill_context->isPartitionMarkedForAutoSpill(partition_index))
+                return false;
+            bool ret = true;
+            fiu_do_on(FailPoints::random_fail_in_resize_callback, {
+                if (hash_join_spill_context->supportFurtherSpill())
+                {
+                    ret = !hash_join_spill_context->markPartitionForAutoSpill(partition_index);
+                }
+            });
+            return ret;
+        };
+        assert(pool != nullptr);
+        pool->setResizeCallback(resize_callback);
+        setResizeCallbackImpl(maps_any, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_all, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_any_full, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_all_full, join_map_method, resize_callback);
+        setResizeCallbackImpl(maps_all_full_with_row_flag, join_map_method, resize_callback);
+    }
 }
 
 void JoinPartition::initMap()
@@ -241,7 +299,7 @@ void JoinPartition::insertBlockForBuild(Block && block)
     build_partition.bytes += bytes;
     build_partition.blocks.push_back(block);
     build_partition.original_blocks.push_back(std::move(block));
-    addMemoryUsage(bytes);
+    addBlockDataMemoryUsage(bytes);
 }
 
 void JoinPartition::insertBlockForProbe(Block && block)
@@ -251,7 +309,7 @@ void JoinPartition::insertBlockForProbe(Block && block)
     probe_partition.rows += rows;
     probe_partition.bytes += bytes;
     probe_partition.blocks.push_back(std::move(block));
-    addMemoryUsage(bytes);
+    addBlockDataMemoryUsage(bytes);
 }
 std::unique_lock<std::mutex> JoinPartition::lockPartition()
 {
@@ -263,32 +321,30 @@ std::unique_lock<std::mutex> JoinPartition::tryLockPartition()
 }
 void JoinPartition::releaseBuildPartitionBlocks(std::unique_lock<std::mutex> &)
 {
-    auto released_bytes = build_partition.bytes;
     build_partition.bytes = 0;
     build_partition.rows = 0;
     build_partition.blocks.clear();
     build_partition.original_blocks.clear();
-    subMemoryUsage(released_bytes);
+    block_data_memory_usage = 0;
 }
 void JoinPartition::releaseProbePartitionBlocks(std::unique_lock<std::mutex> &)
 {
-    auto released_bytes = probe_partition.bytes;
     probe_partition.bytes = 0;
     probe_partition.rows = 0;
     probe_partition.blocks.clear();
-    subMemoryUsage(released_bytes);
+    block_data_memory_usage = 0;
 }
 
 void JoinPartition::releasePartitionPoolAndHashMap(std::unique_lock<std::mutex> &)
 {
-    size_t released_bytes = pool->size();
     pool.reset();
-    released_bytes += clearMaps(maps_any, join_map_method);
-    released_bytes += clearMaps(maps_all, join_map_method);
-    released_bytes += clearMaps(maps_any_full, join_map_method);
-    released_bytes += clearMaps(maps_all_full, join_map_method);
-    released_bytes += clearMaps(maps_all_full_with_row_flag, join_map_method);
-    subMemoryUsage(released_bytes);
+    clearMaps(maps_any, join_map_method);
+    clearMaps(maps_all, join_map_method);
+    clearMaps(maps_any_full, join_map_method);
+    clearMaps(maps_all_full, join_map_method);
+    clearMaps(maps_all_full_with_row_flag, join_map_method);
+    LOG_DEBUG(log, "release {} memories from partition {}", hash_table_pool_memory_usage, partition_index);
+    hash_table_pool_memory_usage = 0;
 }
 
 Blocks JoinPartition::trySpillBuildPartition(std::unique_lock<std::mutex> & partition_lock)
@@ -297,11 +353,6 @@ Blocks JoinPartition::trySpillBuildPartition(std::unique_lock<std::mutex> & part
     {
         auto ret = build_partition.original_blocks;
         releaseBuildPartitionBlocks(partition_lock);
-        if unlikely (memory_usage > 0)
-        {
-            subMemoryUsage(memory_usage);
-            LOG_WARNING(log, "Incorrect memory usage after spill");
-        }
         return ret;
     }
     else
@@ -315,11 +366,6 @@ Blocks JoinPartition::trySpillProbePartition(std::unique_lock<std::mutex> & part
     {
         auto ret = probe_partition.blocks;
         releaseProbePartitionBlocks(partition_lock);
-        if unlikely (memory_usage != 0)
-        {
-            subMemoryUsage(memory_usage);
-            LOG_WARNING(log, "Incorrect memory usage after spill");
-        }
         return ret;
     }
     else
@@ -581,13 +627,13 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
 
 #define INSERT_TO_MAP(join_partition, segment_index)          \
     auto & current_map = (join_partition)->getHashMap<Map>(); \
-    for (auto & i : (segment_index))                          \
+    for (auto & s_i : (segment_index))                        \
     {                                                         \
         Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
             current_map,                                      \
             key_getter,                                       \
             stored_block,                                     \
-            i,                                                \
+            s_i,                                              \
             pool,                                             \
             sort_key_containers);                             \
     }

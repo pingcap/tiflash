@@ -27,33 +27,55 @@ void AggregateContext::initBuild(
     max_threads = max_threads_;
     empty_result_for_aggregation_by_empty_set = params.empty_result_for_aggregation_by_empty_set;
     keys_size = params.keys_size;
+    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads, register_operator_spill_context);
+    aggregator->setCancellationHook(is_cancelled);
+    aggregator->initThresholdByAggregatedDataVariantsSize(max_threads);
     many_data.reserve(max_threads);
     threads_data.reserve(max_threads);
     for (size_t i = 0; i < max_threads; ++i)
     {
-        threads_data.emplace_back(std::make_unique<ThreadData>(params.keys_size, params.aggregates_size));
+        threads_data.emplace_back(std::make_unique<ThreadData>(aggregator.get()));
         many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
     }
-
-    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads, register_operator_spill_context);
-    aggregator->setCancellationHook(is_cancelled);
-    aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     status = AggStatus::build;
     build_watch.emplace();
     LOG_TRACE(log, "Aggregate Context inited");
 }
 
+void AggregateContext::buildOnLocalData(size_t task_index)
+{
+    auto & agg_process_info = threads_data[task_index]->agg_process_info;
+    aggregator->executeOnBlock(agg_process_info, *many_data[task_index], task_index);
+    if likely (agg_process_info.allBlockDataHandled())
+    {
+        threads_data[task_index]->src_bytes += agg_process_info.block.bytes();
+        threads_data[task_index]->src_rows += agg_process_info.block.rows();
+        agg_process_info.block.clear();
+    }
+}
+
+bool AggregateContext::isTaskMarkedForSpill(size_t task_index)
+{
+    if (needSpill(task_index))
+        return true;
+    if (getAggSpillContext()->updatePerThreadRevocableMemory(many_data[task_index]->revocableBytes(), task_index))
+    {
+        return many_data[task_index]->tryMarkNeedSpill();
+    }
+    return false;
+}
+
+bool AggregateContext::hasLocalDataToBuild(size_t task_index)
+{
+    return !threads_data[task_index]->agg_process_info.allBlockDataHandled();
+}
+
 void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
 {
     assert(status.load() == AggStatus::build);
-    aggregator->executeOnBlock(
-        block,
-        *many_data[task_index],
-        threads_data[task_index]->key_columns,
-        threads_data[task_index]->aggregate_columns,
-        task_index);
-    threads_data[task_index]->src_bytes += block.bytes();
-    threads_data[task_index]->src_rows += block.rows();
+    auto & agg_process_info = threads_data[task_index]->agg_process_info;
+    agg_process_info.resetBlock(block);
+    buildOnLocalData(task_index);
 }
 
 bool AggregateContext::hasSpilledData() const
@@ -137,16 +159,14 @@ void AggregateContext::initConvergentPrefix()
 
     if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
     {
-        aggregator->executeOnBlock(
-            this->getHeader(),
-            *many_data[0],
-            threads_data[0]->key_columns,
-            threads_data[0]->aggregate_columns,
-            0);
+        auto & agg_process_info = threads_data[0]->agg_process_info;
+        agg_process_info.resetBlock(this->getHeader());
+        aggregator->executeOnBlock(agg_process_info, *many_data[0], 0);
         /// Since this won't consume a lot of memory,
         /// even if it triggers marking need spill due to a low threshold setting,
         /// it's still reasonable not to spill disk.
         many_data[0]->need_spill = false;
+        assert(agg_process_info.allBlockDataHandled());
         RUNTIME_CHECK(!aggregator->hasSpilledData());
     }
 }

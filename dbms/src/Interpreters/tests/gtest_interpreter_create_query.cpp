@@ -17,10 +17,10 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

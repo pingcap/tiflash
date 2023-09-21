@@ -23,11 +23,11 @@
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/CheckpointInfo.h>
-#include <Storages/Transaction/FastAddPeer.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 
 #include <magic_enum.hpp>
 
@@ -112,15 +112,27 @@ void DeltaMergeStore::cleanPreIngestFiles(
 
     for (const auto & f : external_files)
     {
-        auto file_parent_path = delegate.getDTFilePath(f.id);
-        auto file = DM::DMFile::restore(
-            file_provider,
-            f.id,
-            f.id,
-            file_parent_path,
-            DM::DMFile::ReadMetaMode::memoryAndDiskSize());
-        removePreIngestFile(f.id, false);
-        file->remove(file_provider);
+        if (auto remote_data_store = global_context.getSharedContextDisagg()->remote_data_store; !remote_data_store)
+        {
+            auto file_parent_path = delegate.getDTFilePath(f.id);
+            auto file = DM::DMFile::restore(
+                file_provider,
+                f.id,
+                f.id,
+                file_parent_path,
+                DM::DMFile::ReadMetaMode::memoryAndDiskSize());
+            removePreIngestFile(f.id, false);
+            file->remove(file_provider);
+        }
+        else
+        {
+            // For disagg mode
+            // - if the job has been finished, it means the local files is likely all uploaded to S3
+            // - if the job is intrrupted, it means the `SSTFilesToDTFilesOutputStream::cancel` is called
+            //   and local files are also removed.
+            // So we ignore the files on disk.
+            removePreIngestFile(f.id, false);
+        }
     }
 }
 

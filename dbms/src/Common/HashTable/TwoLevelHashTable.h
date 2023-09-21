@@ -65,6 +65,12 @@ public:
     /// NOTE Bad for hash tables with more than 2^32 cells.
     static size_t getBucketFromHash(size_t hash_value) { return (hash_value >> (32 - BITS_FOR_BUCKET)) & MAX_BUCKET; }
 
+    void setResizeCallback(const ResizeCallback & resize_callback)
+    {
+        for (auto & impl : impls)
+            impl.setResizeCallback(resize_callback);
+    }
+
 protected:
     typename Impl::iterator beginOfNextNonEmptyBucket(size_t & bucket)
     {

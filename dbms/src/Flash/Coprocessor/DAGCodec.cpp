@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGCodec.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <TiDB/Decode/DatumCodec.h>
 
 namespace DB
 {

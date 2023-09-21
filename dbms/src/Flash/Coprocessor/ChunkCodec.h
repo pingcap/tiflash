@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <tipb/select.pb.h>
 
 namespace DB

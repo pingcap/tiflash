@@ -22,7 +22,7 @@
 #include <Encryption/PosixWritableFile.h>
 #include <Encryption/PosixWriteReadableFile.h>
 #include <Encryption/WriteReadableFile.h>
-#include <Storages/Transaction/FileEncryption.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <sys/stat.h>

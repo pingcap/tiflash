@@ -24,7 +24,7 @@
 #include <Common/assert_cast.h>
 #include <Core/Defines.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/memcpy.h>
 #include <common/unaligned.h>
 

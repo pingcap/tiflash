@@ -82,9 +82,7 @@ size_t CompressionEncode(
     case CompressionMethod::ZSTD:
     {
         static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
-
         compressed_buffer.resize(header_size + ZSTD_compressBound(source.size()));
-
         compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::ZSTD);
 
         size_t res = ZSTD_compress(

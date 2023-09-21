@@ -17,6 +17,7 @@
 #include <Common/ColumnsHashing.h>
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
+#include <Core/AutoSpillTrigger.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -134,6 +135,8 @@ Join::Join(
     const SpillConfig & probe_spill_config,
     Int64 join_restore_concurrency_,
     const Names & tidb_output_column_names_,
+    const RegisterOperatorSpillContext & register_operator_spill_context_,
+    AutoSpillTrigger * auto_spill_trigger_,
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
@@ -163,6 +166,8 @@ Join::Join(
     , max_block_size(max_block_size_)
     , runtime_filter_list(runtime_filter_list_)
     , join_restore_concurrency(join_restore_concurrency_)
+    , register_operator_spill_context(register_operator_spill_context_)
+    , auto_spill_trigger(auto_spill_trigger_)
     , shallow_copy_cross_probe_threshold(
           shallow_copy_cross_probe_threshold_ > 0 ? shallow_copy_cross_probe_threshold_
                                                   : std::max(1, max_block_size / 10))
@@ -205,7 +210,7 @@ Join::Join(
     max_restore_round = MAX_RESTORE_ROUND_IN_GTEST;
 #endif
 
-    if (hash_join_spill_context->isSpillEnabled() && restore_round >= max_restore_round)
+    if (hash_join_spill_context->supportSpill() && restore_round >= max_restore_round)
     {
         LOG_WARNING(log, fmt::format("restore round reach to {}, spilling will be disabled.", max_restore_round));
         hash_join_spill_context->disableSpill();
@@ -236,6 +241,8 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
 
 size_t Join::getTotalRowCount() const
 {
+    std::shared_lock rw_lock(rwlock);
+
     size_t res = 0;
 
     if (join_map_method == JoinMapMethod::CROSS)
@@ -245,9 +252,22 @@ size_t Join::getTotalRowCount() const
     else
     {
         for (const auto & partition : partitions)
+        {
+            auto partition_lock = partition->lockPartition();
             res += partition->getRowCount();
+        }
     }
 
+    return res;
+}
+
+size_t Join::getTotalHashTableAndPoolByteCount()
+{
+    if (join_map_method == JoinMapMethod::CROSS)
+        return 0;
+    size_t res = 0;
+    for (const auto & partition : partitions)
+        res += partition->getHashMapAndPoolMemoryUsage();
     return res;
 }
 
@@ -367,6 +387,8 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_{}_probe", join_req_id, restore_round + 1)),
         join_restore_concurrency,
         tidb_output_column_names,
+        register_operator_spill_context,
+        auto_spill_trigger,
         collators,
         non_equal_conditions,
         max_block_size,
@@ -388,7 +410,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     build_sample_block = sample_block;
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     hash_join_spill_context->init(build_concurrency);
-    if (hash_join_spill_context->isSpillEnabled())
+    if (hash_join_spill_context->supportSpill())
     {
         if (join_map_method == JoinMapMethod::CROSS)
         {
@@ -402,8 +424,14 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
             LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
     }
+    if (register_operator_spill_context != nullptr)
+        register_operator_spill_context(hash_join_spill_context);
     if (hash_join_spill_context->isSpillEnabled())
+    {
         hash_join_spill_context->buildBuildSpiller(build_sample_block);
+    }
+    for (auto & partition : partitions)
+        partition->setResizeCallbackIfNeeded();
     setSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
 }
@@ -474,6 +502,39 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index)
     data.clear();
 }
 
+void Join::checkAndMarkPartitionSpilledIfNeeded(size_t stream_index)
+{
+    /// todo need to check more partitions if partition_size is not equal to total stream size
+    size_t partition_index = stream_index;
+    const auto & join_partition = partitions[partition_index];
+    auto partition_lock = join_partition->tryLockPartition();
+    if (partition_lock)
+        checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, partition_index, stream_index);
+    /// if someone already hold the lock, it will check the spill
+}
+
+void Join::checkAndMarkPartitionSpilledIfNeededInternal(
+    JoinPartition & join_partition,
+    std::unique_lock<std::mutex> & partition_lock,
+    size_t partition_index,
+    size_t stream_index)
+{
+    auto ret
+        = hash_join_spill_context->updatePartitionRevocableMemory(partition_index, join_partition.revocableBytes());
+    if (ret)
+    {
+        if (!hash_join_spill_context->isPartitionSpilled(partition_index))
+        {
+            /// first spill
+            hash_join_spill_context->markPartitionSpilled(partition_index);
+            join_partition.releasePartitionPoolAndHashMap(partition_lock);
+            spilled_partition_indexes.push_back(partition_index);
+        }
+        auto blocks_to_spill = join_partition.trySpillBuildPartition(partition_lock);
+        markBuildSideSpillData(partition_index, std::move(blocks_to_spill), stream_index);
+    }
+}
+
 /// the block should be valid.
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
@@ -514,7 +575,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         }
         assert(dispatch_blocks.size() == build_concurrency);
 
-        /// first insert block to join partition
         for (size_t j = stream_index; j < block_size_to_be_inserted + stream_index; ++j)
         {
             size_t i = j % build_concurrency;
@@ -522,45 +582,44 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             {
                 continue;
             }
-            const auto & join_partition = partitions[i];
-            auto partition_lock = join_partition->lockPartition();
-            partitions[i]->insertBlockForBuild(std::move(dispatch_blocks[i]));
-
-            if (!hash_join_spill_context->isPartitionSpilled(i))
-            {
-                size_t byte_before_insert = join_partition->getHashMapAndPoolByteCount();
-                insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
-                size_t byte_after_insert = join_partition->getHashMapAndPoolByteCount();
-                if likely (byte_after_insert > byte_before_insert)
-                {
-                    join_partition->addMemoryUsage(byte_after_insert - byte_before_insert);
-                }
-            }
-        }
-        /// second check spill
-        for (size_t j = stream_index; j < block_size_to_be_inserted + stream_index; ++j)
-        {
-            size_t i = j % build_concurrency;
-            Blocks blocks_to_spill;
             {
                 const auto & join_partition = partitions[i];
                 auto partition_lock = join_partition->lockPartition();
-                /// Currently, a partition spill only triggered by `spillMostMemoryUsedPartitionIfNeed`, so if a partition is not spilled,
-                /// `updatePartitionRevocableMemory` must return false.
-                auto ret = hash_join_spill_context->updatePartitionRevocableMemory(i, join_partition->revocableBytes());
-                if (ret)
+                join_partition->insertBlockForBuild(std::move(dispatch_blocks[i]));
+                /// to release memory before insert if already marked spill
+                checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, i, stream_index);
+                if (!hash_join_spill_context->isPartitionSpilled(i))
                 {
-                    RUNTIME_CHECK_MSG(
-                        hash_join_spill_context->isPartitionSpilled(i),
-                        "Join spill should not triggered here");
-                    blocks_to_spill = join_partition->trySpillBuildPartition(partition_lock);
+                    bool meet_resize_exception = false;
+                    try
+                    {
+                        insertFromBlockInternal(join_partition->getLastBuildBlock(), i);
+                        join_partition->updateHashMapAndPoolMemoryUsage();
+                    }
+                    catch (ResizeException &)
+                    {
+                        meet_resize_exception = true;
+                        LOG_DEBUG(log, "Meet resize exception when insert into partition {}", i);
+                    }
+                    /// double check here to release memory
+                    checkAndMarkPartitionSpilledIfNeededInternal(*join_partition, partition_lock, i, stream_index);
+                    if (meet_resize_exception)
+                        RUNTIME_CHECK_MSG(
+                            hash_join_spill_context->isPartitionSpilled(i),
+                            "resize exception must trigger partition to spill");
                 }
-                else
-                    continue;
             }
-            markBuildSideSpillData(i, std::move(blocks_to_spill), stream_index);
+            if (auto_spill_trigger != nullptr)
+                auto_spill_trigger->triggerAutoSpill();
         }
-        spillMostMemoryUsedPartitionIfNeed(stream_index);
+        if (!hash_join_spill_context->isInAutoSpillMode())
+            spillMostMemoryUsedPartitionIfNeed(stream_index);
+        LOG_DEBUG(
+            log,
+            fmt::format(
+                "all bytes used after one insert: {}, hash table and pool size: {}",
+                getTotalByteCount(),
+                getTotalHashTableAndPoolByteCount()));
     }
 }
 
@@ -693,11 +752,11 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 
 void Join::generateRuntimeFilterValues(const Block & block)
 {
-    LOG_DEBUG(log, "begin to generate rf values for one block in join id, block rows:{}", block.rows());
+    LOG_TRACE(log, "begin to generate rf values for one block in join id, block rows:{}", block.rows());
     for (const auto & rf : runtime_filter_list)
     {
         auto column_with_type_and_name = block.getByName(rf->getSourceColumnName());
-        LOG_DEBUG(log, "update rf values in join, values size:{}", column_with_type_and_name.column->size());
+        LOG_TRACE(log, "update rf values in join, values size:{}", column_with_type_and_name.column->size());
         rf->updateValues(column_with_type_and_name, log);
     }
 }
@@ -1702,7 +1761,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
     if (isEnableSpill())
     {
-        hash_join_spill_context->finishSpillableStage();
+        hash_join_spill_context->finishBuild();
         if (isSpilled())
         {
             // TODO support runtime filter with spill.
@@ -1715,12 +1774,25 @@ void Join::workAfterBuildFinish(size_t stream_index)
             finalizeRuntimeFilter();
         }
 
-        // flush cached blocks for spilled partition.
-        for (auto spilled_partition_index : spilled_partition_indexes)
-            markBuildSideSpillData(
-                spilled_partition_index,
-                partitions[spilled_partition_index]->trySpillBuildPartition(),
-                stream_index);
+        for (size_t i = 0; i < partitions.size(); ++i)
+        {
+            if (hash_join_spill_context->isPartitionMarkedForAutoSpill(i)
+                || hash_join_spill_context->isPartitionSpilled(i))
+            {
+                if (!hash_join_spill_context->isPartitionSpilled(i))
+                {
+                    /// corner case, spill is requested in the last minute
+                    const auto & join_partition = partitions[i];
+                    auto partition_lock = join_partition->lockPartition();
+                    hash_join_spill_context->markPartitionSpilled(i);
+                    join_partition->releasePartitionPoolAndHashMap(partition_lock);
+                    spilled_partition_indexes.push_back(i);
+                }
+                markBuildSideSpillData(i, partitions[i]->trySpillBuildPartition(), stream_index);
+            }
+        }
+        LOG_DEBUG(log, "memory usage after build finish: {}", getTotalByteCount());
+
         has_build_data_in_memory = std::any_of(partitions.cbegin(), partitions.cend(), [](const auto & p) {
             return !p->isSpill() && p->hasBuildData();
         });
@@ -1813,6 +1885,7 @@ void Join::workAfterProbeFinish(size_t stream_index)
                 spilled_partition_index,
                 partitions[spilled_partition_index]->trySpillProbePartition(),
                 stream_index);
+        hash_join_spill_context->finishSpillableStage();
     }
 
     // If it is no longer to scan non-matched-data from the hash table, the hash table can be released.
@@ -2037,11 +2110,13 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
 void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && spill_blocks) const
 {
     hash_join_spill_context->getBuildSpiller()->spillBlocks(std::move(spill_blocks), part_id);
+    hash_join_spill_context->finishOneSpill(part_id);
 }
 
 void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && spill_blocks) const
 {
     hash_join_spill_context->getProbeSpiller()->spillBlocks(std::move(spill_blocks), part_id);
+    hash_join_spill_context->finishOneSpill(part_id);
 }
 
 void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks_to_spill, size_t stream_index)
@@ -2100,7 +2175,6 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
             markBuildSideSpillData(partition_to_be_spilled, std::move(blocks_to_spill), stream_index);
         }
     }
-    LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
 bool Join::getPartitionSpilled(size_t partition_index) const
@@ -2183,10 +2257,15 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
                 spilled_partition_index,
                 restore_join_build_concurrency,
                 true);
-            auto new_max_bytes_before_external_join = static_cast<size_t>(
-                hash_join_spill_context->getOperatorSpillThreshold()
-                * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
-            restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join), spilled_partition_index);
+            auto new_max_bytes_before_external_join = hash_join_spill_context->getOperatorSpillThreshold();
+            /// have operator level threshold
+            if (new_max_bytes_before_external_join > 0)
+                new_max_bytes_before_external_join = std::max(
+                    1,
+                    static_cast<UInt64>(
+                        new_max_bytes_before_external_join
+                        * (static_cast<double>(restore_join_build_concurrency) / build_concurrency)));
+            restore_join = createRestoreJoin(new_max_bytes_before_external_join, spilled_partition_index);
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);

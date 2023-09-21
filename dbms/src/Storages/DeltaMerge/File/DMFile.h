@@ -18,7 +18,6 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
-#include <Interpreters/Settings.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>

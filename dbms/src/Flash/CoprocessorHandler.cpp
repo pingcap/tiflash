@@ -24,9 +24,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
@@ -239,6 +239,10 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
         switch (e.status)
         {
         case RegionException::RegionReadStatus::OTHER:
+        case RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH:
+        case RegionException::RegionReadStatus::FLASHBACK:
+        case RegionException::RegionReadStatus::KEY_NOT_IN_REGION:
+        case RegionException::RegionReadStatus::TIKV_SERVER_ISSUE:
         case RegionException::RegionReadStatus::NOT_LEADER:
         case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
         case RegionException::RegionReadStatus::NOT_FOUND:

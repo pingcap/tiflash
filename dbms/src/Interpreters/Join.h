@@ -48,6 +48,8 @@ using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
+class AutoSpillTrigger;
+
 struct RestoreInfo
 {
     JoinPtr join;
@@ -165,6 +167,8 @@ public:
         const SpillConfig & probe_spill_config_,
         Int64 join_restore_concurrency_,
         const Names & tidb_output_column_names_,
+        const RegisterOperatorSpillContext & register_operator_spill_context_,
+        AutoSpillTrigger * auto_spill_trigger_,
         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
         const JoinNonEqualConditions & non_equal_conditions_ = {},
         size_t max_block_size = 0,
@@ -223,11 +227,20 @@ public:
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
     /// Number of keys in all built JOIN maps.
+    /// This function can only be used externally because it uses `shared_lock(rwlock)`, and `shared_lock` is not reentrant.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
     size_t getTotalByteCount();
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
+
+    void checkAndMarkPartitionSpilledIfNeeded(size_t stream_index);
+
+    void checkAndMarkPartitionSpilledIfNeededInternal(
+        JoinPartition & join_partition,
+        std::unique_lock<std::mutex> & partition_lock,
+        size_t partition_index,
+        size_t stream_index);
 
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
@@ -369,6 +382,10 @@ private:
 
     JoinPtr restore_join;
 
+    RegisterOperatorSpillContext register_operator_spill_context;
+
+    AutoSpillTrigger * auto_spill_trigger;
+
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;
 
@@ -497,6 +514,9 @@ private:
     void finalizeNullAwareSemiFamilyBuild();
 
     void finalizeCrossJoinBuild();
+
+    /// Sum size in bytes of all hash table and pools
+    size_t getTotalHashTableAndPoolByteCount();
 };
 
 } // namespace DB

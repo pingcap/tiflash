@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/Types.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/S3Client.h>
 #include <common/defines.h>

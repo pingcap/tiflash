@@ -76,9 +76,12 @@ MPPTaskManager::~MPPTaskManager()
     monitor->cv.notify_all();
 }
 
-MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id)
+MPPQueryPtr MPPTaskManager::addMPPQuery(
+    const MPPQueryId & query_id,
+    bool has_meaningful_gather_id,
+    UInt64 auto_spill_check_min_interval_ms)
 {
-    auto ptr = std::make_shared<MPPQuery>(query_id, has_meaningful_gather_id);
+    auto ptr = std::make_shared<MPPQuery>(query_id, has_meaningful_gather_id, auto_spill_check_min_interval_ms);
     mpp_query_map.insert({query_id, ptr});
     GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     return ptr;
@@ -110,7 +113,8 @@ void MPPTaskManager::removeMPPGatherTaskSet(MPPQueryPtr & query, const MPPGather
 std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
     const ::mpp::EstablishMPPConnectionRequest * request,
     EstablishCallData * call_data,
-    grpc::CompletionQueue * cq)
+    grpc::CompletionQueue * cq,
+    const Context & context)
 {
     const auto & meta = request->sender_meta();
     MPPTaskId id{meta};
@@ -136,7 +140,10 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
         {
             /// if call_data is in new_request state, put it to waiting tunnel state
             if (query == nullptr)
-                query = addMPPQuery(id.gather_id.query_id, id.gather_id.hasMeaningfulGatherId());
+                query = addMPPQuery(
+                    id.gather_id.query_id,
+                    id.gather_id.hasMeaningfulGatherId(),
+                    context.getSettingsRef().auto_spill_check_min_interval_ms.get());
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
@@ -315,7 +322,10 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     auto & context = task->context;
 
     if (query == nullptr)
-        query = addMPPQuery(task->id.gather_id.query_id, task->id.gather_id.hasMeaningfulGatherId());
+        query = addMPPQuery(
+            task->id.gather_id.query_id,
+            task->id.gather_id.hasMeaningfulGatherId(),
+            task->context->getSettingsRef().auto_spill_check_min_interval_ms);
     if (query->process_list_entry == nullptr)
     {
         query->process_list_entry = setProcessListElement(
@@ -461,9 +471,9 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     return scheduler->tryToSchedule(schedule_entry, *this);
 }
 
-void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
+void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_name, const int needed_threads)
 {
     std::lock_guard lock(mu);
-    scheduler->releaseThreadsThenSchedule(needed_threads, *this);
+    scheduler->releaseThreadsThenSchedule(resource_group_name, needed_threads, *this);
 }
 } // namespace DB

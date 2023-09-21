@@ -20,8 +20,8 @@
 #include <Flash/CoprocessorHandler.h>
 #include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 namespace DB
 {

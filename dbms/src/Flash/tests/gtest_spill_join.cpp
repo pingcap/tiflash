@@ -23,7 +23,11 @@ namespace tests
 class SpillJoinTestRunner : public DB::tests::JoinTestRunner
 {
 public:
-    void initializeContext() override { JoinTestRunner::initializeContext(); }
+    void initializeContext() override
+    {
+        JoinTestRunner::initializeContext();
+        dag_context_ptr->log = Logger::get("JoinSpillTest");
+    }
 };
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \

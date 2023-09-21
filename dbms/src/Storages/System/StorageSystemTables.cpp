@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/VirtualColumnUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -25,12 +26,11 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/System/StorageSystemTables.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/Types.h>
-#include <Storages/VirtualColumnUtils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {

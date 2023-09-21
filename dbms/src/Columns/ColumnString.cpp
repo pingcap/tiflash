@@ -17,7 +17,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <common/memcpy.h>
 #include <fmt/core.h>
 

@@ -103,7 +103,7 @@ public:
     };
 
     UInt64 elapsedMillisecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
-    UInt64 elapsedSecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
+    double elapsedSecondsFromLastTime() { return static_cast<double>(elapsedFromLastTime()) / 1000000000ULL; }
 
 private:
     UInt64 start_ns = 0;

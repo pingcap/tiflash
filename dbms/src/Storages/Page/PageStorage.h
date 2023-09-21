@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
@@ -26,7 +27,6 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WALRecoveryMode.h>
-#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 

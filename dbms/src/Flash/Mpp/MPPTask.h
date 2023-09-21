@@ -140,6 +140,8 @@ private:
 
     void reportStatus(const String & err_msg);
 
+    String getResourceGroupName() const { return meta.resource_group_name(); }
+
 private:
     struct ProcessListEntryHolder
     {
