@@ -79,6 +79,12 @@ bool isUInt8Type(const DataTypePtr & type)
     return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
 }
 
+// Return true when this range appears in sql
+bool isExplicitRangeFrame(const tipb::Window & window)
+{
+    return window.frame().type() == tipb::WindowFrameType::Ranges && window.frame().start().has_frame_range();
+}
+
 tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
 {
     return dag_timezone_info.is_name_based ? constructStringLiteralTiExpr(dag_timezone_info.timezone_name)
@@ -243,7 +249,7 @@ void setAuxiliaryColumnInfo(
     const tipb::Window & window)
 {
     // Execute this function only when the frame type is Range
-    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+    if (!isExplicitRangeFrame(window))
         return;
 
     if (begin_aux_col_name.empty() && end_aux_col_name.empty())
@@ -272,7 +278,7 @@ void setOrderByColumnTypeAndDirectionForRangeFrame(
     const tipb::Window & window)
 {
     // Execute this function only when the frame type is Range
-    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+    if (!isExplicitRangeFrame(window))
         return;
 
     RUNTIME_CHECK_MSG(
@@ -307,7 +313,7 @@ std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     const tipb::Window & window)
 {
     // Execute this function only when the frame type is Range
-    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+    if (!isExplicitRangeFrame(window))
         return std::make_pair("", "");
 
     RUNTIME_CHECK_MSG(
