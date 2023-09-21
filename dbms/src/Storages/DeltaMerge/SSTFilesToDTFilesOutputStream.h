@@ -167,6 +167,8 @@ public:
 
     static SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() { return {}; }
 
+    size_t getSplitId() const { return DM::SSTScanSoftLimit::HEAD_SPLIT; }
+
 protected:
     BlockInputStreamPtr mock_data;
     RegionPtr mock_region;

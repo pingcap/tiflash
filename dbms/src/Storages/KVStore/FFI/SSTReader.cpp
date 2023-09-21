@@ -73,7 +73,6 @@ std::vector<std::string> MonoSSTReader::findSplitKeys(uint64_t splits_count) con
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "findSplitKeys can only be called on write cf");
     }
-    LOG_INFO(log, "!!!!! findSplitKeys {}", splits_count);
     RustStrWithViewVec v = proxy_helper->sst_reader_interfaces.fn_get_split_keys(inner, splits_count);
     std::vector<std::string> res;
     if (v.inner.ptr == nullptr)
@@ -94,30 +93,38 @@ void MonoSSTReader::seek(BaseBuffView && view) const
     proxy_helper->sst_reader_interfaces.fn_seek(inner, type, EngineIteratorSeekType::Key, view);
 }
 
-MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_)
+MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_, size_t split_id_)
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
     , range(range_)
     , tail_checked(false)
+    , split_id(split_id_)
 {
     log = &Poco::Logger::get("MonoSSTReader");
     kind = proxy_helper->sst_reader_interfaces.fn_kind(inner, view.type);
     if (kind == SSTFormatKind::KIND_TABLET)
     {
         auto && r = range->comparableKeys();
+        // TODO(split) Should we add 'z' here?
         auto start = r.first.key.toString();
         LOG_INFO(
             log,
-            "Seek cf {} to {}",
+            "Seek cf {} to {}, split_id {}",
             magic_enum::enum_name(type),
-            Redact::keyToDebugString(start.data(), start.size()));
+            Redact::keyToDebugString(start.data(), start.size()),
+            split_id
+        );
         if (!start.empty())
         {
             proxy_helper->sst_reader_interfaces
                 .fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
         }
     }
+}
+
+size_t MonoSSTReader::getSplitId() const {
+    return split_id;
 }
 
 MonoSSTReader::~MonoSSTReader()

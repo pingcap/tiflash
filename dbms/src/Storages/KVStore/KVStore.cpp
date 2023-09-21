@@ -128,6 +128,7 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
         {
             proxy_config_summary.valid = false;
             // we don't care
+            LOG_WARNING(log, "Can't parse config from proxy {}", cpp_string);
         }
     }
 }

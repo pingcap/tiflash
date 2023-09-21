@@ -160,6 +160,7 @@ public:
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
+    size_t getSplitId() const {return soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT;}
 
     bool maybeSkipBySoftLimit();
 
@@ -220,6 +221,8 @@ public:
 
     // Return values: (effective rows, not clean rows, is delete rows, gc hint version)
     std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const;
+
+    size_t getSplitId() const;
 
 private:
     const ColId pk_column_id;

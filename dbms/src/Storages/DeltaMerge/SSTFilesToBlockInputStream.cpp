@@ -61,18 +61,12 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     std::vector<SSTView> ssts_lock;
 
     auto make_inner_func
-        = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
-              return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
+        = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range, size_t split_id) {
+              return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
           };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
         const auto & snapshot = snaps.views[i];
-
-        LOG_INFO(
-            log,
-            "!!!!! SSTFilesToBlockInputStream {} {}",
-            std::string(snapshot.path.data, snapshot.path.len),
-            magic_enum::enum_name(snapshot.type));
         switch (snapshot.type)
         {
         case ColumnFamilyType::Default:
@@ -96,7 +90,9 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_default,
             log,
-            region->getRange());
+            region->getRange(),
+            soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT
+        );
     }
     if (!ssts_write.empty())
     {
@@ -106,7 +102,9 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_write,
             log,
-            region->getRange());
+            region->getRange(),
+            soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT
+        );
     }
     if (!ssts_lock.empty())
     {
@@ -116,7 +114,9 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             make_inner_func,
             ssts_lock,
             log,
-            region->getRange());
+            region->getRange(),
+            soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT
+        );
     }
     LOG_INFO(
         log,
@@ -388,15 +388,41 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
         return false;
     // TODO(split) use seek to optimize
     // Safety `soft_limit` outlives returned base buff view.
+    LOG_INFO(
+        log,
+        "!!!!! before seek, split_id={}, region_id={}, key {}",
+        soft_limit.value().split_id,
+        region->id(),
+        DecodedTiKVKey(std::string(soft_limit.value().start.data(), soft_limit.value().start.size())).toDebugString()
+    );
     write_cf_reader->seek(cppStringAsBuff(soft_limit.value().start));
-    // Skip the soft_limit key, which must not be a match.
-    write_cf_reader->next();
+    LOG_INFO(
+        log,
+        "!!!!! after seek, remained {}, split_id={}, region_id={}",
+        write_cf_reader->remained(),
+        soft_limit.value().split_id,
+        region->id());
+    // // Skip the soft_limit key, which must not be a match.
+    // if (write_cf_reader->remained())
+    //     write_cf_reader->next();
+    // LOG_INFO(
+    //     log,
+    //     "!!!!! after next, split_id={}, region_id={}",
+    //     soft_limit.value().split_id,
+    //     region->id());
+    auto prev = DecodedTiKVKey("");
     while (write_cf_reader && write_cf_reader->remained())
     {
+        LOG_INFO(
+            log,
+            "!!!!! iteriter, split_id={}, region_id={}",
+            soft_limit.value().split_id,
+            region->id());
         // Read until find the next pk.
         auto key = write_cf_reader->keyView();
         // TODO the copy could be eliminated, but with many modifications.
         auto tikv_key = DecodedTiKVKey(std::string(key.data, key.len));
+        prev = DecodedTiKVKey::copyFrom(tikv_key);
         auto current = RecordKVFormat::getRawTiDBPK(tikv_key);
         if (current != start_limit.value())
         {
@@ -420,6 +446,14 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
         write_cf_reader->next();
     }
     // `start_limit` is the last pk of the sst file.
+    LOG_DEBUG(
+        log,
+        "skip meet the last key of write cf start {} start_limit {} to prev {}, split_id={}, region_id={}",
+        soft_limit.value().start.toDebugString(),
+        start_limit.value().toDebugString(),
+        prev.toDebugString(),
+        soft_limit.value().split_id,
+        region->id());
     return false;
 }
 

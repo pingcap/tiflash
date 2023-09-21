@@ -26,12 +26,14 @@ class SSTReader
 public:
     using RegionRangeFilter = ImutRegionRangePtr;
     virtual bool remained() const = 0;
+    // For a key like `zk1`, it will return `k1`.
     virtual BaseBuffView keyView() const = 0;
     virtual BaseBuffView valueView() const = 0;
     virtual void next() = 0;
     virtual size_t approxSize() const = 0;
     virtual std::vector<std::string> findSplitKeys(uint64_t splits_count) const = 0;
     virtual void seek(BaseBuffView && view) const = 0;
+    virtual size_t getSplitId() const = 0;
 
     virtual ~SSTReader() = default;
 };
@@ -48,9 +50,10 @@ public:
     size_t approxSize() const override;
     std::vector<std::string> findSplitKeys(uint64_t splits_count) const override;
     void seek(BaseBuffView && view) const override;
+    size_t getSplitId() const override;
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
-    MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_);
+    MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_, size_t split_id_);
     ~MonoSSTReader() override;
 
 private:
@@ -60,6 +63,7 @@ private:
     RegionRangeFilter range;
     SSTFormatKind kind;
     mutable bool tail_checked;
+    size_t split_id;
     Poco::Logger * log;
 };
 
@@ -74,7 +78,7 @@ template <typename R, typename E>
 class MultiSSTReader : public SSTReader
 {
 public:
-    using Initer = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E, RegionRangeFilter)>;
+    using Initer = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E, RegionRangeFilter, size_t)>;
 
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
 
@@ -117,6 +121,9 @@ public:
         }
         return mono->seek(std::move(view));
     }
+    size_t getSplitId() const override {
+        return split_id;
+    }
 
     // Switch to next mono reader if current is drained,
     // and we have a next sst file to read.
@@ -130,7 +137,7 @@ public:
                 // We don't drop if mono is the last instance for safety,
                 // and it will be dropped as MultiSSTReader is dropped.
                 LOG_INFO(log, "Open sst file {}", buffToStrView(args[current].path));
-                mono = initer(proxy_helper, args[current], range);
+                mono = initer(proxy_helper, args[current], range, split_id);
             }
         }
     }
@@ -141,7 +148,9 @@ public:
         Initer initer_,
         std::vector<E> args_,
         LoggerPtr log_,
-        RegionRangeFilter range_)
+        RegionRangeFilter range_,
+        size_t split_id_
+    )
         : log(log_)
         , proxy_helper(proxy_helper_)
         , type(type_)
@@ -149,10 +158,11 @@ public:
         , args(args_)
         , current(0)
         , range(range_)
+        , split_id(split_id_)
     {
         assert(args.size() > 0);
-        LOG_INFO(log, "Open sst file first {} range {}", buffToStrView(args[current].path), range->toDebugString());
-        mono = initer(proxy_helper, args[current], range);
+        LOG_INFO(log, "Open sst file first {} range {} split_id {}", buffToStrView(args[current].path), range->toDebugString(), split_id);
+        mono = initer(proxy_helper, args[current], range, split_id);
     }
 
     ~MultiSSTReader() override
@@ -171,6 +181,7 @@ private:
     std::vector<E> args;
     mutable size_t current;
     RegionRangeFilter range;
+    size_t split_id;
 };
 
 } // namespace DB
