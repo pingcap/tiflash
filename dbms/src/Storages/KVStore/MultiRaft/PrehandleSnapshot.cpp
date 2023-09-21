@@ -254,7 +254,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 if (force_decode)
                 {
                     // Can not decode data with `force_decode == true`, must be something wrong
-                    throw;
+                    throw Exception(result.extra_msg, ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
 
                 // Update schema and try to decode again
