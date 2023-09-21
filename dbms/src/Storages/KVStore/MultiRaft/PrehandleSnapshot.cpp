@@ -126,7 +126,9 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                     .dt_disk_bytes = stream->getTotalBytesOnDisk(),
                     .dt_total_bytes = stream->getTotalCommittedBytes(),
                     .total_keys = sst_stream->getProcessKeys().total(),
-                    .write_cf_keys = sst_stream->getProcessKeys().write_cf}});
+                    .write_cf_keys = sst_stream->getProcessKeys().write_cf,
+                    .max_split_write_cf_keys = sst_stream->getProcessKeys().write_cf
+                }});
     }
     catch (DB::Exception & e)
     {

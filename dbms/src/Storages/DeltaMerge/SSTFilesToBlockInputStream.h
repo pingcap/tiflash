@@ -165,7 +165,7 @@ public:
     bool maybeSkipBySoftLimit();
 
 private:
-    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
+    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included, const DecodedTiKVKey * rowkey_to_be_skipped);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();

@@ -94,7 +94,7 @@ try
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
     UInt64 region_id = 1;
     TableID table_id;
-    FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(99999));
+    FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(0));
     SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_parallel_prehandle_threshold"); });
     {
         region_id = 2;
@@ -135,7 +135,8 @@ try
                 = proxy_instance
                       ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
             ASSERT_EQ(res.stats.write_cf_keys, 49); // There are 49 versions.
-            ASSERT_EQ(res.stats.parallels, 1);
+            ASSERT_EQ(res.stats.parallels, 4);
+            ASSERT_EQ(res.stats.max_split_write_cf_keys, res.stats.write_cf_keys); // Only one split can handle all write keys.
         }
     }
 }

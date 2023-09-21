@@ -198,8 +198,8 @@ Block SSTFilesToBlockInputStream::read()
             loaded_write_cf_key.clear();
             // Batch the loading from other CFs until we need to decode data
             // TODO(split) skip keys before soft limit when load from other cfs.
-            loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
-            loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
+            loadCFDataFromSST(ColumnFamilyType::Default, &rowkey, nullptr);
+            loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey, nullptr);
 
             auto block = readCommitedBlock();
             if (block.rows() != 0)
@@ -211,8 +211,8 @@ Block SSTFilesToBlockInputStream::read()
     // We emit the last block of this sst decode stream here.
     // Load all key-value pairs from other CFs.
     // TODO(split) skip keys before soft limit when load from other cfs.
-    loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
-    loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);
+    loadCFDataFromSST(ColumnFamilyType::Default, nullptr, nullptr);
+    loadCFDataFromSST(ColumnFamilyType::Lock, nullptr, nullptr);
 
     // All uncommitted data are saved in `region`, decode the last committed rows.
     return readCommitedBlock();
@@ -220,8 +220,11 @@ Block SSTFilesToBlockInputStream::read()
 
 void SSTFilesToBlockInputStream::loadCFDataFromSST(
     ColumnFamilyType cf,
-    const DecodedTiKVKey * const rowkey_to_be_included)
+    const DecodedTiKVKey * const rowkey_to_be_included,
+    const DecodedTiKVKey * const rowkey_to_be_skipped
+)
 {
+    UNUSED(rowkey_to_be_skipped);
     SSTReader * reader;
     size_t * p_process_keys;
     size_t * p_process_keys_bytes;
@@ -410,28 +413,23 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
     //     "!!!!! after next, split_id={}, region_id={}",
     //     soft_limit.value().split_id,
     //     region->id());
-    auto prev = DecodedTiKVKey("");
     while (write_cf_reader && write_cf_reader->remained())
     {
-        LOG_INFO(
-            log,
-            "!!!!! iteriter, split_id={}, region_id={}",
-            soft_limit.value().split_id,
-            region->id());
         // Read until find the next pk.
         auto key = write_cf_reader->keyView();
         // TODO the copy could be eliminated, but with many modifications.
-        auto tikv_key = DecodedTiKVKey(std::string(key.data, key.len));
-        prev = DecodedTiKVKey::copyFrom(tikv_key);
-        auto current = RecordKVFormat::getRawTiDBPK(tikv_key);
-        if (current != start_limit.value())
+        auto tikv_key = TiKVKey(key.data, key.len);
+        auto current_truncated_ts = RecordKVFormat::truncateTs(tikv_key);
+        auto start_limit_ts = RecordKVFormat::truncateTs(tikv_key);
+        // If found a new pk.
+        if (current_truncated_ts != start_limit_ts)
         {
             RUNTIME_CHECK_MSG(
-                current > start_limit.value(),
+                current_truncated_ts > start_limit_ts,
                 "current decreases as cf advances, start {} start_limit {} current {}, region_id={}",
                 soft_limit.value().start.toDebugString(),
                 start_limit.value().toDebugString(),
-                current.toDebugString(),
+                current_truncated_ts.toDebugString(),
                 region->id());
             LOG_DEBUG(
                 log,
@@ -448,10 +446,9 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
     // `start_limit` is the last pk of the sst file.
     LOG_DEBUG(
         log,
-        "skip meet the last key of write cf start {} start_limit {} to prev {}, split_id={}, region_id={}",
+        "skip meet the last key of write cf start {} start_limit {}, split_id={}, region_id={}",
         soft_limit.value().start.toDebugString(),
         start_limit.value().toDebugString(),
-        prev.toDebugString(),
         soft_limit.value().split_id,
         region->id());
     return false;
@@ -467,9 +464,10 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
         return false;
     auto key = write_cf_reader->keyView();
     // TODO the copy could be eliminated, but with many modifications.
-    auto tikv_key = DecodedTiKVKey(std::string(key.data, key.len));
-    auto current = RecordKVFormat::getRawTiDBPK(tikv_key);
-    if (current > end_limit.value())
+    auto tikv_key = TiKVKey(key.data, key.len);
+    auto current_truncated_ts = RecordKVFormat::truncateTs(tikv_key);
+    auto start_limit_ts = RecordKVFormat::truncateTs(tikv_key);
+    if (current_truncated_ts > start_limit_ts)
     {
         LOG_INFO(
             log,
