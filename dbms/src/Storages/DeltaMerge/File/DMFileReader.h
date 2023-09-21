@@ -39,6 +39,7 @@ inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE
 class DMFileReader
 {
 public:
+    static bool isCacheableColumn(const ColumnDefine & cd);
     // Read stream for single column
     struct Stream
     {

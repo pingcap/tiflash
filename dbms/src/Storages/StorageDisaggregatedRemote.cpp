@@ -499,12 +499,14 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
     const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     LOG_INFO(
         log,
-        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
+        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={} "
+        "column_defines={}",
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         read_task->segment_read_tasks.size(),
-        num_streams);
+        num_streams,
+        *column_defines);
 
     return DM::Remote::RNWorkers::create(
         db_context,

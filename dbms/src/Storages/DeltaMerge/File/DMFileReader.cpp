@@ -512,7 +512,7 @@ inline bool isExtraColumn(const ColumnDefine & cd)
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
 }
 
-inline bool isCacheableColumn(const ColumnDefine & cd)
+bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
 {
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
 }
