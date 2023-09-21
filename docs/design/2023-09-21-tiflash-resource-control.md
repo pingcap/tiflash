@@ -45,7 +45,7 @@ After TaskScheduler obtains a task, it will execute for 100ms and update its CPU
 ### LocalAdmissionController (LAC)
 LAC is responsible for managing the metadata of all resource groups on a TiFlash node, including:
 1. Recording the priorities, configurations, and TokenBuckets of all currently known resource groups.
-2. Watching GAC etcd, updating resource group configurations and detecting resource group deletions.(Creation is not managed by watching etcd, it will be created when the first query comes to TiFlash)
+2. Watching GAC etcd, updating resource group configurations and detecting resource group deletions.(The creation of the resource group does not rely on the watching etcd mechanism. Instead, it is automatically created after the first query for that resource group is dispatched to TiFlash.)
 3. Communicating with GAC to periodically obtain tokens.
 
 ## Test Design
