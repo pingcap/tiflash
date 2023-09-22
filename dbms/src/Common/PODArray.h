@@ -111,7 +111,8 @@ protected:
 
     [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> swicthMemoryTracker()
     {
-        return is_shared_memory ? std::make_optional<MemoryTrackerSetter>(true, shared_column_data_mem_tracker.get()) : std::nullopt;
+        return is_shared_memory ? std::make_optional<MemoryTrackerSetter>(true, shared_column_data_mem_tracker.get())
+                                : std::nullopt;
     }
 
     /// The amount of memory occupied by the num_elements of the elements.
