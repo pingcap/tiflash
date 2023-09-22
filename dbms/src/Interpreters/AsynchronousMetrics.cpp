@@ -187,19 +187,50 @@ void AsynchronousMetrics::update()
                 {
                     if (auto store = dt_storage->getStoreIfInited(); store)
                     {
-                        auto stat = store->getStoreStats();
-                        calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
+                        const auto stat = store->getStoreStats();
+                        if (context.getPageStorageRunMode() == PageStorageRunMode::ONLY_V2)
+                        {
+                            calculateMax(
+                                max_dt_stable_oldest_snapshot_lifetime,
+                                stat.storage_stable_oldest_snapshot_lifetime);
+                            calculateMax(
+                                max_dt_delta_oldest_snapshot_lifetime,
+                                stat.storage_delta_oldest_snapshot_lifetime);
+                            calculateMax(
+                                max_dt_meta_oldest_snapshot_lifetime,
+                                stat.storage_meta_oldest_snapshot_lifetime);
+                        }
                         calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                     }
                 }
             }
         }
 
-        set("MaxDTStableOldestSnapshotLifetime", max_dt_stable_oldest_snapshot_lifetime);
-        set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
-        set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
+        switch (context.getPageStorageRunMode())
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            set("MaxDTStableOldestSnapshotLifetime", max_dt_stable_oldest_snapshot_lifetime);
+            set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
+            set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
+            break;
+        }
+        case PageStorageRunMode::ONLY_V3:
+        case PageStorageRunMode::MIX_MODE:
+        {
+            if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool)
+            {
+                const auto log_snap_stat = global_storage_pool->log_storage->getSnapshotsStat();
+                const auto meta_snap_stat = global_storage_pool->meta_storage->getSnapshotsStat();
+                const auto data_snap_stat = global_storage_pool->data_storage->getSnapshotsStat();
+                set("MaxDTDeltaOldestSnapshotLifetime", log_snap_stat.longest_living_seconds);
+                set("MaxDTMetaOldestSnapshotLifetime", meta_snap_stat.longest_living_seconds);
+                set("MaxDTStableOldestSnapshotLifetime", data_snap_stat.longest_living_seconds);
+            }
+            break;
+        }
+        }
+
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
