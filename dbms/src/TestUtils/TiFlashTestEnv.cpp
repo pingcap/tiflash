@@ -22,6 +22,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -171,6 +172,8 @@ void TiFlashTestEnv::addGlobalContext(
     global_context->getTMTContext().restore(path_pool);
 
     global_context->initializeSharedBlockSchemas(10000);
+
+    global_context->setServerInfo(ServerInfo{}); // Default server info.
 }
 
 ContextPtr TiFlashTestEnv::getContext()
