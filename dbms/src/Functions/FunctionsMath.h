@@ -597,9 +597,33 @@ struct PiImpl
 };
 
 
+bool logNullable(double b, double & result)
+{
+    if (b <= 0)
+        return true;
+    result = log(b);
+    return false;
+}
+
+bool log2Nullable(double b, double & result)
+{
+    if (b <= 0)
+        return true;
+    result = log2(b);
+    return false;
+}
+
+bool log10Nullable(double b, double & result)
+{
+    if (b <= 0)
+        return true;
+    result = log10(b);
+    return false;
+}
+
 bool log2args(double b, double e, double & result)
 {
-    if (b == 1 || b < 0 || e < 0)
+    if (b == 1 || b <= 0 || e <= 0)
     {
         return true;
     }
@@ -722,12 +746,12 @@ using FunctionSign = FunctionMathUnaryFloat64<UnaryFunctionPlain<SignName, DB::s
 using FunctionE = FunctionMathNullaryConstFloat64<EImpl>;
 using FunctionPi = FunctionMathNullaryConstFloat64<PiImpl>;
 using FunctionExp = FunctionMathUnaryFloat64<UnaryFunctionVectorized<ExpName, exp>>;
-using FunctionLog = FunctionMathUnaryFloat64<UnaryFunctionVectorized<LogName, log>>;
+using FunctionLog = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<LogName, DB::logNullable>>;
 using FunctionLog2Args = FunctionMathBinaryFloat64Nullable<BinaryFunctionNullablePlain<Log2ArgsName, DB::log2args>>;
 using FunctionExp2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp2Name, exp2>>;
-using FunctionLog2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log2Name, log2>>;
+using FunctionLog2 = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<Log2Name, DB::log2Nullable>>;
 using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp10Name, preciseExp10>>;
-using FunctionLog10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log10Name, log10>>;
+using FunctionLog10 = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<Log10Name, DB::log10Nullable>>;
 using FunctionSqrt = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<SqrtName, DB::sqrtNullable>>;
 
 using FunctionCbrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CbrtName,
