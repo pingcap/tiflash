@@ -107,7 +107,12 @@ protected:
     char * c_end = null;
     char * c_end_of_storage = null; /// Does not include pad_right.
 
-    bool disable_mem_tracing;
+    bool is_shared_memory;
+
+    [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> swicthMemoryTracker()
+    {
+        return is_shared_memory ? std::make_optional<MemoryTrackerSetter>(true, shared_column_data_mem_tracker.get()) : std::nullopt;
+    }
 
     /// The amount of memory occupied by the num_elements of the elements.
     static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
@@ -134,6 +139,7 @@ protected:
     template <typename... TAllocatorParams>
     void alloc(size_t bytes, TAllocatorParams &&... allocator_params)
     {
+        auto guard = swicthMemoryTracker();
         c_start = c_end
             = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...))
             + pad_left;
@@ -150,7 +156,7 @@ protected:
 
         unprotect();
 
-        MemoryTrackerSetter mem_tracker_guard(true, disable_mem_tracing ? nullptr : current_memory_tracker);
+        auto guard = swicthMemoryTracker();
         TAllocator::free(c_start - pad_left, allocated_bytes());
     }
 
@@ -165,6 +171,7 @@ protected:
 
         unprotect();
 
+        auto guard = swicthMemoryTracker();
         ptrdiff_t end_diff = c_end - c_start;
 
         c_start = reinterpret_cast<char *>(TAllocator::realloc(
@@ -292,7 +299,7 @@ public:
     ~PODArrayBase() { dealloc(); }
 
     PODArrayBase()
-        : disable_mem_tracing(current_memory_tracker == nullptr)
+        : is_shared_memory(current_memory_tracker == nullptr)
     {}
 };
 
