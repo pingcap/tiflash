@@ -77,7 +77,7 @@ static String storageMemoryUsageDetail()
     return fmt::format(
         "non-query: peak={}, amount={}; "
         "query-storage-task: peak={}, amount={}; "
-        "fetch-pages: peak={}, amount={};"
+        "fetch-pages: peak={}, amount={}; "
         "shared-column-data: peak={}, amount={}.",
         root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->getPeak())
                                        : "0",
