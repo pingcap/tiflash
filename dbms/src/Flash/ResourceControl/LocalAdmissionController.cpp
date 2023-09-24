@@ -56,13 +56,13 @@ void LocalAdmissionController::startBackgroudJob()
     {
         try
         {
-            // If the unique_client_id cannot be successfully obtained from GAC for a long, then the behavior of resource control is:
+            // If the unique_client_id cannot be successfully obtained from GAC for a long time, then the behavior of resource control is:
             // when the resource group has consumed RU, all queries cannot be scheduled anymore.
             unique_client_id = etcd_client->acquireServerIDFromPD();
         }
         catch (...)
         {
-            // In case we got context timeout error.
+            // Needs to catch in case we got context timeout error.
             LOG_ERROR(
                 log,
                 "get unique_client_id from PD error: {}, resource control may not work properly, try again later",
