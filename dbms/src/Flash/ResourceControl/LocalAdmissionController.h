@@ -446,6 +446,9 @@ public:
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
+        // NOTE: Better not use lock inside refill_token_callback,
+        // because LAC needs to lock when calling refill_token_callback,
+        // which may introduce dead lock.
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
@@ -516,8 +519,6 @@ private:
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
-
-    void handleBackgroundError(const std::string & err_msg) const;
 
     static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 

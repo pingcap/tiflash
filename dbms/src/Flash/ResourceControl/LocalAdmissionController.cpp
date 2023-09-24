@@ -77,12 +77,10 @@ void LocalAdmissionController::startBackgroudJob()
     auto last_metric_time_point = std::chrono::steady_clock::now();
     while (!stopped.load())
     {
-        std::function<void()> local_refill_token_callback = nullptr;
         bool fetch_token_periodically = false;
 
         {
             std::unique_lock<std::mutex> lock(mu);
-            local_refill_token_callback = refill_token_callback;
 
             auto now = std::chrono::steady_clock::now();
             if (now - last_metric_time_point >= COLLECT_METRIC_INTERVAL)
@@ -107,14 +105,18 @@ void LocalAdmissionController::startBackgroudJob()
             else
                 fetchTokensForLowTokenResourceGroups();
 
-            if (local_refill_token_callback)
-                local_refill_token_callback();
+            {
+                // Need lock here to avoid RCQ has already been destroied.
+                std::lock_guard lock(mu);
+                if (refill_token_callback)
+                    refill_token_callback();
+            }
 
             checkDegradeMode();
         }
         catch (...)
         {
-            handleBackgroundError(getCurrentExceptionMessage(true));
+            LOG_ERROR(log, getCurrentExceptionMessage(true));
         }
     }
 }
@@ -286,7 +288,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
 {
     if unlikely (resp.has_error())
     {
-        handleBackgroundError(resp.error().message());
+        LOG_ERROR(log, resp.error().message());
         return {};
     }
 
@@ -297,7 +299,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
 
     if (resp.responses().empty())
     {
-        handleBackgroundError("got empty TokenBuckets resp from GAC");
+        LOG_ERROR(log, "got empty TokenBuckets resp from GAC");
         return {};
     }
 
@@ -307,7 +309,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         // For each resource group.
         if unlikely (!one_resp.granted_resource_tokens().empty())
         {
-            handleBackgroundError("GAC return RAW granted tokens, but LAC expect RU tokens");
+            LOG_ERROR(log, "GAC return RAW granted tokens, but LAC expect RU tokens");
             continue;
         }
 
@@ -315,13 +317,17 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
 
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
-        if unlikely (!one_resp.granted_r_u_tokens().empty() && one_resp.granted_r_u_tokens().size() != 1)
+        if (one_resp.granted_r_u_tokens().empty())
+            continue;
+
+        if unlikely (one_resp.granted_r_u_tokens().size() != 1)
         {
-            handleBackgroundError(fmt::format(
+            LOG_ERROR(log, fmt::format(
                 "expect resp.granted_r_u_tokens().size() is 1 or 0, but got {} for rg {}",
                 one_resp.granted_r_u_tokens().size(), one_resp.resource_group_name()));
             continue;
         }
+
         auto resource_group = findResourceGroup(one_resp.resource_group_name());
         if (resource_group == nullptr)
             continue;
@@ -329,7 +335,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         const resource_manager::GrantedRUTokenBucket & granted_token_bucket = one_resp.granted_r_u_tokens()[0];
         if unlikely (granted_token_bucket.type() != resource_manager::RequestUnitType::RU)
         {
-            handleBackgroundError("unexpected request type");
+            LOG_ERROR(log, "unexpected request type");
             continue;
         }
 
@@ -397,7 +403,7 @@ void LocalAdmissionController::doWatch()
     if (!write_ok)
     {
         auto status = stream->Finish();
-        handleBackgroundError(WATCH_GAC_ERR_PREFIX + status.error_message());
+        LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + status.error_message());
         return;
     }
 
@@ -408,13 +414,13 @@ void LocalAdmissionController::doWatch()
         if (!read_ok)
         {
             auto status = stream->Finish();
-            handleBackgroundError(WATCH_GAC_ERR_PREFIX + "read watch stream failed, " + status.error_message());
+            LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "read watch stream failed, " + status.error_message());
             break;
         }
         LOG_DEBUG(log, "watchGAC got resp: {}", resp.DebugString());
         if (resp.canceled())
         {
-            handleBackgroundError(WATCH_GAC_ERR_PREFIX + "watch is canceled");
+            LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "watch is canceled");
             break;
         }
         for (const auto & event : resp.events())
@@ -425,11 +431,11 @@ void LocalAdmissionController::doWatch()
             {
             case mvccpb::Event_EventType_DELETE:
                 if (!handleDeleteEvent(kv, err_msg))
-                    handleBackgroundError(WATCH_GAC_ERR_PREFIX + err_msg);
+                    LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + err_msg);
                 break;
             case mvccpb::Event_EventType_PUT:
                 if (!handlePutEvent(kv, err_msg))
-                    handleBackgroundError(WATCH_GAC_ERR_PREFIX + err_msg);
+                    LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + err_msg);
                 break;
             default:
                 RUNTIME_ASSERT(false, log, "unexpect event type {}", magic_enum::enum_name(event.type()));
@@ -515,13 +521,6 @@ bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
     }
     parsed_rg_name = std::string(etcd_key.begin() + key_prefix.length() + 1, etcd_key.end());
     return true;
-}
-
-void LocalAdmissionController::handleBackgroundError(const std::string & err_msg) const
-{
-    // Basically, errors are all from GAC, cannot handle in tiflash.
-    // So only print log.
-    LOG_ERROR(log, err_msg);
 }
 
 void LocalAdmissionController::checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
