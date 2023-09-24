@@ -313,11 +313,13 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
 
         handled_resource_group_names.emplace_back(one_resp.resource_group_name());
 
-        if unlikely (one_resp.granted_r_u_tokens().size() != 1)
+        // It's possible for one_resp.granted_r_u_tokens() to be empty
+        // when the acquire_token_req is only for report RU consumption.
+        if unlikely (!one_resp.granted_r_u_tokens().empty() && one_resp.granted_r_u_tokens().size() != 1)
         {
             handleBackgroundError(fmt::format(
-                "expect resp.granted_r_u_tokens().size() is 1, but got {}",
-                one_resp.granted_r_u_tokens().size()));
+                "expect resp.granted_r_u_tokens().size() is 1 or 0, but got {} for rg {}",
+                one_resp.granted_r_u_tokens().size(), one_resp.resource_group_name()));
             continue;
         }
         auto resource_group = findResourceGroup(one_resp.resource_group_name());
