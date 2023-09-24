@@ -52,15 +52,27 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
 
 void LocalAdmissionController::startBackgroudJob()
 {
-    try
+    while (!stopped.load())
     {
-        unique_client_id = etcd_client->acquireServerIDFromPD();
+        try
+        {
+            // If the unique_client_id cannot be successfully obtained from GAC for a long, then the behavior of resource control is:
+            // when the resource group has consumed RU, all queries cannot be scheduled anymore.
+            unique_client_id = etcd_client->acquireServerIDFromPD();
+        }
+        catch (...)
+        {
+            // In case we got context timeout error.
+            LOG_ERROR(
+                log,
+                "get unique_client_id from PD error: {}, resource control may not work properly, try again later",
+                getCurrentExceptionMessage(false));
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            continue;
+        }
+        break;
     }
-    catch (...)
-    {
-        LOG_FATAL(log, getCurrentExceptionMessage(false));
-        std::terminate();
-    }
+    LOG_INFO(log, "get unique_client_id succeed: {}", unique_client_id);
 
     auto last_metric_time_point = std::chrono::steady_clock::now();
     while (!stopped.load())
@@ -363,15 +375,20 @@ void LocalAdmissionController::watchGAC()
         // 2. grpc stream read error.
         // 3. watch is cancel.
         // Will sleep and try again.
-        std::unique_lock lock(mu);
-        if (cv.wait_for(lock, std::chrono::seconds(10), [this]() { return stopped.load(); }))
-            return;
+        {
+            std::unique_lock lock(mu);
+            if (cv.wait_for(lock, std::chrono::seconds(10), [this]() { return stopped.load(); }))
+                return;
+
+            // Create new grpc_context for each reader/writer.
+            watch_gac_grpc_context = std::make_shared<grpc::ClientContext>();
+        }
     }
 }
 
 void LocalAdmissionController::doWatch()
 {
-    auto stream = etcd_client->watch(&watch_gac_grpc_context);
+    auto stream = etcd_client->watch(watch_gac_grpc_context.get());
     auto watch_req = setupWatchReq();
     LOG_DEBUG(log, "watchGAC req: {}", watch_req.DebugString());
     const bool write_ok = stream->Write(watch_req);
