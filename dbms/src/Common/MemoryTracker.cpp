@@ -23,11 +23,6 @@
 
 #include <iomanip>
 
-namespace CurrentMetrics
-{
-extern const Metric MemoryTrackingSharedColumnData;
-} // namespace CurrentMetrics
-
 std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
 std::atomic<UInt64> proc_virt_size{0};
 MemoryTracker::~MemoryTracker()
