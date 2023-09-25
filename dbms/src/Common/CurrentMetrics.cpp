@@ -64,24 +64,7 @@
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
     M(RegionPersisterRunMode)                   \
-<<<<<<< HEAD
     M(GlobalStorageRunMode)
-=======
-    M(S3Requests)                               \
-    M(GlobalStorageRunMode)                     \
-    M(GlobalThread)                             \
-    M(GlobalThreadActive)                       \
-    M(LocalThread)                              \
-    M(LocalThreadActive)                        \
-    M(DTFileCacheCapacity)                      \
-    M(DTFileCacheUsed)                          \
-    M(PageCacheCapacity)                        \
-    M(PageCacheUsed)                            \
-    M(ConnectionPoolSize)                       \
-    M(MemoryTrackingQueryStorageTask)           \
-    M(MemoryTrackingFetchPages)                 \
-    M(MemoryTrackingSharedColumnData)
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 
 namespace CurrentMetrics
 {

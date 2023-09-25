@@ -22,16 +22,6 @@
 
 #include <iomanip>
 
-<<<<<<< HEAD
-=======
-namespace CurrentMetrics
-{
-extern const Metric MemoryTrackingQueryStorageTask;
-extern const Metric MemoryTrackingFetchPages;
-extern const Metric MemoryTrackingSharedColumnData;
-} // namespace CurrentMetrics
-
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
 std::atomic<UInt64> proc_virt_size{0};
 MemoryTracker::~MemoryTracker()
@@ -74,34 +64,21 @@ static Poco::Logger * getLogger()
     return logger;
 }
 
-<<<<<<< HEAD
-=======
 static String storageMemoryUsageDetail()
 {
     return fmt::format(
         "non-query: peak={}, amount={}; "
-        "query-storage-task: peak={}, amount={}; "
-        "fetch-pages: peak={}, amount={}; "
         "shared-column-data: peak={}, amount={}.",
         root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->getPeak())
                                        : "0",
         root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->get())
                                        : "0",
-        sub_root_of_query_storage_task_mem_trackers
-            ? formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->getPeak())
-            : "0",
-        sub_root_of_query_storage_task_mem_trackers
-            ? formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->get())
-            : "0",
-        fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->getPeak()) : "0",
-        fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->get()) : "0",
         shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->getPeak())
                                        : "0",
         shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->get())
                                        : "0");
 }
 
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 void MemoryTracker::logPeakMemoryUsage() const
 {
     LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
@@ -142,6 +119,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
                               proc_virt_size.load());
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -159,7 +137,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               formatReadableSizeWithBinarySuffix(will_be),
                               size,
                               formatReadableSizeWithBinarySuffix(current_limit));
-
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
         Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
@@ -190,7 +168,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                                   size,
                                   formatReadableSizeWithBinarySuffix(current_limit));
             }
-
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
     }
@@ -264,10 +242,6 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::createGlobalRoot();
 std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
 
-<<<<<<< HEAD
-=======
-std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
-std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
 std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
 
 void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
@@ -277,23 +251,11 @@ void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
         "Storage task memory limit={}, larger_than_limit={}",
         formatReadableSizeWithBinarySuffix(limit),
         formatReadableSizeWithBinarySuffix(larger_than_limit));
-    RUNTIME_CHECK(sub_root_of_query_storage_task_mem_trackers == nullptr);
-    sub_root_of_query_storage_task_mem_trackers = MemoryTracker::create(limit);
-    sub_root_of_query_storage_task_mem_trackers->setBytesThatRssLargerThanLimit(larger_than_limit);
-    sub_root_of_query_storage_task_mem_trackers->setAmountMetric(CurrentMetrics::MemoryTrackingQueryStorageTask);
-
-    RUNTIME_CHECK(fetch_pages_mem_tracker == nullptr);
-    fetch_pages_mem_tracker = MemoryTracker::create();
-    fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
-    fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingFetchPages);
-
     RUNTIME_CHECK(shared_column_data_mem_tracker == nullptr);
-    shared_column_data_mem_tracker = MemoryTracker::create();
-    shared_column_data_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
-    shared_column_data_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingSharedColumnData);
+    shared_column_data_mem_tracker = MemoryTracker::create(limit);
+    shared_column_data_mem_tracker->setBytesThatRssLargerThanLimit(larger_than_limit);
 }
 
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 namespace CurrentMemoryTracker
 {
 static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB

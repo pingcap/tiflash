@@ -58,15 +58,8 @@ int main(int argc, char ** argv)
 {
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
-<<<<<<< HEAD
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
-=======
-    bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
-    DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
-    auto run_mode = DB::PageStorageRunMode::ONLY_V3;
-    DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
