@@ -119,8 +119,9 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     if (!next.load(std::memory_order_relaxed))
     {
         CurrentMetrics::add(metric, size);
-        if (shared_column_data_mem_tracker)
-            will_be += shared_column_data_mem_tracker->get(); // Add shared column data size to root tracker.
+        // Only add shared column data size to root_of_query_mem_trackers.
+        if (shared_column_data_mem_tracker && root_of_query_mem_trackers.get() == this)
+            will_be += shared_column_data_mem_tracker->get();
     }
 
     if (check_memory_limit)
