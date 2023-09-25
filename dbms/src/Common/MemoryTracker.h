@@ -171,6 +171,7 @@ extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 //                  |-- fetch_pages_mem_tracker
 extern std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
 extern std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
+extern std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
 
 void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit);
 

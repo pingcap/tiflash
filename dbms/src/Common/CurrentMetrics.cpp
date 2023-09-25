@@ -81,7 +81,8 @@
     M(PageCacheUsed)                            \
     M(ConnectionPoolSize)                       \
     M(MemoryTrackingQueryStorageTask)           \
-    M(MemoryTrackingFetchPages)
+    M(MemoryTrackingFetchPages)                 \
+    M(MemoryTrackingSharedColumnData)
 
 namespace CurrentMetrics
 {
