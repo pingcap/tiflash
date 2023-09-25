@@ -78,14 +78,7 @@
     M(DTFileCacheUsed)                          \
     M(PageCacheCapacity)                        \
     M(PageCacheUsed)                            \
-<<<<<<< HEAD
     M(ConnectionPoolSize)
-=======
-    M(ConnectionPoolSize)                       \
-    M(MemoryTrackingQueryStorageTask)           \
-    M(MemoryTrackingFetchPages)                 \
-    M(MemoryTrackingSharedColumnData)
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 
 namespace CurrentMetrics
 {

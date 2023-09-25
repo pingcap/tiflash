@@ -1239,6 +1239,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
     // adjust the thread pool size according to settings and logical cores num
     adjustThreadPoolSize(settings, server_info.cpu_info.logical_cores);
+    initStorageMemoryTracker(
+        settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity),
+        settings.bytes_that_rss_larger_than_limit);
 
     /// PageStorage run mode has been determined above
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())

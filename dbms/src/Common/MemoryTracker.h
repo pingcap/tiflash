@@ -157,20 +157,9 @@ extern thread_local MemoryTracker * current_memory_tracker;
 extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
 extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 
-<<<<<<< HEAD
-=======
-// Initialize in `initStorageMemoryTracker`.
-// If a memory tracker of storage tasks is driven by query, it should inherit `sub_root_of_query_storage_task_mem_trackers`.
-// Since it is difficult to maintain synchronization with the root_of_query_mem_trackers, it is not inherited from root_of_query_mem_trackers.
-// sub_root_of_query_storage_task_mem_trackers
-//                  |-- fetch_pages_mem_tracker
-extern std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
-extern std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
 extern std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
-
 void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit);
 
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
 {

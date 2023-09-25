@@ -138,14 +138,10 @@ protected:
     template <typename... TAllocatorParams>
     void alloc(size_t bytes, TAllocatorParams &&... allocator_params)
     {
-<<<<<<< HEAD
-        c_start = c_end = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...)) + pad_left;
-=======
         auto guard = swicthMemoryTracker();
         c_start = c_end
             = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...))
             + pad_left;
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
         c_end_of_storage = c_start + bytes - pad_right - pad_left;
 
         if (pad_left)
@@ -299,18 +295,11 @@ public:
 #endif
     }
 
-<<<<<<< HEAD
-    ~PODArrayBase()
-    {
-        dealloc();
-    }
-=======
     ~PODArrayBase() { dealloc(); }
 
     PODArrayBase()
         : is_shared_memory(current_memory_tracker == nullptr)
     {}
->>>>>>> a7cdb82dbb (No tracing memory usage of shared column data in MPPTask's memory tracker (#8131))
 };
 
 template <typename T, size_t INITIAL_SIZE = 4096, typename TAllocator = Allocator<false>, size_t pad_right_ = 0, size_t pad_left_ = 0>
