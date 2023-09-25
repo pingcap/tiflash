@@ -324,10 +324,9 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         {
             LOG_ERROR(
                 log,
-                fmt::format(
-                    "expect resp.granted_r_u_tokens().size() is 1 or 0, but got {} for rg {}",
-                    one_resp.granted_r_u_tokens().size(),
-                    one_resp.resource_group_name()));
+                "expect resp.granted_r_u_tokens().size() is 1 or 0, but got {} for rg {}",
+                one_resp.granted_r_u_tokens().size(),
+                one_resp.resource_group_name());
             continue;
         }
 
