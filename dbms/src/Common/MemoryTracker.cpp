@@ -65,6 +65,21 @@ static Poco::Logger * getLogger()
     return logger;
 }
 
+static String storageMemoryUsageDetail()
+{
+    return fmt::format(
+        "non-query: peak={}, amount={}; "
+        "shared-column-data: peak={}, amount={}.",
+        root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->getPeak())
+                                       : "0",
+        root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->get())
+                                       : "0",
+        shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->getPeak())
+                                       : "0",
+        shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->get())
+                                       : "0");
+}
+
 void MemoryTracker::logPeakMemoryUsage() const
 {
     LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
@@ -105,6 +120,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
                               proc_virt_size.load());
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -122,7 +138,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               formatReadableSizeWithBinarySuffix(will_be),
                               size,
                               formatReadableSizeWithBinarySuffix(current_limit));
-
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
         Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
@@ -154,7 +170,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                                   size,
                                   formatReadableSizeWithBinarySuffix(current_limit));
             }
-
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
     }
