@@ -817,7 +817,8 @@ void DMFileReader::readColumn(
         // So the allocation and deallocation of this data may not be in the same MemoryTracker.
         // This can lead to inaccurate memory statistics of MemoryTracker.
         // To solve this problem, we use a independent global memory tracker to trace the shared column data in ColumnSharingCacheMap.
-        MemoryTrackerSetter mem_tracker_guard(true, has_concurrent_reader ? nullptr : current_memory_tracker);
+        auto mem_tracker_guard
+            = has_concurrent_reader ? std::make_optional<MemoryTrackerSetter>(true, nullptr) : std::nullopt;
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         auto col = data_type->createColumn();
         readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, last_read_from_cache[column_define.id]);
