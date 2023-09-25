@@ -27,6 +27,7 @@ namespace CurrentMetrics
 {
 extern const Metric MemoryTrackingQueryStorageTask;
 extern const Metric MemoryTrackingFetchPages;
+extern const Metric MemoryTrackingSharedColumnData;
 } // namespace CurrentMetrics
 
 std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
@@ -76,7 +77,8 @@ static String storageMemoryUsageDetail()
     return fmt::format(
         "non-query: peak={}, amount={}; "
         "query-storage-task: peak={}, amount={}; "
-        "fetch-pages: peak={}, amount={}.",
+        "fetch-pages: peak={}, amount={}; "
+        "shared-column-data: peak={}, amount={}.",
         root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->getPeak())
                                        : "0",
         root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->get())
@@ -88,7 +90,11 @@ static String storageMemoryUsageDetail()
             ? formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->get())
             : "0",
         fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->getPeak()) : "0",
-        fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->get()) : "0");
+        fetch_pages_mem_tracker ? formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->get()) : "0",
+        shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->getPeak())
+                                       : "0",
+        shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->get())
+                                       : "0");
 }
 
 void MemoryTracker::logPeakMemoryUsage() const
@@ -111,7 +117,11 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     reportAmount();
 
     if (!next.load(std::memory_order_relaxed))
+    {
         CurrentMetrics::add(metric, size);
+        if (shared_column_data_mem_tracker)
+            will_be += shared_column_data_mem_tracker->get(); // Add shared column data size to root tracker.
+    }
 
     if (check_memory_limit)
     {
@@ -285,6 +295,7 @@ std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::creat
 
 std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
 std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
+std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
 
 void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
 {
@@ -302,6 +313,11 @@ void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
     fetch_pages_mem_tracker = MemoryTracker::create();
     fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
     fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingFetchPages);
+
+    RUNTIME_CHECK(shared_column_data_mem_tracker == nullptr);
+    shared_column_data_mem_tracker = MemoryTracker::create();
+    shared_column_data_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
+    shared_column_data_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingSharedColumnData);
 }
 
 namespace CurrentMemoryTracker
