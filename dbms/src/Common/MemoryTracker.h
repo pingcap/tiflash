@@ -157,6 +157,9 @@ extern thread_local MemoryTracker * current_memory_tracker;
 extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
 extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 
+extern std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
+void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit);
+
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
 {
