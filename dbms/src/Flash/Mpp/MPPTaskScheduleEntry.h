@@ -41,8 +41,6 @@ public:
 
     const MPPTaskId & getMPPTaskId() const;
 
-    const String & getResourceGroupName() const { return id.gather_id.query_id.resource_group_name; }
-
     ~MPPTaskScheduleEntry();
 
     MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_);

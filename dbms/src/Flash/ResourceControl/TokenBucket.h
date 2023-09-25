@@ -39,7 +39,6 @@ public:
         const std::string & log_id,
         double capacity_ = std::numeric_limits<double>::max())
         : fill_rate(fill_rate_)
-        , fill_rate_ms(fill_rate_ / 1000)
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
@@ -103,14 +102,12 @@ public:
 
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
-    static constexpr auto MIN_COMPACT_INTERVAL = std::chrono::milliseconds(10);
 
     // Merge dynamic token into static token.
     void compact(const TokenBucket::TimePoint & timepoint);
     double getDynamicTokens(const TimePoint & timepoint) const;
 
     double fill_rate;
-    double fill_rate_ms;
     double tokens;
     double capacity;
 

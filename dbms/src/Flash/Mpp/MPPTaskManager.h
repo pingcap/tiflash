@@ -226,7 +226,7 @@ public:
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
-    void releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads);
+    void releaseThreadsFromScheduler(int needed_threads);
 
     std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(
         const ::mpp::EstablishMPPConnectionRequest * request,

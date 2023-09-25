@@ -318,6 +318,8 @@ std::unordered_set<UInt64> Client::getExistsServerID()
         throw Exception("getExistsServerID failed, grpc error: {}", status.error_message());
 
     std::unordered_set<UInt64> exists_server_ids;
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("all existing server ids: ");
     for (const auto & kv : range_resp.kvs())
     {
         String key = kv.key();
@@ -325,8 +327,9 @@ std::unordered_set<UInt64> Client::getExistsServerID()
         RUNTIME_CHECK(prefix == TIDB_SERVER_ID_ETCD_PATH);
         String server_id_str(key.begin() + TIDB_SERVER_ID_ETCD_PATH.size() + 1, key.end());
         exists_server_ids.insert(std::stoi(server_id_str));
+        fmt_buf.fmtAppend("{};", server_id_str);
     }
-    LOG_INFO(log, "existing server ids: {}", exists_server_ids.size());
+    LOG_INFO(log, fmt_buf.toString());
     return exists_server_ids;
 }
 
