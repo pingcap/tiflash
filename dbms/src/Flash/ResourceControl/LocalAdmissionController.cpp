@@ -392,7 +392,7 @@ void LocalAdmissionController::watchGAC()
                 return;
 
             // Create new grpc_context for each reader/writer.
-            watch_gac_grpc_context = std::make_shared<grpc::ClientContext>();
+            watch_gac_grpc_context = std::make_unique<grpc::ClientContext>();
         }
     }
 }

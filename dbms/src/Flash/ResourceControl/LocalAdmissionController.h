@@ -385,7 +385,7 @@ public:
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
-        , watch_gac_grpc_context(std::make_shared<grpc::ClientContext>())
+        , watch_gac_grpc_context(std::make_unique<grpc::ClientContext>())
     {
         background_threads.emplace_back([this] { this->startBackgroudJob(); });
         background_threads.emplace_back([this] { this->watchGAC(); });
@@ -582,7 +582,7 @@ private:
     ::pingcap::kv::Cluster * cluster = nullptr;
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
-    std::shared_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
+    std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
     std::vector<std::thread> background_threads;
 
     std::function<void()> refill_token_callback;
