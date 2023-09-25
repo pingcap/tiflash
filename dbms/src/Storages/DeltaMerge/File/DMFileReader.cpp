@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
@@ -594,8 +595,15 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
                               size_t skip_packs,
                               bool force_seek)
 {
+    bool has_concurrent_reader = DMFileReaderPool::instance().hasConcurrentReader(*this);
     if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
     {
+        // If there are concurrent read requests, this data is likely to be shared.
+        // So the allocation and deallocation of this data may not be in the same MemoryTracker.
+        // This can lead to inaccurate memory statistics of MemoryTracker.
+        // To solve this problem, we use a independent global memory tracker to trace the shared column data in ColumnSharingCacheMap.
+        auto mem_tracker_guard
+            = has_concurrent_reader ? std::make_optional<MemoryTrackerSetter>(true, nullptr) : std::nullopt;
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         auto col = data_type->createColumn();
         readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, force_seek || last_read_from_cache[column_define.id]);
@@ -607,7 +615,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
         last_read_from_cache[column_define.id] = true;
     }
 
-    if (col_data_cache != nullptr)
+    if (has_concurrent_reader && col_data_cache != nullptr)
     {
         DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
     }
