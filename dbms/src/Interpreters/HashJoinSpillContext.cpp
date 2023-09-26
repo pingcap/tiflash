@@ -80,6 +80,15 @@ void HashJoinSpillContext::finishBuild()
     in_build_stage = false;
 }
 
+size_t HashJoinSpillContext::spilledPartitionCount()
+{
+    size_t ret = 0;
+    for (auto & is_spilled : (*partition_is_spilled))
+        if (is_spilled)
+            ret++;
+    return ret;
+}
+
 bool HashJoinSpillContext::markPartitionForAutoSpill(size_t partition_id)
 {
     auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
