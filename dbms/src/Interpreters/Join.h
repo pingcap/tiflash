@@ -214,9 +214,7 @@ public:
 
     bool getPartitionSpilled(size_t partition_index) const;
 
-    bool hasPartitionSpilledWithLock();
-
-    bool hasPartitionSpilled();
+    bool hasPartitionToRestore();
 
     bool isSpilled() const { return hash_join_spill_context->isSpilled(); }
 
@@ -371,7 +369,7 @@ private:
 
     JoinPartitions partitions;
 
-    std::list<size_t> spilled_partition_indexes;
+    std::list<size_t> remaining_partition_indexes_to_restore;
 
     Int64 join_restore_concurrency;
 
