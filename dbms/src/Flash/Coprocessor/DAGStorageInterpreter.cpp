@@ -696,6 +696,7 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
         req->tp = pingcap::coprocessor::ReqType::DAG;
         req->start_ts = context.getSettingsRef().read_tso;
         req->schema_version = context.getSettingsRef().schema_version;
+        req->resource_group_name = dagContext().getResourceGroupName();
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
