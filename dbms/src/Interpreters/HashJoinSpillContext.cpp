@@ -85,7 +85,7 @@ size_t HashJoinSpillContext::spilledPartitionCount()
     size_t ret = 0;
     for (auto & is_spilled : (*partition_is_spilled))
         if (is_spilled)
-            ret++;
+            ++ret;
     return ret;
 }
 
