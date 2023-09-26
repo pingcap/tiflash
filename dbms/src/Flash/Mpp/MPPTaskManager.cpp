@@ -46,6 +46,26 @@ MPPTask * MPPGatherTaskSet::findMPPTask(const MPPTaskId & task_id) const
     return it->second.get();
 }
 
+void MPPGatherTaskSet::cancelAlarmsBySenderTaskId(const MPPTaskId & task_id)
+{
+    /// cancel all the alarm waiting on this task
+    auto alarm_it = alarms.find(task_id.task_id);
+    if (alarm_it != alarms.end())
+    {
+        for (auto & alarm : alarm_it->second)
+            alarm.second.Cancel();
+        alarms.erase(alarm_it);
+    }
+}
+
+void MPPGatherTaskSet::markTaskAsFinishedOrFailed(const MPPTaskId & task_id)
+{
+    task_map.erase(task_id);
+    finished_or_failed_tasks.insert(task_id);
+    /// cancel all the alarms on this task
+    cancelAlarmsBySenderTaskId(task_id);
+}
+
 MPPQuery::~MPPQuery()
 {
     if likely (process_list_entry != nullptr)
@@ -138,6 +158,8 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
         /// task not found or not visible yet
         if (!call_data->isWaitingTunnelState())
         {
+            if (gather_task_set != nullptr && gather_task_set->isTaskAlreadyFinishedOrFailed(id))
+                return {nullptr, fmt::format("Task {} is already finished or failed", id.toString())};
             /// if call_data is in new_request state, put it to waiting tunnel state
             if (query == nullptr)
                 query = addMPPQuery(
@@ -372,14 +394,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
         query->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
         "Task process list entry should always be the same as query process list entry");
     gather_task_set->makeTaskActive(task);
-    /// cancel all the alarm waiting on this task
-    auto alarm_it = gather_task_set->alarms.find(task->id.task_id);
-    if (alarm_it != gather_task_set->alarms.end())
-    {
-        for (auto & alarm : alarm_it->second)
-            alarm.second.Cancel();
-        gather_task_set->alarms.erase(alarm_it);
-    }
+    gather_task_set->cancelAlarmsBySenderTaskId(task->id);
     task->is_public = true;
     cv.notify_all();
     return {true, ""};
@@ -400,7 +415,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
         assert(query != nullptr);
         if (gather_task_set->isTaskRegistered(id))
         {
-            gather_task_set->removeMPPTask(id);
+            gather_task_set->markTaskAsFinishedOrFailed(id);
             if (!gather_task_set->hasMPPTask() && gather_task_set->alarms.empty())
             {
                 removeMPPGatherTaskSet(query, id.gather_id, false);

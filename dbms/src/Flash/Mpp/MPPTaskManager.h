@@ -41,6 +41,7 @@ struct MPPGatherTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
+    /// <sender_task_id, <receiver_task_id, alarm>>
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
@@ -48,6 +49,10 @@ struct MPPGatherTaskSet
     bool allowUnregisterTask() const { return state == Normal || state == Aborted; }
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
     bool isTaskRegistered(const MPPTaskId & task_id) const { return task_map.find(task_id) != task_map.end(); }
+    bool isTaskAlreadyFinishedOrFailed(const MPPTaskId & task_id) const
+    {
+        return finished_or_failed_tasks.find(task_id) != finished_or_failed_tasks.end();
+    }
     void registerTask(const MPPTaskId & task_id)
     {
         assert(task_map.find(task_id) == task_map.end());
@@ -58,6 +63,7 @@ struct MPPGatherTaskSet
         assert(task_map.find(task->getId()) != task_map.end());
         task_map[task->getId()] = task;
     }
+    void cancelAlarmsBySenderTaskId(const MPPTaskId & task_id);
     bool hasMPPTask() const { return !task_map.empty(); }
     template <typename F>
     void forEachMPPTask(F && f) const
@@ -65,10 +71,11 @@ struct MPPGatherTaskSet
         for (const auto & it : task_map)
             f(it);
     }
-    void removeMPPTask(const MPPTaskId & task_id) { task_map.erase(task_id); }
+    void markTaskAsFinishedOrFailed(const MPPTaskId & task_id);
 
 private:
     MPPTaskMap task_map;
+    std::unordered_set<MPPTaskId> finished_or_failed_tasks;
 };
 using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
