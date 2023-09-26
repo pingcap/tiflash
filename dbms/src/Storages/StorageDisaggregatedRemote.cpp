@@ -215,7 +215,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(EstablishDisaggTask)> rpc(cluster->rpc_client, req->address());
     disaggregated::EstablishDisaggTaskResponse resp;
     grpc::ClientContext client_context;
-    rpc.setClientContext(client_context, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
+    rpc.setClientContext(client_context, db_context.getSettingsRef().disagg_build_task_timeout);
     auto status = rpc.call(&client_context, *req, &resp);
     if (!status.ok())
         throw Exception(rpc.errMsg(status));
