@@ -68,7 +68,8 @@ CoprocessorHandler<false>::CoprocessorHandler(
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_response(cop_response_)
-    , log(Logger::get("CoprocessorHandler"))
+    , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
+    , log(Logger::get("CoprocessorHandler, resource_group: " + resource_group_name))
 {}
 
 template <>
@@ -79,7 +80,8 @@ CoprocessorHandler<true>::CoprocessorHandler(
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_writer(cop_writer_)
-    , log(Logger::get("CoprocessorHandler(stream)"))
+    , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
+    , log(Logger::get("CoprocessorHandler(stream), resource_group: " + resource_group_name))
 {}
 
 template <bool is_stream>
@@ -139,20 +141,18 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
-            const char * msg;
+            String msg;
             if constexpr (is_stream)
-                msg = "CoprocessorHandler(stream)";
+                msg = "CoprocessorHandler(stream), resource_group: ";
             else
-                msg = "CoprocessorHandler";
+                msg = "CoprocessorHandler, resource_group: ";
+            msg += resource_group_name;
 
             DAGRequestKind kind;
             if constexpr (is_stream)
                 kind = DAGRequestKind::CopStream;
             else
                 kind = DAGRequestKind::Cop;
-
-            const String & resource_group_name
-                = cop_request->context().resource_control_context().resource_group_name();
 
             DAGContext dag_context(
                 dag_request,
