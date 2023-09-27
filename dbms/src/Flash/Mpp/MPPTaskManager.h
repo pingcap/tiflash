@@ -65,6 +65,7 @@ struct MPPGatherTaskSet
     }
     void cancelAlarmsBySenderTaskId(const MPPTaskId & task_id);
     bool hasMPPTask() const { return !task_map.empty(); }
+    bool hasAlarm() const { return !alarms.empty(); }
     template <typename F>
     void forEachMPPTask(F && f) const
     {
@@ -252,6 +253,9 @@ public:
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
+
+    /// for test
+    MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
 
 private:
     MPPQueryPtr addMPPQuery(

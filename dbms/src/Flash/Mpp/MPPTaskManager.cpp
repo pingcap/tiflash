@@ -170,7 +170,10 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
             call_data->setToWaitingTunnelState();
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
+            if likely (cq != nullptr)
+            {
+                alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
+            }
             return {nullptr, ""};
         }
         else
@@ -368,6 +371,12 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
     return {true, ""};
+}
+
+MPPQueryId MPPTaskManager::getCurrentMinTSOQueryId(const String & resource_group_name)
+{
+    std::lock_guard lock(mu);
+    return scheduler->getCurrentMinTSOQueryId(resource_group_name);
 }
 
 std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)

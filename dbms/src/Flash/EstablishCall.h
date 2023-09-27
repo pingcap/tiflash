@@ -54,6 +54,9 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
+    /// for test
+    EstablishCallData();
+
     ~EstablishCallData() override;
 
     void execute(bool ok) override;

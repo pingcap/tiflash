@@ -101,7 +101,7 @@ public:
     ~MPPTask();
 
 private:
-    MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_);
+    MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_, bool for_test = false);
 
     void runImpl();
 

@@ -175,6 +175,12 @@ void MinTSOScheduler::deleteQuery(
     }
 }
 
+MPPQueryId MinTSOScheduler::getCurrentMinTSOQueryId(const String & resource_group_name)
+{
+    auto & group_entry = getOrCreateGroupEntry(resource_group_name);
+    return group_entry.min_query_id;
+}
+
 /// NOTE: should not throw exceptions due to being called when destruction.
 void MinTSOScheduler::releaseThreadsThenSchedule(
     const String & resource_group_name,
