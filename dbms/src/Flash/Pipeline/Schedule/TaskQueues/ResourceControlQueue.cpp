@@ -244,6 +244,7 @@ void ResourceControlQueue<NestedTaskQueueType>::cancel(const String & query_id, 
             iter->second->collectCancelledTasks(cancel_task_queue, query_id);
         }
     }
+    cv.notify_all();
 }
 
 template <typename NestedTaskQueueType>

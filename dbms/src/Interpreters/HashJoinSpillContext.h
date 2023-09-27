@@ -62,6 +62,7 @@ public:
     /// only used in random failpoint
     bool markPartitionForAutoSpill(size_t partition_id);
     void finishBuild();
+    size_t spilledPartitionCount();
 };
 
 using HashJoinSpillContextPtr = std::shared_ptr<HashJoinSpillContext>;

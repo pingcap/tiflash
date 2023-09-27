@@ -385,6 +385,7 @@ public:
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
+        , watch_gac_grpc_context(std::make_unique<grpc::ClientContext>())
     {
         background_threads.emplace_back([this] { this->startBackgroudJob(); });
         background_threads.emplace_back([this] { this->watchGAC(); });
@@ -445,6 +446,9 @@ public:
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
+        // NOTE: Better not use lock inside refill_token_callback,
+        // because LAC needs to lock when calling refill_token_callback,
+        // which may introduce dead lock.
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
@@ -462,7 +466,13 @@ private:
         if (stopped)
             return;
         stopped.store(true);
-        watch_gac_grpc_context.TryCancel();
+
+        // TryCancel() is thread safe(https://github.com/grpc/grpc/pull/30416).
+        // But we need to create a new grpc_context for each new grpc reader/writer(https://github.com/grpc/grpc/issues/18348#issuecomment-477402608). So need to lock.
+        {
+            std::lock_guard lock(mu);
+            watch_gac_grpc_context->TryCancel();
+        }
         cv.notify_all();
         for (auto & thread : background_threads)
         {
@@ -509,8 +519,6 @@ private:
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
-
-    void handleBackgroundError(const std::string & err_msg) const;
 
     static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
@@ -574,7 +582,7 @@ private:
     ::pingcap::kv::Cluster * cluster = nullptr;
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
-    grpc::ClientContext watch_gac_grpc_context;
+    std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
     std::vector<std::thread> background_threads;
 
     std::function<void()> refill_token_callback;
