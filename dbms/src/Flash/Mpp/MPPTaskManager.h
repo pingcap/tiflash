@@ -49,9 +49,13 @@ struct MPPGatherTaskSet
     bool allowUnregisterTask() const { return state == Normal || state == Aborted; }
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
     bool isTaskRegistered(const MPPTaskId & task_id) const { return task_map.find(task_id) != task_map.end(); }
-    bool isTaskAlreadyFinishedOrFailed(const MPPTaskId & task_id) const
+    std::pair<bool, String> isTaskAlreadyFinishedOrFailed(const MPPTaskId & task_id) const
     {
-        return finished_or_failed_tasks.find(task_id) != finished_or_failed_tasks.end();
+        auto result = finished_or_failed_tasks.find(task_id);
+        if (result != finished_or_failed_tasks.end())
+            return {true, result->second};
+        else
+            return {false, ""};
     }
     void registerTask(const MPPTaskId & task_id)
     {
@@ -72,11 +76,11 @@ struct MPPGatherTaskSet
         for (const auto & it : task_map)
             f(it);
     }
-    void markTaskAsFinishedOrFailed(const MPPTaskId & task_id);
+    void markTaskAsFinishedOrFailed(const MPPTaskId & task_id, const String & error_message);
 
 private:
     MPPTaskMap task_map;
-    std::unordered_set<MPPTaskId> finished_or_failed_tasks;
+    std::unordered_map<MPPTaskId, String> finished_or_failed_tasks;
 };
 using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
@@ -230,7 +234,7 @@ public:
 
     std::pair<bool, String> makeTaskActive(MPPTaskPtr task);
 
-    std::pair<bool, String> unregisterTask(const MPPTaskId & id);
+    std::pair<bool, String> unregisterTask(const MPPTaskId & id, const String & error_message);
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 

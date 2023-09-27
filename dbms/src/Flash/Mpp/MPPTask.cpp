@@ -361,7 +361,7 @@ MemoryTracker * MPPTask::getMemoryTracker() const
 
 void MPPTask::unregisterTask()
 {
-    auto [result, reason] = manager->unregisterTask(id);
+    auto [result, reason] = manager->unregisterTask(id, getErrString());
     if (result)
         LOG_DEBUG(log, "task unregistered");
     else

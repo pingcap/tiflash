@@ -58,10 +58,10 @@ void MPPGatherTaskSet::cancelAlarmsBySenderTaskId(const MPPTaskId & task_id)
     }
 }
 
-void MPPGatherTaskSet::markTaskAsFinishedOrFailed(const MPPTaskId & task_id)
+void MPPGatherTaskSet::markTaskAsFinishedOrFailed(const MPPTaskId & task_id, const String & error_message)
 {
     task_map.erase(task_id);
-    finished_or_failed_tasks.insert(task_id);
+    finished_or_failed_tasks[task_id] = error_message;
     /// cancel all the alarms on this task
     cancelAlarmsBySenderTaskId(task_id);
 }
@@ -158,8 +158,16 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
         /// task not found or not visible yet
         if (!call_data->isWaitingTunnelState())
         {
-            if (gather_task_set != nullptr && gather_task_set->isTaskAlreadyFinishedOrFailed(id))
-                return {nullptr, fmt::format("Task {} is already finished or failed", id.toString())};
+            if (gather_task_set != nullptr)
+            {
+                auto task_result_info = gather_task_set->isTaskAlreadyFinishedOrFailed(id);
+                if (task_result_info.first)
+                    return {
+                        nullptr,
+                        task_result_info.second.empty()
+                            ? fmt::format("Task {} is already finished", id.task_id)
+                            : fmt::format("Task {} is failed: {}", id.task_id, task_result_info.second)};
+            }
             /// if call_data is in new_request state, put it to waiting tunnel state
             if (query == nullptr)
                 query = addMPPQuery(
@@ -409,7 +417,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
     return {true, ""};
 }
 
-std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
+std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id, const String & error_message)
 {
     std::unique_lock lock(mu);
     MPPGatherTaskSetPtr gather_task_set = nullptr;
@@ -424,7 +432,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
         assert(query != nullptr);
         if (gather_task_set->isTaskRegistered(id))
         {
-            gather_task_set->markTaskAsFinishedOrFailed(id);
+            gather_task_set->markTaskAsFinishedOrFailed(id, error_message);
             if (!gather_task_set->hasMPPTask() && gather_task_set->alarms.empty())
             {
                 removeMPPGatherTaskSet(query, id.gather_id, false);
