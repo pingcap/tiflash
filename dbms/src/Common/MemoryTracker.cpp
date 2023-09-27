@@ -64,6 +64,21 @@ static Poco::Logger * getLogger()
     return logger;
 }
 
+static String storageMemoryUsageDetail()
+{
+    return fmt::format(
+        "non-query: peak={}, amount={}; "
+        "shared-column-data: peak={}, amount={}.",
+        root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->getPeak())
+                                       : "0",
+        root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->get())
+                                       : "0",
+        shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->getPeak())
+                                       : "0",
+        shared_column_data_mem_tracker ? formatReadableSizeWithBinarySuffix(shared_column_data_mem_tracker->get())
+                                       : "0");
+}
+
 void MemoryTracker::logPeakMemoryUsage() const
 {
     LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
@@ -78,7 +93,12 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
 
     if (!next.load(std::memory_order_relaxed))
+    {
         CurrentMetrics::add(metric, size);
+        // Only add shared column data size to root_of_query_mem_trackers.
+        if (shared_column_data_mem_tracker && root_of_query_mem_trackers.get() == this)
+            will_be += shared_column_data_mem_tracker->get();
+    }
 
     if (check_memory_limit)
     {
@@ -100,6 +120,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
                               proc_virt_size.load());
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -117,7 +138,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               formatReadableSizeWithBinarySuffix(will_be),
                               size,
                               formatReadableSizeWithBinarySuffix(current_limit));
-
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
         Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
@@ -148,7 +169,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                                   size,
                                   formatReadableSizeWithBinarySuffix(current_limit));
             }
-
+            fmt_buf.fmtAppend(" Memory usage of storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
     }
@@ -221,6 +242,20 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::createGlobalRoot();
 std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
+
+std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
+
+void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
+{
+    LOG_INFO(
+        getLogger(),
+        "Storage task memory limit={}, larger_than_limit={}",
+        formatReadableSizeWithBinarySuffix(limit),
+        formatReadableSizeWithBinarySuffix(larger_than_limit));
+    RUNTIME_CHECK(shared_column_data_mem_tracker == nullptr);
+    shared_column_data_mem_tracker = MemoryTracker::create(limit);
+    shared_column_data_mem_tracker->setBytesThatRssLargerThanLimit(larger_than_limit);
+}
 
 namespace CurrentMemoryTracker
 {
