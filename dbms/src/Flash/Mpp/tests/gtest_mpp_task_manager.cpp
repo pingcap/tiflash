@@ -85,8 +85,8 @@ try
         mpp_task_manager->getCurrentMinTSOQueryId(gather_id.query_id.resource_group_name) == MPPTaskId::Max_Query_Id);
 
     /// schedule task will put query_id to scheduler
-    auto mpp_task_1 = MPPTask::newTask(*sender_meta, context, true);
-    auto mpp_task_2 = MPPTask::newTask(*receiver_meta, context, true);
+    auto mpp_task_1 = MPPTask::newTaskForTest(*sender_meta, context);
+    auto mpp_task_2 = MPPTask::newTaskForTest(*receiver_meta, context);
     mpp_task_manager->registerTask(mpp_task_1.get());
     mpp_task_manager->tryToScheduleTask(mpp_task_1->getScheduleEntry());
     mpp_task_manager->registerTask(mpp_task_2.get());

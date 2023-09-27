@@ -124,7 +124,7 @@ MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
     }
 }
 
-MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_, bool for_test)
+MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
     , context(context_)
@@ -136,12 +136,13 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_, bool 
     assert(manager != nullptr);
     current_memory_tracker = nullptr;
     mpp_task_monitor_helper.initAndAddself(manager, id.toString());
-    if unlikely (for_test)
-    {
-        dag_context = std::make_unique<DAGContext>(100);
-        context->setDAGContext(dag_context.get());
-        schedule_entry.setNeededThreads(10);
-    }
+}
+
+void MPPTask::initForTest()
+{
+    dag_context = std::make_unique<DAGContext>(100);
+    context->setDAGContext(dag_context.get());
+    schedule_entry.setNeededThreads(10);
 }
 
 MPPTask::~MPPTask()
