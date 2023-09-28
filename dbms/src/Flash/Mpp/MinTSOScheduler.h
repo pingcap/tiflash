@@ -50,6 +50,8 @@ public:
         const String & resource_group_name,
         int needed_threads,
         MPPTaskManager & task_manager);
+    /// for test
+    MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
 
 private:
     bool scheduleImp(

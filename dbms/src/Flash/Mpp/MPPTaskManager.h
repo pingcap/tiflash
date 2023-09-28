@@ -41,6 +41,7 @@ struct MPPGatherTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
+    /// <sender_task_id, <receiver_task_id, alarm>>
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
@@ -48,6 +49,14 @@ struct MPPGatherTaskSet
     bool allowUnregisterTask() const { return state == Normal || state == Aborted; }
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
     bool isTaskRegistered(const MPPTaskId & task_id) const { return task_map.find(task_id) != task_map.end(); }
+    std::pair<bool, String> isTaskAlreadyFinishedOrFailed(const MPPTaskId & task_id) const
+    {
+        auto result = finished_or_failed_tasks.find(task_id);
+        if (result != finished_or_failed_tasks.end())
+            return {true, result->second};
+        else
+            return {false, ""};
+    }
     void registerTask(const MPPTaskId & task_id)
     {
         assert(task_map.find(task_id) == task_map.end());
@@ -58,17 +67,20 @@ struct MPPGatherTaskSet
         assert(task_map.find(task->getId()) != task_map.end());
         task_map[task->getId()] = task;
     }
+    void cancelAlarmsBySenderTaskId(const MPPTaskId & task_id);
     bool hasMPPTask() const { return !task_map.empty(); }
+    bool hasAlarm() const { return !alarms.empty(); }
     template <typename F>
     void forEachMPPTask(F && f) const
     {
         for (const auto & it : task_map)
             f(it);
     }
-    void removeMPPTask(const MPPTaskId & task_id) { task_map.erase(task_id); }
+    void markTaskAsFinishedOrFailed(const MPPTaskId & task_id, const String & error_message);
 
 private:
     MPPTaskMap task_map;
+    std::unordered_map<MPPTaskId, String> finished_or_failed_tasks;
 };
 using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
@@ -222,7 +234,7 @@ public:
 
     std::pair<bool, String> makeTaskActive(MPPTaskPtr task);
 
-    std::pair<bool, String> unregisterTask(const MPPTaskId & id);
+    std::pair<bool, String> unregisterTask(const MPPTaskId & id, const String & error_message);
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
@@ -245,6 +257,9 @@ public:
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
+
+    /// for test
+    MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
 
 private:
     MPPQueryPtr addMPPQuery(

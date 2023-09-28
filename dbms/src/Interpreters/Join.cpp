@@ -613,12 +613,17 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         }
         if (!hash_join_spill_context->isInAutoSpillMode())
             spillMostMemoryUsedPartitionIfNeed(stream_index);
-        LOG_DEBUG(
-            log,
-            fmt::format(
-                "all bytes used after one insert: {}, hash table and pool size: {}",
-                getTotalByteCount(),
-                getTotalHashTableAndPoolByteCount()));
+        if (log->is(Poco::Message::PRIO_DEBUG))
+        {
+            auto total_bytes = getTotalByteCount();
+            if (total_bytes > 100 * 1024 * 1024)
+                LOG_DEBUG(
+                    log,
+                    fmt::format(
+                        "all bytes used after one insert: {}, hash table and pool size: {}",
+                        getTotalByteCount(),
+                        getTotalHashTableAndPoolByteCount()));
+        }
     }
 }
 
