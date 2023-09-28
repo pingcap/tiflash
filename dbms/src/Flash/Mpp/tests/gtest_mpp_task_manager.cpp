@@ -97,7 +97,7 @@ try
         mpp_task_manager->getCurrentMinTSOQueryId(gather_id.query_id.resource_group_name) == gather_id.query_id);
 
     /// unregister task should clean the related alarms
-    mpp_task_manager->unregisterTask(mpp_task_1->getId());
+    mpp_task_manager->unregisterTask(mpp_task_1->getId(), "");
     gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "")));
     ASSERT_TRUE(gather_task_set.first->hasMPPTask());
     ASSERT_TRUE(!gather_task_set.first->hasAlarm());
@@ -113,7 +113,7 @@ try
     ASSERT_TRUE(find_tunnel_result.first == nullptr && !find_tunnel_result.second.empty());
 
     /// if all task is unregistered, min tso should be updated
-    mpp_task_manager->unregisterTask(mpp_task_2->getId());
+    mpp_task_manager->unregisterTask(mpp_task_2->getId(), "");
     gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "")));
     ASSERT_TRUE(gather_task_set.first == nullptr);
     ASSERT_TRUE(
