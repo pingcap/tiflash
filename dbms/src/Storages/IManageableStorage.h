@@ -19,10 +19,10 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/Types.h>
 
 
 namespace TiDB

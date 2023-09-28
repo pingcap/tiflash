@@ -44,10 +44,10 @@
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>
 #include <grpcpp/support/status_code_enum.h>
@@ -158,7 +158,6 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
-        std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
         std::make_pair("tiflash_mem_quota_query_per_node", "max_memory_usage"),
         std::make_pair("tiflash_query_spill_ratio", "auto_memory_revoke_trigger_threshold"),
     };

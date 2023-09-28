@@ -27,7 +27,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/KVStore/TMTStorages.h>
 
 namespace DB
 {

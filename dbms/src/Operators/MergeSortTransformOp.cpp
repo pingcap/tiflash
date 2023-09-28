@@ -167,6 +167,8 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
     switch (status)
     {
     case MergeSortStatus::PARTIAL:
+        if (sort_spill_context->updateRevocableMemory(sum_bytes_in_blocks))
+            return fromPartialToSpill();
         return OperatorStatus::NEED_INPUT;
     case MergeSortStatus::SPILL:
     {

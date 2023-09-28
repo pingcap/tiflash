@@ -67,6 +67,18 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     return storage;
 }
 
+UniversalPageStorage::UniversalPageStorage(
+    String name,
+    PSDiskDelegatorPtr delegator_,
+    const PageStorageConfig & config_,
+    const FileProviderPtr & file_provider_)
+    : storage_name(std::move(name))
+    , delegator(std::move(delegator_))
+    , config(config_)
+    , file_provider(file_provider_)
+    , log(Logger::get(storage_name))
+{}
+
 void UniversalPageStorage::restore()
 {
     blob_store->registerPaths();
@@ -192,6 +204,7 @@ UniversalPageMap UniversalPageStorage::read(
     {
         auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_ids, snapshot);
         auto page_map = do_read(page_entries);
+        // Add invalid pages to the result for non-exist page_ids
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             page_map.emplace(page_id_not_found, Page::invalidPage());
@@ -399,8 +412,13 @@ bool UniversalPageStorage::gc(
     const ReadLimiterPtr & read_limiter)
 {
     PS::V3::RemoteFileValidSizes remote_valid_sizes;
-    bool done_anything
-        = manager.gc(*blob_store, *page_directory, write_limiter, read_limiter, &remote_valid_sizes, log);
+    bool done_anything = manager.gc( //
+        *blob_store,
+        *page_directory,
+        write_limiter,
+        read_limiter,
+        &remote_valid_sizes,
+        log);
     // update the valid size cache of remote file ids
     remote_data_files_stat_cache.updateValidSize(remote_valid_sizes);
     return done_anything;

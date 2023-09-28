@@ -78,10 +78,11 @@ std::shared_ptr<ResourceGroup> createResourceGroupOfDynamicTokenBucket(
 
     // Default token bucket is static.
     // Here we setup dynamic token bucket.
-    resource_group->bucket->reConfig(
+    TokenBucket::TokenBucketConfig config(
         user_ru_per_sec,
         user_ru_per_sec,
         static_cast<double>(std::numeric_limits<uint64_t>::max()));
+    resource_group->bucket->reConfig(config);
     return resource_group;
 }
 
@@ -104,18 +105,12 @@ uint64_t dynamicGetPriority(const std::string & name)
     return priority;
 }
 
-bool dynamicIsResourceGroupThrottled(const std::string &)
-{
-    return false;
-}
-
 void setupNopLAC()
 {
     LocalAdmissionController::global_instance.reset();
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
     LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
     LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
-    LocalAdmissionController::global_instance->is_resource_group_throttled_func = nopIsResourceGroupThrottled;
 }
 
 void setupMockLAC(const std::vector<ResourceGroupPtr> & resource_groups)
@@ -124,7 +119,6 @@ void setupMockLAC(const std::vector<ResourceGroupPtr> & resource_groups)
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
     LocalAdmissionController::global_instance->consume_resource_func = dynamicConsumeResource;
     LocalAdmissionController::global_instance->get_priority_func = dynamicGetPriority;
-    LocalAdmissionController::global_instance->is_resource_group_throttled_func = dynamicIsResourceGroupThrottled;
 
     uint64_t max_ru_per_sec = 0;
     for (const auto & resource_group : resource_groups)
@@ -643,6 +637,32 @@ TEST_F(TestResourceControlQueue, cancel)
                 FINALIZE_TASK(task);
             }
         }
+    }
+}
+
+TEST_F(TestResourceControlQueue, tokenBucket)
+{
+    const double fill_rate = 10.0;
+    const double init_tokens = 10.0;
+    {
+        TokenBucket bucket(fill_rate, init_tokens, "log_id");
+        for (int i = 0; i < 10; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            bucket.peek();
+        }
+        ASSERT_GT(bucket.peek(), init_tokens);
+        ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 10 * std::chrono::milliseconds(10).count() / 1000);
+    }
+    {
+        TokenBucket bucket(fill_rate, init_tokens, "log_id");
+        for (int i = 0; i < 1000; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(5));
+            bucket.peek();
+        }
+        ASSERT_GT(bucket.peek(), init_tokens);
+        ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 1000 * std::chrono::microseconds(5).count() / 1000000);
     }
 }
 

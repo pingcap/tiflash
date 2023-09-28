@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Interpreters/HashJoinSpillContext.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_marked_for_auto_spill[];
+} // namespace FailPoints
+
 HashJoinSpillContext::HashJoinSpillContext(
     const SpillConfig & build_spill_config_,
     const SpillConfig & probe_spill_config_,
@@ -74,6 +80,33 @@ void HashJoinSpillContext::finishBuild()
     in_build_stage = false;
 }
 
+size_t HashJoinSpillContext::spilledPartitionCount()
+{
+    size_t ret = 0;
+    for (auto & is_spilled : (*partition_is_spilled))
+        if (is_spilled)
+            ++ret;
+    return ret;
+}
+
+bool HashJoinSpillContext::markPartitionForAutoSpill(size_t partition_id)
+{
+    auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+    if (in_build_stage && isSpillEnabled())
+    {
+        return (*partition_spill_status)[partition_id].compare_exchange_strong(
+            old_value,
+            AutoSpillStatus::NEED_AUTO_SPILL);
+    }
+    if (!in_build_stage && in_spillable_stage && isSpillEnabled() && isPartitionSpilled(partition_id))
+    {
+        return (*partition_spill_status)[partition_id].compare_exchange_strong(
+            old_value,
+            AutoSpillStatus::NEED_AUTO_SPILL);
+    }
+    return false;
+}
+
 void HashJoinSpillContext::buildProbeSpiller(const Block & input_schema)
 {
     probe_spiller = std::make_unique<Spiller>(
@@ -92,6 +125,8 @@ void HashJoinSpillContext::markPartitionSpilled(size_t partition_index)
 
 bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, Int64 new_value)
 {
+    if (!in_spillable_stage || !isSpillEnabled())
+        return false;
     bool is_spilled = (*partition_is_spilled)[partition_id];
     (*partition_revocable_memories)[partition_id] = new_value;
     if (operator_spill_threshold > 0)
@@ -122,7 +157,19 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
                 old_value,
                 AutoSpillStatus::WAIT_SPILL_FINISH);
         }
-        return false;
+        bool ret = false;
+        fiu_do_on(FailPoints::random_marked_for_auto_spill, {
+            if (in_build_stage || is_spilled)
+            {
+                AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+                if (new_value > 0
+                    && (*partition_spill_status)[partition_id].compare_exchange_strong(
+                        old_value,
+                        AutoSpillStatus::WAIT_SPILL_FINISH))
+                    ret = true;
+            }
+        });
+        return ret;
     }
 }
 

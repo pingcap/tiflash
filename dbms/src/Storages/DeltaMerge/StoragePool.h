@@ -18,9 +18,9 @@
 #include <Common/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/StoragePool_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <Storages/Transaction/Types.h>
 
 #include <atomic>
 #include <chrono>
@@ -178,7 +178,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    bool doV2Gc(const Settings & settings);
+    bool doV2Gc(const Settings & settings) const;
 
     void forceTransformMetaV2toV3();
     void forceTransformDataV2toV3();

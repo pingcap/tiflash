@@ -18,7 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/StringRef.h>
 
 namespace DB

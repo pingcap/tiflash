@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
+
 #include <chrono>
 #include <memory>
 
@@ -30,18 +33,37 @@ class TokenBucket final
 public:
     using TimePoint = std::chrono::steady_clock::time_point;
 
-    TokenBucket(double fill_rate_, double init_tokens_, double capacity_ = std::numeric_limits<double>::max())
+    TokenBucket(
+        double fill_rate_,
+        double init_tokens_,
+        const std::string & log_id,
+        double capacity_ = std::numeric_limits<double>::max())
         : fill_rate(fill_rate_)
+        , fill_rate_ms(fill_rate_ / 1000)
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
-        , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
+        , last_get_avg_speed_timepoint(std::chrono::steady_clock::now())
         , last_get_avg_speed_tokens(init_tokens_)
         , avg_speed_per_sec(0.0)
         , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
+        , log(Logger::get(log_id))
     {}
 
     ~TokenBucket() = default;
+
+    struct TokenBucketConfig
+    {
+        TokenBucketConfig(double tokens_, double fill_rate_, double capacity_)
+            : tokens(tokens_)
+            , fill_rate(fill_rate_)
+            , capacity(capacity_)
+        {}
+
+        double tokens;
+        double fill_rate;
+        double capacity;
+    };
 
     // Put n tokens into bucket.
     void put(double n);
@@ -53,9 +75,13 @@ public:
 
     double peek(const TimePoint & timepoint) const;
 
-    void reConfig(double new_tokens, double new_fill_rate, double new_capacity);
+    void reConfig(const TokenBucketConfig & config);
 
-    std::tuple<double, double, double> getCurrentConfig() const { return std::make_tuple(tokens, fill_rate, capacity); }
+    TokenBucketConfig getConfig(const std::chrono::steady_clock::time_point & tp = std::chrono::steady_clock::now())
+    {
+        compact(tp);
+        return {tokens, fill_rate, capacity};
+    }
 
     double getAvgSpeedPerSec();
 
@@ -63,14 +89,28 @@ public:
 
     bool isStatic() const { return fill_rate == 0.0; }
 
+    std::string toString() const
+    {
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend(
+            "tokens: {}, fill_rate: {}, capacity: {}, avg_speed_per_sec: {}",
+            tokens,
+            fill_rate,
+            capacity,
+            avg_speed_per_sec);
+        return fmt_buf.toString();
+    }
+
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
+    static constexpr auto MIN_COMPACT_INTERVAL = std::chrono::milliseconds(10);
 
     // Merge dynamic token into static token.
     void compact(const TokenBucket::TimePoint & timepoint);
     double getDynamicTokens(const TimePoint & timepoint) const;
 
     double fill_rate;
+    double fill_rate_ms;
     double tokens;
     double capacity;
 
@@ -81,6 +121,8 @@ private:
     double avg_speed_per_sec;
 
     double low_token_threshold;
+
+    LoggerPtr log;
 };
 
 using TokenBucketPtr = std::unique_ptr<TokenBucket>;

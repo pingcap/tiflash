@@ -32,7 +32,7 @@
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 
@@ -131,6 +131,7 @@ struct AggregationMethodOneNumber
     /// To use one `Method` in different threads, use different `State`.
     using State = ColumnsHashing::
         HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     /// Shuffle key columns before `insertKeyIntoColumns` call if needed.
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
@@ -166,6 +167,7 @@ struct AggregationMethodString
     {}
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -198,6 +200,7 @@ struct AggregationMethodStringNoCache
 
     // Remove last zero byte.
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -229,6 +232,7 @@ struct AggregationMethodOneKeyStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -262,6 +266,7 @@ struct AggregationMethodMultiStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodMultiString<typename Data::value_type, Mapped>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -292,6 +297,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     using State
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -386,6 +392,7 @@ struct AggregationMethodFixedString
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -417,6 +424,7 @@ struct AggregationMethodFixedStringNoCache
     {}
 
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -451,6 +459,7 @@ struct AggregationMethodKeysFixed
 
     using State
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> & key_columns, const Sizes & key_sizes)
     {
@@ -538,6 +547,7 @@ struct AggregationMethodSerialized
     {}
 
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
+    using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -938,6 +948,8 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void convertToTwoLevel();
 
+    void setResizeCallbackIfNeeded(size_t thread_num) const;
+
 #define APPLY_FOR_VARIANTS_TWO_LEVEL(M)               \
     M(key32_two_level)                                \
     M(key64_two_level)                                \
@@ -1111,18 +1123,65 @@ public:
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
 
+    bool isCancelled() { return is_cancelled(); }
+
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
     using AggregateColumnsConstData = std::vector<const ColumnAggregateFunction::Container *>;
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
+    /** This array serves two purposes.
+      *
+      * Function arguments are collected side by side, and they do not need to be collected from different places. Also the array is made zero-terminated.
+      * The inner loop (for the case without_key) is almost twice as compact; performance gain of about 30%.
+      */
+    struct AggregateFunctionInstruction
+    {
+        const IAggregateFunction * that{};
+        IAggregateFunction::AddFunc func{};
+        size_t state_offset{};
+        const IColumn ** arguments{};
+        const IAggregateFunction * batch_that{};
+        const IColumn ** batch_arguments{};
+    };
+
+    using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
+    struct AggProcessInfo
+    {
+        AggProcessInfo(Aggregator * aggregator_)
+            : aggregator(aggregator_)
+        {
+            assert(aggregator);
+        }
+        Block block;
+        size_t start_row = 0;
+        size_t end_row = 0;
+        bool prepare_for_agg_done = false;
+        Columns materialized_columns;
+        Columns input_columns;
+        ColumnRawPtrs key_columns;
+        AggregateColumns aggregate_columns;
+        AggregateFunctionInstructions aggregate_functions_instructions;
+        Aggregator * aggregator;
+        void prepareForAgg();
+        bool allBlockDataHandled() const
+        {
+            assert(start_row <= end_row);
+            return start_row == end_row || aggregator->isCancelled();
+        }
+        void resetBlock(const Block & block_)
+        {
+            RUNTIME_CHECK_MSG(allBlockDataHandled(), "Previous block is not processed yet");
+            block = block_;
+            start_row = 0;
+            end_row = 0;
+            materialized_columns.clear();
+            prepare_for_agg_done = false;
+        }
+    };
+
     /// Process one block. Return false if the processing should be aborted.
-    bool executeOnBlock(
-        const Block & block,
-        AggregatedDataVariants & result,
-        ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        size_t thread_num);
+    bool executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDataVariants & result, size_t thread_num);
 
     /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
       * Return nullptr if there are no non empty data_variant.
@@ -1171,24 +1230,6 @@ protected:
 
     AggregateFunctionsPlainPtrs aggregate_functions;
 
-    /** This array serves two purposes.
-      *
-      * Function arguments are collected side by side, and they do not need to be collected from different places. Also the array is made zero-terminated.
-      * The inner loop (for the case without_key) is almost twice as compact; performance gain of about 30%.
-      */
-    struct AggregateFunctionInstruction
-    {
-        const IAggregateFunction * that{};
-        IAggregateFunction::AddFunc func{};
-        size_t state_offset{};
-        const IColumn ** arguments{};
-        const IAggregateFunction * batch_that{};
-        const IColumn ** batch_arguments{};
-        const UInt64 * offsets{};
-    };
-
-    using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
-
     Sizes offsets_of_aggregate_states; /// The offset to the n-th aggregate function in a row of aggregate functions.
     size_t total_size_of_aggregate_states = 0; /// The total size of the row from the aggregate functions.
 
@@ -1235,25 +1276,26 @@ protected:
     void executeImpl(
         Method & method,
         Arena * aggregates_pool,
-        size_t rows,
-        ColumnRawPtrs & key_columns,
-        TiDB::TiDBCollators & collators,
-        AggregateFunctionInstruction * aggregate_instructions) const;
+        AggProcessInfo & agg_process_info,
+        TiDB::TiDBCollators & collators) const;
 
     template <typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
-        size_t rows,
-        AggregateFunctionInstruction * aggregate_instructions) const;
+        AggProcessInfo & agg_process_info) const;
+
+    template <typename Method>
+    std::optional<typename Method::EmplaceResult> emplaceKey(
+        Method & method,
+        typename Method::State & state,
+        size_t index,
+        Arena & aggregates_pool,
+        std::vector<std::string> & sort_key_containers) const;
 
     /// For case when there are no keys (all aggregate into one row).
-    static void executeWithoutKeyImpl(
-        AggregatedDataWithoutKey & res,
-        size_t rows,
-        AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena);
+    static void executeWithoutKeyImpl(AggregatedDataWithoutKey & res, AggProcessInfo & agg_process_info, Arena * arena);
 
     template <typename Method>
     void spillImpl(AggregatedDataVariants & data_variants, Method & method, size_t thread_num);

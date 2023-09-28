@@ -67,6 +67,7 @@
     M(StoragePoolV2Only)                        \
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
+    M(StoragePoolUniPS)                         \
     M(RegionPersisterRunMode)                   \
     M(S3Requests)                               \
     M(GlobalStorageRunMode)                     \
@@ -80,7 +81,8 @@
     M(PageCacheUsed)                            \
     M(ConnectionPoolSize)                       \
     M(MemoryTrackingQueryStorageTask)           \
-    M(MemoryTrackingFetchPages)
+    M(MemoryTrackingFetchPages)                 \
+    M(MemoryTrackingSharedColumnData)
 
 namespace CurrentMetrics
 {

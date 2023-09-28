@@ -14,8 +14,8 @@
 
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
-#include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TiDB/Collation/Collator.h>
 
 namespace DB
 {

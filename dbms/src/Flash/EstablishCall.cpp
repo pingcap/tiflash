@@ -22,7 +22,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 
 namespace DB
 {
@@ -49,6 +49,15 @@ EstablishCallData::EstablishCallData(
     // the tag uniquely identifying the request.
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, asGRPCKickTag());
 }
+
+EstablishCallData::EstablishCallData()
+    : service(nullptr)
+    , cq(nullptr)
+    , notify_cq(nullptr)
+    , is_shutdown(std::make_shared<std::atomic<bool>>(false))
+    , responder(&ctx)
+    , state(NEW_REQUEST)
+{}
 
 EstablishCallData::~EstablishCallData()
 {

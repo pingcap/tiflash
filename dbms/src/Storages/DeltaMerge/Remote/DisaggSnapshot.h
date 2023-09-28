@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/defines.h>
 #include <tipb/expression.pb.h>
 
@@ -40,7 +40,6 @@ struct SegmentPagesFetchTask
 {
     SegmentReadTaskPtr seg_task;
     DM::ColumnDefinesPtr column_defines;
-    std::shared_ptr<std::vector<tipb::FieldType>> output_field_types;
 
     String err_msg;
 
@@ -49,14 +48,11 @@ struct SegmentPagesFetchTask
 public:
     static SegmentPagesFetchTask error(String err_msg)
     {
-        return SegmentPagesFetchTask{nullptr, nullptr, nullptr, std::move(err_msg)};
+        return SegmentPagesFetchTask{nullptr, nullptr, std::move(err_msg)};
     }
-    static SegmentPagesFetchTask task(
-        SegmentReadTaskPtr seg_task,
-        DM::ColumnDefinesPtr column_defines,
-        std::shared_ptr<std::vector<tipb::FieldType>> output_field_types)
+    static SegmentPagesFetchTask task(SegmentReadTaskPtr seg_task, DM::ColumnDefinesPtr column_defines)
     {
-        return SegmentPagesFetchTask{std::move(seg_task), std::move(column_defines), std::move(output_field_types), ""};
+        return SegmentPagesFetchTask{std::move(seg_task), std::move(column_defines), ""};
     }
 };
 
@@ -116,7 +112,6 @@ public:
     // TODO: these members are the same in the logical table level,
     //       maybe we can reuse them to reduce memory consumption.
     DM::ColumnDefinesPtr column_defines;
-    std::shared_ptr<std::vector<tipb::FieldType>> output_field_types;
 
 private:
     mutable std::shared_mutex mtx;

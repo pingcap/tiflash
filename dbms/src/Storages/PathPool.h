@@ -18,9 +18,9 @@
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathPool_fwd.h>
-#include <Storages/Transaction/Types.h>
 
 #include <mutex>
 #include <unordered_map>

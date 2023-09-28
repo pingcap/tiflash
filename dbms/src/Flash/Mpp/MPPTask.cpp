@@ -32,8 +32,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <fmt/core.h>
 
 #include <chrono>
@@ -136,6 +136,13 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     assert(manager != nullptr);
     current_memory_tracker = nullptr;
     mpp_task_monitor_helper.initAndAddself(manager, id.toString());
+}
+
+void MPPTask::initForTest()
+{
+    dag_context = std::make_unique<DAGContext>(100);
+    context->setDAGContext(dag_context.get());
+    schedule_entry.setNeededThreads(10);
 }
 
 MPPTask::~MPPTask()
@@ -354,7 +361,7 @@ MemoryTracker * MPPTask::getMemoryTracker() const
 
 void MPPTask::unregisterTask()
 {
-    auto [result, reason] = manager->unregisterTask(id);
+    auto [result, reason] = manager->unregisterTask(id, getErrString());
     if (result)
         LOG_DEBUG(log, "task unregistered");
     else

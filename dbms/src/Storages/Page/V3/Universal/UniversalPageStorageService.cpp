@@ -22,13 +22,13 @@
 #include <Poco/Path.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
 #include <aws/s3/S3Client.h>
 
 #include <ext/scope_guard.h>
@@ -285,14 +285,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     return true;
 }
 
-bool UniversalPageStorageService::gc()
+bool UniversalPageStorageService::gc() const
 {
-    Timepoint now = Clock::now();
-    const std::chrono::seconds try_gc_period(60);
-    if (now < (last_try_gc_time.load() + try_gc_period))
-        return false;
-
-    last_try_gc_time = now;
     // TODO: reload config
     return this->uni_page_storage->gc();
 }
@@ -318,7 +312,7 @@ void UniversalPageStorageService::shutdown()
     }
 }
 
-void UniversalPageStorageService::removeAllLocalCheckpointFiles()
+void UniversalPageStorageService::removeAllLocalCheckpointFiles() const
 {
     Poco::File temp_dir(global_context.getTemporaryPath());
     if (temp_dir.exists() && temp_dir.isDirectory())

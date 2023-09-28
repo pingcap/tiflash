@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <unordered_map>
 

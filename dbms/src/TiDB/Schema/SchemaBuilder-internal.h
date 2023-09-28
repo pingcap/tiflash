@@ -16,7 +16,7 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <map>
 #include <set>

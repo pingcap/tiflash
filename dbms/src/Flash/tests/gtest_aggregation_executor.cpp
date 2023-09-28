@@ -20,6 +20,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_agg_on_partial_block[];
+} // namespace FailPoints
 namespace tests
 {
 #define DT DecimalField<Decimal32>
@@ -232,6 +236,17 @@ public:
     ColumnWithUInt64 col_pr{1, 2, 0, 3290124, 968933, 3125, 31236, 4327, 80000};
 };
 
+#define WRAP_FOR_AGG_PARTIAL_BLOCK_START                                              \
+    std::vector<bool> partial_blocks{true, false};                                    \
+    for (auto partial_block : partial_blocks)                                         \
+    {                                                                                 \
+        if (partial_block)                                                            \
+            FailPointHelper::enableFailPoint(FailPoints::force_agg_on_partial_block); \
+        else                                                                          \
+            FailPointHelper::disableFailPoint(FailPoints::force_agg_on_partial_block);
+
+#define WRAP_FOR_AGG_PARTIAL_BLOCK_END }
+
 /// Guarantee the correctness of group by
 TEST_F(AggExecutorTestRunner, GroupBy)
 try
@@ -340,7 +355,9 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_START
             executeAndAssertColumnsEqual(request, expect_cols[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
 
@@ -397,7 +414,9 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_START
             executeAndAssertColumnsEqual(request, expect_cols[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
 
@@ -429,7 +448,9 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
         executeAndAssertColumnsEqual(request, expect_cols[i]);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
     }
 
     /// Min function tests
@@ -448,7 +469,9 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
         executeAndAssertColumnsEqual(request, expect_cols[i]);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
     }
 }
 CATCH
@@ -506,7 +529,9 @@ try
     {
         request
             = buildDAGRequest(std::make_pair(db_name, table_name), {agg_funcs[i]}, group_by_exprs[i], projections[i]);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
         executeAndAssertColumnsEqual(request, expect_cols[i]);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
     }
 }
 CATCH
@@ -574,7 +599,9 @@ try
                 {agg_func},
                 group_by_exprs[i],
                 projections[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_START
             executeAndAssertColumnsEqual(request, expect_cols[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
     {
@@ -586,7 +613,9 @@ try
                 {agg_func},
                 group_by_exprs[i],
                 projections[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_START
             executeAndAssertColumnsEqual(request, expect_cols[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
     for (auto collation_id : {0, static_cast<int>(TiDB::ITiDBCollator::BINARY)})
@@ -623,7 +652,9 @@ try
                 {agg_func},
                 group_by_exprs[i],
                 projections[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_START
             executeAndAssertColumnsEqual(request, expect_cols[i]);
+            WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
 }
@@ -636,7 +667,9 @@ try
     executeAndAssertColumnsEqual(request, {{toNullableVec<String>({"banana"})}});
 
     request = context.scan("aggnull_test", "t1").aggregation({}, {col("s1")}).build(context);
+    WRAP_FOR_AGG_PARTIAL_BLOCK_START
     executeAndAssertColumnsEqual(request, {{toNullableVec<String>("s1", {{}, "banana"})}});
+    WRAP_FOR_AGG_PARTIAL_BLOCK_END
 }
 CATCH
 
@@ -648,7 +681,9 @@ try
         = {toNullableVec<Int64>({3}), toNullableVec<Int64>({1}), toVec<UInt64>({6})};
     auto test_single_function = [&](size_t index) {
         auto request = context.scan("test_db", "test_table").aggregation({functions[index]}, {}).build(context);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
         executeAndAssertColumnsEqual(request, {functions_result[index]});
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
     };
     for (size_t i = 0; i < functions.size(); ++i)
         test_single_function(i);
@@ -669,7 +704,9 @@ try
                 results.push_back(functions_result[k]);
 
                 auto request = context.scan("test_db", "test_table").aggregation(funcs, {}).build(context);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_START
                 executeAndAssertColumnsEqual(request, results);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_END
 
                 funcs.pop_back();
                 results.pop_back();
@@ -705,7 +742,9 @@ try
                 context.context->setSetting(
                     "group_by_two_level_threshold",
                     Field(static_cast<UInt64>(two_level_threshold)));
+                WRAP_FOR_AGG_PARTIAL_BLOCK_START
                 executeAndAssertColumnsEqual(request, expect);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_END
             }
         }
     }
@@ -736,6 +775,7 @@ try
                         "group_by_two_level_threshold",
                         Field(static_cast<UInt64>(two_level_threshold)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                    WRAP_FOR_AGG_PARTIAL_BLOCK_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     size_t actual_row = 0;
                     for (auto & block : blocks)
@@ -744,6 +784,7 @@ try
                         actual_row += block.rows();
                     }
                     ASSERT_EQ(actual_row, expect_rows[i]);
+                    WRAP_FOR_AGG_PARTIAL_BLOCK_END
                 }
             }
         }
@@ -857,6 +898,7 @@ try
                             "group_by_two_level_threshold",
                             Field(static_cast<UInt64>(two_level_threshold)));
                         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                        WRAP_FOR_AGG_PARTIAL_BLOCK_START
                         auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                         for (auto & block : blocks)
                         {
@@ -881,6 +923,7 @@ try
                                 vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                                 false));
                         }
+                        WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     }
                 }
             }
@@ -907,12 +950,20 @@ try
     executeAndAssertColumnsEqual(request, {});
 
     request = context.receive("empty_recv", 5).aggregation({Max(col("s1"))}, {col("s2")}, 5).build(context);
-    executeAndAssertColumnsEqual(request, {});
+    {
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
+        executeAndAssertColumnsEqual(request, {});
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
+    }
 
     request = context.scan("test_db", "empty_table")
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeAndAssertColumnsEqual(request, {toVec<UInt64>({0})});
+    {
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
+        executeAndAssertColumnsEqual(request, {toVec<UInt64>({0})});
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
+    }
 }
 CATCH
 
@@ -961,10 +1012,15 @@ try
     auto baseline = executeStreams(gen_request(1), 1);
     for (size_t exchange_concurrency : exchange_receiver_concurrency)
     {
+        WRAP_FOR_AGG_PARTIAL_BLOCK_START
         executeAndAssertColumnsEqual(gen_request(exchange_concurrency), baseline);
+        WRAP_FOR_AGG_PARTIAL_BLOCK_END
     }
 }
 CATCH
+
+#undef WRAP_FOR_AGG_PARTIAL_BLOCK_START
+#undef WRAP_FOR_AGG_PARTIAL_BLOCK_END
 
 } // namespace tests
 } // namespace DB

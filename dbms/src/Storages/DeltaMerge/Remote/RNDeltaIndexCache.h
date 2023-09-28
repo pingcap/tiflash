@@ -16,7 +16,7 @@
 
 #include <Common/LRUCache.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
@@ -85,7 +85,7 @@ public:
 
     struct CacheValueWeight
     {
-        size_t operator()(const CacheValue & v) const { return v.bytes; }
+        size_t operator()(const CacheKey & key, const CacheValue & v) const { return sizeof(key) + v.bytes; }
     };
 
     /**
@@ -95,6 +95,10 @@ public:
 
     // `setDeltaIndex` will updated cache size and remove overflows if necessary.
     void setDeltaIndex(const DeltaIndexPtr & delta_index);
+
+    size_t getCacheWeight() const { return cache.weight(); }
+    size_t getCacheCount() const { return cache.count(); }
+
 
 private:
     std::mutex mtx;

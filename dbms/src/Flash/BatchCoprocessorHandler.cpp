@@ -22,7 +22,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
@@ -41,7 +41,8 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , writer(writer_)
-    , log(Logger::get("BatchCoprocessorHandler"))
+    , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
+    , log(Logger::get("BatchCoprocessorHandler, resource_group: " + resource_group_name))
 {}
 
 grpc::Status BatchCoprocessorHandler::execute()
@@ -75,8 +76,6 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
-            const String & resource_group_name
-                = cop_request->context().resource_control_context().resource_group_name();
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
@@ -84,7 +83,7 @@ grpc::Status BatchCoprocessorHandler::execute()
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 DAGRequestKind::BatchCop,
                 resource_group_name,
-                Logger::get("BatchCoprocessorHandler"));
+                Logger::get("BatchCoprocessorHandler, resource_group: " + resource_group_name));
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver<DAGRequestKind::BatchCop> driver(

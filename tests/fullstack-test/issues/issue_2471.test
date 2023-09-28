@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#TODO: tidb sys variable `tiflash_enable_pipeline` is deleted, so this test should not be used
+#RETURN
+
 # Preparation.
 => DBGInvoke __init_fail_point()
 
@@ -23,7 +26,6 @@ mysql> alter table test.a set tiflash replica 1
 
 func> wait_table test a
 
-
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
 +----+------+-------+------+------+-------+
 | pk | id   | value | pk   | id   | value |
@@ -34,7 +36,9 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_bro
 
 => DBGInvoke __enable_fail_point(exception_in_creating_set_input_stream)
 
-mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_tiflash_pipeline_model = false; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
+mysql> set global tiflash_enable_pipeline_model = OFF;
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
 {#REGEXP}.*point FailPoints::exception_in_creating_set_input_stream is triggered.*
 
 => DBGInvoke __disable_fail_point(exception_in_creating_set_input_stream)
@@ -45,7 +49,7 @@ mysql> use test; select sleep(5);
 +----------+
 |        0 |
 +----------+
-mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_tiflash_pipeline_model = false; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
 +----+------+-------+------+------+-------+
 | pk | id   | value | pk   | id   | value |
 +----+------+-------+------+------+-------+
@@ -55,3 +59,4 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_ti
 
 # Clean up.
 # mysql> drop table if exists test.a
+mysql> set global tiflash_enable_pipeline_model = ON;

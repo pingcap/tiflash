@@ -22,7 +22,7 @@
 #include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTFunction.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>

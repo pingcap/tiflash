@@ -34,10 +34,7 @@ public:
         RUNTIME_CHECK_MSG(
             LocalAdmissionController::global_instance != nullptr,
             "LocalAdmissionController::global_instance has not been initialized yet.");
-        LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() {
-            std::lock_guard lock(mu);
-            cv.notify_all();
-        });
+        LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() { cv.notify_all(); });
     }
 
     ~ResourceControlQueue() override { LocalAdmissionController::global_instance->unregisterRefillTokenCallback(); }
@@ -60,8 +57,9 @@ public:
 private:
 #endif
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
-    // <resource_group_name, resource_group_task_queues>
     using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
+
+    void submitWithoutLock(TaskPtr && task);
 
     struct ResourceGroupInfo
     {
@@ -82,11 +80,15 @@ private:
         }
     };
 
-    // Update resource_group_infos, will reorder resource group by priority.
-    void updateResourceGroupInfosWithoutLock();
+    static constexpr const char * error_template = "resource group {} not found, maybe has been deleted";
 
-    // Submit task into task queue of specific resource group.
-    void submitWithoutLock(TaskPtr && task);
+    // Update resource_group_infos, will reorder resource group by priority.
+    // Return true if got error resource group.
+    bool updateResourceGroupInfosWithoutLock();
+
+    // Erase resource group info and task_queue.
+    void mustEraseResourceGroupInfoWithoutLock(const String & name);
+    static void mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task);
 
     mutable std::mutex mu;
     std::condition_variable cv;
@@ -98,5 +100,9 @@ private:
 
     FIFOQueryIdCache cancel_query_id_cache;
     std::deque<TaskPtr> cancel_task_queue;
+
+    // Store tasks whose resource group info is not found in LAC,
+    // it will be cancelled in take().
+    std::deque<TaskPtr> error_task_queue;
 };
 } // namespace DB

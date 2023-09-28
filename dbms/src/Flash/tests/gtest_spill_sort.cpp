@@ -24,7 +24,11 @@ namespace tests
 class SpillSortTestRunner : public DB::tests::ExecutorTest
 {
 public:
-    void initializeContext() override { ExecutorTest::initializeContext(); }
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        dag_context_ptr->log = Logger::get("SortSpillTest");
+    }
 };
 
 /// todo add more tests

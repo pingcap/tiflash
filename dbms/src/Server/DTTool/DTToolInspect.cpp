@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/formatReadable.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
 #include <boost/program_options.hpp>
@@ -36,8 +38,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 
     // black_hole is used to consume data manually.
     // we use SCOPE_EXIT to ensure the release of memory area.
-    auto * black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
-    SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
+    auto * black_hole = reinterpret_cast<char *>(::operator new(DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
+    SCOPE_EXIT({ ::operator delete(black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
     };
@@ -131,21 +133,33 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         }
     } // end of (arg.check)
 
-    if (args.dump_columns)
+    if (args.dump_columns || args.dump_all_columns)
     {
         LOG_INFO(logger, "dumping values from all data blocks");
         // Only dump the extra-handle, version, tag
         const auto all_cols = dmfile->getColumnDefines();
         DB::DM::ColumnDefines cols_to_dump;
-        for (const auto & c : all_cols)
+        if (args.dump_all_columns)
         {
-            if (c.id == DB::TiDBPkColumnID || c.id == DB::VersionColumnID || c.id == DB::DelMarkColumnID)
-                cols_to_dump.emplace_back(c);
+            cols_to_dump = all_cols;
+        }
+        else if (args.dump_columns)
+        {
+            for (const auto & c : all_cols)
+            {
+                if (c.id == DB::TiDBPkColumnID || c.id == DB::VersionColumnID || c.id == DB::DelMarkColumnID)
+                    cols_to_dump.emplace_back(c);
+            }
         }
 
+
         auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile, cols_to_dump);
+
+        size_t tot_num_rows = 0;
         size_t block_no = 0;
         DB::Field f;
+        std::map<DB::ColumnID, size_t> in_mem_bytes;
+
         stream->readPrefix();
         while (true)
         {
@@ -153,6 +167,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
             if (!block)
                 break;
 
+            tot_num_rows += block.rows();
             DB::FmtBuffer buff;
             for (size_t row_no = 0; row_no < block.rows(); ++row_no)
             {
@@ -168,9 +183,27 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 }
                 LOG_INFO(logger, "pack_no={}, row_no={}, fields=[{}]", block_no, row_no, buff.toString());
             }
+
+            for (const auto & col : block)
+            {
+                if (auto iter = in_mem_bytes.find(col.column_id); iter != in_mem_bytes.end())
+                    iter->second += col.column->byteSize();
+                else
+                    in_mem_bytes[col.column_id] = col.column->byteSize();
+            }
             block_no++;
         }
         stream->readSuffix();
+
+        LOG_INFO(logger, "total_num_rows={}", tot_num_rows);
+        for (const auto [column_id, col_in_mem_bytes] : in_mem_bytes)
+        {
+            LOG_INFO(
+                logger,
+                "column_id={} bytes_in_mem={}",
+                column_id,
+                formatReadableSizeWithBinarySuffix(col_in_mem_bytes));
+        }
     } // end of (arg.dump_columns)
     return 0;
 }
@@ -181,6 +214,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
     bool check = false;
     bool imitative = false;
     bool dump_columns = false;
+    bool dump_all_columns = false;
 
     bpo::variables_map vm;
     bpo::options_description options{"Delta Merge Inspect"};
@@ -188,6 +222,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("help", "Print help message and exit.") //
         ("check", bpo::bool_switch(&check), "Check integrity for the delta-tree file.") //
         ("dump", bpo::bool_switch(&dump_columns), "Dump the handle, pk, tag column values.") //
+        ("dump_all", bpo::bool_switch(&dump_all_columns), "Dump all column values.") //
         ("workdir",
          bpo::value<std::string>()->required(),
          "Target directory. Will inpsect the delta-tree file ${workdir}/dmf_${file-id}/") //
@@ -228,7 +263,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
 
         auto workdir = vm["workdir"].as<std::string>();
         auto file_id = vm["file-id"].as<size_t>();
-        auto args = InspectArgs{check, dump_columns, file_id, workdir};
+        auto args = InspectArgs{check, dump_columns, dump_all_columns, file_id, workdir};
         if (imitative)
         {
             auto env = detail::ImitativeEnv{args.workdir};
@@ -245,6 +280,11 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
     {
         std::cerr << exception.what() << std::endl;
         options.print(std::cerr);
+        return -EINVAL;
+    }
+    catch (DB::Exception &)
+    {
+        DB::tryLogCurrentException(DB::Logger::get("DTToolInspect"));
         return -EINVAL;
     }
 

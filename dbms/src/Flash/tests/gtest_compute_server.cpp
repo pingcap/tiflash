@@ -138,7 +138,8 @@ public:
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         gather_ids.push_back(gather_id);
         running_queries.emplace_back([&, properties, gather_id]() {
             BlockInputStreamPtr stream;
@@ -576,7 +577,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto res = prepareMPPStreams(
             context.scan("test_db", "test_table_1")
                 .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
@@ -594,7 +596,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto tasks = prepareMPPTasks(
             context.scan("test_db", "test_table_1")
                 .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
@@ -607,8 +610,7 @@ try
             executeMPPTasks(tasks, properties);
         }
         catch (...)
-        {
-        }
+        {}
         EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     WRAP_FOR_SERVER_TEST_END
@@ -628,7 +630,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto res = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
@@ -654,7 +657,8 @@ try
             properties.query_ts,
             properties.local_query_id,
             properties.server_id,
-            properties.start_ts);
+            properties.start_ts,
+            /*resource_group_name=*/"");
         auto stream = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -682,7 +686,8 @@ try
             properties1.query_ts,
             properties1.local_query_id,
             properties1.server_id,
-            properties1.start_ts);
+            properties1.start_ts,
+            /*resource_group_name=*/"");
         auto res1 = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
@@ -693,7 +698,8 @@ try
             properties2.query_ts,
             properties2.local_query_id,
             properties2.server_id,
-            properties2.start_ts);
+            properties2.start_ts,
+            /*resource_group_name=*/"");
         auto res2 = prepareMPPStreams(
             context.scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -721,7 +727,8 @@ try
                 properties.query_ts,
                 properties.local_query_id,
                 properties.server_id,
-                properties.start_ts);
+                properties.start_ts,
+                /*resource_group_name=*/"");
             queries.push_back(std::make_tuple(
                 gather_id,
                 prepareMPPStreams(
@@ -840,7 +847,12 @@ try
         auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
         initRandomFailPoint(config_str);
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        MPPQueryId query_id(
+            properties.query_ts,
+            properties.local_query_id,
+            properties.server_id,
+            properties.start_ts,
+            /*resource_group_name=*/"");
         try
         {
             BlockInputStreamPtr tmp = prepareMPPStreams(
@@ -893,7 +905,8 @@ try
                 properties.query_ts,
                 properties.local_query_id,
                 properties.server_id,
-                properties.start_ts);
+                properties.start_ts,
+                /*resource_group_name=*/"");
             /// currently all the failpoints are automatically disabled after triggered once, so have to enable it before every run
             FailPointHelper::enableFailPoint(failpoint);
             BlockInputStreamPtr stream;
@@ -934,12 +947,12 @@ try
     setCancelTest();
     ASSERT_TRUE(
         TiFlashMetrics::instance()
-            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
             .Value()
         == 0);
     ASSERT_TRUE(
         TiFlashMetrics::instance()
-            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
             .Value()
         == 0);
     std::vector<std::thread> running_queries;
@@ -955,24 +968,24 @@ try
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 2);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         addOneQuery(1, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 3);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         for (const auto & gather_id : gather_ids)
@@ -990,24 +1003,24 @@ try
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 2);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         addOneQuery(30, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 2);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 1);
         /// cancel 1 running query
@@ -1016,12 +1029,12 @@ try
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 2);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         for (size_t i = 1; i < running_queries.size(); i++)
@@ -1048,12 +1061,12 @@ try
     setCancelTest();
     ASSERT_TRUE(
         TiFlashMetrics::instance()
-            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
             .Value()
         == 0);
     ASSERT_TRUE(
         TiFlashMetrics::instance()
-            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+            .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
             .Value()
         == 0);
     std::vector<std::thread> running_queries;
@@ -1074,12 +1087,12 @@ try
         /// 6 gathers, but two query
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 2);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         std::vector<size_t> killed_gathers{0, 2, 4};
@@ -1097,12 +1110,12 @@ try
         /// the active query count should not change
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 2);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         /// kill single gather query
@@ -1111,12 +1124,12 @@ try
         /// the active query count should be 1
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 1);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         /// kill the rest gathers
@@ -1127,12 +1140,12 @@ try
         }
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
                 .Value()
             == 0);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
-                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count)
+                .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count, "")
                 .Value()
             == 0);
         for (auto & t : running_queries)

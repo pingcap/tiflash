@@ -27,7 +27,6 @@
 #include <gtest/gtest.h>
 #include <signal.h>
 
-
 namespace DB::FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
@@ -70,7 +69,6 @@ int main(int argc, char ** argv)
     DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
-
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();

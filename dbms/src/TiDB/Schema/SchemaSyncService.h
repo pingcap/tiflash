@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <boost/noncopyable.hpp>
 #include <memory>
