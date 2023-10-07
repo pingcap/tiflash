@@ -1027,7 +1027,8 @@ void Region::cleanApproxMemCacheInfo() const
     approx_mem_cache_bytes = 0;
 }
 
-void Region::mergeDataFrom(const Region & other) {
+void Region::mergeDataFrom(const Region & other)
+{
     this->data.mergeFrom(other.data);
 }
 

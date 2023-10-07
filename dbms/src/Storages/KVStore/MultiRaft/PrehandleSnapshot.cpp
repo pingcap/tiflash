@@ -82,8 +82,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             sst_stream,
             ::DB::TiDBPkColumnID,
             opts.schema_snap,
-            sst_stream->getSplitId()
-        );
+            sst_stream->getSplitId());
 
         stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
             opts.log_prefix,
@@ -116,19 +115,11 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         });
         stream->write();
         stream->writeSuffix();
-        auto res = ReadFromStreamResult{
-            .error = ReadFromStreamError::Ok, 
-            .extra_msg = "",
-            .region = new_region
-        };
+        auto res = ReadFromStreamResult{.error = ReadFromStreamError::Ok, .extra_msg = "", .region = new_region};
         if (stream->isAbort())
         {
             stream->cancel();
-            res = ReadFromStreamResult{
-                .error = ReadFromStreamError::Aborted, 
-                .extra_msg = "",
-                .region = new_region
-            };
+            res = ReadFromStreamResult{.error = ReadFromStreamError::Aborted, .extra_msg = "", .region = new_region};
         }
         return std::make_pair(
             std::move(res),
@@ -154,20 +145,18 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         {
             return std::make_pair(
                 ReadFromStreamResult{
-                    .error = ReadFromStreamError::ErrUpdateSchema, 
+                    .error = ReadFromStreamError::ErrUpdateSchema,
                     .extra_msg = e.displayText(),
-                    .region = new_region
-                },
+                    .region = new_region},
                 PrehandleResult{});
         }
         else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
         {
             return std::make_pair(
                 ReadFromStreamResult{
-                    .error = ReadFromStreamError::ErrTableDropped, 
+                    .error = ReadFromStreamError::ErrTableDropped,
                     .extra_msg = e.displayText(),
-                    .region = new_region
-                },
+                    .region = new_region},
                 PrehandleResult{});
         }
         throw;
@@ -322,19 +311,20 @@ struct ParallelPrehandleCtx
 using ParallelPrehandleCtxPtr = std::shared_ptr<ParallelPrehandleCtx>;
 
 static void runInParallel(
-                    LoggerPtr log,
-                    RegionPtr new_region,
-                    DM::SSTFilesToBlockInputStreamOpts & opt,
-                    const SSTViewVec & snaps,
-                    const TiFlashRaftProxyHelper * proxy_helper,
-                    TMTContext & tmt,
-                    std::shared_ptr<std::atomic_bool> prehandle_task,
-                    DM::FileConvertJobType job_type,
-                    uint64_t index,
-                    uint64_t extra_id,
-                    ParallelPrehandleCtxPtr ctx,
-                    DM::SSTScanSoftLimit && part_limit,
-                    std::shared_ptr<StorageDeltaMerge> dm_storage) {
+    LoggerPtr log,
+    RegionPtr new_region,
+    DM::SSTFilesToBlockInputStreamOpts & opt,
+    const SSTViewVec & snaps,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    TMTContext & tmt,
+    std::shared_ptr<std::atomic_bool> prehandle_task,
+    DM::FileConvertJobType job_type,
+    uint64_t index,
+    uint64_t extra_id,
+    ParallelPrehandleCtxPtr ctx,
+    DM::SSTScanSoftLimit && part_limit,
+    std::shared_ptr<StorageDeltaMerge> dm_storage)
+{
     auto part_new_region = std::make_shared<Region>(new_region->mutMeta().cloned());
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
@@ -347,14 +337,8 @@ static void runInParallel(
     try
     {
         std::string limit_tag = part_limit.toDebugString();
-        auto [part_result, part_prehandle_result] = executeTransform(
-            part_new_region,
-            prehandle_task,
-            job_type,
-            dm_storage,
-            part_sst_stream,
-            opt,
-            tmt);
+        auto [part_result, part_prehandle_result]
+            = executeTransform(part_new_region, prehandle_task, job_type, dm_storage, part_sst_stream, opt, tmt);
         LOG_INFO(
             log,
             "Finished extra parallel prehandle task limit {} write cf {} dmfiles {} error {}, "
@@ -523,7 +507,20 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                             extra_id,
                             split_keys.size(),
                             limit.toDebugString());
-                        runInParallel(log, new_region, opt, snaps, proxy_helper, tmt, prehandle_task, job_type, index, extra_id, ctx, std::move(limit), dm_storage);
+                        runInParallel(
+                            log,
+                            new_region,
+                            opt,
+                            snaps,
+                            proxy_helper,
+                            tmt,
+                            prehandle_task,
+                            job_type,
+                            index,
+                            extra_id,
+                            ctx,
+                            std::move(limit),
+                            dm_storage);
                         return true;
                     });
                     RUNTIME_CHECK_MSG(
@@ -662,11 +659,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             else
             {
                 // Other unrecoverable error, throw
-                e.addMessage(fmt::format(
-                    "keyspace={} physical_table_id={}", 
-                    keyspace_id, 
-                    physical_table_id
-                ));
+                e.addMessage(fmt::format("keyspace={} physical_table_id={}", keyspace_id, physical_table_id));
                 throw;
             }
         }

@@ -200,8 +200,7 @@ public:
         SSTFilesToBlockInputStreamPtr child,
         ColId pk_column_id_,
         const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
-        size_t split_id
-    );
+        size_t split_id);
 
     static String getName() { return "BoundedSSTFilesToBlockInputStream"; }
 

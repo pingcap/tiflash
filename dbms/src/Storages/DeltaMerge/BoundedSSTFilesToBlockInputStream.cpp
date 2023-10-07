@@ -32,8 +32,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId pk_column_id_,
     const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
-    size_t split_id
-)
+    size_t split_id)
     : pk_column_id(pk_column_id_)
     , _raw_child(std::move(child))
 {
@@ -46,14 +45,16 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
         _raw_child,
         pk_column_id,
         is_common_handle,
-        split_id
-    );
+        split_id);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream,
         *(schema_snap->column_defines),
         _raw_child->opts.gc_safepoint,
         is_common_handle);
-    LOG_INFO(&Poco::Logger::get("BoundedSSTFilesToBlockInputStream"), "create bounded sst file stream, split_id={}", split_id);
+    LOG_INFO(
+        &Poco::Logger::get("BoundedSSTFilesToBlockInputStream"),
+        "create bounded sst file stream, split_id={}",
+        split_id);
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()

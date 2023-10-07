@@ -33,7 +33,11 @@ template <bool need_extra_sort>
 class PKSquashingBlockInputStream final : public IBlockInputStream
 {
 public:
-    PKSquashingBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_, size_t split_id_ =  DM::SSTScanSoftLimit::HEAD_SPLIT)
+    PKSquashingBlockInputStream(
+        BlockInputStreamPtr child,
+        ColId pk_column_id_,
+        bool is_common_handle_,
+        size_t split_id_ = DM::SSTScanSoftLimit::HEAD_SPLIT)
         : sorted_input_stream(child)
         , pk_column_id(pk_column_id_)
         , is_common_handle(is_common_handle_)
@@ -68,15 +72,17 @@ public:
         if (first_read)
         {
             next_block = DB::DM::readNextBlock(sorted_input_stream);
-            if(split_id == 1) {
+            if (split_id == 1)
+            {
                 auto cur_col = getByColumnId(next_block, pk_column_id).column;
                 RowKeyColumnContainer cur_rowkey_column(cur_col, is_common_handle);
                 const auto first_curr_pk = cur_rowkey_column.getRowKeyValue(0);
                 const auto last_curr_pk = cur_rowkey_column.getRowKeyValue(cur_col->size() - 1);
-                LOG_INFO(&Poco::Logger::get("!!! debug"), "!!!!! pk first read first {} last {}", 
+                LOG_INFO(
+                    &Poco::Logger::get("!!! debug"),
+                    "!!!!! pk first read first {} last {}",
                     first_curr_pk.toDebugString(),
-                    last_curr_pk.toDebugString()
-                );
+                    last_curr_pk.toDebugString());
             }
             first_read = false;
         }
@@ -93,7 +99,7 @@ public:
             //     RowKeyColumnContainer cur_rowkey_column(cur_col, is_common_handle);
             //     const auto first_curr_pk = cur_rowkey_column.getRowKeyValue(0);
             //     const auto last_curr_pk = cur_rowkey_column.getRowKeyValue(cur_col->size() - 1);
-            //     LOG_INFO(&Poco::Logger::get("!!! debug"), "!!!!! pk second first {} last {}", 
+            //     LOG_INFO(&Poco::Logger::get("!!! debug"), "!!!!! pk second first {} last {}",
             //         first_curr_pk.toDebugString(),
             //         last_curr_pk.toDebugString()
             //     );
@@ -108,7 +114,8 @@ public:
             }
 #endif
 
-            const size_t cut_offset = findCutOffsetInNextBlock(split_id, cur_block, next_block, pk_column_id, is_common_handle);
+            const size_t cut_offset
+                = findCutOffsetInNextBlock(split_id, cur_block, next_block, pk_column_id, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
                 return finializeBlock(std::move(cur_block));
@@ -175,11 +182,12 @@ private:
                 {
                     if (unlikely(next_pk < last_curr_pk))
                         throw Exception(
-                            fmt::format("InputStream is not sorted, pk in next block {} is smaller than current block {}, split_id={}",
-                                next_pk.toDebugString(), 
+                            fmt::format(
+                                "InputStream is not sorted, pk in next block {} is smaller than current block {}, "
+                                "split_id={}",
+                                next_pk.toDebugString(),
                                 last_curr_pk.toDebugString(),
-                                split_id
-                            ),
+                                split_id),
                             ErrorCodes::LOGICAL_ERROR);
                 }
                 break;
