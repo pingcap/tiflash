@@ -138,15 +138,12 @@ void PipelineExecutorContext::decActiveRefCount()
         RUNTIME_ASSERT(!is_finished);
         is_finished = true;
 
-        if (isWaitMode())
-        {
-            cv.notify_all();
-        }
-        else
+        if (!isWaitMode())
         {
             assert(*result_queue);
             (*result_queue)->finish();
         }
+        cv.notify_all();
     }
 }
 
