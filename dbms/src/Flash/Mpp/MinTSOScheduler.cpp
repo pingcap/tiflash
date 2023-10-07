@@ -38,7 +38,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     if (active_set_soft_limit == 0 || active_set_soft_limit > 10 * cores)
     {
         /// set active_set_soft_limit to a reasonable value
-        active_set_soft_limit = std::max(cores, 1); /// at least 1
+        active_set_soft_limit = std::max(2 * cores, 1); /// at least 1
     }
     if (isDisabled())
     {
