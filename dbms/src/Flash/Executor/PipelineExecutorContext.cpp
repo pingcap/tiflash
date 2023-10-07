@@ -76,7 +76,7 @@ void PipelineExecutorContext::onErrorOccurred(const std::exception_ptr & excepti
     if (setExceptionPtr(exception_ptr_))
     {
         cancel();
-        LOG_WARNING(log, "error occured and cancel the query");
+        LOG_WARNING(log, "error {} occured and cancel the query", getExceptionMsg());
     }
 }
 
