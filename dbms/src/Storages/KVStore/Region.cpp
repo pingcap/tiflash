@@ -1027,6 +1027,10 @@ void Region::cleanApproxMemCacheInfo() const
     approx_mem_cache_bytes = 0;
 }
 
+void Region::mergeDataFrom(const Region & other) {
+    this->data.mergeFrom(other.data);
+}
+
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
 {
     for (const auto & peer : region.peers())

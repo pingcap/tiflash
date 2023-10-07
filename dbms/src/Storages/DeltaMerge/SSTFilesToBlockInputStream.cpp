@@ -172,8 +172,12 @@ Block SSTFilesToBlockInputStream::read()
             {
                 BaseBuffView key = write_cf_reader->keyView();
                 BaseBuffView value = write_cf_reader->valueView();
+                auto tikv_key = TiKVKey(key.data, key.len);
+                // if(this->getSplitId() == 1) {
+                //     LOG_INFO(log, "!!!!! read1haha {}", tikv_key.toDebugString());
+                // }
                 // TODO(split) check if there is concurrency problem when parallel prehandling.
-                region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+                region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
                 ++process_keys.write_cf;
                 process_keys.write_cf_bytes += (key.len + value.len);
                 if (process_keys.write_cf % opts.expected_size == 0)
@@ -434,12 +438,13 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
                 current_truncated_ts.toDebugString(),
                 prev,
                 region->id());
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
-                "jump after start_raw {} start_pk {} to {}, split_id={}, region_id={}",
+                "Re-Seek after start_raw {} start_pk {} to {}, current_pk = {}, split_id={}, region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 tikv_key.toDebugString(),
+                current_truncated_ts.toDebugString(),
                 soft_limit.value().split_id,
                 region->id());
             return true;
@@ -448,9 +453,9 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
         write_cf_reader->next();
     }
     // `start_limit` is the last pk of the sst file.
-    LOG_DEBUG(
+    LOG_INFO(
         log,
-        "skip to the last key of write cf start_raw {} start_pk {}, split_id={}, region_id={}",
+        "Re-Seek to the last key of write cf start_raw {} start_pk {}, split_id={}, region_id={}",
         soft_limit.value().raw_start.toDebugString(),
         start_limit.value().toDebugString(),
         soft_limit.value().split_id,
@@ -481,6 +486,15 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
             region->id());
         return true;
     }
+    // if(getSplitId() == 1) {
+    //     LOG_INFO(
+    //         log,
+    //         "!!!!! NOT Reach end for this split {} current {}, split_id={} region_id={}",
+    //         sl.toDebugString(),
+    //         tikv_key.toDebugString(),
+    //         soft_limit.value().split_id,
+    //         region->id());
+    // }
     return false;
 }
 } // namespace DM

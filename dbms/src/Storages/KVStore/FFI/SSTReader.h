@@ -164,7 +164,7 @@ public:
         assert(args.size() > 0);
         LOG_INFO(
             log,
-            "Open sst file first {} range {} split_id {}",
+            "Open sst file first {} range {} split_id={}",
             buffToStrView(args[current].path),
             range->toDebugString(),
             split_id);

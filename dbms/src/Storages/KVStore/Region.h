@@ -229,6 +229,8 @@ public:
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
+    void mergeDataFrom(const Region & other);
+
     Region() = delete;
 
 private:
