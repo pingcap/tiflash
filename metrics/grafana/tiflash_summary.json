@@ -16277,7 +16277,7 @@
               "exemplar": true,
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"remaining_tokens\", instance=~\"$instance\"}) by (instance,resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "remaining_tokens-{{instance}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
@@ -16286,7 +16286,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"avg_speed\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "avg_speed-{{instance}}-{{resource_group}}",
               "refId": "B"
             },
             {
@@ -16294,7 +16294,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "total_consumption-{{instance}}-{{resource_group}}",
               "refId": "C"
             },
             {
@@ -16302,7 +16302,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_fill_rate\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "bucket_fill_rate-{{instance}}-{{resource_group}}",
               "refId": "D"
             },
             {
@@ -16310,7 +16310,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_capacity\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "bucket_capacity-{{instance}}-{{resource_group}}",
               "refId": "E"
             },
             {
@@ -16318,7 +16318,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"fetch_tokens_from_gac_count\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "fetch_tokens_from_gac_count-{{instance}}-{{resource_group}}",
               "refId": "F"
             }
           ],
