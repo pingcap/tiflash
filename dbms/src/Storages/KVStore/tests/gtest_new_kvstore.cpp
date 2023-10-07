@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
+#include <Storages/KVStore/Read/LearnerRead.h>
 
 #include "kvstore_helper.h"
 
@@ -363,15 +363,20 @@ static void validate(
     auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper,
                               SSTView snap,
                               SSTReader::RegionRangeFilter range,
-                              size_t split_id
-                            ) -> std::unique_ptr<MonoSSTReader> {
+                              size_t split_id) -> std::unique_ptr<MonoSSTReader> {
         auto parsed_kind = MockRaftStoreProxy::parseSSTViewKind(buffToStrView(snap.path));
         auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
         assert(reader->sst_format_kind() == parsed_kind);
         return reader;
     };
-    MultiSSTReader<MonoSSTReader, SSTView>
-        reader{proxy_helper.get(), cf, make_inner_func, ssts, Logger::get(), kvr1->getRange(), DM::SSTScanSoftLimit::HEAD_SPLIT};
+    MultiSSTReader<MonoSSTReader, SSTView> reader{
+        proxy_helper.get(),
+        cf,
+        make_inner_func,
+        ssts,
+        Logger::get(),
+        kvr1->getRange(),
+        DM::SSTScanSoftLimit::HEAD_SPLIT};
 
     size_t counter = 0;
     while (reader.remained())

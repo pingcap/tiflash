@@ -136,7 +136,9 @@ try
                       ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
             ASSERT_EQ(res.stats.write_cf_keys, 49); // There are 49 versions.
             ASSERT_EQ(res.stats.parallels, 4);
-            ASSERT_EQ(res.stats.max_split_write_cf_keys, res.stats.write_cf_keys); // Only one split can handle all write keys.
+            ASSERT_EQ(
+                res.stats.max_split_write_cf_keys,
+                res.stats.write_cf_keys); // Only one split can handle all write keys.
         }
     }
 }
@@ -255,7 +257,7 @@ try
                 FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
                 auto [kvr1, res]
                     = proxy_instance
-                        ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+                          ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
                 // After retried.
                 ASSERT_EQ(res.stats.parallels, 4);
             }
@@ -263,7 +265,8 @@ try
                 fpv->store(2);
                 EXPECT_THROW(
                     proxy_instance
-                        ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt), Exception);
+                        ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt),
+                    Exception);
             }
         }
     }

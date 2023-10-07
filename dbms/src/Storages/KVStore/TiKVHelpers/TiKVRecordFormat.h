@@ -176,7 +176,7 @@ inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
 
 inline std::tuple<DecodedTiKVKey, size_t> decodeTiKVKeyFull(const TiKVKey & key)
 {
-    const size_t chunk_len = ENC_GROUP_SIZE + 1;
+    const size_t chunk_len = ENC_GROUP_SIZE + 1; // 8 + 1
     std::string res;
     res.reserve(key.dataSize() / chunk_len * ENC_GROUP_SIZE);
     for (const char * ptr = key.data();; ptr += chunk_len)
@@ -229,6 +229,7 @@ inline std::string_view getRawTiDBPKView(const DecodedTiKVKey & key)
     return std::string_view(user_key.data() + RAW_KEY_NO_HANDLE_SIZE, user_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
+// DecodedTiKVKey is from decodeTiKVKey.
 inline RawTiDBPK getRawTiDBPK(const DecodedTiKVKey & key)
 {
     return std::make_shared<const std::string>(getRawTiDBPKView(key));
@@ -264,6 +265,7 @@ inline TiKVKey appendTs(const TiKVKey & key, Timestamp ts)
     return TiKVKey(std::move(str));
 }
 
+// Not begin with 'z'
 inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
 {
     TiKVKey key = genKey(tableId, handleId);

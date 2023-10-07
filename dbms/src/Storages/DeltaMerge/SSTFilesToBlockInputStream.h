@@ -54,55 +54,43 @@ struct SSTScanSoftLimit
 {
     constexpr static size_t HEAD_SPLIT = SIZE_MAX;
     size_t split_id;
-    DecodedTiKVKey start;
-    DecodedTiKVKey end;
+    TiKVKey raw_start;
+    TiKVKey raw_end;
+    DecodedTiKVKey decoded_start;
+    DecodedTiKVKey decoded_end;
     std::optional<RawTiDBPK> start_limit;
     std::optional<RawTiDBPK> end_limit;
 
-    SSTScanSoftLimit(size_t extra_id, std::string && start_, std::string && end_)
-        : SSTScanSoftLimit(extra_id, DecodedTiKVKey(std::move(start_)), DecodedTiKVKey(std::move(end_)))
-    {}
-
-    SSTScanSoftLimit(size_t extra_id, DecodedTiKVKey && start_, DecodedTiKVKey && end_)
+    SSTScanSoftLimit(size_t extra_id, TiKVKey && raw_start_, TiKVKey && raw_end_)
         : split_id(extra_id)
-        , start(std::move(start_))
-        , end(std::move(end_))
+        , raw_start(std::move(raw_start_))
+        , raw_end(std::move(raw_end_))
     {
-        if (start.size())
+        if (!raw_start.empty())
         {
-            start_limit = RecordKVFormat::getRawTiDBPK(start);
+            decoded_start = RecordKVFormat::decodeTiKVKey(raw_start);
         }
-        if (end.size())
+        if (!raw_end.empty())
         {
-            end_limit = RecordKVFormat::getRawTiDBPK(end);
+            decoded_end = RecordKVFormat::decodeTiKVKey(raw_end);
+        }
+        if (decoded_start.size())
+        {
+            start_limit = RecordKVFormat::getRawTiDBPK(decoded_start);
+        }
+        if (decoded_end.size())
+        {
+            end_limit = RecordKVFormat::getRawTiDBPK(decoded_end);
         }
     }
 
-    std::optional<RawTiDBPK> getStartLimit() { return start_limit; }
+    const std::optional<RawTiDBPK> & getStartLimit() { return start_limit; }
 
-    std::optional<RawTiDBPK> getEndLimit() { return end_limit; }
+    const std::optional<RawTiDBPK> & getEndLimit() { return end_limit; }
 
     std::string toDebugString() const
     {
-        return fmt::format(
-            "{}({}):{}({})",
-            start.toDebugString(),
-            limitToDebugString(start_limit),
-            end.toDebugString(),
-            limitToDebugString(end_limit));
-    }
-
-private:
-    static std::string limitToDebugString(const std::optional<RawTiDBPK> & l)
-    {
-        if (l)
-        {
-            return fmt::format("{}[{}]", l.value().toDebugString(), (HandleID)l.value());
-        }
-        else
-        {
-            return "";
-        }
+        return fmt::format("{}:{}", raw_start.toDebugString(), raw_end.toDebugString());
     }
 };
 
@@ -160,12 +148,18 @@ public:
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
-    size_t getSplitId() const {return soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT;}
+    size_t getSplitId() const
+    {
+        return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT;
+    }
 
     bool maybeSkipBySoftLimit();
 
 private:
-    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included, const DecodedTiKVKey * rowkey_to_be_skipped);
+    void loadCFDataFromSST(
+        ColumnFamilyType cf,
+        const DecodedTiKVKey * rowkey_to_be_included,
+        const DecodedTiKVKey * rowkey_to_be_skipped);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();

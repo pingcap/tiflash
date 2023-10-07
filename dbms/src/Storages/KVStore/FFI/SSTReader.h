@@ -53,7 +53,11 @@ public:
     size_t getSplitId() const override;
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
-    MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_, size_t split_id_);
+    MonoSSTReader(
+        const TiFlashRaftProxyHelper * proxy_helper_,
+        SSTView view,
+        RegionRangeFilter range_,
+        size_t split_id_);
     ~MonoSSTReader() override;
 
 private:
@@ -121,9 +125,7 @@ public:
         }
         return mono->seek(std::move(view));
     }
-    size_t getSplitId() const override {
-        return split_id;
-    }
+    size_t getSplitId() const override { return split_id; }
 
     // Switch to next mono reader if current is drained,
     // and we have a next sst file to read.
@@ -149,8 +151,7 @@ public:
         std::vector<E> args_,
         LoggerPtr log_,
         RegionRangeFilter range_,
-        size_t split_id_
-    )
+        size_t split_id_)
         : log(log_)
         , proxy_helper(proxy_helper_)
         , type(type_)
@@ -161,7 +162,12 @@ public:
         , split_id(split_id_)
     {
         assert(args.size() > 0);
-        LOG_INFO(log, "Open sst file first {} range {} split_id {}", buffToStrView(args[current].path), range->toDebugString(), split_id);
+        LOG_INFO(
+            log,
+            "Open sst file first {} range {} split_id {}",
+            buffToStrView(args[current].path),
+            range->toDebugString(),
+            split_id);
         mono = initer(proxy_helper, args[current], range, split_id);
     }
 

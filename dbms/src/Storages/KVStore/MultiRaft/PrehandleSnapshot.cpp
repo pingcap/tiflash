@@ -100,10 +100,13 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
             if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_raise_prehandle_exception); v)
             {
                 auto flag = std::any_cast<std::shared_ptr<std::atomic_uint64_t>>(v.value());
-                if(flag->load() == 1) {
+                if (flag->load() == 1)
+                {
                     flag->store(0);
                     throw Exception("fake exception once", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
-                } else if (flag->load() == 2 ){
+                }
+                else if (flag->load() == 2)
+                {
                     throw Exception("fake exception", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
             }
@@ -127,8 +130,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                     .dt_total_bytes = stream->getTotalCommittedBytes(),
                     .total_keys = sst_stream->getProcessKeys().total(),
                     .write_cf_keys = sst_stream->getProcessKeys().write_cf,
-                    .max_split_write_cf_keys = sst_stream->getProcessKeys().write_cf
-                }});
+                    .max_split_write_cf_keys = sst_stream->getProcessKeys().write_cf}});
     }
     catch (DB::Exception & e)
     {
@@ -196,7 +198,7 @@ static inline std::vector<std::string> getSplitKey(
 {
     // We don't use this is the single snapshot is small, due to overhead in decoding.
     // TODO(split) find solution if the snapshot has too many untrimmed data.
-    // TODO(split) recover this
+    // TODO(split) recover this after integration test passes.
     // constexpr size_t PARALLEL_PREHANDLE_THRESHOLD = 1 * 1024 * 1024 * 1024;
     constexpr size_t PARALLEL_PREHANDLE_THRESHOLD = 1 * 1024 * 1024;
     size_t parallel_prehandle_threshold = PARALLEL_PREHANDLE_THRESHOLD;
@@ -269,7 +271,8 @@ static inline std::vector<std::string> getSplitKey(
                     ":");
                 LOG_INFO(
                     log,
-                    "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} region_id={}",
+                    "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
+                    "region_id={}",
                     fmt_buf.toString(),
                     total_concurrency,
                     ongoing_count,
@@ -403,7 +406,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     DM::SSTScanSoftLimit::HEAD_SPLIT,
                     std::string(""),
                     std::string(split_keys[0])));
-                struct ParallelPrehandleCtx {
+                struct ParallelPrehandleCtx
+                {
                     std::unordered_map<uint64_t, ReadFromStreamResult> gather_res;
                     std::unordered_map<uint64_t, PrehandleResult> gather_prehandle_res;
                     std::mutex mut;
@@ -456,6 +460,13 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     catch (Exception & e)
                     {
                         // The exception can be wrapped in the future, however, we abort here.
+                        LOG_INFO(
+                            log,
+                            "Parallel prehandling error {}"
+                            " split_id={} region_id={}",
+                            e.message(),
+                            extra_id,
+                            new_region->id());
                         prehandle_task->store(true);
                         throw;
                     }
@@ -467,8 +478,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                         auto limit = DM::SSTScanSoftLimit(
                             extra_id,
                             std::string(split_keys[extra_id]),
-                            extra_id + 1 == split_key_count ? std::string("") : std::string(split_keys[extra_id + 1])
-                        );
+                            extra_id + 1 == split_key_count ? std::string("") : std::string(split_keys[extra_id + 1]));
                         LOG_INFO(
                             log,
                             "Add extra parallel prehandle task split_id={}/total={} limit {}",
@@ -494,7 +504,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
                 LOG_INFO(
                     log,
-                    "Finished extra parallel prehandle task limit {} write cf {} dmfiles {} error {}, split_id={}, region_id={}",
+                    "Finished extra parallel prehandle task limit {} write cf {} dmfiles {} error {}, split_id={}, "
+                    "region_id={}",
                     sst_stream->getSoftLimit()->toDebugString(),
                     head_prehandle_result.stats.write_cf_keys,
                     head_prehandle_result.ingest_ids.size(),
@@ -509,11 +520,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
                     {
                         // May get exception.
-                        LOG_INFO(
-                            log,
-                            "Try fetch prehandle task split_id={}, region_id={}",
-                            extra_id,
-                            new_region->id());
+                        LOG_INFO(log, "Try fetch prehandle task split_id={}, region_id={}", extra_id, new_region->id());
                         async_tasks.fetchResult(extra_id);
                     }
                     // Aggregate results.
@@ -545,7 +552,9 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                         prehandle_result.ingest_ids.size(),
                         magic_enum::enum_name(head_result.error),
                         new_region->id());
-                } else {
+                }
+                else
+                {
                     // Otherwise, fallback to error handling or exception handling.
                     result = head_result;
                 }

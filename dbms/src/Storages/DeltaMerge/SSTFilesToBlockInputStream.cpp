@@ -60,10 +60,12 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     std::vector<SSTView> ssts_write;
     std::vector<SSTView> ssts_lock;
 
-    auto make_inner_func
-        = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range, size_t split_id) {
-              return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
-          };
+    auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper,
+                               SSTView snap,
+                               SSTReader::RegionRangeFilter range,
+                               size_t split_id) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
+    };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
         const auto & snapshot = snaps.views[i];
@@ -91,8 +93,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_default,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT
-        );
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT);
     }
     if (!ssts_write.empty())
     {
@@ -103,8 +104,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_write,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT
-        );
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT);
     }
     if (!ssts_lock.empty())
     {
@@ -115,8 +115,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_lock,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id: DM::SSTScanSoftLimit::HEAD_SPLIT
-        );
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT);
     }
     LOG_INFO(
         log,
@@ -197,7 +196,6 @@ Block SSTFilesToBlockInputStream::read()
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
             loaded_write_cf_key.clear();
             // Batch the loading from other CFs until we need to decode data
-            // TODO(split) skip keys before soft limit when load from other cfs.
             loadCFDataFromSST(ColumnFamilyType::Default, &rowkey, nullptr);
             loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey, nullptr);
 
@@ -210,7 +208,6 @@ Block SSTFilesToBlockInputStream::read()
 
     // We emit the last block of this sst decode stream here.
     // Load all key-value pairs from other CFs.
-    // TODO(split) skip keys before soft limit when load from other cfs.
     loadCFDataFromSST(ColumnFamilyType::Default, nullptr, nullptr);
     loadCFDataFromSST(ColumnFamilyType::Lock, nullptr, nullptr);
 
@@ -221,9 +218,9 @@ Block SSTFilesToBlockInputStream::read()
 void SSTFilesToBlockInputStream::loadCFDataFromSST(
     ColumnFamilyType cf,
     const DecodedTiKVKey * const rowkey_to_be_included,
-    const DecodedTiKVKey * const rowkey_to_be_skipped
-)
+    const DecodedTiKVKey * const rowkey_to_be_skipped)
 {
+    // TODO(split) skip keys before soft limit when load from other cfs.
     UNUSED(rowkey_to_be_skipped);
     SSTReader * reader;
     size_t * p_process_keys;
@@ -245,6 +242,12 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     }
     else
         throw Exception("Unknown cf, should not happen!");
+
+    if (rowkey_to_be_skipped)
+    {
+        BaseBuffView bf = BaseBuffView{rowkey_to_be_skipped->data(), rowkey_to_be_skipped->size()};
+        reader->seek(std::move(bf));
+    }
 
     // Simply read to the end of SST file
     if (rowkey_to_be_included == nullptr)
@@ -385,7 +388,7 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
     // TODO(split) optimize to use fn_seek after miss for some iterations.
     if (!soft_limit.has_value())
         return false;
-    auto start_limit = soft_limit.value().getStartLimit();
+    const auto & start_limit = soft_limit.value().getStartLimit();
     // If start is set to "", then there is no soft limit for start.
     if (!start_limit)
         return false;
@@ -393,12 +396,11 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
     // Safety `soft_limit` outlives returned base buff view.
     LOG_INFO(
         log,
-        "!!!!! before seek, split_id={}, region_id={}, key {}",
+        "!!!!! before seek, split_id={}, region_id={}, tikv {}",
         soft_limit.value().split_id,
         region->id(),
-        DecodedTiKVKey(std::string(soft_limit.value().start.data(), soft_limit.value().start.size())).toDebugString()
-    );
-    write_cf_reader->seek(cppStringAsBuff(soft_limit.value().start));
+        soft_limit.value().raw_start.toDebugString());
+    write_cf_reader->seek(cppStringAsBuff(soft_limit.value().raw_start));
     LOG_INFO(
         log,
         "!!!!! after seek, remained {}, split_id={}, region_id={}",
@@ -413,41 +415,43 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
     //     "!!!!! after next, split_id={}, region_id={}",
     //     soft_limit.value().split_id,
     //     region->id());
+    std::string prev;
     while (write_cf_reader && write_cf_reader->remained())
     {
         // Read until find the next pk.
         auto key = write_cf_reader->keyView();
         // TODO the copy could be eliminated, but with many modifications.
         auto tikv_key = TiKVKey(key.data, key.len);
-        auto current_truncated_ts = RecordKVFormat::truncateTs(tikv_key);
-        auto start_limit_ts = RecordKVFormat::truncateTs(tikv_key);
+        auto current_truncated_ts = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(tikv_key));
         // If found a new pk.
-        if (current_truncated_ts != start_limit_ts)
+        if (current_truncated_ts != start_limit)
         {
             RUNTIME_CHECK_MSG(
-                current_truncated_ts > start_limit_ts,
-                "current decreases as cf advances, start {} start_limit {} current {}, region_id={}",
-                soft_limit.value().start.toDebugString(),
+                current_truncated_ts > start_limit,
+                "current pk decreases as reader advances, start_raw {} start_pk {} current {} prev {}, region_id={}",
+                soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 current_truncated_ts.toDebugString(),
+                prev,
                 region->id());
             LOG_DEBUG(
                 log,
-                "jump after start {} start_limit {} to {}, split_id={}, region_id={}",
-                soft_limit.value().start.toDebugString(),
+                "jump after start_raw {} start_pk {} to {}, split_id={}, region_id={}",
+                soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 tikv_key.toDebugString(),
                 soft_limit.value().split_id,
                 region->id());
             return true;
         }
+        prev = current_truncated_ts.toDebugString();
         write_cf_reader->next();
     }
     // `start_limit` is the last pk of the sst file.
     LOG_DEBUG(
         log,
-        "skip meet the last key of write cf start {} start_limit {}, split_id={}, region_id={}",
-        soft_limit.value().start.toDebugString(),
+        "skip to the last key of write cf start_raw {} start_pk {}, split_id={}, region_id={}",
+        soft_limit.value().raw_start.toDebugString(),
         start_limit.value().toDebugString(),
         soft_limit.value().split_id,
         region->id());
@@ -459,15 +463,14 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
     if (!soft_limit.has_value())
         return false;
     const SSTScanSoftLimit & sl = soft_limit.value();
-    auto end_limit = soft_limit.value().getEndLimit();
+    const auto & end_limit = soft_limit.value().getEndLimit();
     if (!end_limit)
         return false;
     auto key = write_cf_reader->keyView();
     // TODO the copy could be eliminated, but with many modifications.
     auto tikv_key = TiKVKey(key.data, key.len);
-    auto current_truncated_ts = RecordKVFormat::truncateTs(tikv_key);
-    auto start_limit_ts = RecordKVFormat::truncateTs(tikv_key);
-    if (current_truncated_ts > start_limit_ts)
+    auto current_truncated_ts = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(tikv_key));
+    if (current_truncated_ts > end_limit)
     {
         LOG_INFO(
             log,

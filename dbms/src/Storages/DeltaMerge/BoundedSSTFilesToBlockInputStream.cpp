@@ -72,7 +72,8 @@ SSTFilesToBlockInputStream::ProcessKeys BoundedSSTFilesToBlockInputStream::getPr
 }
 
 
-size_t BoundedSSTFilesToBlockInputStream::getSplitId() const {
+size_t BoundedSSTFilesToBlockInputStream::getSplitId() const
+{
     return _raw_child->getSplitId();
 }
 

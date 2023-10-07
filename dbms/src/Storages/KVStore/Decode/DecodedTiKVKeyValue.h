@@ -40,19 +40,17 @@ struct DecodedTiKVKey
         return *this;
     }
 
-    static DecodedTiKVKey copyFrom(const DecodedTiKVKey & other) {
-        return DecodedTiKVKey(other.toBase());
-    }
+    static DecodedTiKVKey copyFrom(const DecodedTiKVKey & other) { return DecodedTiKVKey(other.toBase()); }
 
     KeyspaceID getKeyspaceID() const;
     std::string_view getUserKey() const;
     // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     std::string toDebugString() const;
+    std::string toString() const { return toBase(); }
     static std::string makeKeyspacePrefix(KeyspaceID keyspace_id);
+
 private:
-    Base toBase() const {
-        return *this;
-    }
+    Base toBase() const { return *this; }
 };
 
 static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
