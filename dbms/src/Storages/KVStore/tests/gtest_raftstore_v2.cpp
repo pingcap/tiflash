@@ -187,11 +187,12 @@ try
         region_id = 2;
         initStorages();
         KVStore & kvs = getKVS();
-        HandleID table_limit = 3;
+        HandleID table_limit_start = 30;
+        HandleID table_limit_end = 32;
         HandleID sst_limit = 100;
         table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-        auto start = RecordKVFormat::genKey(table_id, 0);
-        auto end = RecordKVFormat::genKey(table_id, table_limit);
+        auto start = RecordKVFormat::genKey(table_id, table_limit_start);
+        auto end = RecordKVFormat::genKey(table_id, table_limit_end);
         proxy_instance->bootstrapWithRegion(
             kvs,
             ctx.getTMTContext(),
@@ -223,7 +224,7 @@ try
                 = proxy_instance
                       ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
             // There must be some parallel which actually reads no write cf.
-            ASSERT_EQ(res.stats.write_cf_keys, 2); // table_limit - 1
+            ASSERT_EQ(res.stats.write_cf_keys, 2); // table_limit_end - table_limit_start
             ASSERT_EQ(res.stats.parallels, 4);
         }
     }

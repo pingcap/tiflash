@@ -408,6 +408,24 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
     // If start is set to "", then there is no soft limit for start.
     if (!start_limit)
         return false;
+
+    if (reader && reader->remained())
+    {
+        auto key = reader->keyView();
+        if (soft_limit.value().raw_start < buffToStrView(key))
+        {
+            // This happens when there is too many untrimmed data.
+            LOG_INFO(
+                log,
+                "Re-Seek backward is forbidden, start_limit {} current {}, cf={}, split_id={}, region_id={}",
+                soft_limit.value().raw_start.toDebugString(),
+                Redact::keyToDebugString(key.data, key.len),
+                magic_enum::enum_name(cf),
+                soft_limit.value().split_id,
+                region->id());
+            return false;
+        }
+    }
     // Safety `soft_limit` outlives returned base buff view.
     reader->seek(cppStringAsBuff(soft_limit.value().raw_start));
 
