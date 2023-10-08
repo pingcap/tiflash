@@ -42,7 +42,7 @@ mysql> analyze table test.t;
 => DBGInvoke __enable_fail_point(cop_send_failure)
 
 mysql> set tidb_enforce_mpp=1; select count(*) from test.t;
-{#REGEXP}.*Fail point FailPoints::random_cop_send_failure_failpoint is triggered.*
+{#REGEXP}.*Fail point FailPoints::cop_send_failure  is triggered.*
 
 => DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
 => DBGInvoke __disable_fail_point(cop_send_failure)
