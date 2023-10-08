@@ -277,6 +277,7 @@ static inline std::vector<std::string> getSplitKey(
             }
             else
             {
+                std::sort(split_keys.begin(), split_keys.end());
                 fmt_buf.joinStr(
                     split_keys.cbegin(),
                     split_keys.cend(),

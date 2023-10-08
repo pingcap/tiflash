@@ -913,6 +913,7 @@ void MockRaftStoreProxy::Cf::finish_file(SSTFormatKind kind)
     {
         kv_list.emplace_back(kv.first, kv.second);
     }
+    std::sort(kv_list.begin(), kv_list.end(), [](const auto & a, const auto & b) { return a.first < b.first; });
     auto & mmp = MockSSTReader::getMockSSTData();
     mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
     kvs.clear();
