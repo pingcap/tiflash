@@ -109,16 +109,46 @@ CATCH
 TEST_F(PipelineExecutorContextTestRunner, consumeThrowError)
 try
 {
-    PipelineExecutorContext context;
-    auto ret_queue = context.toConsumeMode(1);
-    ret_queue->push(Block{});
-    ResultHandler handler{[](const Block &) {
-        throw Exception("for test");
-    }};
-    context.consume(handler);
-    ASSERT_TRUE(context.getExceptionPtr());
-    auto actual_err_msg = context.getExceptionMsg();
-    ASSERT_EQ(actual_err_msg, "for test");
+    // case1
+    {
+        PipelineExecutorContext context;
+        auto ret_queue = context.toConsumeMode(1);
+        ret_queue->push(Block{});
+        ResultHandler handler{[](const Block &) {
+            throw Exception("for test");
+        }};
+        context.consume(handler);
+        ASSERT_TRUE(context.getExceptionPtr());
+        auto actual_err_msg = context.getExceptionMsg();
+        ASSERT_EQ(actual_err_msg, "for test");
+    }
+
+    // case2
+    {
+        PipelineExecutorContext context;
+
+        context.incActiveRefCount();
+        auto thread_manager = newThreadManager();
+        thread_manager->schedule(false, "exec", [&context]() mutable {
+            while (!context.isCancelled())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            context.decActiveRefCount();
+        });
+
+        auto ret_queue = context.toConsumeMode(1);
+        ret_queue->push(Block{});
+        ResultHandler handler{[](const Block &) {
+            throw Exception("for test");
+        }};
+        context.consume(handler);
+        ASSERT_TRUE(context.getExceptionPtr());
+        auto actual_err_msg = context.getExceptionMsg();
+        ASSERT_EQ(actual_err_msg, "for test");
+
+        thread_manager->wait();
+    }
 }
 CATCH
 
