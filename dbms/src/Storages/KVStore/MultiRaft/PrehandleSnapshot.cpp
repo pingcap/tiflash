@@ -446,7 +446,7 @@ void executeParallelTransform(
         });
         RUNTIME_CHECK_MSG(
             add_result,
-            "Failed when add {}-th task for prehandling region_id={}",
+            "Failed when adding {}-th task for prehandling region_id={}",
             extra_id,
             new_region->id());
     }
