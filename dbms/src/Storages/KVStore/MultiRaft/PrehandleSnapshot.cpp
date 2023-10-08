@@ -61,6 +61,7 @@ struct ReadFromStreamResult
 };
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
+    LoggerPtr log,
     const RegionPtr & new_region,
     const std::shared_ptr<std::atomic_bool> & prehandle_task,
     DM::FileConvertJobType job_type,
@@ -69,6 +70,11 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
     const DM::SSTFilesToBlockInputStreamOpts & opts,
     TMTContext & tmt)
 {
+    LOG_INFO(
+        log,
+        "Add prehandle task split_id={} limit={}",
+        sst_stream->getSplitId(),
+        sst_stream->getSoftLimit().has_value() ? sst_stream->getSoftLimit()->toDebugString() : "");
     auto region_id = new_region->id();
     std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
     // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
@@ -340,7 +346,7 @@ static void runInParallel(
     {
         std::string limit_tag = part_limit.toDebugString();
         auto [part_result, part_prehandle_result]
-            = executeTransform(part_new_region, prehandle_task, job_type, dm_storage, part_sst_stream, opt, tmt);
+            = executeTransform(log, part_new_region, prehandle_task, job_type, dm_storage, part_sst_stream, opt, tmt);
         LOG_INFO(
             log,
             "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} error {}, "
@@ -422,12 +428,6 @@ void executeParallelTransform(
                 extra_id,
                 std::string(split_keys[extra_id]),
                 extra_id + 1 == split_key_count ? std::string("") : std::string(split_keys[extra_id + 1]));
-            LOG_INFO(
-                log,
-                "Add extra parallel prehandle task split_id={} total={} limit={}",
-                extra_id,
-                split_keys.size(),
-                limit.toDebugString());
             runInParallel(
                 log,
                 new_region,
@@ -450,14 +450,8 @@ void executeParallelTransform(
             extra_id,
             new_region->id());
     }
-    LOG_INFO(
-        log,
-        "Add extra parallel prehandle task split_id={}/total={} limit {}",
-        DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
-        split_keys.size(),
-        sst_stream->getSoftLimit().value().toDebugString());
     auto [head_result, head_prehandle_result]
-        = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+        = executeTransform(log, new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
     LOG_INFO(
         log,
         "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} "
@@ -614,7 +608,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     new_region->getRange()->toDebugString(),
                     new_region->id());
                 std::tie(result, prehandle_result)
-                    = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+                    = executeTransform(log, new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
             }
             else
             {
