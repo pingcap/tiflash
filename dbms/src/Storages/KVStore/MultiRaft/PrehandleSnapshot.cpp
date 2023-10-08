@@ -215,9 +215,9 @@ static inline std::vector<std::string> getSplitKey(
     // We don't use this is the single snapshot is small, due to overhead in decoding.
     // TODO(split) find solution if the snapshot has too many untrimmed data.
     // TODO(split) recover this after integration test passes.
-    // constexpr size_t PARALLEL_PREHANDLE_THRESHOLD = 1 * 1024 * 1024 * 1024;
-    constexpr size_t PARALLEL_PREHANDLE_THRESHOLD = 1 * 1024 * 1024;
-    size_t parallel_prehandle_threshold = PARALLEL_PREHANDLE_THRESHOLD;
+    // constexpr size_t default_parallel_prehandle_threshold = 1 * 1024 * 1024 * 1024;
+    constexpr size_t default_parallel_prehandle_threshold = 1 * 1024 * 1024;
+    size_t parallel_prehandle_threshold = default_parallel_prehandle_threshold;
     fiu_do_on(FailPoints::force_set_parallel_prehandle_threshold, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_parallel_prehandle_threshold); v)
             parallel_prehandle_threshold = std::any_cast<size_t>(v.value());
@@ -415,6 +415,7 @@ void executeParallelTransform(
         new_region->getRange()->toDebugString(),
         split_key_count,
         new_region->id());
+    // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
     sst_stream->resetSoftLimit(
         DM::SSTScanSoftLimit(DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT, std::string(""), std::string(split_keys[0])));
