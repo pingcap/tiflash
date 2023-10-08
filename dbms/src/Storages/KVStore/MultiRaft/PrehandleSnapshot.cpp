@@ -216,7 +216,7 @@ static inline std::vector<std::string> getSplitKey(
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_parallel_prehandle_threshold); v)
             parallel_prehandle_threshold = std::any_cast<size_t>(v.value());
     });
-    // If size is 0, do no parallel prehandle for this snapshot, which is legacy.
+    // If size is 0, do not parallel prehandle for this snapshot, which is legacy.
     // If size is non-zero, use extra this many threads to prehandle.
     std::vector<std::string> split_keys;
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
