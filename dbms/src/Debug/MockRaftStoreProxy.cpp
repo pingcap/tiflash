@@ -182,7 +182,7 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
 
 static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, uint64_t)
 {
-    auto s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");
+    auto * s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");
     return RustStrWithView{
         .buff = cppStringAsBuff(*s),
         .inner = RawRustPtr{.ptr = s, .type = static_cast<RawRustPtrType>(RawObjType::MockString)}};

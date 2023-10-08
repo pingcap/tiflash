@@ -84,7 +84,7 @@ static RustStrWithViewVec fn_get_split_keys(SSTReaderPtr ptr, uint64_t splits_co
     auto length = reader->length();
     RUNTIME_CHECK(splits_count > 1);
     auto size_per_split = length / splits_count;
-    auto vec = new std::vector<std::string>();
+    auto * vec = new std::vector<std::string>();
     auto split_key_count = splits_count - 1;
     auto it = reader->getBegin();
     BaseBuffView * buffs = createBaseBuffViewArray(split_key_count);
