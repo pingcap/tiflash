@@ -543,7 +543,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
                 LOG_INFO(
                     log,
-                    "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} error {}, split_id={}, "
+                    "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} "
+                    "error {}, split_id={}, "
                     "region_id={}",
                     sst_stream->getSoftLimit()->toDebugString(),
                     head_prehandle_result.stats.write_cf_keys,

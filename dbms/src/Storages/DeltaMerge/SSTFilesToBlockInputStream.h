@@ -158,9 +158,7 @@ public:
     bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader); }
 
 private:
-    void loadCFDataFromSST(
-        ColumnFamilyType cf,
-        const DecodedTiKVKey * rowkey_to_be_included);
+    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();

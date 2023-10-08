@@ -27,7 +27,7 @@ extern const char force_raise_prehandle_exception[];
 namespace tests
 {
 
-// Test several keys with only one version.
+// Test several uncommitted keys with only one version.
 TEST_F(RegionKVStoreTest, KVStoreSingleSnap1)
 try
 {
@@ -45,6 +45,7 @@ try
         KVStore & kvs = getKVS();
         HandleID table_limit = 20;
         HandleID sst_limit = 30;
+        HandleID uncommitted = 15;
         table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
         auto start = RecordKVFormat::genKey(table_id, 0);
         auto end = RecordKVFormat::genKey(table_id, table_limit);
@@ -70,6 +71,8 @@ try
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
+                if (h == uncommitted)
+                    continue;
                 write_cf.insert_raw(k, value_default);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
@@ -78,10 +81,31 @@ try
             auto [kvr1, res]
                 = proxy_instance
                       ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
-            ASSERT_EQ(res.stats.write_cf_keys, 19); // table_limit - 1
+            ASSERT_EQ(res.stats.write_cf_keys, 18); // table_limit - 1 - 1(uncommitted)
             // No extra read, otherwise mergeDataFrom will also fire.
-            ASSERT_EQ(res.stats.write_cf_keys, res.stats.default_cf_keys);
+            ASSERT_EQ(res.stats.write_cf_keys + 1, res.stats.default_cf_keys);
             ASSERT_EQ(res.stats.parallels, 4);
+        }
+        // Switch V1 to test if there are duplicated keys.
+        proxy_instance->cluster_ver = RaftstoreVer::V1;
+        {
+            auto k = RecordKVFormat::genKey(table_id, uncommitted, 111);
+            auto [index, term]
+                = proxy_instance
+                      ->rawWrite(region_id, {k}, {value_default}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            MockRaftStoreProxy::FailCond cond;
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        }
+        {
+            auto k = RecordKVFormat::genKey(table_id, uncommitted, 111);
+            auto [index, term] = proxy_instance->rawWrite(
+                region_id,
+                {k, k},
+                {value_default, value_default},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write});
+            MockRaftStoreProxy::FailCond cond;
+            EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
         }
     }
 }

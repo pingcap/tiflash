@@ -139,10 +139,13 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix() {}
 
-void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader) {
+void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader)
+{
     // There must be no data left when we write suffix
-    if (!write_cf_reader) return;
-    if (!write_cf_reader->remained()) return;
+    if (!write_cf_reader)
+        return;
+    if (!write_cf_reader->remained())
+        return;
     RUNTIME_CHECK(soft_limit.has_value());
     BaseBuffView cur = reader->keyView();
     RUNTIME_CHECK(buffToStrView(cur) > soft_limit.value().raw_end);
@@ -252,7 +255,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else
         throw Exception("Unknown cf, should not happen!");
 
-    if(reader && reader->remained()) {
+    if (reader && reader->remained())
+    {
         maybeSkipBySoftLimit(cf, *reader_ptr);
     }
 
@@ -261,7 +265,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     {
         while (reader && reader->remained())
         {
-            if(maybeStopBySoftLimit(cf, *reader_ptr)) {
+            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            {
                 break;
             }
             BaseBuffView key = reader->keyView();
@@ -420,7 +425,8 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
         {
             RUNTIME_CHECK_MSG(
                 current_truncated_ts > start_limit,
-                "current pk decreases as reader advances, start_raw {} start_pk {} current {}, cf={}, split_id={}, region_id={}",
+                "current pk decreases as reader advances, start_raw {} start_pk {} current {}, cf={}, split_id={}, "
+                "region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 current_truncated_ts.toDebugString(),
