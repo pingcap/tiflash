@@ -100,7 +100,7 @@ struct MPPGatherId
     String toString() const
     {
         return fmt::format(
-            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_gorup: {}>",
+            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group: {}>",
             gather_id,
             query_id.query_ts,
             query_id.local_query_id,
