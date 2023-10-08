@@ -27,6 +27,7 @@ extern const char force_raise_prehandle_exception[];
 namespace tests
 {
 
+// Test several keys with only one version.
 TEST_F(RegionKVStoreTest, KVStoreSingleSnap1)
 try
 {
@@ -78,6 +79,8 @@ try
                 = proxy_instance
                       ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
             ASSERT_EQ(res.stats.write_cf_keys, 19); // table_limit - 1
+            // No extra read, otherwise mergeDataFrom will also fire.
+            ASSERT_EQ(res.stats.write_cf_keys, res.stats.default_cf_keys);
             ASSERT_EQ(res.stats.parallels, 4);
         }
     }

@@ -132,6 +132,8 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                     .dt_total_bytes = stream->getTotalCommittedBytes(),
                     .total_keys = sst_stream->getProcessKeys().total(),
                     .write_cf_keys = sst_stream->getProcessKeys().write_cf,
+                    .lock_cf_keys = sst_stream->getProcessKeys().lock_cf,
+                    .default_cf_keys = sst_stream->getProcessKeys().default_cf,
                     .max_split_write_cf_keys = sst_stream->getProcessKeys().write_cf}});
     }
     catch (DB::Exception & e)
@@ -274,7 +276,7 @@ static inline std::vector<std::string> getSplitKey(
                     split_keys.cend(),
                     [](const auto & arg, FmtBuffer & fb) {
                         // TODO(split) reduce copy here
-                        fb.append(DecodedTiKVKey(std::string(arg)).toDebugString());
+                        fb.append(Redact::keyToDebugString(arg.data(), arg.size()));
                     },
                     ":");
                 LOG_INFO(
@@ -341,10 +343,12 @@ static void runInParallel(
             = executeTransform(part_new_region, prehandle_task, job_type, dm_storage, part_sst_stream, opt, tmt);
         LOG_INFO(
             log,
-            "Finished extra parallel prehandle task limit {} write cf {} dmfiles {} error {}, "
+            "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} error {}, "
             "split_id={} region_id={}",
             limit_tag,
             part_prehandle_result.stats.write_cf_keys,
+            part_prehandle_result.stats.lock_cf_keys,
+            part_prehandle_result.stats.default_cf_keys,
             part_prehandle_result.ingest_ids.size(),
             magic_enum::enum_name(part_result.error),
             extra_id,
@@ -539,17 +543,19 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     = executeTransform(new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
                 LOG_INFO(
                     log,
-                    "Finished extra parallel prehandle task limit {} write cf {} dmfiles {} error {}, split_id={}, "
+                    "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} error {}, split_id={}, "
                     "region_id={}",
                     sst_stream->getSoftLimit()->toDebugString(),
                     head_prehandle_result.stats.write_cf_keys,
+                    head_prehandle_result.stats.lock_cf_keys,
+                    head_prehandle_result.stats.default_cf_keys,
                     head_prehandle_result.ingest_ids.size(),
                     magic_enum::enum_name(head_result.error),
                     DM::SSTScanSoftLimit::HEAD_SPLIT,
                     new_region->id());
 
 
-                // Wait all threads to join.
+                // Wait all threads to join. May throw.
                 for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
                 {
                     // May get exception.
@@ -573,6 +579,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                                 std::make_move_iterator(v.ingest_ids.end()));
                             v.ingest_ids.clear();
                             prehandle_result.stats.mergeFrom(v.stats);
+                            // Merge all uncommitted data in different splits.
                             new_region->mergeDataFrom(*ctx->gather_res[extra_id].region);
                         }
                         else

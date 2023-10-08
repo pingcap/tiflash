@@ -139,13 +139,20 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix() {}
 
+void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader) {
+    // There must be no data left when we write suffix
+    if (!write_cf_reader) return;
+    if (!write_cf_reader->remained()) return;
+    RUNTIME_CHECK(soft_limit.has_value());
+    BaseBuffView cur = reader->keyView();
+    RUNTIME_CHECK(buffToStrView(cur) > soft_limit.value().raw_end);
+}
+
 void SSTFilesToBlockInputStream::readSuffix()
 {
-    // There must be no data left when we write suffix
-    // TODO(split) may be seek to end.
-    // assert(!write_cf_reader || !write_cf_reader->remained());
-    // assert(!default_cf_reader || !default_cf_reader->remained());
-    // assert(!lock_cf_reader || !lock_cf_reader->remained());
+    // checkFinishedState(write_cf_reader);
+    // checkFinishedState(default_cf_reader);
+    // checkFinishedState(lock_cf_reader);
 
     // reset all SSTReaders and return without writting blocks any more.
     write_cf_reader.reset();
@@ -159,7 +166,7 @@ Block SSTFilesToBlockInputStream::read()
 
     while (write_cf_reader && write_cf_reader->remained())
     {
-        bool should_stop_advancing = maybeStopBySoftLimit();
+        bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader);
         if (!should_stop_advancing)
         {
             // To decode committed rows from key-value pairs into block, we need to load
@@ -173,10 +180,6 @@ Block SSTFilesToBlockInputStream::read()
                 BaseBuffView key = write_cf_reader->keyView();
                 BaseBuffView value = write_cf_reader->valueView();
                 auto tikv_key = TiKVKey(key.data, key.len);
-                // if(this->getSplitId() == 1) {
-                //     LOG_INFO(log, "!!!!! read1haha {}", tikv_key.toDebugString());
-                // }
-                // TODO(split) check if there is concurrency problem when parallel prehandling.
                 region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
                 ++process_keys.write_cf;
                 process_keys.write_cf_bytes += (key.len + value.len);
@@ -199,9 +202,10 @@ Block SSTFilesToBlockInputStream::read()
             // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
             loaded_write_cf_key.clear();
+
             // Batch the loading from other CFs until we need to decode data
-            loadCFDataFromSST(ColumnFamilyType::Default, &rowkey, nullptr);
-            loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey, nullptr);
+            loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
+            loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
 
             auto block = readCommitedBlock();
             if (block.rows() != 0)
@@ -212,8 +216,9 @@ Block SSTFilesToBlockInputStream::read()
 
     // We emit the last block of this sst decode stream here.
     // Load all key-value pairs from other CFs.
-    loadCFDataFromSST(ColumnFamilyType::Default, nullptr, nullptr);
-    loadCFDataFromSST(ColumnFamilyType::Lock, nullptr, nullptr);
+
+    loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
+    loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);
 
     // All uncommitted data are saved in `region`, decode the last committed rows.
     return readCommitedBlock();
@@ -221,18 +226,17 @@ Block SSTFilesToBlockInputStream::read()
 
 void SSTFilesToBlockInputStream::loadCFDataFromSST(
     ColumnFamilyType cf,
-    const DecodedTiKVKey * const rowkey_to_be_included,
-    const DecodedTiKVKey * const rowkey_to_be_skipped)
+    const DecodedTiKVKey * const rowkey_to_be_included)
 {
-    // TODO(split) skip keys before soft limit when load from other cfs.
-    UNUSED(rowkey_to_be_skipped);
     SSTReader * reader;
+    SSTReaderPtr * reader_ptr;
     size_t * p_process_keys;
     size_t * p_process_keys_bytes;
     DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
+        reader_ptr = &default_cf_reader;
         p_process_keys = &process_keys.default_cf;
         p_process_keys_bytes = &process_keys.default_cf_bytes;
         last_loaded_rowkey = &default_last_loaded_rowkey;
@@ -240,6 +244,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else if (cf == ColumnFamilyType::Lock)
     {
         reader = lock_cf_reader.get();
+        reader_ptr = &lock_cf_reader;
         p_process_keys = &process_keys.lock_cf;
         p_process_keys_bytes = &process_keys.lock_cf_bytes;
         last_loaded_rowkey = &lock_last_loaded_rowkey;
@@ -247,10 +252,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else
         throw Exception("Unknown cf, should not happen!");
 
-    if (rowkey_to_be_skipped)
-    {
-        BaseBuffView bf = BaseBuffView{rowkey_to_be_skipped->data(), rowkey_to_be_skipped->size()};
-        reader->seek(std::move(bf));
+    if(reader && reader->remained()) {
+        maybeSkipBySoftLimit(cf, *reader_ptr);
     }
 
     // Simply read to the end of SST file
@@ -258,26 +261,31 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     {
         while (reader && reader->remained())
         {
+            if(maybeStopBySoftLimit(cf, *reader_ptr)) {
+                break;
+            }
             BaseBuffView key = reader->keyView();
             BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len), DupCheck::AllowSame);
-            reader->next();
             (*p_process_keys) += 1;
             (*p_process_keys_bytes) += (key.len + value.len);
+            reader->next();
         }
         LOG_DEBUG(
             log,
-            "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} "
+            "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
             "snapshot_index={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
             process_keys.write_cf,
             region->id(),
+            getSplitId(),
             snapshot_index);
         return;
     }
+
 
     size_t process_keys_offset_end = process_keys.write_cf;
     while (reader && reader->remained())
@@ -387,43 +395,23 @@ std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits
 
 // Returning false means no skip is performed, the reader is intact.
 // Returning true means skip is performed, must read from current value.
-bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
+bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
 {
-    // TODO(split) optimize to use fn_seek after miss for some iterations.
     if (!soft_limit.has_value())
         return false;
     const auto & start_limit = soft_limit.value().getStartLimit();
     // If start is set to "", then there is no soft limit for start.
     if (!start_limit)
         return false;
-    // TODO(split) use seek to optimize
     // Safety `soft_limit` outlives returned base buff view.
-    LOG_INFO(
-        log,
-        "!!!!! before seek, split_id={}, region_id={}, tikv {}",
-        soft_limit.value().split_id,
-        region->id(),
-        soft_limit.value().raw_start.toDebugString());
-    write_cf_reader->seek(cppStringAsBuff(soft_limit.value().raw_start));
-    LOG_INFO(
-        log,
-        "!!!!! after seek, remained {}, split_id={}, region_id={}",
-        write_cf_reader->remained(),
-        soft_limit.value().split_id,
-        region->id());
-    // // Skip the soft_limit key, which must not be a match.
-    // if (write_cf_reader->remained())
-    //     write_cf_reader->next();
-    // LOG_INFO(
-    //     log,
-    //     "!!!!! after next, split_id={}, region_id={}",
-    //     soft_limit.value().split_id,
-    //     region->id());
-    std::string prev;
-    while (write_cf_reader && write_cf_reader->remained())
+    reader->seek(cppStringAsBuff(soft_limit.value().raw_start));
+
+    // Skip other versions of the same PK.
+    // TODO(split) use seek to optimize if failed several iterations.
+    while (reader && reader->remained())
     {
         // Read until find the next pk.
-        auto key = write_cf_reader->keyView();
+        auto key = reader->keyView();
         // TODO the copy could be eliminated, but with many modifications.
         auto tikv_key = TiKVKey(key.data, key.len);
         auto current_truncated_ts = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(tikv_key));
@@ -432,38 +420,40 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit()
         {
             RUNTIME_CHECK_MSG(
                 current_truncated_ts > start_limit,
-                "current pk decreases as reader advances, start_raw {} start_pk {} current {} prev {}, region_id={}",
+                "current pk decreases as reader advances, start_raw {} start_pk {} current {}, cf={}, split_id={}, region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 current_truncated_ts.toDebugString(),
-                prev,
+                magic_enum::enum_name(cf),
+                soft_limit.value().split_id,
                 region->id());
             LOG_INFO(
                 log,
-                "Re-Seek after start_raw {} start_pk {} to {}, current_pk = {}, split_id={}, region_id={}",
+                "Re-Seek after start_raw {} start_pk {} to {}, current_pk = {}, cf={}, split_id={}, region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
                 start_limit.value().toDebugString(),
                 tikv_key.toDebugString(),
                 current_truncated_ts.toDebugString(),
+                magic_enum::enum_name(cf),
                 soft_limit.value().split_id,
                 region->id());
             return true;
         }
-        prev = current_truncated_ts.toDebugString();
-        write_cf_reader->next();
+        reader->next();
     }
     // `start_limit` is the last pk of the sst file.
     LOG_INFO(
         log,
-        "Re-Seek to the last key of write cf start_raw {} start_pk {}, split_id={}, region_id={}",
+        "Re-Seek to the last key of write cf start_raw {} start_pk {}, cf={}, split_id={}, region_id={}",
         soft_limit.value().raw_start.toDebugString(),
         start_limit.value().toDebugString(),
+        magic_enum::enum_name(cf),
         soft_limit.value().split_id,
         region->id());
     return false;
 }
 
-bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
+bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
 {
     if (!soft_limit.has_value())
         return false;
@@ -471,7 +461,7 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
     const auto & end_limit = soft_limit.value().getEndLimit();
     if (!end_limit)
         return false;
-    auto key = write_cf_reader->keyView();
+    auto key = reader->keyView();
     // TODO the copy could be eliminated, but with many modifications.
     auto tikv_key = TiKVKey(key.data, key.len);
     auto current_truncated_ts = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(tikv_key));
@@ -479,22 +469,16 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit()
     {
         LOG_INFO(
             log,
-            "Reach end for this split {} current {}, split_id={} region_id={}",
+            "Reach end for split {} current {} pk {} end_limit {}, cf={} split_id={} region_id={}",
             sl.toDebugString(),
             tikv_key.toDebugString(),
+            current_truncated_ts.toDebugString(),
+            end_limit->toDebugString(),
+            magic_enum::enum_name(cf),
             soft_limit.value().split_id,
             region->id());
         return true;
     }
-    // if(getSplitId() == 1) {
-    //     LOG_INFO(
-    //         log,
-    //         "!!!!! NOT Reach end for this split {} current {}, split_id={} region_id={}",
-    //         sl.toDebugString(),
-    //         tikv_key.toDebugString(),
-    //         soft_limit.value().split_id,
-    //         region->id());
-    // }
     return false;
 }
 } // namespace DM

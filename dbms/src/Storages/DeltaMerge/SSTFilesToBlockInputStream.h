@@ -153,17 +153,19 @@ public:
         return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT;
     }
 
-    bool maybeSkipBySoftLimit();
+    using SSTReaderPtr = std::unique_ptr<SSTReader>;
+    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader); }
 
 private:
     void loadCFDataFromSST(
         ColumnFamilyType cf,
-        const DecodedTiKVKey * rowkey_to_be_included,
-        const DecodedTiKVKey * rowkey_to_be_skipped);
+        const DecodedTiKVKey * rowkey_to_be_included);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
-    bool maybeStopBySoftLimit();
+    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    void checkFinishedState(SSTReaderPtr & reader);
 
 private:
     RegionPtr region;
@@ -175,7 +177,6 @@ private:
     const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
-    using SSTReaderPtr = std::unique_ptr<SSTReader>;
     SSTReaderPtr write_cf_reader;
     SSTReaderPtr default_cf_reader;
     SSTReaderPtr lock_cf_reader;

@@ -88,12 +88,6 @@ static RustStrWithViewVec fn_get_split_keys(SSTReaderPtr ptr, uint64_t splits_co
     auto split_key_count = splits_count - 1;
     auto it = reader->getBegin();
     BaseBuffView * buffs = createBaseBuffViewArray(split_key_count);
-    LOG_INFO(
-        &Poco::Logger::get("!!!! xxx"),
-        "!!!! fn_get_split_keys length {} size_per_split {} splits_count {}",
-        length,
-        size_per_split,
-        splits_count);
     for (size_t i = 0; i < split_key_count; i++)
     {
         for (size_t j = 0; j < size_per_split; j++)

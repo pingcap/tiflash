@@ -39,6 +39,8 @@ struct PrehandleResult
         size_t dt_total_bytes = 0;
         size_t total_keys = 0;
         size_t write_cf_keys = 0;
+        size_t lock_cf_keys = 0;
+        size_t default_cf_keys = 0;
         size_t max_split_write_cf_keys = 0;
 
         void mergeFrom(const Stats & other)
@@ -49,6 +51,8 @@ struct PrehandleResult
             dt_total_bytes += other.dt_total_bytes;
             total_keys += other.total_keys;
             write_cf_keys += other.write_cf_keys;
+            lock_cf_keys += other.lock_cf_keys;
+            default_cf_keys += other.default_cf_keys;
             max_split_write_cf_keys = std::max(max_split_write_cf_keys, other.max_split_write_cf_keys);
         }
     };

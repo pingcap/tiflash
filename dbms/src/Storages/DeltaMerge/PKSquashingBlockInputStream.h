@@ -72,18 +72,6 @@ public:
         if (first_read)
         {
             next_block = DB::DM::readNextBlock(sorted_input_stream);
-            if (split_id == 1)
-            {
-                auto cur_col = getByColumnId(next_block, pk_column_id).column;
-                RowKeyColumnContainer cur_rowkey_column(cur_col, is_common_handle);
-                const auto first_curr_pk = cur_rowkey_column.getRowKeyValue(0);
-                const auto last_curr_pk = cur_rowkey_column.getRowKeyValue(cur_col->size() - 1);
-                LOG_INFO(
-                    &Poco::Logger::get("!!! debug"),
-                    "!!!!! pk first read first {} last {}",
-                    first_curr_pk.toDebugString(),
-                    last_curr_pk.toDebugString());
-            }
             first_read = false;
         }
 
@@ -94,16 +82,6 @@ public:
         while (true)
         {
             next_block = DB::DM::readNextBlock(sorted_input_stream);
-            // if(split_id == 1) {
-            //     auto cur_col = getByColumnId(next_block, pk_column_id).column;
-            //     RowKeyColumnContainer cur_rowkey_column(cur_col, is_common_handle);
-            //     const auto first_curr_pk = cur_rowkey_column.getRowKeyValue(0);
-            //     const auto last_curr_pk = cur_rowkey_column.getRowKeyValue(cur_col->size() - 1);
-            //     LOG_INFO(&Poco::Logger::get("!!! debug"), "!!!!! pk second first {} last {}",
-            //         first_curr_pk.toDebugString(),
-            //         last_curr_pk.toDebugString()
-            //     );
-            // }
 
 #ifndef NDEBUG
             if (next_block && !isSameSchema(cur_block, next_block))
@@ -170,9 +148,6 @@ private:
         RowKeyColumnContainer next_rowkey_column(next_col, is_common_handle);
         size_t cut_offset = 0;
 
-        // if(split_id == 1) {
-        //     LOG_INFO(&Poco::Logger::get("!!! debug"), "!!!!! read1haha last_cur {} cur rows {} next rows {}", last_curr_pk.toDebugString(), cur_block.rows(), next_block.rows());
-        // }
         for (/* */; cut_offset < next_col->size(); ++cut_offset)
         {
             const auto next_pk = next_rowkey_column.getRowKeyValue(cut_offset);
