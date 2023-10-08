@@ -37,7 +37,7 @@ public:
         BlockInputStreamPtr child,
         ColId pk_column_id_,
         bool is_common_handle_,
-        size_t split_id_ = DM::SSTScanSoftLimit::HEAD_SPLIT)
+        size_t split_id_ = DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT)
         : sorted_input_stream(child)
         , pk_column_id(pk_column_id_)
         , is_common_handle(is_common_handle_)
@@ -194,6 +194,7 @@ private:
 
     bool first_read = true;
     const bool is_common_handle;
+    // Setting to non `HEAD_OR_ONLY_SPLIT` means this is a part stream.
     size_t split_id;
 };
 

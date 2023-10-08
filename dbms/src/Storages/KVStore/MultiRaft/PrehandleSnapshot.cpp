@@ -491,7 +491,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     new_region->id());
                 auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
                 sst_stream->resetSoftLimit(DM::SSTScanSoftLimit(
-                    DM::SSTScanSoftLimit::HEAD_SPLIT,
+                    DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
                     std::string(""),
                     std::string(split_keys[0])));
 
@@ -536,7 +536,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 LOG_INFO(
                     log,
                     "Add extra parallel prehandle task split_id={}/total={} limit {}",
-                    DM::SSTScanSoftLimit::HEAD_SPLIT,
+                    DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
                     split_keys.size(),
                     sst_stream->getSoftLimit().value().toDebugString());
                 auto [head_result, head_prehandle_result]
@@ -552,7 +552,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     head_prehandle_result.stats.default_cf_keys,
                     head_prehandle_result.ingest_ids.size(),
                     magic_enum::enum_name(head_result.error),
-                    DM::SSTScanSoftLimit::HEAD_SPLIT,
+                    DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
                     new_region->id());
 
 

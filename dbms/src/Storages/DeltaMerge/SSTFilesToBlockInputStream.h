@@ -52,7 +52,7 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 
 struct SSTScanSoftLimit
 {
-    constexpr static size_t HEAD_SPLIT = SIZE_MAX;
+    constexpr static size_t HEAD_OR_ONLY_SPLIT = SIZE_MAX;
     size_t split_id;
     TiKVKey raw_start;
     TiKVKey raw_end;
@@ -150,7 +150,7 @@ public:
     const ProcessKeys & getProcessKeys() const { return process_keys; }
     size_t getSplitId() const
     {
-        return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT;
+        return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
     }
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;

@@ -376,7 +376,7 @@ static void validate(
         ssts,
         Logger::get(),
         kvr1->getRange(),
-        DM::SSTScanSoftLimit::HEAD_SPLIT};
+        DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT};
 
     size_t counter = 0;
     while (reader.remained())

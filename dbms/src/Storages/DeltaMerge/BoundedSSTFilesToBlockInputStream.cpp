@@ -51,10 +51,6 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
         *(schema_snap->column_defines),
         _raw_child->opts.gc_safepoint,
         is_common_handle);
-    LOG_INFO(
-        &Poco::Logger::get("BoundedSSTFilesToBlockInputStream"),
-        "create bounded sst file stream, split_id={}",
-        split_id);
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()

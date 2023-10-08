@@ -93,7 +93,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_default,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT);
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
     if (!ssts_write.empty())
     {
@@ -104,7 +104,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_write,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT);
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
     if (!ssts_lock.empty())
     {
@@ -115,7 +115,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
             ssts_lock,
             log,
             region->getRange(),
-            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_SPLIT);
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
     LOG_INFO(
         log,
@@ -142,20 +142,20 @@ void SSTFilesToBlockInputStream::readPrefix() {}
 void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader)
 {
     // There must be no data left when we write suffix
-    if (!write_cf_reader)
+    if (!reader)
         return;
-    if (!write_cf_reader->remained())
+    if (!reader->remained())
         return;
-    RUNTIME_CHECK(soft_limit.has_value());
+    RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value()");
     BaseBuffView cur = reader->keyView();
-    RUNTIME_CHECK(buffToStrView(cur) > soft_limit.value().raw_end);
+    RUNTIME_CHECK_MSG(buffToStrView(cur) > soft_limit.value().raw_end, "cur > raw_end");
 }
 
 void SSTFilesToBlockInputStream::readSuffix()
 {
-    // checkFinishedState(write_cf_reader);
-    // checkFinishedState(default_cf_reader);
-    // checkFinishedState(lock_cf_reader);
+    checkFinishedState(write_cf_reader);
+    checkFinishedState(default_cf_reader);
+    checkFinishedState(lock_cf_reader);
 
     // reset all SSTReaders and return without writting blocks any more.
     write_cf_reader.reset();
