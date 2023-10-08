@@ -333,6 +333,7 @@ static void runInParallel(
     DM::SSTScanSoftLimit && part_limit,
     std::shared_ptr<StorageDeltaMerge> dm_storage)
 {
+    std::string limit_tag = part_limit.toDebugString();
     auto part_new_region = std::make_shared<Region>(new_region->mutMeta().cloned());
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
@@ -344,7 +345,6 @@ static void runInParallel(
         DM::SSTFilesToBlockInputStreamOpts(opt));
     try
     {
-        std::string limit_tag = part_limit.toDebugString();
         auto [part_result, part_prehandle_result]
             = executeTransform(log, part_new_region, prehandle_task, job_type, dm_storage, part_sst_stream, opt, tmt);
         LOG_INFO(
