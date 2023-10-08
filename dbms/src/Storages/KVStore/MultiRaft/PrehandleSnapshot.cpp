@@ -424,7 +424,7 @@ void executeParallelTransform(
                 extra_id + 1 == split_key_count ? std::string("") : std::string(split_keys[extra_id + 1]));
             LOG_INFO(
                 log,
-                "Add extra parallel prehandle task split_id={}/total={} limit {}",
+                "Add extra parallel prehandle task split_id={} total={} limit={}",
                 extra_id,
                 split_keys.size(),
                 limit.toDebugString());
