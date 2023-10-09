@@ -206,6 +206,8 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     return result;
 }
 
+// If size is 0, do not parallel prehandle for this snapshot, which is legacy.
+// If size is non-zero, use extra this many threads to prehandle.
 static inline std::vector<std::string> getSplitKey(
     LoggerPtr log,
     KVStore * kvstore,
@@ -222,91 +224,88 @@ static inline std::vector<std::string> getSplitKey(
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_parallel_prehandle_threshold); v)
             parallel_prehandle_threshold = std::any_cast<size_t>(v.value());
     });
-    // If size is 0, do not parallel prehandle for this snapshot, which is legacy.
-    // If size is non-zero, use extra this many threads to prehandle.
-    std::vector<std::string> split_keys;
+
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
+    if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
+        return {};
+    if (kvstore->getOngoingPrehandleTaskCount() >= 2)
+        return {};
+    if (sst_stream->getApproxBytes() <= parallel_prehandle_threshold)
+        return {};
 
-    if (new_region->getClusterRaftstoreVer() == RaftstoreVer::V2 && kvstore->getOngoingPrehandleTaskCount() < 2
-        && sst_stream->getApproxBytes() > parallel_prehandle_threshold)
+    // Get this info again, since getApproxBytes maybe take some time.
+    auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
+    const auto & proxy_config = kvstore->getProxyConfigSummay();
+    uint64_t want_split_parts = 0;
+    size_t total_concurrency = 0;
+    if (proxy_config.valid)
     {
-        // Get this info again, since getApproxBytes maybe take some time.
-        auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
-        const auto & proxy_config = kvstore->getProxyConfigSummay();
-        uint64_t want_split_parts = 0;
-        size_t total_concurrency = 0;
-        if (proxy_config.valid)
-        {
-            total_concurrency = proxy_config.snap_handle_pool_size;
-        }
-        else
-        {
-            total_concurrency = std::thread::hardware_concurrency();
-        }
-        if (total_concurrency + 1 > ongoing_count)
-        {
-            // Current thread takes 1 which is in `ongoing_count`.
-            // We use all threads to prehandle, since there is potentially no read and no delta merge when prehandling the only region.
-            want_split_parts = total_concurrency - ongoing_count + 1;
-        }
+        total_concurrency = proxy_config.snap_handle_pool_size;
+    }
+    else
+    {
+        total_concurrency = std::thread::hardware_concurrency();
+    }
+    if (total_concurrency + 1 > ongoing_count)
+    {
+        // Current thread takes 1 which is in `ongoing_count`.
+        // We use all threads to prehandle, since there is potentially no read and no delta merge when prehandling the only region.
+        want_split_parts = total_concurrency - ongoing_count + 1;
+    }
+    if (want_split_parts <= 1)
+    {
+        LOG_INFO(
+            log,
+            "getSplitKey refused to split, ongoing={} total_concurrency={} region_id={}",
+            ongoing_count,
+            total_concurrency,
+            new_region->id());
+        return {};
+    }
+    // Will generate at most `want_split_parts - 1` keys.
+    std::vector<std::string> split_keys = sst_stream->findSplitKeys(want_split_parts);
 
-        if (want_split_parts > 1)
-        {
-            // Will generate at most `want_split_parts - 1` keys.
-            split_keys = sst_stream->findSplitKeys(want_split_parts);
-
-            RUNTIME_CHECK_MSG(
-                split_keys.size() + 1 <= want_split_parts,
-                "findSplitKeys should generate {} - 1 keys, actual {}",
-                want_split_parts,
-                split_keys.size());
-            FmtBuffer fmt_buf;
-            if (split_keys.size() + 1 < want_split_parts)
-            {
-                // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
-                // it is even better that we still handle it sequantially.
-                split_keys.clear();
-                LOG_INFO(
-                    log,
-                    "getSplitKey failed to split, ongoing={} want={} got={} region_id={}",
-                    ongoing_count,
-                    want_split_parts,
-                    split_keys.size(),
-                    new_region->id());
-            }
-            else
-            {
-                std::sort(split_keys.begin(), split_keys.end());
-                fmt_buf.joinStr(
-                    split_keys.cbegin(),
-                    split_keys.cend(),
-                    [](const auto & arg, FmtBuffer & fb) {
-                        // TODO(split) reduce copy here
-                        fb.append(Redact::keyToDebugString(arg.data(), arg.size()));
-                    },
-                    ":");
-                LOG_INFO(
-                    log,
-                    "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
-                    "region_id={}",
-                    fmt_buf.toString(),
-                    total_concurrency,
-                    ongoing_count,
-                    want_split_parts,
-                    split_keys.size(),
-                    new_region->id());
-            }
-        }
-        else
-        {
-            LOG_INFO(
-                log,
-                "getSplitKey refused to split, ongoing={} total_concurrency={} region_id={}",
-                ongoing_count,
-                total_concurrency,
-                new_region->id());
-        }
+    RUNTIME_CHECK_MSG(
+        split_keys.size() + 1 <= want_split_parts,
+        "findSplitKeys should generate {} - 1 keys, actual {}",
+        want_split_parts,
+        split_keys.size());
+    FmtBuffer fmt_buf;
+    if (split_keys.size() + 1 < want_split_parts)
+    {
+        // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
+        // it is even better that we still handle it sequantially.
+        split_keys.clear();
+        LOG_INFO(
+            log,
+            "getSplitKey failed to split, ongoing={} want={} got={} region_id={}",
+            ongoing_count,
+            want_split_parts,
+            split_keys.size(),
+            new_region->id());
+    }
+    else
+    {
+        std::sort(split_keys.begin(), split_keys.end());
+        fmt_buf.joinStr(
+            split_keys.cbegin(),
+            split_keys.cend(),
+            [](const auto & arg, FmtBuffer & fb) {
+                // TODO(split) reduce copy here
+                fb.append(Redact::keyToDebugString(arg.data(), arg.size()));
+            },
+            ":");
+        LOG_INFO(
+            log,
+            "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
+            "region_id={}",
+            fmt_buf.toString(),
+            total_concurrency,
+            ongoing_count,
+            want_split_parts,
+            split_keys.size(),
+            new_region->id());
     }
     return split_keys;
 }
@@ -335,7 +334,7 @@ static void runInParallel(
     std::shared_ptr<StorageDeltaMerge> dm_storage)
 {
     std::string limit_tag = part_limit.toDebugString();
-    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().cloned());
+    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone());
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
         index,
