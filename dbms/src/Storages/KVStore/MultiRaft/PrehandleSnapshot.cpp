@@ -416,7 +416,6 @@ void executeParallelTransform(
         split_key_count,
         new_region->id());
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
-    // TODO(split) Check if it will leak when throw
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
     sst_stream->resetSoftLimit(
         DM::SSTScanSoftLimit(DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT, std::string(""), std::string(split_keys[0])));
@@ -470,6 +469,7 @@ void executeParallelTransform(
 
 
     // Wait all threads to join. May throw.
+    // If one thread throws, then all result is useless, so `async_tasks` is released directly.
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
     {
         // May get exception.
