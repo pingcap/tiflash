@@ -117,7 +117,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
             if (tryFromBuildToSpill() == OperatorStatus::IO_OUT)
                 return OperatorStatus::IO_OUT;
         }
-        return OperatorStatus::NEED_INPUT;
+        return agg_context.isTaskMarkedForSpill(task_index) ? tryFromBuildToSpill() : OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convergent:
         block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;

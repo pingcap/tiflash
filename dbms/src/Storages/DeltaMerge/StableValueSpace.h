@@ -211,6 +211,14 @@ public:
 
         ColumnCachePtrs & getColumnCaches() { return column_caches; }
 
+        void clearColumnCaches()
+        {
+            for (auto & col_cache : column_caches)
+            {
+                col_cache->clear();
+            }
+        }
+
         SkippableBlockInputStreamPtr getInputStream(
             const DMContext & context, //
             const ColumnDefines & read_columns,

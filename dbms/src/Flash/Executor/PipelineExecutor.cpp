@@ -109,12 +109,6 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         wait();
     }
     LOG_TRACE(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
-
-    // For read_ru, only report it to GAC for now.
-    LocalAdmissionController::global_instance->consumeResource(
-        exec_context.getResourceGroupName(),
-        dagContext().getReadRU(),
-        0);
     return exec_context.toExecutionResult();
 }
 
@@ -145,7 +139,7 @@ RU PipelineExecutor::collectRequestUnit()
     // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
     const auto & query_profile_info = exec_context.getQueryProfileInfo();
     auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
-    return toRU(cpu_time_ns);
+    return cpuTimeToRU(cpu_time_ns);
 }
 
 Block PipelineExecutor::getSampleBlock() const

@@ -275,12 +275,12 @@ void setOrderByColumnTypeAndDirectionForRangeFrame(
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
 
+    if (!window.frame().start().has_frame_range() && !window.frame().end().has_frame_range())
+        return;
+
     RUNTIME_CHECK_MSG(
         !window_desc.order_by.empty(),
         "Order by column should not be empty when the frame type is range");
-    RUNTIME_CHECK_MSG(
-        window_desc.order_by.size() == 1,
-        "Number of order by should not be larger than 1 in range frame");
 
     const Block & sample_block = actions->getSampleBlock();
     const String & order_by_col_name = window_desc.order_by[0].column_name;
@@ -309,10 +309,6 @@ std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return std::make_pair("", "");
-
-    RUNTIME_CHECK_MSG(
-        window.frame().start().has_frame_range() || window.frame().end().has_frame_range(),
-        "tipb::WindowFrameBound of start or end must be set when the frame type is range");
 
     String begin_aux_col_name;
     String end_aux_col_name;

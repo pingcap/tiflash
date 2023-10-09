@@ -82,6 +82,7 @@ protected:
     coprocessor::Response * cop_response = nullptr;
     grpc::ServerWriter<coprocessor::Response> * cop_writer = nullptr;
 
+    const String resource_group_name;
     const LoggerPtr log;
 };
 

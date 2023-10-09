@@ -4200,9 +4200,9 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"min_tso\"}) by (instance)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"min_tso\"}) by (instance, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             }
@@ -4302,29 +4302,47 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_soft_limit\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_soft_limit\"}) by (instance, type, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"estimated_thread_usage\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"estimated_thread_usage\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_hard_limit\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_hard_limit\"}) by (instance, type, resource_group)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
+              "queryType": "randomWalk",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"global_estimated_thread_usage\"}) by (instance, type, resource_group)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
+              "queryType": "randomWalk",
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"group_entry_count\"}) by (instance, type)",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-{{type}}",
               "queryType": "randomWalk",
-              "refId": "C"
+              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -4422,18 +4440,18 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_queries_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_queries_count\"}) by (instance, type, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_queries_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_queries_count\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             }
@@ -4533,18 +4551,18 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_tasks_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_tasks_count\"}) by (instance, type, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_tasks_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_tasks_count\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             }
@@ -4644,10 +4662,10 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"hard_limit_exceeded_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"hard_limit_exceeded_count\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             }
@@ -4745,28 +4763,28 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le,resource_group))",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-80",
+              "legendFormat": "{{instance}}-{{resource_group}}-80",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le,resource_group))",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-90",
+              "legendFormat": "{{instance}}-{{resource_group}}-90",
               "queryType": "randomWalk",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(1, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le,resource_group))",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-100",
+              "legendFormat": "{{instance}}-{{resource_group}}-100",
               "queryType": "randomWalk",
               "refId": "C"
             }
@@ -16259,7 +16277,7 @@
               "exemplar": true,
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"remaining_tokens\", instance=~\"$instance\"}) by (instance,resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "remaining_tokens-{{instance}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
@@ -16268,7 +16286,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"avg_speed\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "avg_speed-{{instance}}-{{resource_group}}",
               "refId": "B"
             },
             {
@@ -16276,7 +16294,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "total_consumption-{{instance}}-{{resource_group}}",
               "refId": "C"
             },
             {
@@ -16284,7 +16302,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_fill_rate\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "bucket_fill_rate-{{instance}}-{{resource_group}}",
               "refId": "D"
             },
             {
@@ -16292,7 +16310,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_capacity\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "bucket_capacity-{{instance}}-{{resource_group}}",
               "refId": "E"
             },
             {
@@ -16300,7 +16318,7 @@
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"fetch_tokens_from_gac_count\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-{{resource_group}}",
+              "legendFormat": "fetch_tokens_from_gac_count-{{instance}}-{{resource_group}}",
               "refId": "F"
             }
           ],

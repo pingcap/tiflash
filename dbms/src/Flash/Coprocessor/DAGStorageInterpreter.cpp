@@ -613,7 +613,8 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     DAGContext & dag_context = *context.getDAGContext();
-    auto scan_context = std::make_shared<DM::ScanContext>();
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName(), dag_context.isResourceControlEnabled());
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
 
@@ -695,6 +696,7 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
         req->tp = pingcap::coprocessor::ReqType::DAG;
         req->start_ts = context.getSettingsRef().read_tso;
         req->schema_version = context.getSettingsRef().schema_version;
+        req->resource_group_name = dagContext().getResourceGroupName();
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;

@@ -302,18 +302,18 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
         case tipb::ExecType::TypeJoin:
             return true;
         default:
-            if (settings.enforce_enable_pipeline)
+            if (settings.enforce_enable_resource_control)
                 throw Exception(fmt::format(
                     "Pipeline mode does not support {}, and an error is reported because the setting "
-                    "enforce_enable_pipeline is true.",
+                    "enforce_enable_resource_control is true.",
                     magic_enum::enum_name(executor.tp())));
             is_supported = false;
             return false;
         }
     });
-    if (settings.enforce_enable_pipeline && !is_supported)
+    if (settings.enforce_enable_resource_control && !is_supported)
         throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the "
-                        "setting enforce_enable_pipeline is true.");
+                        "setting enforce_enable_resource_control is true.");
     return is_supported;
 }
 } // namespace DB

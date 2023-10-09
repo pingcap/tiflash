@@ -79,6 +79,15 @@ public:
         return Ptr(new MPPTask(std::forward<Args>(args)...));
     }
 
+    /// Ensure all MPPTasks are allocated as std::shared_ptr
+    template <typename... Args>
+    static Ptr newTaskForTest(Args &&... args)
+    {
+        auto ret = Ptr(new MPPTask(std::forward<Args>(args)...));
+        ret->initForTest();
+        return ret;
+    }
+
     const MPPTaskId & getId() const { return id; }
 
     bool isRootMPPTask() const;
@@ -104,6 +113,8 @@ private:
     MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_);
 
     void runImpl();
+
+    void initForTest();
 
     void unregisterTask();
 

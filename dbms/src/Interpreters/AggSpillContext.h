@@ -47,6 +47,8 @@ public:
     {
         return per_thread_auto_spill_status[thread_num] != AutoSpillStatus::NO_NEED_AUTO_SPILL;
     }
+    /// only used in random failpoint
+    bool markThreadForAutoSpill(size_t thread_num);
 };
 
 using AggSpillContextPtr = std::shared_ptr<AggSpillContext>;

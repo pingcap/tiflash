@@ -127,34 +127,37 @@ namespace DB
     M(pause_query_init)                   \
     M(pause_passive_flush_before_persist_region)
 
-#define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
-    M(random_tunnel_wait_timeout_failpoint)             \
-    M(random_tunnel_write_failpoint)                    \
-    M(random_tunnel_init_rpc_failure_failpoint)         \
-    M(random_receiver_local_msg_push_failure_failpoint) \
-    M(random_receiver_sync_msg_push_failure_failpoint)  \
-    M(random_receiver_async_msg_push_failure_failpoint) \
-    M(random_limit_check_failpoint)                     \
-    M(random_join_build_failpoint)                      \
-    M(random_join_prob_failpoint)                       \
-    M(random_aggregate_create_state_failpoint)          \
-    M(random_aggregate_merge_failpoint)                 \
-    M(random_sharedquery_failpoint)                     \
-    M(random_interpreter_failpoint)                     \
-    M(random_task_manager_find_task_failure_failpoint)  \
-    M(random_min_tso_scheduler_failpoint)               \
-    M(random_pipeline_model_task_run_failpoint)         \
-    M(random_pipeline_model_task_construct_failpoint)   \
-    M(random_pipeline_model_event_schedule_failpoint)   \
-    M(random_pipeline_model_event_finish_failpoint)     \
-    M(random_pipeline_model_operator_run_failpoint)     \
-    M(random_pipeline_model_cancel_failpoint)           \
-    M(random_pipeline_model_execute_prefix_failpoint)   \
-    M(random_pipeline_model_execute_suffix_failpoint)   \
-    M(random_spill_to_disk_failpoint)                   \
-    M(random_restore_from_disk_failpoint)               \
-    M(random_exception_when_connect_local_tunnel)       \
-    M(random_exception_when_construct_async_request_handler)
+#define APPLY_FOR_RANDOM_FAILPOINTS(M)                       \
+    M(random_tunnel_wait_timeout_failpoint)                  \
+    M(random_tunnel_write_failpoint)                         \
+    M(random_tunnel_init_rpc_failure_failpoint)              \
+    M(random_receiver_local_msg_push_failure_failpoint)      \
+    M(random_receiver_sync_msg_push_failure_failpoint)       \
+    M(random_receiver_async_msg_push_failure_failpoint)      \
+    M(random_limit_check_failpoint)                          \
+    M(random_join_build_failpoint)                           \
+    M(random_join_prob_failpoint)                            \
+    M(random_aggregate_create_state_failpoint)               \
+    M(random_aggregate_merge_failpoint)                      \
+    M(random_sharedquery_failpoint)                          \
+    M(random_interpreter_failpoint)                          \
+    M(random_task_manager_find_task_failure_failpoint)       \
+    M(random_min_tso_scheduler_failpoint)                    \
+    M(random_pipeline_model_task_run_failpoint)              \
+    M(random_pipeline_model_task_construct_failpoint)        \
+    M(random_pipeline_model_event_schedule_failpoint)        \
+    M(random_pipeline_model_event_finish_failpoint)          \
+    M(random_pipeline_model_operator_run_failpoint)          \
+    M(random_pipeline_model_cancel_failpoint)                \
+    M(random_pipeline_model_execute_prefix_failpoint)        \
+    M(random_pipeline_model_execute_suffix_failpoint)        \
+    M(random_spill_to_disk_failpoint)                        \
+    M(random_restore_from_disk_failpoint)                    \
+    M(random_exception_when_connect_local_tunnel)            \
+    M(random_exception_when_construct_async_request_handler) \
+    M(random_fail_in_resize_callback)                        \
+    M(random_marked_for_auto_spill)
+
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";

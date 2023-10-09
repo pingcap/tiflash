@@ -161,6 +161,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , warnings(max_recorded_error_count)
     , warning_count(0)
 {
+    query_operator_spill_contexts = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, ""), 100);
     initOutputInfo();
 }
 
@@ -431,13 +432,13 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
 
 RU DAGContext::getReadRU() const
 {
-    double ru = 0.0;
+    UInt64 read_bytes = 0;
     for (const auto & [id, sc] : scan_context_map)
     {
         (void)id; // Disable unused variable warnning.
-        ru += sc->getReadRU();
+        read_bytes += sc->total_user_read_bytes;
     }
-    return ru;
+    return bytesToRU(read_bytes);
 }
 
 } // namespace DB

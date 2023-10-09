@@ -959,5 +959,4 @@ BaseBuffView cppStringAsBuff(const std::string & s)
 {
     return BaseBuffView{.data = s.data(), .len = s.size()};
 }
-
 } // namespace DB

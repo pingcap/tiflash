@@ -138,6 +138,13 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
 
+void MPPTask::initForTest()
+{
+    dag_context = std::make_unique<DAGContext>(100);
+    context->setDAGContext(dag_context.get());
+    schedule_entry.setNeededThreads(10);
+}
+
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
@@ -354,7 +361,7 @@ MemoryTracker * MPPTask::getMemoryTracker() const
 
 void MPPTask::unregisterTask()
 {
-    auto [result, reason] = manager->unregisterTask(id);
+    auto [result, reason] = manager->unregisterTask(id, getErrString());
     if (result)
         LOG_DEBUG(log, "task unregistered");
     else

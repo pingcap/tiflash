@@ -50,6 +50,15 @@ EstablishCallData::EstablishCallData(
     service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, asGRPCKickTag());
 }
 
+EstablishCallData::EstablishCallData()
+    : service(nullptr)
+    , cq(nullptr)
+    , notify_cq(nullptr)
+    , is_shutdown(std::make_shared<std::atomic<bool>>(false))
+    , responder(&ctx)
+    , state(NEW_REQUEST)
+{}
+
 EstablishCallData::~EstablishCallData()
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();

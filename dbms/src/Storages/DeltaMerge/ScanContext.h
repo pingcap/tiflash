@@ -55,7 +55,10 @@ public:
     std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
 
-    ScanContext() = default;
+    explicit ScanContext(const String & name = "", bool enable_resource_control_ = false)
+        : resource_group_name(name)
+        , enable_resource_control(enable_resource_control_)
+    {}
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
@@ -130,9 +133,8 @@ public:
         total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
 
-    // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control
-    // For Read I/O, 1/64 RU per KB.
-    double getReadRU() const { return static_cast<double>(total_user_read_bytes) / 1024.0 / 64.0; }
+    const String resource_group_name;
+    const bool enable_resource_control;
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

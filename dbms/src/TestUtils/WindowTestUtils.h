@@ -33,6 +33,8 @@ static inline ASTPtr buildPlusFunction(
     switch (cmp_data_type)
     {
     case tipb::RangeCmpDataType::Int:
+    case tipb::RangeCmpDataType::DateTime:
+    case tipb::RangeCmpDataType::Duration:
         return plusInt(col(order_by_col_name), lit(range_val_field));
     case tipb::RangeCmpDataType::Float:
         return plusReal(col(order_by_col_name), lit(range_val_field));
@@ -51,6 +53,8 @@ static inline ASTPtr buildMinusFunction(
     switch (cmp_data_type)
     {
     case tipb::RangeCmpDataType::Int:
+    case tipb::RangeCmpDataType::DateTime:
+    case tipb::RangeCmpDataType::Duration:
         return minusInt(col(order_by_col_name), lit(range_val_field));
     case tipb::RangeCmpDataType::Float:
         return minusReal(col(order_by_col_name), lit(range_val_field));
