@@ -25,11 +25,7 @@ class SimpleFixedThreadPool
 {
 public:
     /// Size is constant
-    explicit SimpleFixedThreadPool(const std::string & name_, size_t m_size_)
-        : name(name_)
-        , m_size(m_size_)
-        , thread_mgr(newThreadManager())
-    {}
+    SimpleFixedThreadPool(const std::string & name_, size_t m_size_);
 
     /// Add new job. Locks until free thread in pool become available.
     void schedule(ThreadManager::Job job);

@@ -19,6 +19,14 @@
 
 namespace DB
 {
+SimpleFixedThreadPool::SimpleFixedThreadPool(const std::string & name_, size_t m_size_)
+    : name(name_)
+    , m_size(m_size_)
+    , thread_mgr(newThreadManager())
+{
+    RUNTIME_ASSERT(m_size > 0);
+}
+
 void SimpleFixedThreadPool::schedule(ThreadManager::Job job)
 {
     {
