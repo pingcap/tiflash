@@ -183,6 +183,7 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
 static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, uint64_t)
 {
     auto * s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");
+    GCMonitor::instance().add(RawObjType::MockString, 1);
     return RustStrWithView{
         .buff = cppStringAsBuff(*s),
         .inner = RawRustPtr{.ptr = s, .type = static_cast<RawRustPtrType>(RawObjType::MockString)}};
@@ -1058,7 +1059,10 @@ bool GCMonitor::checkClean()
     for (auto && d : data)
     {
         if (d.second)
+        {
+            LOG_INFO(&Poco::Logger::get("GCMonitor"), "checkClean {} has {}", magic_enum::enum_name(d.first), d.second);
             return false;
+        }
     }
     return true;
 }

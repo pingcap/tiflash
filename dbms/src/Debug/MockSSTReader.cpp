@@ -97,6 +97,7 @@ static RustStrWithViewVec fn_get_split_keys(SSTReaderPtr ptr, uint64_t splits_co
         vec->push_back(it->first);
         new (&buffs[i]) BaseBuffView{.data = vec->back().data(), .len = vec->back().size()};
     }
+    GCMonitor::instance().add(RawObjType::MockVecOfString, 1);
     return RustStrWithViewVec{
         .buffs = buffs,
         .len = split_key_count,
