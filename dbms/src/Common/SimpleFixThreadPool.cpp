@@ -12,44 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/SimpleFixThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/SimpleFixThreadPool.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
-    void SimpleFixThreadPool::schedule(ThreadManager::Job job)
+void SimpleFixThreadPool::schedule(ThreadManager::Job job)
+{
     {
-        {
-            std::unique_lock lock(mutex);
-            has_free_thread.wait(lock, [this] { return active_jobs < m_size; });
-            ++active_jobs;
-        }
-        thread_mgr->schedule(false, name, [&, job]() {
-            job();
-            {
-                std::lock_guard lock(mutex);
-                --active_jobs;
-                has_free_thread.notify_one();
-            }
-        });
+        std::unique_lock lock(mutex);
+        has_free_thread.wait(lock, [this] { return active_jobs < m_size; });
+        ++active_jobs;
     }
+    thread_mgr->schedule(false, name, [&, job]() {
+        job();
+        {
+            std::lock_guard lock(mutex);
+            --active_jobs;
+            has_free_thread.notify_one();
+        }
+    });
+}
 
-    /// Wait for all currently active jobs to be done.
-    SimpleFixThreadPool::~SimpleFixThreadPool()
+/// Wait for all currently active jobs to be done.
+SimpleFixThreadPool::~SimpleFixThreadPool()
+{
     {
-        {
-            std::unique_lock lock(mutex);
-            has_free_thread.wait(lock, [this] { return active_jobs == 0; });
-        }
-        try
-        {
-            thread_mgr->wait();
-        }
-        catch (...)
-        {
-            LOG_WARNING(Logger::get(), "exception occur in {}: {}", name, getCurrentExceptionMessage(true, true));
-        }
+        std::unique_lock lock(mutex);
+        has_free_thread.wait(lock, [this] { return active_jobs == 0; });
     }
+    try
+    {
+        thread_mgr->wait();
+    }
+    catch (...)
+    {
+        LOG_WARNING(Logger::get(), "exception occur in {}: {}", name, getCurrentExceptionMessage(true, true));
+    }
+}
 } // namespace DB
