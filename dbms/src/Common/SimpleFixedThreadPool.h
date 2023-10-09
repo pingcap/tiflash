@@ -21,11 +21,11 @@
 
 namespace DB
 {
-class SimpleFixThreadPool
+class SimpleFixedThreadPool
 {
 public:
     /// Size is constant
-    explicit SimpleFixThreadPool(const std::string & name_, size_t m_size_)
+    explicit SimpleFixedThreadPool(const std::string & name_, size_t m_size_)
         : name(name_)
         , m_size(m_size_)
         , thread_mgr(newThreadManager())
@@ -35,7 +35,7 @@ public:
     void schedule(ThreadManager::Job job);
 
     /// Wait for all currently active jobs to be done.
-    ~SimpleFixThreadPool();
+    ~SimpleFixedThreadPool();
 
     size_t size() const { return m_size; }
 

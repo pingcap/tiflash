@@ -14,12 +14,12 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/SimpleFixThreadPool.h>
+#include <Common/SimpleFixedThreadPool.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
-void SimpleFixThreadPool::schedule(ThreadManager::Job job)
+void SimpleFixedThreadPool::schedule(ThreadManager::Job job)
 {
     {
         std::unique_lock lock(mutex);
@@ -37,7 +37,7 @@ void SimpleFixThreadPool::schedule(ThreadManager::Job job)
 }
 
 /// Wait for all currently active jobs to be done.
-SimpleFixThreadPool::~SimpleFixThreadPool()
+SimpleFixedThreadPool::~SimpleFixedThreadPool()
 {
     {
         std::unique_lock lock(mutex);
