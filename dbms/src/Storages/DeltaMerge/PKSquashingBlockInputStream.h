@@ -16,9 +16,9 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/sortBlock.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 
 namespace DB
 {

@@ -16,8 +16,8 @@
 
 #include <Common/Stopwatch.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <memory>

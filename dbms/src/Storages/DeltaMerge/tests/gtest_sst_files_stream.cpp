@@ -15,8 +15,8 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/tests/region_helper.h>

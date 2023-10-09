@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 
 #include "kvstore_helper.h"

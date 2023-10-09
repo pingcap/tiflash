@@ -15,8 +15,8 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
-#include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/SSTReader.h>
@@ -473,7 +473,7 @@ void executeParallelTransform(
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
     {
         // May get exception.
-        LOG_INFO(log, "Try fetch prehandle task split_id={}, region_id={}", extra_id, new_region->id());
+        LOG_DEBUG(log, "Try fetch prehandle task split_id={}, region_id={}", extra_id, new_region->id());
         async_tasks.fetchResult(extra_id);
     }
     if (head_result.error == ReadFromStreamError::Ok)
