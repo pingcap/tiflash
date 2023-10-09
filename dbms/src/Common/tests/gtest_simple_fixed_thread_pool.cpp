@@ -13,21 +13,17 @@
 // limitations under the License.
 
 #include <Common/SimpleFixedThreadPool.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <thread>
 
 namespace DB::tests
 {
-namespace
-{
 class SimpleFixedThreadPoolTest : public ::testing::Test
 {
 };
 
 TEST_F(SimpleFixedThreadPoolTest, basic)
-try
 {
     // case1
     {
@@ -73,7 +69,4 @@ try
         stop = true;
     }
 }
-CATCH
-
-} // namespace
 } // namespace DB::tests
