@@ -12,21 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-tmp_path = "/tmp/tiflash/data/tmp"
-path = "/tmp/tiflash/data/db"
-capacity = "107374182400" # 100GB
-mark_cache_size = 1073741824
-minmax_index_cache_size = 1073741824
-tcp_port = 9000
-http_port = 8123
+mysql> drop table if exists test.t0
+mysql> create table test.t0(c0 BOOL);
+mysql> INSERT INTO test.t0 VALUES (false)
+mysql> alter table test.t0 set tiflash replica 1
 
-[logger]
-count = 10
-errorlog = "/tmp/tiflash/log/error.log"
-size = "1000M"
-log = "/tmp/tiflash/log/server.log"
-level = "trace"
+func> wait_table test t0
 
-[profiles]
-[profiles.default]
-enable_resource_control = 0
+mysql> use test; set tidb_enforce_mpp=1; SELECT /*+ READ_FROM_STORAGE(TIFLASH[t0])*/t0.c0 FROM t0 WHERE LOG(t0.c0)

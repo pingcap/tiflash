@@ -45,6 +45,7 @@ protected:
     const coprocessor::BatchRequest * cop_request;
     grpc::ServerWriter<coprocessor::BatchResponse> * writer;
 
+    const String resource_group_name;
     const LoggerPtr log;
 };
 

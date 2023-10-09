@@ -47,7 +47,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
         return {};
 
     // first check if current join has a partition to restore
-    if (join->isSpilled() && join->hasPartitionSpilledWithLock())
+    if (join->isSpilled() && join->hasPartitionToRestore())
     {
         // get a restore join
         if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
@@ -86,7 +86,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 
             return restore_probe_exec;
         }
-        assert(join->hasPartitionSpilledWithLock() == false);
+        assert(join->hasPartitionToRestore() == false);
     }
 
     // current join has no more partition to restore, so check if previous join still has partition to restore

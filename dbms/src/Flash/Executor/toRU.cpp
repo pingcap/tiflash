@@ -30,12 +30,18 @@ UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
 }
 
 // 1 ru = 3 millisecond cpu time
-RU toRU(UInt64 cpu_time_ns)
+RU cpuTimeToRU(UInt64 cpu_time_ns)
 {
     if (unlikely(cpu_time_ns == 0))
         return 0;
 
     auto cpu_time_millisecond = toCPUTimeMillisecond(cpu_time_ns);
     return static_cast<double>(cpu_time_millisecond) / 3;
+}
+
+// 1ru = 64KB
+RU bytesToRU(UInt64 bytes)
+{
+    return static_cast<double>(bytes) / 1024.0 / 64.0;
 }
 } // namespace DB

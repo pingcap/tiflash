@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
@@ -186,7 +187,14 @@ size_t ColumnFileSetReader::readRows(
     }
     for (const auto & col : output_columns)
     {
-        context.scan_context->total_user_read_bytes += col->byteSize();
+        const auto delta_bytes = col->byteSize();
+        context.scan_context->total_user_read_bytes += delta_bytes;
+
+        if (context.scan_context->enable_resource_control)
+            LocalAdmissionController::global_instance->consumeResource(
+                context.scan_context->resource_group_name,
+                bytesToRU(delta_bytes),
+                0);
     }
     return actual_read;
 }
