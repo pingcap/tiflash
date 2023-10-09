@@ -116,15 +116,15 @@ void FlashService::init(Context & context_)
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
-    cop_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+    cop_pool = std::make_unique<SimpleFixThreadPool>("cop-pool", cop_pool_size);
 
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop stream requests.", cop_pool_size);
-    cop_stream_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-stream-pool"); });
+    cop_stream_pool = std::make_unique<SimpleFixThreadPool>("cop-stream-pool", cop_pool_size);
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
-    batch_cop_pool = std::make_unique<legacy::ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    batch_cop_pool = std::make_unique<SimpleFixThreadPool>("batch-cop-pool", batch_cop_pool_size);
 }
 
 FlashService::~FlashService() = default;
@@ -132,7 +132,7 @@ FlashService::~FlashService() = default;
 namespace
 {
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(legacy::ThreadPool & pool, std::function<grpc::Status()> job)
+grpc::Status executeInThreadPool(SimpleFixThreadPool & pool, std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
