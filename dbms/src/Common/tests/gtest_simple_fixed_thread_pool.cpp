@@ -15,8 +15,8 @@
 #include <Common/SimpleFixedThreadPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
+
 #include <thread>
-#include "Common/DynamicThreadPool.h"
 
 namespace DB::tests
 {
@@ -35,7 +35,7 @@ try
         ASSERT_EQ(pool.size(), 2);
         ASSERT_EQ(pool.active(), 0);
         std::atomic<int> a = 0;
-        for (size_t i = 0; i < 10 ; ++i)
+        for (size_t i = 0; i < 10; ++i)
         {
             ASSERT_LE(pool.active(), pool.size());
             pool.schedule([&]() {
