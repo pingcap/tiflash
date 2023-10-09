@@ -42,7 +42,12 @@ mysql> analyze table test.t;
 => DBGInvoke __enable_fail_point(cop_send_failure)
 
 mysql> set tidb_enforce_mpp=1; select count(*) from test.t;
-{#REGEXP}[\s\S]*cop_send_failure[\s\S]*
+# ERROR 1105 (HY000) at line 1: other error for mpp stream: Code: 0, e.displayText() = DB::Exception: code: 10007
+# msg: "Fail point FailPoints::cop_send_failure is triggered."
+# , e.what() = DB::Exception,
+{#REGEXP}.*
+{#REGEXP}.*Fail point FailPoints::cop_send_failure is triggered.*
+{#REGEXP}.*
 
 => DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
 => DBGInvoke __disable_fail_point(cop_send_failure)
