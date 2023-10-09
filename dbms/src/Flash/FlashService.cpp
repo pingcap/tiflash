@@ -908,6 +908,10 @@ grpc::Status FlashService::EstablishDisaggTask(
             [&handler, &request, &response, deadline = grpc_context->deadline()]() {
                 auto current = std::chrono::system_clock::now();
                 RUNTIME_CHECK(current < deadline, current, deadline);
+                // `handler` may set `current_memory_tracker` in various ways.
+                // Let's backup the original `current_memory_tracker` and reset it after task finished.
+                auto * current_memory_tracker_backup = current_memory_tracker;
+                SCOPE_EXIT({ current_memory_tracker = current_memory_tracker_backup; });
                 handler->prepare(request);
                 handler->execute(response);
             });
