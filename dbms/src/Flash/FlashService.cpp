@@ -889,9 +889,6 @@ grpc::Status FlashService::EstablishDisaggTask(
     DM::DisaggTaskId task_id(meta);
     auto logger = Logger::get(task_id);
 
-    auto handler = std::make_shared<WNEstablishDisaggTaskHandler>(db_context, task_id);
-    SCOPE_EXIT({ current_memory_tracker = nullptr; });
-
     auto record_other_error = [&](int flash_err_code, const String & err_msg) {
         // Note: We intentinally do not remove the snapshot from the SnapshotManager
         // when this request is failed. Consider this case:
@@ -905,9 +902,11 @@ grpc::Status FlashService::EstablishDisaggTask(
     try
     {
         auto task = std::make_shared<std::packaged_task<void()>>(
-            [&handler, &request, &response, deadline = grpc_context->deadline()]() {
+            [db_context = db_context, &task_id, &request, &response, deadline = grpc_context->deadline()]() {
                 auto current = std::chrono::system_clock::now();
                 RUNTIME_CHECK(current < deadline, current, deadline);
+                auto handler = std::make_unique<WNEstablishDisaggTaskHandler>(db_context, task_id);
+                SCOPE_EXIT({ current_memory_tracker = nullptr; });
                 handler->prepare(request);
                 handler->execute(response);
             });

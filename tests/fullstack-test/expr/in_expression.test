@@ -194,3 +194,19 @@ mysql> set tidb_enforce_mpp=1; select (a and 1) in (null,0,0), (a and 1) in (nul
 |                    NULL |                       1 |                  0 |                  1 |                  0 |                  1 |
 |                    NULL |                       1 |                  0 |                  1 |               NULL |               NULL |
 +-------------------------+-------------------------+--------------------+--------------------+--------------------+--------------------+
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (col0 integer, col1 integer);
+mysql> insert into test.t values(20, 30), (30, 40), (40, 50), (null, null);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> alter table test.t compact tiflash replica;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where col0 in (null, col0);
++------+------+
+| col0 | col1 |
++------+------+
+|   20 |   30 |
+|   30 |   40 |
+|   40 |   50 |
++------+------+
+mysql> drop table test.t;
