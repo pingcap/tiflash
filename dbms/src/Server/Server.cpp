@@ -1570,6 +1570,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // For disaggregated storage mode, LAC will be nullptr.
     // Because disaggregated storage will not use pipeline model to execute queries, so no need to start LAC.
     // Besides, starting LAC will acquire RU from GAC, which will be wasted.
+    // TODO: LAC can start on WN after we support resource control for WN.
     if (!global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
         LocalAdmissionController::global_instance
             = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
