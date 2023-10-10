@@ -220,12 +220,16 @@ public:
     // copy the key-values from `temp_region` and move forward the `index` and `term`
     void finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UInt64 term);
 
-    /// methods to handle orphan keys under raftstore v2
+    // Check the raftstore cluster version of this region.
+    // Currently, all version in the same TiFlash store should be the same.
     RaftstoreVer getClusterRaftstoreVer();
+    // Methods to handle orphan keys under raftstore v2.
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
-    void afterPrehandleSnapshot();
+    void afterPrehandleSnapshot(int64_t ongoing);
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
+
+    void mergeDataFrom(const Region & other);
 
     Region() = delete;
 

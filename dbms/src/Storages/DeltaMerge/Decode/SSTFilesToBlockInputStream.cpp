@@ -15,9 +15,10 @@
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
+#include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/SSTReader.h>
@@ -41,29 +42,30 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
     TMTContext & tmt_,
+    std::optional<SSTScanSoftLimit> && soft_limit_,
     SSTFilesToBlockInputStreamOpts && opts_)
     : region(std::move(region_))
     , snapshot_index(snapshot_index_)
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
     , tmt(tmt_)
+    , soft_limit(std::move(soft_limit_))
     , opts(std::move(opts_))
 {
     log = Logger::get(opts.log_prefix);
-}
 
-SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
-
-void SSTFilesToBlockInputStream::readPrefix()
-{
+    // We have to initialize sst readers at an earlier stage,
+    // due to prehandle snapshot of single region feature in raftstore v2.
     std::vector<SSTView> ssts_default;
     std::vector<SSTView> ssts_write;
     std::vector<SSTView> ssts_lock;
 
-    auto make_inner_func
-        = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
-              return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
-          };
+    auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper,
+                               SSTView snap,
+                               SSTReader::RegionRangeFilter range,
+                               size_t split_id) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
+    };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
         const auto & snapshot = snaps.views[i];
@@ -90,7 +92,8 @@ void SSTFilesToBlockInputStream::readPrefix()
             make_inner_func,
             ssts_default,
             log,
-            region->getRange());
+            region->getRange(),
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
     if (!ssts_write.empty())
     {
@@ -100,7 +103,8 @@ void SSTFilesToBlockInputStream::readPrefix()
             make_inner_func,
             ssts_write,
             log,
-            region->getRange());
+            region->getRange(),
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
     if (!ssts_lock.empty())
     {
@@ -110,7 +114,8 @@ void SSTFilesToBlockInputStream::readPrefix()
             make_inner_func,
             ssts_lock,
             log,
-            region->getRange());
+            region->getRange(),
+            soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
     LOG_INFO(
         log,
@@ -130,12 +135,27 @@ void SSTFilesToBlockInputStream::readPrefix()
     process_keys.lock_cf_bytes = 0;
 }
 
-void SSTFilesToBlockInputStream::readSuffix()
+SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
+
+void SSTFilesToBlockInputStream::readPrefix() {}
+
+void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader)
 {
     // There must be no data left when we write suffix
-    assert(!write_cf_reader || !write_cf_reader->remained());
-    assert(!default_cf_reader || !default_cf_reader->remained());
-    assert(!lock_cf_reader || !lock_cf_reader->remained());
+    if (!reader)
+        return;
+    if (!reader->remained())
+        return;
+    RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value()");
+    BaseBuffView cur = reader->keyView();
+    RUNTIME_CHECK_MSG(buffToStrView(cur) > soft_limit.value().raw_end, "cur > raw_end");
+}
+
+void SSTFilesToBlockInputStream::readSuffix()
+{
+    checkFinishedState(write_cf_reader);
+    checkFinishedState(default_cf_reader);
+    checkFinishedState(lock_cf_reader);
 
     // reset all SSTReaders and return without writting blocks any more.
     write_cf_reader.reset();
@@ -146,8 +166,16 @@ void SSTFilesToBlockInputStream::readSuffix()
 Block SSTFilesToBlockInputStream::read()
 {
     std::string loaded_write_cf_key;
+
     while (write_cf_reader && write_cf_reader->remained())
     {
+        bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader);
+        if (should_stop_advancing)
+        {
+            // Load the last batch
+            break;
+        }
+
         // To decode committed rows from key-value pairs into block, we need to load
         // all need key-value pairs from default and lock column families.
         // Check the MVCC (key-format and transaction model) for details
@@ -158,7 +186,8 @@ Block SSTFilesToBlockInputStream::read()
         {
             BaseBuffView key = write_cf_reader->keyView();
             BaseBuffView value = write_cf_reader->valueView();
-            region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+            auto tikv_key = TiKVKey(key.data, key.len);
+            region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
             ++process_keys.write_cf;
             process_keys.write_cf_bytes += (key.len + value.len);
             if (process_keys.write_cf % opts.expected_size == 0)
@@ -168,11 +197,13 @@ Block SSTFilesToBlockInputStream::read()
         } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
         write_cf_reader->next();
 
+        // If there is enough data to form a Block, we will load all keys before `loaded_write_cf_key` in other cf.
         if (process_keys.write_cf % opts.expected_size == 0)
         {
             // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
             loaded_write_cf_key.clear();
+
             // Batch the loading from other CFs until we need to decode data
             loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
             loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
@@ -184,7 +215,9 @@ Block SSTFilesToBlockInputStream::read()
         }
     }
 
-    // Load all key-value pairs from other CFs
+    // We emit the last block of this sst decode stream here.
+    // Load all key-value pairs from other CFs.
+
     loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
     loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);
 
@@ -197,12 +230,14 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader * reader;
+    SSTReaderPtr * reader_ptr;
     size_t * p_process_keys;
     size_t * p_process_keys_bytes;
     DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
+        reader_ptr = &default_cf_reader;
         p_process_keys = &process_keys.default_cf;
         p_process_keys_bytes = &process_keys.default_cf_bytes;
         last_loaded_rowkey = &default_last_loaded_rowkey;
@@ -210,6 +245,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else if (cf == ColumnFamilyType::Lock)
     {
         reader = lock_cf_reader.get();
+        reader_ptr = &lock_cf_reader;
         p_process_keys = &process_keys.lock_cf;
         p_process_keys_bytes = &process_keys.lock_cf_bytes;
         last_loaded_rowkey = &lock_last_loaded_rowkey;
@@ -217,31 +253,42 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
     else
         throw Exception("Unknown cf, should not happen!");
 
+    if (reader && reader->remained())
+    {
+        maybeSkipBySoftLimit(cf, *reader_ptr);
+    }
+
     // Simply read to the end of SST file
     if (rowkey_to_be_included == nullptr)
     {
         while (reader && reader->remained())
         {
+            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            {
+                break;
+            }
             BaseBuffView key = reader->keyView();
             BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len), DupCheck::AllowSame);
-            reader->next();
             (*p_process_keys) += 1;
             (*p_process_keys_bytes) += (key.len + value.len);
+            reader->next();
         }
         LOG_DEBUG(
             log,
-            "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} "
+            "Done loading all kvpairs, CF={} offset={} processed_bytes={} write_cf_offset={} region_id={} split_id={} "
             "snapshot_index={}",
             CFToName(cf),
             (*p_process_keys),
             (*p_process_keys_bytes),
             process_keys.write_cf,
             region->id(),
+            getSplitId(),
             snapshot_index);
         return;
     }
+
 
     size_t process_keys_offset_end = process_keys.write_cf;
     while (reader && reader->remained())
@@ -330,6 +377,131 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
         else
             throw;
     }
+}
+
+size_t SSTFilesToBlockInputStream::getApproxBytes() const
+{
+    size_t total = 0;
+    if (write_cf_reader)
+        total += write_cf_reader->approxSize();
+    if (lock_cf_reader)
+        total += lock_cf_reader->approxSize();
+    if (default_cf_reader)
+        total += default_cf_reader->approxSize();
+    return total;
+}
+
+std::vector<std::string> SSTFilesToBlockInputStream::findSplitKeys(size_t splits_count) const
+{
+    return write_cf_reader->findSplitKeys(splits_count);
+}
+
+// Returning false means no skip is performed, the reader is intact.
+// Returning true means skip is performed, must read from current value.
+bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+{
+    if (!soft_limit.has_value())
+        return false;
+    const auto & start_limit = soft_limit.value().getStartLimit();
+    // If start is set to "", then there is no soft limit for start.
+    if (!start_limit)
+        return false;
+
+    if (reader && reader->remained())
+    {
+        auto key = reader->keyView();
+        if (soft_limit.value().raw_start < buffToStrView(key))
+        {
+            // This happens when there is too many untrimmed data.
+            LOG_INFO(
+                log,
+                "Re-Seek backward is forbidden, start_limit {} current {}, cf={}, split_id={}, region_id={}",
+                soft_limit.value().raw_start.toDebugString(),
+                Redact::keyToDebugString(key.data, key.len),
+                magic_enum::enum_name(cf),
+                soft_limit.value().split_id,
+                region->id());
+            return false;
+        }
+    }
+    // Safety `soft_limit` outlives returned base buff view.
+    reader->seek(cppStringAsBuff(soft_limit.value().raw_start));
+
+    // Skip other versions of the same PK.
+    // TODO(split) use seek to optimize if failed several iterations.
+    while (reader && reader->remained())
+    {
+        // Read until find the next pk.
+        auto key = reader->keyView();
+        // TODO the copy could be eliminated, but with many modifications.
+        auto tikv_key = TiKVKey(key.data, key.len);
+        auto current_truncated_ts = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(tikv_key));
+        // If found a new pk.
+        if (current_truncated_ts != start_limit)
+        {
+            RUNTIME_CHECK_MSG(
+                current_truncated_ts > start_limit,
+                "current pk decreases as reader advances, start_raw {} start_pk {} current {}, cf={}, split_id={}, "
+                "region_id={}",
+                soft_limit.value().raw_start.toDebugString(),
+                start_limit.value().toDebugString(),
+                current_truncated_ts.toDebugString(),
+                magic_enum::enum_name(cf),
+                soft_limit.value().split_id,
+                region->id());
+            LOG_INFO(
+                log,
+                "Re-Seek after start_raw {} start_pk {} to {}, current_pk = {}, cf={}, split_id={}, region_id={}",
+                soft_limit.value().raw_start.toDebugString(),
+                start_limit.value().toDebugString(),
+                tikv_key.toDebugString(),
+                current_truncated_ts.toDebugString(),
+                magic_enum::enum_name(cf),
+                soft_limit.value().split_id,
+                region->id());
+            return true;
+        }
+        reader->next();
+    }
+    // `start_limit` is the last pk of the sst file.
+    LOG_INFO(
+        log,
+        "Re-Seek to the last key of write cf start_raw {} start_pk {}, cf={}, split_id={}, region_id={}",
+        soft_limit.value().raw_start.toDebugString(),
+        start_limit.value().toDebugString(),
+        magic_enum::enum_name(cf),
+        soft_limit.value().split_id,
+        region->id());
+    return false;
+}
+
+bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader)
+{
+    if (!soft_limit.has_value())
+        return false;
+    const SSTScanSoftLimit & sl = soft_limit.value();
+    const auto & end_limit = soft_limit.value().getEndLimit();
+    if (!end_limit)
+        return false;
+    auto key = reader->keyView();
+    // TODO the copy could be eliminated, but with many modifications.
+    auto tikv_key = TiKVKey(key.data, key.len);
+    auto current_truncated_ts = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(tikv_key));
+    if (current_truncated_ts > end_limit)
+    {
+        LOG_INFO(
+            log,
+            "Reach end for split {} current {} pk {} end_limit {}, cf={} split_id={} region_id={}",
+            sl.toDebugString(),
+            tikv_key.toDebugString(),
+            current_truncated_ts.toDebugString(),
+            end_limit->toDebugString(),
+            magic_enum::enum_name(cf),
+            soft_limit.value().split_id,
+            region->id());
+        return true;
+    }
+    return false;
 }
 } // namespace DM
 } // namespace DB
