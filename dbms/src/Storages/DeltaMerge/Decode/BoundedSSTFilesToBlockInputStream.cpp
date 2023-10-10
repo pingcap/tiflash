@@ -15,10 +15,10 @@
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -31,7 +31,8 @@ namespace DM
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId pk_column_id_,
-    const DecodingStorageSchemaSnapshotConstPtr & schema_snap)
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
+    size_t split_id)
     : pk_column_id(pk_column_id_)
     , _raw_child(std::move(child))
 {
@@ -43,7 +44,8 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(
         _raw_child,
         pk_column_id,
-        is_common_handle);
+        is_common_handle,
+        split_id);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream,
         *(schema_snap->column_defines),
@@ -69,6 +71,12 @@ Block BoundedSSTFilesToBlockInputStream::read()
 SSTFilesToBlockInputStream::ProcessKeys BoundedSSTFilesToBlockInputStream::getProcessKeys() const
 {
     return _raw_child->process_keys;
+}
+
+
+size_t BoundedSSTFilesToBlockInputStream::getSplitId() const
+{
+    return _raw_child->getSplitId();
 }
 
 RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const

@@ -50,6 +50,50 @@ using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream
 class BoundedSSTFilesToBlockInputStream;
 using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBlockInputStream>;
 
+struct SSTScanSoftLimit
+{
+    constexpr static size_t HEAD_OR_ONLY_SPLIT = SIZE_MAX;
+    size_t split_id;
+    TiKVKey raw_start;
+    TiKVKey raw_end;
+    DecodedTiKVKey decoded_start;
+    DecodedTiKVKey decoded_end;
+    std::optional<RawTiDBPK> start_limit;
+    std::optional<RawTiDBPK> end_limit;
+
+    SSTScanSoftLimit(size_t extra_id, TiKVKey && raw_start_, TiKVKey && raw_end_)
+        : split_id(extra_id)
+        , raw_start(std::move(raw_start_))
+        , raw_end(std::move(raw_end_))
+    {
+        if (!raw_start.empty())
+        {
+            decoded_start = RecordKVFormat::decodeTiKVKey(raw_start);
+        }
+        if (!raw_end.empty())
+        {
+            decoded_end = RecordKVFormat::decodeTiKVKey(raw_end);
+        }
+        if (decoded_start.size())
+        {
+            start_limit = RecordKVFormat::getRawTiDBPK(decoded_start);
+        }
+        if (decoded_end.size())
+        {
+            end_limit = RecordKVFormat::getRawTiDBPK(decoded_end);
+        }
+    }
+
+    const std::optional<RawTiDBPK> & getStartLimit() { return start_limit; }
+
+    const std::optional<RawTiDBPK> & getEndLimit() { return end_limit; }
+
+    std::string toDebugString() const
+    {
+        return fmt::format("{}:{}", raw_start.toDebugString(), raw_end.toDebugString());
+    }
+};
+
 struct SSTFilesToBlockInputStreamOpts
 {
     std::string log_prefix;
@@ -61,7 +105,7 @@ struct SSTFilesToBlockInputStreamOpts
     size_t expected_size;
 };
 
-// Read blocks from TiKV's SSTFiles
+// Read blocks from TiKV's SSTFiles or Tablets.
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
@@ -71,6 +115,7 @@ public:
         const SSTViewVec & snaps_,
         const TiFlashRaftProxyHelper * proxy_helper_,
         TMTContext & tmt_,
+        std::optional<SSTScanSoftLimit> && soft_limit_,
         SSTFilesToBlockInputStreamOpts && opts_);
     ~SSTFilesToBlockInputStream() override;
 
@@ -81,6 +126,12 @@ public:
     void readPrefix() override;
     void readSuffix() override;
     Block read() override;
+    // Currently it only takes effect if using tablet sst reader which is usually a raftstore v2 case.
+    // Otherwise will return zero.
+    size_t getApproxBytes() const;
+    std::vector<std::string> findSplitKeys(size_t splits_count) const;
+    void resetSoftLimit(std::optional<SSTScanSoftLimit> soft_limit_) { soft_limit = std::move(soft_limit_); }
+    const std::optional<SSTScanSoftLimit> & getSoftLimit() const { return soft_limit; }
 
 public:
     struct ProcessKeys
@@ -97,11 +148,22 @@ public:
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
+    size_t getSplitId() const
+    {
+        return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
+    }
+
+    using SSTReaderPtr = std::unique_ptr<SSTReader>;
+    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader); }
 
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
+    // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
+    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
+    void checkFinishedState(SSTReaderPtr & reader);
 
 private:
     RegionPtr region;
@@ -109,10 +171,10 @@ private:
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     TMTContext & tmt;
+    std::optional<SSTScanSoftLimit> soft_limit;
     const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
-    using SSTReaderPtr = std::unique_ptr<SSTReader>;
     SSTReaderPtr write_cf_reader;
     SSTReaderPtr default_cf_reader;
     SSTReaderPtr lock_cf_reader;
@@ -136,7 +198,8 @@ public:
     BoundedSSTFilesToBlockInputStream(
         SSTFilesToBlockInputStreamPtr child,
         ColId pk_column_id_,
-        const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
+        const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
+        size_t split_id);
 
     static String getName() { return "BoundedSSTFilesToBlockInputStream"; }
 
@@ -152,6 +215,8 @@ public:
 
     // Return values: (effective rows, not clean rows, is delete rows, gc hint version)
     std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const;
+
+    size_t getSplitId() const;
 
 private:
     const ColId pk_column_id;

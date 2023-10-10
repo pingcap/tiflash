@@ -16,6 +16,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/sortBlock.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
@@ -32,10 +33,15 @@ template <bool need_extra_sort>
 class PKSquashingBlockInputStream final : public IBlockInputStream
 {
 public:
-    PKSquashingBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
+    PKSquashingBlockInputStream(
+        BlockInputStreamPtr child,
+        ColId pk_column_id_,
+        bool is_common_handle_,
+        size_t split_id_ = DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT)
         : sorted_input_stream(child)
         , pk_column_id(pk_column_id_)
         , is_common_handle(is_common_handle_)
+        , split_id(split_id_)
     {
         assert(sorted_input_stream != nullptr);
         cur_block = {};
@@ -86,7 +92,8 @@ public:
             }
 #endif
 
-            const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_id, is_common_handle);
+            const size_t cut_offset
+                = findCutOffsetInNextBlock(split_id, cur_block, next_block, pk_column_id, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
                 return finializeBlock(std::move(cur_block));
@@ -123,11 +130,13 @@ public:
 
 private:
     static size_t findCutOffsetInNextBlock(
+        size_t split_id,
         const Block & cur_block,
         const Block & next_block,
         const ColId pk_column_id,
         bool is_common_handle)
     {
+        UNUSED(split_id);
         assert(cur_block);
         if (!next_block)
             return 0;
@@ -138,6 +147,7 @@ private:
         auto next_col = getByColumnId(next_block, pk_column_id).column;
         RowKeyColumnContainer next_rowkey_column(next_col, is_common_handle);
         size_t cut_offset = 0;
+
         for (/* */; cut_offset < next_col->size(); ++cut_offset)
         {
             const auto next_pk = next_rowkey_column.getRowKeyValue(cut_offset);
@@ -147,9 +157,13 @@ private:
                 {
                     if (unlikely(next_pk < last_curr_pk))
                         throw Exception(
-                            "InputStream is not sorted, pk in next block is smaller than current block: "
-                                + next_pk.toDebugString() + " < " + last_curr_pk.toDebugString(),
-                            ErrorCodes::LOGICAL_ERROR);
+                            ErrorCodes::LOGICAL_ERROR,
+                            fmt::format(
+                                "InputStream is not sorted, pk in next block {} is smaller than current block {}, "
+                                "split_id={}",
+                                next_pk.toDebugString(),
+                                last_curr_pk.toDebugString(),
+                                split_id));
                 }
                 break;
             }
@@ -180,6 +194,8 @@ private:
 
     bool first_read = true;
     const bool is_common_handle;
+    // Setting to non `HEAD_OR_ONLY_SPLIT` means this is a part stream.
+    size_t split_id;
 };
 
 } // namespace DM
