@@ -459,6 +459,7 @@ void executeParallelTransform(
             extra_id,
             new_region->id());
     }
+    // This will read the keys from the beginning to the first split key
     auto [head_result, head_prehandle_result]
         = executeTransform(log, new_region, prehandle_task, job_type, storage, sst_stream, opt, tmt);
     LOG_INFO(
