@@ -18,12 +18,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
-#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/FFI/SSTReader.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/SerializationHelper.h>
@@ -32,16 +29,10 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
-namespace ProfileEvents
-{
-extern const Event RaftWaitIndexTimeout;
-} // namespace ProfileEvents
-
 namespace DB
 {
 namespace ErrorCodes
 {
-extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
 namespace FailPoints
@@ -374,76 +365,6 @@ RaftstoreVer Region::getClusterRaftstoreVer()
         }
     }
     return RaftstoreVer::Uncertain;
-}
-
-kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
-{
-    auto meta_snap = region.dumpRegionMetaSnapshot();
-    kvrpcpb::ReadIndexRequest request;
-    {
-        auto * context = request.mutable_context();
-        context->set_region_id(region.id());
-        *context->mutable_peer() = meta_snap.peer;
-        context->mutable_region_epoch()->set_version(meta_snap.ver);
-        context->mutable_region_epoch()->set_conf_ver(meta_snap.conf_ver);
-        // if start_ts is 0, only send read index request to proxy
-        if (start_ts)
-        {
-            request.set_start_ts(start_ts);
-            auto * key_range = request.add_ranges();
-            // use original tikv key
-            key_range->set_start_key(meta_snap.range->comparableKeys().first.key);
-            key_range->set_end_key(meta_snap.range->comparableKeys().second.key);
-        }
-    }
-    return request;
-}
-
-bool Region::checkIndex(UInt64 index) const
-{
-    return meta.checkIndex(index);
-}
-
-std::tuple<WaitIndexResult, double> Region::waitIndex(
-    UInt64 index,
-    const UInt64 timeout_ms,
-    std::function<bool(void)> && check_running)
-{
-    if (proxy_helper != nullptr)
-    {
-        if (!meta.checkIndex(index))
-        {
-            Stopwatch wait_index_watch;
-            LOG_DEBUG(log, "{} need to wait learner index {} timeout {}", toString(), index, timeout_ms);
-            auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
-            auto elapsed_secs = wait_index_watch.elapsedSeconds();
-            switch (wait_idx_res)
-            {
-            case WaitIndexResult::Finished:
-            {
-                LOG_DEBUG(log, "{} wait learner index {} done", toString(false), index);
-                return {wait_idx_res, elapsed_secs};
-            }
-            case WaitIndexResult::Terminated:
-            {
-                return {wait_idx_res, elapsed_secs};
-            }
-            case WaitIndexResult::Timeout:
-            {
-                ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_WARNING(
-                    log,
-                    "{} wait learner index {} timeout current {} state {}",
-                    toString(false),
-                    index,
-                    appliedIndex(),
-                    peerState());
-                return {wait_idx_res, elapsed_secs};
-            }
-            }
-        }
-    }
-    return {WaitIndexResult::Finished, 0};
 }
 
 UInt64 Region::version() const
