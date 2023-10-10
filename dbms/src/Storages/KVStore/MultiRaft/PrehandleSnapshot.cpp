@@ -296,9 +296,7 @@ static inline std::vector<std::string> getSplitKey(
         fmt_buf.joinStr(
             split_keys.cbegin(),
             split_keys.cend(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.append(Redact::keyToDebugString(arg.data(), arg.size()));
-            },
+            [](const auto & arg, FmtBuffer & fb) { fb.append(Redact::keyToDebugString(arg.data(), arg.size())); },
             ":");
         LOG_INFO(
             log,
