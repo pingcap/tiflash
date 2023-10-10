@@ -489,7 +489,11 @@ private:
             }
             catch (...)
             {
-                LOG_ERROR(log, "delete server id({}) from GAC failed: {}", unique_client_id, getCurrentExceptionMessage(false));
+                LOG_ERROR(
+                    log,
+                    "delete server id({}) from GAC failed: {}",
+                    unique_client_id,
+                    getCurrentExceptionMessage(false));
             }
         }
     }
