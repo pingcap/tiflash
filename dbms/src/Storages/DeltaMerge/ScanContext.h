@@ -55,7 +55,7 @@ public:
     std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
 
-    explicit ScanContext(const String & name = "", bool enable_lac = false)
+    explicit ScanContext(const String & name = "", bool enable_lac_ = false)
         : resource_group_name(name)
         , enable_lac(enable_lac_)
     {}
