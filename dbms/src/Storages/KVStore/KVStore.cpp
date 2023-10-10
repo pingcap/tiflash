@@ -317,17 +317,6 @@ void KVStore::applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const
     }
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(
-    const WriteCmdsView & cmds,
-    UInt64 region_id,
-    UInt64 index,
-    UInt64 term,
-    TMTContext & tmt)
-{
-    DM::WriteResult write_result;
-    return handleWriteRaftCmdInner(cmds, region_id, index, term, tmt, write_result);
-}
-
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 {
     handleDestroy(region_id, tmt, genTaskLock());
