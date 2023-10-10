@@ -142,7 +142,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         if (isColumnExpr(child))
             is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
     }
-    for (int32_t child_idx = 0; child_idx < expr.children_size(); child_idx++)
+    for (int32_t child_idx = 0; child_idx < expr.children_size(); ++child_idx)
     {
         const auto & child = expr.children(child_idx);
         if (isColumnExpr(child))
@@ -159,6 +159,10 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     expr.ShortDebugString(),
                     "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
                     false);
+
+            // Only support `column` in/not in (literal1, literal2, ...) now.
+            if (expr.children_size() != 2 && child_idx != 0)
+                return createUnsupported(expr.ShortDebugString(), "ColumnRef in In/NotIn is not supported", false);
 
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr = creator(id);
