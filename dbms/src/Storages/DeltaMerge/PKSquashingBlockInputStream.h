@@ -157,13 +157,13 @@ private:
                 {
                     if (unlikely(next_pk < last_curr_pk))
                         throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
                             fmt::format(
                                 "InputStream is not sorted, pk in next block {} is smaller than current block {}, "
                                 "split_id={}",
                                 next_pk.toDebugString(),
                                 last_curr_pk.toDebugString(),
-                                split_id),
-                            ErrorCodes::LOGICAL_ERROR);
+                                split_id));
                 }
                 break;
             }
