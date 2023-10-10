@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1694697238872,
+  "iteration": 1696907181842,
   "links": [],
   "panels": [
     {
@@ -11774,6 +11774,14 @@
               "intervalFactor": 1,
               "legendFormat": "Pending-{{instance}}",
               "refId": "B"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_RaftNumPrehandlingSubTasks{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "PrehandleSubtasks-{{instance}}",
+              "refId": "A"
             }
           ],
           "thresholds": [],

@@ -37,10 +37,13 @@ struct MockSSTReader
     using Key = std::pair<std::string, ColumnFamilyType>;
     struct Data : std::vector<std::pair<std::string, std::string>>
     {
-        DISALLOW_COPY(Data);
         Data(Data &&) = default;
         Data & operator=(Data &&) = default;
         Data() = default;
+        static Data copyFrom(const Data & other) { return other; }
+
+    private:
+        Data(const Data &) = default;
     };
 
     explicit MockSSTReader(const Data & data_, SSTFormatKind kind_)
@@ -49,7 +52,14 @@ struct MockSSTReader
         , end(data_.end())
         , remained(iter != end)
         , kind(kind_)
-    {}
+        , len(data_.size())
+    {
+        total_bytes = 0;
+        for (auto it = data_.begin(); it != data_.end(); it++)
+        {
+            total_bytes += it->second.size();
+        }
+    }
 
     static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_, SSTFormatKind kind_)
     {
@@ -96,6 +106,14 @@ struct MockSSTReader
         }
     }
 
+    size_t ffi_approx_size() { return total_bytes; }
+
+    size_t length() const { return len; }
+
+    Data::const_iterator getBegin() const { return begin; }
+
+    Data::const_iterator getEnd() const { return end; }
+
     static std::map<Key, MockSSTReader::Data> & getMockSSTData() { return MockSSTData; }
 
 private:
@@ -104,6 +122,8 @@ private:
     Data::const_iterator end;
     bool remained;
     SSTFormatKind kind;
+    size_t total_bytes;
+    size_t len;
 
     // (region_id, cf) -> Data
     static std::map<Key, MockSSTReader::Data> MockSSTData;

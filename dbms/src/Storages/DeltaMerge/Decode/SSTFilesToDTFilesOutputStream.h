@@ -16,8 +16,8 @@
 
 #include <Common/Stopwatch.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
-#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <memory>
@@ -166,6 +166,8 @@ public:
     static std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() { return {}; }
 
     static SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() { return {}; }
+
+    size_t getSplitId() const { return DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT; }
 
 protected:
     BlockInputStreamPtr mock_data;
