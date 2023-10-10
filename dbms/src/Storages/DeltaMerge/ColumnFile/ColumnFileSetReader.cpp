@@ -190,7 +190,7 @@ size_t ColumnFileSetReader::readRows(
         const auto delta_bytes = col->byteSize();
         context.scan_context->total_user_read_bytes += delta_bytes;
 
-        if (context.scan_context->enable_lac)
+        if (context.scan_context->enable_resource_control)
             LocalAdmissionController::global_instance->consumeResource(
                 context.scan_context->resource_group_name,
                 bytesToRU(delta_bytes),

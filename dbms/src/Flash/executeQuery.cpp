@@ -200,7 +200,10 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
     if (!context.getSharedContextDisagg()->isDisaggregatedStorageMode())
-        dag_context.enableLAC();
+    {
+        // ResourceControl will not work on WN.
+        dag_context.enableResourceControl();
+    }
     return {std::move(executor)};
 }
 
