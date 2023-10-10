@@ -318,8 +318,8 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getResourceGroupName() { return resource_group_name; }
-    void enableResourceControl() { enable_resource_control = true; }
-    bool isResourceControlEnabled() const { return enable_resource_control; }
+    void enableLAC() { enable_lac = true; }
+    bool isLACEnabled() const { return enable_lac; }
 
     RU getReadRU() const;
 
@@ -452,7 +452,7 @@ private:
     const KeyspaceID keyspace_id = NullspaceID;
 
     const String resource_group_name;
-    bool enable_resource_control = false;
+    bool enable_lac = false;
 
     // Used to determine the execution mode
     // - None: request has not been executed yet

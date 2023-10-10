@@ -199,7 +199,8 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
-    dag_context.enableResourceControl();
+    if (!context.getSharedContextDisagg()->isDisaggregatedStorageMode())
+        dag_context.enableLAC();
     return {std::move(executor)};
 }
 

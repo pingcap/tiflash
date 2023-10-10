@@ -220,7 +220,7 @@ private:
         {
             scan_context->total_user_read_bytes += bytes;
 
-            if (scan_context->enable_resource_control)
+            if (scan_context->enable_lac)
                 LocalAdmissionController::global_instance->consumeResource(
                     scan_context->resource_group_name,
                     bytesToRU(bytes),
