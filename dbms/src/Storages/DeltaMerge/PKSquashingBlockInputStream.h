@@ -87,8 +87,10 @@ public:
             if (next_block && !isSameSchema(cur_block, next_block))
             {
                 throw Exception(
-                    "schema not match! [cur_block=" + cur_block.dumpStructure()
-                    + "] [next_block=" + next_block.dumpStructure() + "]");
+                    ErrorCodes::LOGICAL_ERROR,
+                    "schema not match! [cur_block={}] [next_block={}]",
+                    cur_block.dumpStructure(),
+                    next_block.dumpStructure());
             }
 #endif
 
@@ -136,7 +138,6 @@ private:
         const ColId pk_column_id,
         bool is_common_handle)
     {
-        UNUSED(split_id);
         assert(cur_block);
         if (!next_block)
             return 0;
@@ -147,7 +148,6 @@ private:
         auto next_col = getByColumnId(next_block, pk_column_id).column;
         RowKeyColumnContainer next_rowkey_column(next_col, is_common_handle);
         size_t cut_offset = 0;
-
         for (/* */; cut_offset < next_col->size(); ++cut_offset)
         {
             const auto next_pk = next_rowkey_column.getRowKeyValue(cut_offset);
@@ -158,12 +158,11 @@ private:
                     if (unlikely(next_pk < last_curr_pk))
                         throw Exception(
                             ErrorCodes::LOGICAL_ERROR,
-                            fmt::format(
-                                "InputStream is not sorted, pk in next block {} is smaller than current block {}, "
-                                "split_id={}",
-                                next_pk.toDebugString(),
-                                last_curr_pk.toDebugString(),
-                                split_id));
+                            "InputStream is not sorted, pk in next block {} is smaller than current block {}, "
+                            "split_id={}",
+                            next_pk.toDebugString(),
+                            last_curr_pk.toDebugString(),
+                            split_id);
                 }
                 break;
             }
@@ -195,7 +194,7 @@ private:
     bool first_read = true;
     const bool is_common_handle;
     // Setting to non `HEAD_OR_ONLY_SPLIT` means this is a part stream.
-    size_t split_id;
+    const size_t split_id;
 };
 
 } // namespace DM
