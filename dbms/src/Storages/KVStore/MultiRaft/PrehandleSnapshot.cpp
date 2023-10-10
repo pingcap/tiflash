@@ -223,10 +223,7 @@ static inline std::vector<std::string> getSplitKey(
     std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream)
 {
     // We don't use this is the single snapshot is small, due to overhead in decoding.
-    // TODO(split) find solution if the snapshot has too many untrimmed data.
-    // TODO(split) recover this after integration test passes.
-    // constexpr size_t default_parallel_prehandle_threshold = 1 * 1024 * 1024 * 1024;
-    constexpr size_t default_parallel_prehandle_threshold = 1 * 1024 * 1024;
+    constexpr size_t default_parallel_prehandle_threshold = 1 * 1024 * 1024 * 1024;
     size_t parallel_prehandle_threshold = default_parallel_prehandle_threshold;
     fiu_do_on(FailPoints::force_set_parallel_prehandle_threshold, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_parallel_prehandle_threshold); v)
@@ -300,7 +297,6 @@ static inline std::vector<std::string> getSplitKey(
             split_keys.cbegin(),
             split_keys.cend(),
             [](const auto & arg, FmtBuffer & fb) {
-                // TODO(split) reduce copy here
                 fb.append(Redact::keyToDebugString(arg.data(), arg.size()));
             },
             ":");
