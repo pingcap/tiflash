@@ -479,6 +479,19 @@ private:
             if (thread.joinable())
                 thread.join();
         }
+
+        if (unique_client_id_ok)
+        {
+            try
+            {
+                etcd_client->deleteServerIDFromGAC(unique_client_id);
+                LOG_DEBUG(log, "delete server id({}) from GAC succeed", unique_client_id);
+            }
+            catch (...)
+            {
+                LOG_ERROR(log, "delete server id({}) from GAC failed: {}", unique_client_id, getCurrentExceptionMessage(false));
+            }
+        }
     }
 
     // Interval of fetch from GAC periodically.
@@ -580,6 +593,7 @@ private:
         = std::chrono::steady_clock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
+    std::atomic<bool> unique_client_id_ok{false};
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
     std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
