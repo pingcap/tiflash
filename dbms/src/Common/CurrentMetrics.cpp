@@ -47,6 +47,7 @@
     M(DT_DeltaMergeTotalRows)                   \
     M(DT_DeltaIndexCacheSize)                   \
     M(RaftNumSnapshotsPendingApply)             \
+    M(RaftNumPrehandlingSubTasks)               \
     M(RateLimiterPendingWriteRequest)           \
     M(DT_SegmentReadTasks)                      \
     M(DT_SnapshotOfRead)                        \

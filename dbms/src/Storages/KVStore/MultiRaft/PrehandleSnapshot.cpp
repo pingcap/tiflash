@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
@@ -29,6 +30,11 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+
+namespace CurrentMetrics
+{
+extern const Metric RaftNumPrehandlingSubTasks;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -70,6 +76,8 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
     const DM::SSTFilesToBlockInputStreamOpts & opts,
     TMTContext & tmt)
 {
+    CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
+    SCOPE_EXIT({ CurrentMetrics::sub(CurrentMetrics::RaftNumPrehandlingSubTasks); });
     LOG_INFO(
         log,
         "Add prehandle task split_id={} limit={}",
@@ -467,7 +475,6 @@ void executeParallelTransform(
         DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT,
         new_region->id());
 
-
     // Wait all threads to join. May throw.
     // If one thread throws, then all result is useless, so `async_tasks` is released directly.
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
@@ -763,7 +770,7 @@ void Region::afterPrehandleSnapshot(int64_t ongoing)
         data.orphan_keys_info.pre_handling = false;
         LOG_INFO(
             log,
-            "After prehandle, remains orphan keys {} removed orphan keys {} ongoing {} [region_id={}]",
+            "After prehandle, orphan keys remains={} removed={} ongoing_prehandle={} region_id={}",
             data.orphan_keys_info.remainedKeyCount(),
             data.orphan_keys_info.removed_remained_keys.size(),
             ongoing,

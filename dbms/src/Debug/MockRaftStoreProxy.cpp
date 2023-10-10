@@ -115,8 +115,7 @@ void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
         delete reinterpret_cast<std::string *>(ptr);
         break;
     case RawObjType::MockVecOfString:
-        auto * inner = reinterpret_cast<RustStrWithViewVecInner *>(ptr);
-        delete inner;
+        delete reinterpret_cast<RustStrWithViewVecInner *>(ptr);
         break;
     }
 }
@@ -180,6 +179,7 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
     return x.cluster_ver;
 }
 
+// Must call `RustGcHelper` to gc the returned pointer in the end.
 static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, uint64_t)
 {
     auto * s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");

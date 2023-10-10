@@ -170,37 +170,35 @@ Block SSTFilesToBlockInputStream::read()
     while (write_cf_reader && write_cf_reader->remained())
     {
         bool should_stop_advancing = maybeStopBySoftLimit(ColumnFamilyType::Write, write_cf_reader);
-        if (!should_stop_advancing)
-        {
-            // To decode committed rows from key-value pairs into block, we need to load
-            // all need key-value pairs from default and lock column families.
-            // Check the MVCC (key-format and transaction model) for details
-            // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
-            // To ensure correctness, when loading key-values pairs from the default and
-            // the lock column family, we will load all key-values which rowkeys are equal
-            // or less that the last rowkey from the write column family.
-            {
-                BaseBuffView key = write_cf_reader->keyView();
-                BaseBuffView value = write_cf_reader->valueView();
-                auto tikv_key = TiKVKey(key.data, key.len);
-                region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
-                ++process_keys.write_cf;
-                process_keys.write_cf_bytes += (key.len + value.len);
-                if (process_keys.write_cf % opts.expected_size == 0)
-                {
-                    loaded_write_cf_key.assign(key.data, key.len);
-                }
-            } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
-            write_cf_reader->next();
-        }
-        else
+        if (should_stop_advancing)
         {
             // Load the last batch
             break;
         }
 
+        // To decode committed rows from key-value pairs into block, we need to load
+        // all need key-value pairs from default and lock column families.
+        // Check the MVCC (key-format and transaction model) for details
+        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
+        // To ensure correctness, when loading key-values pairs from the default and
+        // the lock column family, we will load all key-values which rowkeys are equal
+        // or less that the last rowkey from the write column family.
+        {
+            BaseBuffView key = write_cf_reader->keyView();
+            BaseBuffView value = write_cf_reader->valueView();
+            auto tikv_key = TiKVKey(key.data, key.len);
+            region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
+            ++process_keys.write_cf;
+            process_keys.write_cf_bytes += (key.len + value.len);
+            if (process_keys.write_cf % opts.expected_size == 0)
+            {
+                loaded_write_cf_key.assign(key.data, key.len);
+            }
+        } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
+        write_cf_reader->next();
+
         // If there is enough data to form a Block, we will load all keys before `loaded_write_cf_key` in other cf.
-        if (should_stop_advancing || process_keys.write_cf % opts.expected_size == 0)
+        if (process_keys.write_cf % opts.expected_size == 0)
         {
             // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
