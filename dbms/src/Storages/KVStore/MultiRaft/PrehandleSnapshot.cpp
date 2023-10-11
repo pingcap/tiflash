@@ -69,7 +69,7 @@ struct ReadFromStreamResult
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
     LoggerPtr log,
     const RegionPtr & new_region,
-    const std::shared_ptr<std::atomic_bool> & prehandle_task,
+    const std::shared_ptr<PreHandlingTrace::Item> & prehandle_task,
     DM::FileConvertJobType job_type,
     const std::shared_ptr<StorageDeltaMerge> & storage,
     const std::shared_ptr<DM::SSTFilesToBlockInputStream> & sst_stream,
@@ -327,7 +327,7 @@ static void runInParallel(
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
     TMTContext & tmt,
-    std::shared_ptr<std::atomic_bool> prehandle_task,
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task,
     DM::FileConvertJobType job_type,
     uint64_t index,
     uint64_t extra_id,
@@ -363,7 +363,7 @@ static void runInParallel(
             part_new_region->id());
         if (part_result.error == ReadFromStreamError::ErrUpdateSchema)
         {
-            prehandle_task->store(true);
+            prehandle_task->abort_flag.store(true);
         }
         {
             std::scoped_lock l(ctx->mut);
@@ -384,7 +384,7 @@ static void runInParallel(
             processed_keys.write_cf,
             extra_id,
             part_new_region->id());
-        prehandle_task->store(true);
+        prehandle_task->abort_flag.store(true);
         throw;
     }
 }
@@ -400,7 +400,7 @@ void executeParallelTransform(
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
     TMTContext & tmt,
-    std::shared_ptr<std::atomic_bool> prehandle_task,
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task,
     DM::FileConvertJobType job_type,
     uint64_t index,
     std::shared_ptr<StorageDeltaMerge> storage)
@@ -707,13 +707,13 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
 {
     UNUSED(tmt);
-    auto cancel_flag = prehandling_trace.deregisterTask(region_id);
-    if (cancel_flag)
+    auto prehandle_task = prehandling_trace.deregisterTask(region_id);
+    if (prehandle_task)
     {
         // The task is registered, set the cancel flag to true and the generated files
         // will be clear later by `releasePreHandleSnapshot`
         LOG_INFO(log, "Try cancel pre-handling from upper layer, region_id={}", region_id);
-        cancel_flag->store(true, std::memory_order_seq_cst);
+        prehandle_task->abort_flag.store(true, std::memory_order_seq_cst);
     }
     else
     {
