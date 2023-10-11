@@ -22,6 +22,8 @@ namespace DB
 {
 bool LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
 {
+    assert(!stopped);
+
     if (name.empty())
         return false;
 

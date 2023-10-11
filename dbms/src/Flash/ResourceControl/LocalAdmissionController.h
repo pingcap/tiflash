@@ -391,10 +391,15 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
-    ~LocalAdmissionController() { stop(); }
+    // stop() should be called before LAC is destructed to make sure it's shutdown gracefully.
+    // You should explicitly call stop() instead of calling it in the destructor,
+    // because the destruction of LAC is after objects such as Logger, and stop() still needs Logger for log.
+    ~LocalAdmissionController() { assert(stopped); }
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
+        assert(!stopped);
+
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return;
@@ -419,6 +424,8 @@ public:
 
     std::optional<uint64_t> getPriority(const std::string & name)
     {
+        assert(!stopped);
+
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
@@ -438,14 +445,9 @@ public:
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
-#ifdef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<MockLocalAdmissionController> global_instance;
-#else
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#endif
-
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
+        assert(!stopped);
         // NOTE: Better not use lock inside refill_token_callback,
         // because LAC needs to lock when calling refill_token_callback,
         // which may introduce dead lock.
@@ -455,12 +457,12 @@ public:
     }
     void unregisterRefillTokenCallback()
     {
+        assert(!stopped);
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
         refill_token_callback = nullptr;
     }
 
-private:
     void stop()
     {
         if (stopped)
@@ -498,6 +500,13 @@ private:
         }
     }
 
+#ifdef DBMS_PUBLIC_GTEST
+    static std::unique_ptr<MockLocalAdmissionController> global_instance;
+#else
+    static std::unique_ptr<LocalAdmissionController> global_instance;
+#endif
+
+private:
     // Interval of fetch from GAC periodically.
     static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.

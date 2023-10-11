@@ -1801,6 +1801,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
+        LocalAdmissionController::global_instance->stop();
         {
             // Set limiters stopping and wakeup threads in waitting queue.
             global_context->getIORateLimiter().setStop();
