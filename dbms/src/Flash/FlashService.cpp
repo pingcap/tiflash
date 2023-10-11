@@ -116,30 +116,21 @@ void FlashService::init(Context & context_)
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
-    cop_pool = std::make_unique<SimpleFixedThreadPool>("cop-pool", cop_pool_size);
+    cop_limiter = std::make_unique<Limiter<grpc::Status>>(cop_pool_size);
 
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop stream requests.", cop_pool_size);
-    cop_stream_pool = std::make_unique<SimpleFixedThreadPool>("cop-stream-pool", cop_pool_size);
+    cop_stream_limiter = std::make_unique<Limiter<grpc::Status>>(cop_pool_size);
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
-    batch_cop_pool = std::make_unique<SimpleFixedThreadPool>("batch-cop-pool", batch_cop_pool_size);
+    batch_cop_limiter = std::make_unique<Limiter<grpc::Status>>(batch_cop_pool_size);
 }
 
 FlashService::~FlashService() = default;
 
 namespace
 {
-// Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(SimpleFixedThreadPool & pool, std::function<grpc::Status()> job)
-{
-    std::packaged_task<grpc::Status()> task(job);
-    std::future<grpc::Status> future = task.get_future();
-    pool.schedule([&task] { task(); });
-    return future.get();
-}
-
 String getClientMetaVarWithDefault(
     const grpc::ServerContext * grpc_context,
     const String & name,
@@ -241,7 +232,7 @@ grpc::Status FlashService::Coprocessor(
 
     const auto & settings = context->getSettingsRef();
     auto handle_limit
-        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_limiter->getLimit();
     auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
 
     if (handle_limit > 0)
@@ -257,7 +248,7 @@ grpc::Status FlashService::Coprocessor(
         }
     }
 
-    grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
+    grpc::Status ret = cop_limiter->execute([&] {
         auto wait_ms = watch.elapsedMilliseconds();
         if (max_queued_duration_ms > 0)
         {
@@ -321,7 +312,7 @@ grpc::Status FlashService::BatchCoprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
+    grpc::Status ret = batch_cop_limiter->execute([&] {
         auto wait_ms = watch.elapsedMilliseconds();
         LOG_INFO(log, "Begin process batch cop request after wait {} ms, start ts: {}", wait_ms, request->start_ts());
         auto [db_context, status] = createDBContext(grpc_context);
@@ -379,7 +370,7 @@ grpc::Status FlashService::CoprocessorStream(
 
     const auto & settings = context->getSettingsRef();
     auto handle_limit
-        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_stream_limiter->getLimit();
     auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
 
     if (handle_limit > 0)
@@ -399,7 +390,7 @@ grpc::Status FlashService::CoprocessorStream(
         }
     }
 
-    grpc::Status ret = executeInThreadPool(*cop_stream_pool, [&] {
+    grpc::Status ret = cop_stream_limiter->execute([&] {
         auto wait_ms = watch.elapsedMilliseconds();
         if (max_queued_duration_ms > 0)
         {
