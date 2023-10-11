@@ -480,7 +480,7 @@ private:
                 thread.join();
         }
 
-        if (unique_client_id_ok)
+        if (need_reset_unique_client_id.load())
         {
             try
             {
