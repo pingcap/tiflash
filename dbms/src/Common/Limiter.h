@@ -38,6 +38,42 @@ public:
         cv.wait(lock, [&]() { return active_count == 0; });
     }
 
+    template <typename Duration>
+    T executeFor(std::function<T()> exec_func, const Duration & max_wait_time, std::function<T()> timeout_func)
+    {
+        // If max_wait_time is 0, it means the wait time is infinite.
+        if (max_wait_time <= max_wait_time.zero())
+            return execute(exec_func);
+
+        bool is_timeout = false;
+        {
+            std::unique_lock lock(mu);
+            if (cv.wait_for(lock, max_wait_time, [&]() { return active_count < limit; }))
+            {
+                ++active_count;
+            }
+            else
+            {
+                is_timeout = true;
+            }
+        }
+
+        if (is_timeout)
+        {
+            return timeout_func();
+        }
+        else
+        {
+            auto ret = exec_func();
+            {
+                std::lock_guard lock(mu);
+                --active_count;
+            }
+            cv.notify_one();
+            return ret;
+        }
+    }
+
     T execute(std::function<T()> func)
     {
         {
