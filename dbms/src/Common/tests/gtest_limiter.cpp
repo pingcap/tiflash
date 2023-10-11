@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include <Common/Limiter.h>
-#include <gtest/gtest.h>
 #include <Common/ThreadManager.h>
+#include <gtest/gtest.h>
+
 #include <atomic>
 #include <thread>
 
