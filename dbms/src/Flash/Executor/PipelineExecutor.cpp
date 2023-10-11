@@ -19,6 +19,7 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 
 namespace DB
 {
@@ -43,7 +44,13 @@ PipelineExecutor::PipelineExecutor(
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
-    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
+    // For disaggregated storage mode, resource group name will always be emtpy, so no resource group will be added.
+    // Because WN will not run any queires and it will not use pipeline model, and all read_bytes RU will be reported by CN.
+    // TODO: We can consider using LAC after support resource control of storage layer.
+    const bool added
+        = LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
+    if (context_.getSharedContextDisagg()->isDisaggregatedStorageMode())
+        RUNTIME_ASSERT(!added);
 }
 
 void PipelineExecutor::scheduleEvents()

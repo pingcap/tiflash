@@ -20,14 +20,14 @@
 
 namespace DB
 {
-void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
+bool LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
 {
     if (name.empty())
-        return;
+        return false;
 
     ResourceGroupPtr group = findResourceGroup(name);
     if (group != nullptr)
-        return;
+        return false;
 
     resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
@@ -47,7 +47,7 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
 
     checkGACRespValid(resp.group());
 
-    addResourceGroup(resp.group());
+    return addResourceGroup(resp.group());
 }
 
 void LocalAdmissionController::startBackgroudJob()

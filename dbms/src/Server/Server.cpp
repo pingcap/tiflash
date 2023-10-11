@@ -1564,16 +1564,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     auto & tmt_context = global_context->getTMTContext();
 #ifdef DBMS_PUBLIC_GTEST
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
-        LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+    LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-    // For disaggregated storage mode, LAC will be nullptr.
-    // Because disaggregated storage will not use pipeline model to execute queries, so no need to start LAC.
-    // Besides, starting LAC will acquire RU from GAC, which will be wasted.
-    // TODO: LAC can start on WN after we support resource control for WN.
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
-        LocalAdmissionController::global_instance
-            = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+    LocalAdmissionController::global_instance
+        = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
 
     // For test mode, TaskScheduler is controlled by test case.
