@@ -51,6 +51,35 @@ extern const char force_fail_in_flush_region_data[];
 extern const char pause_passive_flush_before_persist_region[];
 } // namespace FailPoints
 
+void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parallel)
+{
+    auto parallel_subtask_limit = kvstore->getMaxParallelPrehandleSize();
+    if (ongoing_prehandle_subtask_count.load() + parallel <= parallel_subtask_limit)
+    {
+        LOG_DEBUG(
+            log,
+            "Prehandle resource meet, limit={}, current={}, region_id={}",
+            parallel_subtask_limit,
+            ongoing_prehandle_subtask_count.load(),
+            region_id);
+        ongoing_prehandle_subtask_count.fetch_add(parallel);
+        return;
+    }
+    Stopwatch watch;
+    std::unique_lock<std::mutex> cpu_resource_lock{cpu_resource_mut};
+    LOG_DEBUG(
+        log,
+        "Prehandle resource wait begin, limit={}, current={}, region_id={}",
+        parallel_subtask_limit,
+        ongoing_prehandle_subtask_count.load(),
+        region_id);
+    cpu_resource_cv.wait(cpu_resource_lock, [&]() {
+        return ongoing_prehandle_subtask_count.load() + parallel <= parallel_subtask_limit;
+    });
+    LOG_INFO(log, "Prehandle resource acquired after {} seconds, region_id={}", watch.elapsedSeconds(), region_id);
+    ongoing_prehandle_subtask_count.fetch_add(parallel);
+}
+
 KVStore::KVStore(Context & context)
     : region_persister(
         context.getSharedContextDisagg()->isDisaggregatedComputeMode()
@@ -62,6 +91,7 @@ KVStore::KVStore(Context & context)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
     , region_eager_gc_log_gap(512)
+    , prehandling_trace(PreHandlingTrace(this))
     // Eager RaftLog GC is only enabled under UniPS
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
@@ -108,6 +138,11 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
         }
     }
 
+    updateProxyConfig(proxy_helper);
+}
+
+void KVStore::updateProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
+{
     // Try fetch proxy's config as a json string
     if (proxy_helper && proxy_helper->fn_get_config_json)
     {

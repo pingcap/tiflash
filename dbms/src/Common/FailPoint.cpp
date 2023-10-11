@@ -125,6 +125,7 @@ namespace DB
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)                   \
+    M(pause_before_prehandle_subtask)     \
     M(pause_passive_flush_before_persist_region)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                       \

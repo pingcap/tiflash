@@ -19,6 +19,7 @@
 #include <Storages/KVStore/FFI/SSTReader.h>
 
 #include <map>
+#include <mutex>
 
 
 namespace DB
@@ -115,6 +116,9 @@ struct MockSSTReader
     Data::const_iterator getEnd() const { return end; }
 
     static std::map<Key, MockSSTReader::Data> & getMockSSTData() { return MockSSTData; }
+
+public:
+    static std::mutex mut;
 
 private:
     Data::const_iterator iter;

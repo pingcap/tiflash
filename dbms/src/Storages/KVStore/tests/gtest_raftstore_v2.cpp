@@ -22,6 +22,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_raise_prehandle_exception[];
+extern const char pause_before_prehandle_subtask[];
 } // namespace FailPoints
 
 namespace tests
@@ -301,7 +302,111 @@ try
 }
 CATCH
 
-// Test if a sub task throws.
+// Test if parallel limit is reached.
+TEST_F(RegionKVStoreTest, KVStoreSingleSnap5)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3}})";
+    KVStore & kvs = getKVS();
+    kvs.updateProxyConfig(proxy_helper.get());
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(0));
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_parallel_prehandle_threshold"); });
+    {
+        initStorages();
+        std::vector<UInt64> region_ids = {2, 3, 4};
+        region_id = region_ids[0];
+        std::vector<HandleID> table_limits = {0, 90, 180, 270};
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(
+                RecordKVFormat::genKey(table_id, table_limits[0]).toString(),
+                RecordKVFormat::genKey(table_id, table_limits[1]).toString()));
+
+        auto ranges = std::vector<std::pair<std::string, std::string>>();
+        for (size_t i = 1; i + 1 < table_limits.size(); i++)
+        {
+            ranges.push_back(std::make_pair(
+                RecordKVFormat::genKey(table_id, table_limits[i]).toString(),
+                RecordKVFormat::genKey(table_id, table_limits[i + 1]).toString()));
+        }
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            std::vector(region_ids.begin() + 1, region_ids.end()),
+            std::move(ranges));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        MockSSTReader::getMockSSTData().clear();
+        DB::FailPointHelper::enablePauseFailPoint(DB::FailPoints::pause_before_prehandle_subtask, 100);
+        std::vector<std::thread> ths;
+        auto runId = [&](size_t ths_id) {
+            auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+            MockRaftStoreProxy::Cf default_cf{region_ids[ths_id], table_id, ColumnFamilyType::Default};
+            for (HandleID h = table_limits[ths_id]; h < table_limits[ths_id + 1]; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                default_cf.insert_raw(k, value_default);
+            }
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockRaftStoreProxy::Cf write_cf{region_ids[ths_id], table_id, ColumnFamilyType::Write};
+            for (HandleID h = table_limits[ths_id]; h < table_limits[ths_id + 1]; h++)
+            {
+                auto k = RecordKVFormat::genKey(region_ids[ths_id], h, 111);
+                write_cf.insert_raw(k, value_default);
+            }
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            LOG_INFO(log, "!!!!!!! insert2 {}", ths_id);
+            {
+                auto [kvr1, res] = proxy_instance->snapshot(
+                    kvs,
+                    ctx.getTMTContext(),
+                    region_ids[ths_id],
+                    {default_cf, write_cf},
+                    0,
+                    0,
+                    std::nullopt);
+            }
+        };
+        ths.push_back(std::thread(runId, 0));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+        ASSERT_EQ(kvs.getOngoingPrehandleTaskCount(), 1);
+        for (size_t ths_id = 1; ths_id < region_ids.size(); ths_id++)
+        {
+            LOG_INFO(log, "!!!!!!! insert {}", ths_id);
+            ths.push_back(std::thread(runId, ths_id));
+            LOG_INFO(log, "!!!!!!! insert3 {}", ths_id);
+        }
+
+        auto loop = 0;
+        while (kvs.getOngoingPrehandleTaskCount() != 3)
+        {
+            loop += 1;
+            ASSERT(loop < 30);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        DB::FailPointHelper::disableFailPoint(DB::FailPoints::pause_before_prehandle_subtask);
+        for (auto && t : ths)
+        {
+            t.join();
+        }
+        ASSERT_EQ(kvs.getOngoingPrehandleTaskCount(), 0);
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

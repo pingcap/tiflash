@@ -180,9 +180,10 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
 }
 
 // Must call `RustGcHelper` to gc the returned pointer in the end.
-static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, uint64_t)
+static RustStrWithView fn_get_config_json(RaftStoreProxyPtr ptr, uint64_t)
 {
-    auto * s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");
+    auto & x = as_ref(ptr);
+    auto * s = new std::string(x.proxy_config_string);
     GCMonitor::instance().add(RawObjType::MockString, 1);
     return RustStrWithView{
         .buff = cppStringAsBuff(*s),
@@ -915,6 +916,7 @@ void MockRaftStoreProxy::Cf::finish_file(SSTFormatKind kind)
         kv_list.emplace_back(kv.first, kv.second);
     }
     std::sort(kv_list.begin(), kv_list.end(), [](const auto & a, const auto & b) { return a.first < b.first; });
+    std::scoped_lock<std::mutex> lock(MockSSTReader::mut);
     auto & mmp = MockSSTReader::getMockSSTData();
     mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
     kvs.clear();
@@ -942,6 +944,7 @@ MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyTyp
     , c(0)
     , freezed(false)
 {
+    std::scoped_lock<std::mutex> lock(MockSSTReader::mut);
     auto & mmp = MockSSTReader::getMockSSTData();
     auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
     mmp[MockSSTReader::Key{region_id_str, type}].clear();
