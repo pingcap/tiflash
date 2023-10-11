@@ -50,7 +50,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     UInt64 split_after_rows_,
     UInt64 split_after_size_,
     UInt64 region_id_,
-    std::shared_ptr<std::atomic_bool> abort_flag_,
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
     Context & context_)
     : child(std::move(child_))
     , storage(std::move(storage_))
@@ -59,7 +59,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
     , region_id(region_id_)
-    , abort_flag(abort_flag_)
+    , prehandle_task(prehandle_task_)
     , context(context_)
     , log(Logger::get(log_prefix_))
 {}
@@ -250,7 +250,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
     size_t cur_deleted_rows = 0;
     while (true)
     {
-        if (abort_flag->load(std::memory_order_seq_cst))
+        if (prehandle_task->abort_flag.load(std::memory_order_seq_cst))
         {
             break;
         }
