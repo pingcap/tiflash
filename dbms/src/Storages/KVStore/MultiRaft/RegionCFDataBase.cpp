@@ -237,11 +237,10 @@ size_t RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_da
         if (!ok)
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                fmt::format(
-                    "{}: got duplicate key {}, cf={}",
-                    __PRETTY_FUNCTION__,
-                    getTiKVKey(it->second),
-                    getTraitName<Trait>()));
+                "{}: got duplicate key {}, cf={}",
+                __PRETTY_FUNCTION__,
+                getTiKVKey(it->second),
+                getTraitName<Trait>());
     }
 
     return size_changed;
