@@ -599,7 +599,7 @@ private:
         = std::chrono::steady_clock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
-    std::atomic<bool> unique_client_id_ok{false};
+    std::atomic<bool> need_reset_unique_client_id{false};
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
     std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
