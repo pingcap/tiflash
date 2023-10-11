@@ -119,63 +119,6 @@ struct ProxyConfigSummary
     size_t snap_handle_pool_size = 0;
 };
 
-struct PreHandlingTrace : MutexLockWrap
-{
-    class KVStore * kvstore;
-    std::unordered_map<uint64_t, std::shared_ptr<std::atomic_bool>> tasks;
-    std::atomic<uint64_t> ongoing_prehandle_subtask_count{0};
-    uint64_t parallel_subtask_limit;
-    std::mutex cpu_resource_mut;
-    std::condition_variable cpu_resource_cv;
-    LoggerPtr log;
-
-    PreHandlingTrace(class KVStore * kvstore_)
-        : kvstore(kvstore_)
-        , log(Logger::get("PreHandlingTrace"))
-    {}
-
-    std::shared_ptr<std::atomic_bool> registerTask(uint64_t region_id)
-    {
-        // Automaticlly override the old one.
-        auto _ = genLockGuard();
-        auto b = std::make_shared<std::atomic_bool>(false);
-        tasks[region_id] = b;
-        return b;
-    }
-    std::shared_ptr<std::atomic_bool> deregisterTask(uint64_t region_id)
-    {
-        auto _ = genLockGuard();
-        auto it = tasks.find(region_id);
-        if (it != tasks.end())
-        {
-            auto b = it->second;
-            tasks.erase(it);
-            return b;
-        }
-        else
-        {
-            return nullptr;
-        }
-    }
-    bool hasTask(uint64_t region_id)
-    {
-        auto _ = genLockGuard();
-        return tasks.find(region_id) != tasks.end();
-    }
-    void waitForSubtaskResources(uint64_t region_id, size_t parallel);
-    void releaseSubtaskResources(uint64_t region_id, size_t split_id)
-    {
-        UNUSED(region_id);
-        UNUSED(split_id);
-        std::unique_lock<std::mutex> cpu_resource_lock(cpu_resource_mut);
-        // TODO(split) refine this to avoid notify_all
-        auto prev = ongoing_prehandle_subtask_count.fetch_sub(1);
-        LOG_INFO(&Poco::Logger::get("!!!!!"), "!!!!!! prev {} after {}", prev, ongoing_prehandle_subtask_count.load());
-        // RUNTIME_CHECK_MSG(prev > 0, "Try to decrease prehandle subtask count to below 0, region_id={}, split_id={}", region_id, split_id);
-        cpu_resource_cv.notify_all();
-    }
-};
-
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {

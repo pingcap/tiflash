@@ -362,7 +362,7 @@ try
             MockRaftStoreProxy::Cf write_cf{region_ids[ths_id], table_id, ColumnFamilyType::Write};
             for (HandleID h = table_limits[ths_id]; h < table_limits[ths_id + 1]; h++)
             {
-                auto k = RecordKVFormat::genKey(region_ids[ths_id], h, 111);
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
                 write_cf.insert_raw(k, value_default);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);

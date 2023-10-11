@@ -240,7 +240,7 @@ size_t RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_da
                 ErrorCodes::LOGICAL_ERROR,
                 "{}: got duplicate key {}, cf={}, ori_key_count={}",
                 __PRETTY_FUNCTION__,
-                getTiKVKey(it->second),
+                getTiKVKey(it->second).toDebugString(),
                 getTraitName<Trait>(),
                 ori_key_count);
     }
