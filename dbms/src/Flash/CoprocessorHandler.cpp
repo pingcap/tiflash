@@ -64,24 +64,26 @@ template <>
 CoprocessorHandler<false>::CoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::Request * cop_request_,
-    coprocessor::Response * cop_response_)
+    coprocessor::Response * cop_response_,
+    const String & identifier)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_response(cop_response_)
     , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
-    , log(Logger::get("CoprocessorHandler, resource_group: " + resource_group_name))
+    , log(Logger::get(identifier))
 {}
 
 template <>
 CoprocessorHandler<true>::CoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::Request * cop_request_,
-    grpc::ServerWriter<coprocessor::Response> * cop_writer_)
+    grpc::ServerWriter<coprocessor::Response> * cop_writer_,
+    const String & identifier)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_writer(cop_writer_)
     , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
-    , log(Logger::get("CoprocessorHandler(stream), resource_group: " + resource_group_name))
+    , log(Logger::get(identifier))
 {}
 
 template <bool is_stream>
@@ -141,13 +143,6 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
-            String msg;
-            if constexpr (is_stream)
-                msg = "CoprocessorHandler(stream), resource_group: ";
-            else
-                msg = "CoprocessorHandler, resource_group: ";
-            msg += resource_group_name;
-
             DAGRequestKind kind;
             if constexpr (is_stream)
                 kind = DAGRequestKind::CopStream;
@@ -161,7 +156,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 kind,
                 resource_group_name,
-                Logger::get(msg));
+                Logger::get(log->identifier()));
             cop_context.db_context.setDAGContext(&dag_context);
 
             if constexpr (is_stream)

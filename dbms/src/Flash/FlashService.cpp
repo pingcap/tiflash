@@ -198,15 +198,19 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
+    auto region_info = fmt::format(
+        "{{{}, {}, {}}}",
+        request->context().region_id(),
+        request->context().region_epoch().conf_ver(),
+        request->context().region_epoch().version());
     auto log_level = is_remote_read ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_level,
-        "Handling coprocessor request, is_remote_read: {}, start ts: {}, region info: {}, region epoch: {}",
+        "Handling coprocessor request, is_remote_read: {}, start ts: {}, region info: {}",
         is_remote_read,
         request->start_ts(),
-        request->context().region_id(),
-        request->context().region_epoch().DebugString());
+        region_info);
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -255,11 +259,10 @@ grpc::Status FlashService::Coprocessor(
         LOG_IMPL(
             log,
             log_level,
-            "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}",
+            "Begin process cop request after wait {} ms, start ts: {}, region info: {}",
             wait_ms,
             request->start_ts(),
-            request->context().region_id(),
-            request->context().region_epoch().DebugString());
+            region_info);
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -272,7 +275,13 @@ grpc::Status FlashService::Coprocessor(
                 GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Decrement();
         });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
-        CoprocessorHandler<false> cop_handler(cop_context, request, response);
+        auto request_identifier = fmt::format(
+            "Coprocessor, is_remote_read: {}, start_ts: {}, region_info: {}, resource_group: {}",
+            is_remote_read,
+            request->start_ts(),
+            region_info,
+            request->context().resource_control_context().resource_group_name());
+        CoprocessorHandler<false> cop_handler(cop_context, request, response, request_identifier);
         return cop_handler.execute();
     };
     auto timeout_func = [&]() -> grpc::Status {
@@ -319,7 +328,11 @@ grpc::Status FlashService::BatchCoprocessor(
             return status;
         }
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
-        BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+        auto request_identifier = fmt::format(
+            "BatchCoprocessor, start_ts: {}, resource_group: {}",
+            request->start_ts(),
+            request->context().resource_control_context().resource_group_name());
+        BatchCoprocessorHandler cop_handler(cop_context, request, writer, request_identifier);
         return cop_handler.execute();
     });
 
@@ -334,15 +347,19 @@ grpc::Status FlashService::CoprocessorStream(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
+    auto region_info = fmt::format(
+        "{{{}, {}, {}}}",
+        request->context().region_id(),
+        request->context().region_epoch().conf_ver(),
+        request->context().region_epoch().version());
     auto log_level = is_remote_read ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_level,
-        "Handling coprocessor stream request, is_remote_read: {}, start ts: {}, region info: {}, region epoch: {}",
+        "Handling coprocessor stream request, is_remote_read: {}, start ts: {}, region info: {}",
         is_remote_read,
         request->start_ts(),
-        request->context().region_id(),
-        request->context().region_epoch().DebugString());
+        region_info);
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -395,11 +412,10 @@ grpc::Status FlashService::CoprocessorStream(
         LOG_IMPL(
             log,
             log_level,
-            "Begin process cop stream request after wait {} ms, start ts: {}, region info: {}, region epoch: {}",
+            "Begin process cop stream request after wait {} ms, start ts: {}, region info: {}",
             wait_ms,
             request->start_ts(),
-            request->context().region_id(),
-            request->context().region_epoch().DebugString());
+            region_info);
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -412,7 +428,13 @@ grpc::Status FlashService::CoprocessorStream(
                 GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Decrement();
         });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
-        CoprocessorHandler<true> cop_handler(cop_context, request, writer);
+        auto request_identifier = fmt::format(
+            "Coprocessor(stream), is_remote_read: {}, start_ts: {}, region_info: {}, resource_group: {}",
+            is_remote_read,
+            request->start_ts(),
+            region_info,
+            request->context().resource_control_context().resource_group_name());
+        CoprocessorHandler<true> cop_handler(cop_context, request, writer, request_identifier);
         return cop_handler.execute();
     };
     auto timeout_func = [&]() -> grpc::Status {

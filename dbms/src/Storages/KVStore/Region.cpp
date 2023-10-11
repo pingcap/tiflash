@@ -491,5 +491,6 @@ void Region::cleanApproxMemCacheInfo() const
 void Region::mergeDataFrom(const Region & other)
 {
     this->data.mergeFrom(other.data);
+    this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
 } // namespace DB
