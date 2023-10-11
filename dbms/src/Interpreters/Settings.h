@@ -311,7 +311,16 @@ struct Settings
     M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")                                                                   \
     M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
     M(SettingUInt64, ddl_sync_interval_seconds, 60, "The interval of background DDL sync schema in seconds")                                                                                                                            \
+<<<<<<< HEAD
     M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
+=======
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")                                                                                                                            \
+    M(SettingDouble, auto_memory_revoke_trigger_threshold, 0.0, "Trigger auto memory revocation when the memory usage is above this percentage.")                                                                                       \
+    M(SettingUInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                    \
+    M(SettingBool, enable_cop_stream_for_remote_read, false, "Enable cop stream for remote read")                                                                                                                                        \
+    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
+    M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")
+>>>>>>> 4e768a1be6 (Disable cop stream for remote read by default (#8179))
 
 
 // clang-format on
