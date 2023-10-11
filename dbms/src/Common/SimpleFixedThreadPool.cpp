@@ -39,8 +39,8 @@ void SimpleFixedThreadPool::schedule(ThreadManager::Job job)
         {
             std::lock_guard lock(mutex);
             --active_jobs;
-            has_free_thread.notify_one();
         }
+        has_free_thread.notify_one();
     });
 }
 
