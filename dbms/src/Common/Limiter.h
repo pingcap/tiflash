@@ -14,14 +14,15 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <common/types.h>
+
 #include <condition_variable>
 #include <mutex>
-#include <Common/Exception.h>
 
 namespace DB
 {
-template<typename T>
+template <typename T>
 class Limiter
 {
 public:
