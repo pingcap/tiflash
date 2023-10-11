@@ -230,6 +230,7 @@ size_t RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_da
     const auto & ori_map = ori_region_data.data;
     auto & tar_map = data;
 
+    size_t ori_key_count = ori_region_data.getSize();
     for (auto it = ori_map.begin(); it != ori_map.end(); it++)
     {
         size_changed += calcTiKVKeyValueSize(it->second);
@@ -237,10 +238,11 @@ size_t RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_da
         if (!ok)
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "{}: got duplicate key {}, cf={}",
+                "{}: got duplicate key {}, cf={}, ori_key_count={}",
                 __PRETTY_FUNCTION__,
                 getTiKVKey(it->second),
-                getTraitName<Trait>());
+                getTraitName<Trait>(),
+                ori_key_count);
     }
 
     return size_changed;
