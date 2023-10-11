@@ -393,7 +393,7 @@ public:
 
     // stop() should be called before LAC is destructed to make sure it's shutdown gracefully.
     // You should explicitly call stop() instead of calling it in the destructor,
-    // because the destruction of LAC is after objects such as Logger, and stop() still needs Logger for log.
+    // because the destruction of LAC is after objects such as Logger, and Logger is used in stop().
     ~LocalAdmissionController() { assert(stopped); }
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)

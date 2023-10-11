@@ -343,6 +343,11 @@ void Client::deleteServerIDFromGAC(UInt64 serverID)
     auto status = leaderClient()->kv_stub->DeleteRange(&context, del_range_req, &del_range_resp);
     if (!status.ok())
         throw Exception("deleteServerIDFromGAC failed, grpc error: {}", status.error_message());
+
+    if (del_range_resp.deleted() != 1)
+        throw Exception(
+            "deleteServerIDFromGAC failed, unexpected deleted num, expect 1, got {}",
+            del_range_resp.deleted());
 }
 
 bool Session::isValid() const

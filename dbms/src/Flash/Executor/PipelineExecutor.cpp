@@ -44,9 +44,9 @@ PipelineExecutor::PipelineExecutor(
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
-    // For disaggregated storage mode, resource group name will always be emtpy, so no resource group will be added.
-    // Because WN will not run any queires and it will not use pipeline model, and all read_bytes RU will be reported by CN.
-    // TODO: We can consider using LAC after support resource control of storage layer.
+    // WN will not use pipeline model, also all read_bytes RU will be reported by CN instead of WN.
+    // So we expect no resource group should be added for WN.
+    // TODO: We remove this check after resource control of storage layer is supported.
     const bool added
         = LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
     if (context_.getSharedContextDisagg()->isDisaggregatedStorageMode())
