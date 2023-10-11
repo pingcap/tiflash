@@ -43,7 +43,6 @@ namespace pingcap
 {
 namespace common
 {
-
 template <typename T>
 class CopIterMPMCQueue : public IMPMCQueue<T>
 {
@@ -181,7 +180,8 @@ public:
         bool enable_cop_stream_,
         size_t queue_size,
         UInt64 cop_timeout,
-        const pingcap::kv::LabelFilter & tiflash_label_filter_)
+        const pingcap::kv::LabelFilter & tiflash_label_filter_,
+        const String & source_identifier)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , concurrency(concurrency_)
@@ -191,7 +191,7 @@ public:
               std::move(tasks),
               cluster,
               concurrency_,
-              &Poco::Logger::get("pingcap/coprocessor"),
+              &Poco::Logger::get(fmt::format("{} pingcap/coprocessor", source_identifier)),
               cop_timeout,
               tiflash_label_filter_)
     {}
