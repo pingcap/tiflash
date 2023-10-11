@@ -92,6 +92,12 @@ public:
 
     UInt64 getLimit() const { return limit; }
 
+    UInt64 getActiveCount()
+    {
+        std::lock_guard lock(mu);
+        return active_count;
+    }
+
 private:
     const UInt64 limit;
     std::mutex mu;

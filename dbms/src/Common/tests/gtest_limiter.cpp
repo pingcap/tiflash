@@ -32,7 +32,9 @@ TEST_F(LimiterTest, timeout)
     const std::chrono::milliseconds timeout(10);
 
     {
+        ASSERT_EQ(limiter.getActiveCount(), 0);
         auto ret = limiter.executeFor([] { return 1; }, timeout, [] { return 2; });
+        ASSERT_EQ(limiter.getActiveCount(), 0);
         ASSERT_EQ(ret, 1);
     }
 
@@ -49,7 +51,10 @@ TEST_F(LimiterTest, timeout)
     });
 
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ASSERT_EQ(limiter.getActiveCount(), 1);
         auto ret = limiter.executeFor([] { return 1; }, timeout, [] { return 2; });
+        ASSERT_EQ(limiter.getActiveCount(), 1);
         ASSERT_EQ(ret, 2);
     }
 
