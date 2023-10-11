@@ -64,11 +64,13 @@ public:
     CoprocessorHandler(
         CoprocessorContext & cop_context_,
         const coprocessor::Request * cop_request_,
-        coprocessor::Response * response_);
+        coprocessor::Response * response_,
+        const String & identifier);
     CoprocessorHandler(
         CoprocessorContext & cop_context_,
         const coprocessor::Request * cop_request_,
-        grpc::ServerWriter<coprocessor::Response> * cop_writer_);
+        grpc::ServerWriter<coprocessor::Response> * cop_writer_,
+        const String & identifier);
 
     grpc::Status execute();
 

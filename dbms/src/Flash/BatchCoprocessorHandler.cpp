@@ -37,12 +37,13 @@ extern const int NOT_IMPLEMENTED;
 BatchCoprocessorHandler::BatchCoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::BatchRequest * cop_request_,
-    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
+    const String & identifier)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , writer(writer_)
     , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
-    , log(Logger::get("BatchCoprocessorHandler, resource_group: " + resource_group_name))
+    , log(Logger::get(identifier))
 {}
 
 grpc::Status BatchCoprocessorHandler::execute()
@@ -83,7 +84,7 @@ grpc::Status BatchCoprocessorHandler::execute()
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 DAGRequestKind::BatchCop,
                 resource_group_name,
-                Logger::get("BatchCoprocessorHandler, resource_group: " + resource_group_name));
+                Logger::get(log->identifier()));
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver<DAGRequestKind::BatchCop> driver(
