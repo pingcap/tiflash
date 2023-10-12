@@ -65,8 +65,6 @@ public:
         }
         else
         {
-            
-            auto ret = exec_func();
             SCOPE_EXIT({
                 {
                     std::lock_guard lock(mu);
@@ -74,7 +72,7 @@ public:
                 }
                 cv.notify_one();
             });
-            return ret;
+            return exec_func();
         }
     }
 
@@ -85,7 +83,6 @@ public:
             cv.wait(lock, [&]() { return active_count < limit; });
             ++active_count;
         }
-        auto ret = func();
         SCOPE_EXIT({
             {
                 std::lock_guard lock(mu);
@@ -93,7 +90,7 @@ public:
             }
             cv.notify_one();
         });
-        return ret;
+        return func();
     }
 
     UInt64 getLimit() const { return limit; }
