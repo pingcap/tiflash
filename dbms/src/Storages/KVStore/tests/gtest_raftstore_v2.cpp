@@ -356,9 +356,6 @@ try
             auto [kvr1, res]
                 = proxy_instance
                       ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
-            // There must be some parallel which actually reads no write cf.
-            // ASSERT_EQ(res.stats.write_cf_keys, 2); // table_limit_end - table_limit_start
-            // ASSERT_EQ(res.stats.parallels, 4);
         }
     }
 }
