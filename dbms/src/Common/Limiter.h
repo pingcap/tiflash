@@ -16,9 +16,9 @@
 
 #include <Common/Exception.h>
 #include <common/types.h>
-#include <ext/scope_guard.h>
 
 #include <condition_variable>
+#include <ext/scope_guard.h>
 #include <mutex>
 
 namespace DB
