@@ -18,6 +18,7 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <memory>
@@ -78,7 +79,7 @@ public:
         UInt64 split_after_rows_,
         UInt64 split_after_size_,
         UInt64 region_id_,
-        std::shared_ptr<std::atomic_bool> abort_flag_,
+        std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
         Context & context);
     ~SSTFilesToDTFilesOutputStream();
 
@@ -94,7 +95,7 @@ public:
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
 
-    bool isAbort() const { return abort_flag->load(std::memory_order_seq_cst); }
+    bool isAbort() const { return prehandle_task->abort_flag.load(std::memory_order_seq_cst); }
 
     size_t getTotalCommittedBytes() const { return total_committed_bytes; }
     size_t getTotalBytesOnDisk() const { return total_bytes_on_disk; }
@@ -122,7 +123,7 @@ private:
     const UInt64 split_after_rows;
     const UInt64 split_after_size;
     const UInt64 region_id;
-    std::shared_ptr<std::atomic_bool> abort_flag;
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
     Context & context;
     LoggerPtr log;
 
