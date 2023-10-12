@@ -49,6 +49,7 @@
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
 #include <TiDB/Schema/TiDB.h>
+#include <grpcpp/support/status_code_enum.h>
 #include <kvproto/disaggregated.pb.h>
 #include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>
@@ -68,6 +69,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace ErrorCodes
 
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
@@ -209,7 +211,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 {
     Stopwatch watch;
 
-    auto req = buildEstablishDisaggTaskReq(db_context, batch_cop_task);
+    const auto req = buildEstablishDisaggTaskReq(db_context, batch_cop_task);
 
     auto * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(EstablishDisaggTask)> rpc(cluster->rpc_client, req->address());
@@ -217,7 +219,13 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     grpc::ClientContext client_context;
     rpc.setClientContext(client_context, db_context.getSettingsRef().disagg_build_task_timeout);
     auto status = rpc.call(&client_context, *req, &resp);
-    if (!status.ok())
+    if (status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED)
+        throw Exception(
+            ErrorCodes::TIMEOUT_EXCEEDED,
+            "EstablishDisaggregated execution was interrupted, maximum execution time exceeded, wn_address={} {}",
+            req->address(),
+            log->identifier());
+    else if (!status.ok())
         throw Exception(rpc.errMsg(status));
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
