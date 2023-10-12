@@ -353,9 +353,10 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            auto [kvr1, res]
-                = proxy_instance
-                      ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            // It could throw "got duplicate key"
+            ASSERT_NO_THROW(
+                proxy_instance
+                    ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt));
         }
     }
 }
