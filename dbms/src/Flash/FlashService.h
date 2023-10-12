@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Common/Limiter.h>
 #include <Debug/MockServerInfo.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
@@ -156,8 +156,8 @@ protected:
     MockStorage * mock_storage = nullptr;
     MockMPPServerInfo mpp_test_info{};
 
-    // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<legacy::ThreadPool> cop_pool, cop_stream_pool, batch_cop_pool;
+    // Put Limiter member(s) at the end so that ensure it will be destroyed firstly.
+    std::unique_ptr<Limiter<grpc::Status>> cop_limiter, cop_stream_limiter, batch_cop_limiter;
 };
 
 class AsyncFlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<FlashService>
