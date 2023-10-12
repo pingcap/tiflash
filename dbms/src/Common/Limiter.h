@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <common/types.h>
+#include <ext/scope_guard.h>
 
 #include <condition_variable>
 #include <mutex>
@@ -64,12 +65,15 @@ public:
         }
         else
         {
+            
             auto ret = exec_func();
-            {
-                std::lock_guard lock(mu);
-                --active_count;
-            }
-            cv.notify_one();
+            SCOPE_EXIT({
+                {
+                    std::lock_guard lock(mu);
+                    --active_count;
+                }
+                cv.notify_one();
+            });
             return ret;
         }
     }
@@ -82,11 +86,13 @@ public:
             ++active_count;
         }
         auto ret = func();
-        {
-            std::lock_guard lock(mu);
-            --active_count;
-        }
-        cv.notify_one();
+        SCOPE_EXIT({
+            {
+                std::lock_guard lock(mu);
+                --active_count;
+            }
+            cv.notify_one();
+        });
         return ret;
     }
 

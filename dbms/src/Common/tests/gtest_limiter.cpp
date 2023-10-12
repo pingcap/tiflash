@@ -25,6 +25,38 @@ class LimiterTest : public ::testing::Test
 {
 };
 
+TEST_F(LimiterTest, exception)
+{
+    Limiter<void> limiter{1};
+    const std::chrono::milliseconds timeout(10);
+
+    {
+        ASSERT_EQ(limiter.getActiveCount(), 0);
+        try
+        {
+            limiter.execute([] { throw Exception(); });
+        }
+        catch (...)
+        {
+            ASSERT_EQ(limiter.getActiveCount(), 0);
+        }
+        GTEST_FAIL();
+    }
+
+    {
+        ASSERT_EQ(limiter.getActiveCount(), 0);
+        try
+        {
+            limiter.executeFor([] { throw Exception(); }, timeout, [] {});
+        }
+        catch (...)
+        {
+            ASSERT_EQ(limiter.getActiveCount(), 0);
+        }
+        GTEST_FAIL();
+    }
+}
+
 TEST_F(LimiterTest, timeout1)
 {
     Limiter<int> limiter{1};
