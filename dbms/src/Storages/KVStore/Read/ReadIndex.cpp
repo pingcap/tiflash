@@ -21,6 +21,7 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 namespace ProfileEvents
 {
@@ -29,6 +30,10 @@ extern const Event RaftWaitIndexTimeout;
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_wait_index_timeout[];
+} // namespace FailPoints
 
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
 {
@@ -63,38 +68,39 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(
     const UInt64 timeout_ms,
     std::function<bool(void)> && check_running)
 {
-    if (proxy_helper != nullptr)
+    fiu_return_on(FailPoints::force_wait_index_timeout, std::make_tuple(WaitIndexResult::Timeout, 1.0));
+    if (proxy_helper == nullptr) // just for debug
+        return {WaitIndexResult::Finished, 0};
+
+    if (!meta.checkIndex(index))
     {
-        if (!meta.checkIndex(index))
+        Stopwatch wait_index_watch;
+        LOG_DEBUG(log, "{} need to wait learner index {} timeout {}", toString(), index, timeout_ms);
+        auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
+        auto elapsed_secs = wait_index_watch.elapsedSeconds();
+        switch (wait_idx_res)
         {
-            Stopwatch wait_index_watch;
-            LOG_DEBUG(log, "{} need to wait learner index {} timeout {}", toString(), index, timeout_ms);
-            auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
-            auto elapsed_secs = wait_index_watch.elapsedSeconds();
-            switch (wait_idx_res)
-            {
-            case WaitIndexResult::Finished:
-            {
-                LOG_DEBUG(log, "{} wait learner index {} done", toString(false), index);
-                return {wait_idx_res, elapsed_secs};
-            }
-            case WaitIndexResult::Terminated:
-            {
-                return {wait_idx_res, elapsed_secs};
-            }
-            case WaitIndexResult::Timeout:
-            {
-                ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_WARNING(
-                    log,
-                    "{} wait learner index {} timeout current {} state {}",
-                    toString(false),
-                    index,
-                    appliedIndex(),
-                    peerState());
-                return {wait_idx_res, elapsed_secs};
-            }
-            }
+        case WaitIndexResult::Finished:
+        {
+            LOG_DEBUG(log, "{} wait learner index {} done", toString(false), index);
+            return {wait_idx_res, elapsed_secs};
+        }
+        case WaitIndexResult::Terminated:
+        {
+            return {wait_idx_res, elapsed_secs};
+        }
+        case WaitIndexResult::Timeout:
+        {
+            ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
+            LOG_WARNING(
+                log,
+                "{} wait learner index {} timeout current {} state {}",
+                toString(false),
+                index,
+                appliedIndex(),
+                peerState());
+            return {wait_idx_res, elapsed_secs};
+        }
         }
     }
     return {WaitIndexResult::Finished, 0};
