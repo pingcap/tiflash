@@ -25,7 +25,7 @@ class LimiterTest : public ::testing::Test
 {
 };
 
-TEST_F(LimiterTest, timeout)
+TEST_F(LimiterTest, timeout1)
 {
     Limiter<int> limiter{1};
     auto thread_mgr = newThreadManager();
@@ -56,6 +56,49 @@ TEST_F(LimiterTest, timeout)
         auto ret = limiter.executeFor([] { return 1; }, timeout, [] { return 2; });
         ASSERT_EQ(limiter.getActiveCount(), 1);
         ASSERT_EQ(ret, 2);
+    }
+
+    is_stop = true;
+    thread_mgr->wait();
+}
+
+TEST_F(LimiterTest, timeout2)
+{
+    Limiter<int> limiter{10};
+    auto thread_mgr = newThreadManager();
+    const std::chrono::milliseconds timeout(10);
+
+    {
+        ASSERT_EQ(limiter.getActiveCount(), 0);
+        auto ret = limiter.executeFor([] { return 1; }, timeout, [] { return 2; });
+        ASSERT_EQ(limiter.getActiveCount(), 0);
+        ASSERT_EQ(ret, 1);
+    }
+
+    std::atomic_bool is_stop = false;
+    for (size_t i = 0; i < 9; ++i)
+    {
+        thread_mgr->schedule(false, "test", [&] {
+            auto ret = limiter.executeFor(
+                [&] {
+                    while (!is_stop)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                    return 1;
+                },
+                timeout,
+                [] { return 2; });
+            ASSERT_EQ(ret, 1);
+        });
+    }
+
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ASSERT_EQ(limiter.getActiveCount(), 9);
+        auto ret = limiter.executeFor([] { return 1; }, timeout, [] { return 2; });
+        ASSERT_EQ(limiter.getActiveCount(), 9);
+        ASSERT_EQ(ret, 1);
     }
 
     is_stop = true;
