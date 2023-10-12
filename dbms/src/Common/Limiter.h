@@ -48,13 +48,13 @@ public:
         bool is_timeout = false;
         {
             std::unique_lock lock(mu);
-            if (cv.wait_for(lock, max_wait_time, [&]() { return active_count < limit; }) == std::cv_status::timeout)
+            if (cv.wait_for(lock, max_wait_time, [&]() { return active_count < limit; }))
             {
-                is_timeout = true;
+                ++active_count;
             }
             else
             {
-                ++active_count;
+                is_timeout = true;
             }
         }
 
