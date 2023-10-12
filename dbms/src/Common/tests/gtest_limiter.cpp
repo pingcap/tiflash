@@ -27,31 +27,35 @@ class LimiterTest : public ::testing::Test
 
 TEST_F(LimiterTest, exception)
 {
-    Limiter<void> limiter{1};
+    Limiter<int> limiter{1};
     const std::chrono::milliseconds timeout(10);
 
+    while (true)
     {
         ASSERT_EQ(limiter.getActiveCount(), 0);
         try
         {
-            limiter.execute([] { throw Exception(); });
+            limiter.execute([]() -> int { throw Exception(); });
         }
         catch (...)
         {
             ASSERT_EQ(limiter.getActiveCount(), 0);
+            break;
         }
         GTEST_FAIL();
     }
 
+    while (true)
     {
         ASSERT_EQ(limiter.getActiveCount(), 0);
         try
         {
-            limiter.executeFor([] { throw Exception(); }, timeout, [] {});
+            limiter.executeFor([]() -> int { throw Exception(); }, timeout, [] { return 1; });
         }
         catch (...)
         {
             ASSERT_EQ(limiter.getActiveCount(), 0);
+            break;
         }
         GTEST_FAIL();
     }

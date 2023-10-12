@@ -198,6 +198,7 @@ void DAGContext::initOutputInfo()
 
 tipb::EncodeType DAGContext::analyzeDAGEncodeType() const
 {
+    const tipb::EncodeType request_encode_type = dag_request->encode_type();
     if (isMPPTask() && !isRootMPPTask())
     {
         /// always use CHBlock encode type for data exchange between TiFlash nodes
@@ -205,17 +206,17 @@ tipb::EncodeType DAGContext::analyzeDAGEncodeType() const
     }
     if (dag_request->has_force_encode_type() && dag_request->force_encode_type())
     {
-        assert(encode_type == tipb::EncodeType::TypeCHBlock);
-        return encode_type;
+        assert(request_encode_type == tipb::EncodeType::TypeCHBlock);
+        return request_encode_type;
     }
-    if (isUnsupportedEncodeType(result_field_types, encode_type))
+    if (isUnsupportedEncodeType(result_field_types, request_encode_type))
         return tipb::EncodeType::TypeDefault;
-    if (encode_type == tipb::EncodeType::TypeChunk && dag_request->has_chunk_memory_layout()
+    if (request_encode_type == tipb::EncodeType::TypeChunk && dag_request->has_chunk_memory_layout()
         && dag_request->chunk_memory_layout().has_endian()
         && dag_request->chunk_memory_layout().endian() == tipb::Endian::BigEndian)
         // todo support BigEndian encode for chunk encode type
         return tipb::EncodeType::TypeDefault;
-    return encode_type;
+    return request_encode_type;
 }
 
 bool DAGContext::allowZeroInDate() const
