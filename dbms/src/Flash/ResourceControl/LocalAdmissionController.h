@@ -441,7 +441,7 @@ public:
 
     // Fetch resource group info from GAC if necessary and store in local cache.
     // Throw exception if got error when fetching from GAC.
-    bool warmupResourceGroupInfoCache(const std::string & name);
+    void warmupResourceGroupInfoCache(const std::string & name);
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
@@ -529,7 +529,7 @@ private:
     }
 
     // Return true if new resource group is added.
-    bool addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
+    void addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
         if (max_ru_per_sec.load() < user_ru_per_sec)
@@ -538,12 +538,11 @@ private:
         std::lock_guard lock(mu);
         auto iter = resource_groups.find(new_group_pb.name());
         if (iter != resource_groups.end())
-            return false;
+            return;
 
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
-        return true;
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);

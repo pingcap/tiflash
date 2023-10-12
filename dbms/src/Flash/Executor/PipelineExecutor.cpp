@@ -44,13 +44,7 @@ PipelineExecutor::PipelineExecutor(
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
-    // WN will not use pipeline model, also all read_bytes RU will be reported by CN instead of WN.
-    // So we expect no resource group should be added for WN.
-    // TODO: We remove this check after resource control of storage layer is supported.
-    const bool added
-        = LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
-    if (context_.getSharedContextDisagg()->isDisaggregatedStorageMode())
-        RUNTIME_ASSERT(!added);
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
 }
 
 void PipelineExecutor::scheduleEvents()
