@@ -1569,8 +1569,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
     if (!is_disagg_storage)
     {
-        global_context->getSettingsRef().enable_resource_control = false;
-
 #ifdef DBMS_PUBLIC_GTEST
         LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
