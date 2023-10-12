@@ -1597,11 +1597,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     SCOPE_EXIT({
-        if (is_disagg_storage)
+        if (!is_disagg_storage)
             LocalAdmissionController::global_instance.reset();
     });
     SCOPE_EXIT({
-        if (is_disagg_storage && is_prod)
+        if (!is_disagg_storage && is_prod)
         {
             assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();
