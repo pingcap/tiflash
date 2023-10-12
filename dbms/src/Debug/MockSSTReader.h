@@ -86,7 +86,7 @@ struct MockSSTReader
         else if (et == EngineIteratorSeekType::Last)
         {
             iter = end;
-            remained = iter != end;
+            remained = false;
         }
         else
         {
