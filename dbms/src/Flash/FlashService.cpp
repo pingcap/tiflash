@@ -295,7 +295,7 @@ grpc::Status FlashService::Coprocessor(
             cop_limiter->getLimit()));
         return grpc::Status::OK;
     };
-    grpc::Status ret = cop_limiter->executeFor(exec_func, max_queued_duration_ms, timeout_func);
+    grpc::Status ret = cop_limiter->executeFor(std::move(exec_func), max_queued_duration_ms, std::move(timeout_func));
 
     LOG_IMPL(log, log_level, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
@@ -453,7 +453,7 @@ grpc::Status FlashService::CoprocessorStream(
         writer->Write(response);
         return grpc::Status::OK;
     };
-    grpc::Status ret = cop_stream_limiter->executeFor(exec_func, max_queued_duration_ms, timeout_func);
+    grpc::Status ret = cop_stream_limiter->executeFor(std::move(exec_func), max_queued_duration_ms, std::move(timeout_func));
 
     LOG_IMPL(log, log_level, "Handle coprocessor stream request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
