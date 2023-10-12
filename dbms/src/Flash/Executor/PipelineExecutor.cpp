@@ -19,7 +19,6 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/SharedContexts/Disagg.h>
 
 namespace DB
 {

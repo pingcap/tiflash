@@ -528,7 +528,6 @@ private:
         return iter == resource_groups.end() ? nullptr : iter->second;
     }
 
-    // Return true if new resource group is added.
     void addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
