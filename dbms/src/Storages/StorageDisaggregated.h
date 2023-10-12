@@ -21,10 +21,10 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/IStorage.h>
-
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
@@ -103,7 +103,7 @@ private:
         const DM::ScanContextPtr & scan_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task,
         std::mutex & output_lock,
-        std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks);
+        std::vector<DM::SegmentReadTaskPtr> & output_seg_tasks);
 
     void buildReadTaskForWriteNodeTable(
         const Context & db_context,
@@ -113,7 +113,7 @@ private:
         const String & store_address,
         const String & serialized_physical_table,
         std::mutex & output_lock,
-        std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks);
+        std::vector<DM::SegmentReadTaskPtr> & output_seg_tasks);
 
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,

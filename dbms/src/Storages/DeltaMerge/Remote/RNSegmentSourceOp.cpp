@@ -68,7 +68,7 @@ OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
     if (t_block.has_value())
     {
         std::swap(block, t_block.value());
-        action.transform(block, current_seg_task->meta.physical_table_id);
+        action.transform(block, current_seg_task->extra_remote_info->remote_segment_id.physical_table_id);
         t_block.reset();
         return OperatorStatus::HAS_OUTPUT;
     }
