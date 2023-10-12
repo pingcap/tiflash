@@ -391,10 +391,7 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
-    // stop() should be called before LAC is destructed to make sure it's shutdown gracefully.
-    // You should explicitly call stop() instead of calling it in the destructor,
-    // because the destruction of LAC is after objects such as Logger, and Logger is used in stop().
-    ~LocalAdmissionController() { assert(stopped); }
+    ~LocalAdmissionController() { stop(); }
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
@@ -463,6 +460,13 @@ public:
         refill_token_callback = nullptr;
     }
 
+#ifdef DBMS_PUBLIC_GTEST
+    static std::unique_ptr<MockLocalAdmissionController> global_instance;
+#else
+    static std::unique_ptr<LocalAdmissionController> global_instance;
+#endif
+
+private:
     void stop()
     {
         if (stopped)
@@ -500,13 +504,6 @@ public:
         }
     }
 
-#ifdef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<MockLocalAdmissionController> global_instance;
-#else
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#endif
-
-private:
     // Interval of fetch from GAC periodically.
     static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
