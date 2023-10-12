@@ -265,7 +265,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         {
             if (maybeStopBySoftLimit(cf, *reader_ptr))
             {
-                reader->seekToLast();
                 break;
             }
             BaseBuffView key = reader->keyView();
@@ -320,7 +319,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         {
             if (maybeStopBySoftLimit(cf, *reader_ptr))
             {
-                reader->seekToLast();
                 break;
             }
             {
@@ -506,6 +504,8 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
             magic_enum::enum_name(cf),
             soft_limit.value().split_id,
             region->id());
+        // Seek to the end of reader to prevent further check.
+        reader->seekToLast();
         return true;
     }
     return false;
