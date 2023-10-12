@@ -70,6 +70,7 @@ extern const char force_remote_read_for_batch_cop[];
 extern const char force_remote_read_for_batch_cop_once[];
 extern const char pause_after_copr_streams_acquired[];
 extern const char pause_after_copr_streams_acquired_once[];
+extern const char random_trigger_remote_read[];
 } // namespace FailPoints
 
 namespace
@@ -128,6 +129,10 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus> Ma
                     status = RegionException::RegionReadStatus::NOT_FOUND;
             });
             fiu_do_on(FailPoints::force_remote_read_for_batch_cop_once, {
+                if (batch_cop)
+                    status = RegionException::RegionReadStatus::NOT_FOUND;
+            });
+            fiu_do_on(FailPoints::random_trigger_remote_read, {
                 if (batch_cop)
                     status = RegionException::RegionReadStatus::NOT_FOUND;
             });
