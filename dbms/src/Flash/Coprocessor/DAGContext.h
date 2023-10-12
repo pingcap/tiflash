@@ -397,6 +397,7 @@ public:
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
+    tipb::EncodeType analyzeDAGEncodeType() const;
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
