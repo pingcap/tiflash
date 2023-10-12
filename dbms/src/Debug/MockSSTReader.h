@@ -80,13 +80,13 @@ struct MockSSTReader
     {
         if (et == EngineIteratorSeekType::First)
         {
-            remained = iter != end;
             iter = begin;
+            remained = iter != end;
         }
         else if (et == EngineIteratorSeekType::Last)
         {
-            remained = iter != end;
             iter = end;
+            remained = iter != end;
         }
         else
         {
