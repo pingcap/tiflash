@@ -287,7 +287,8 @@ grpc::Status FlashService::Coprocessor(
     auto timeout_func = [&]() -> grpc::Status {
         auto wait_ms = watch.elapsedMilliseconds();
         response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
-            "this task queued in tiflash cop limiter too long, current = {} ms, limit = {} ms, current_requests = {}, limit_requests = {}",
+            "this task queued in tiflash cop limiter too long, current = {} ms, limit = {} ms"
+            ", current_requests = {}, limit_requests = {}",
             wait_ms,
             max_queued_duration_ms.count(),
             cop_limiter->getActiveCount(),
@@ -443,7 +444,8 @@ grpc::Status FlashService::CoprocessorStream(
         auto wait_ms = watch.elapsedMilliseconds();
         coprocessor::Response response;
         response.mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
-            "this task queued in tiflash cop stream limiter too long, current = {} ms, limit = {} ms, current_requests = {}, limit_requests = {}",
+            "this task queued in tiflash cop stream limiter too long, current = {} ms, limit = {} ms"
+            ", current_requests = {}, limit_requests = {}",
             wait_ms,
             max_queued_duration_ms.count(),
             cop_stream_limiter->getActiveCount(),
