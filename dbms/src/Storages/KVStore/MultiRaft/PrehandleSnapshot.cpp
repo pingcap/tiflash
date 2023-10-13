@@ -242,7 +242,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     {
         LOG_INFO(
             log,
-            "getSplitKey refused to split, total_concurrency={} parallel_prehandle_threshold={} region_id={}",
+            "getSplitKey refused to split, approx_bytes={} parallel_prehandle_threshold={} region_id={}",
             approx_bytes,
             parallel_prehandle_threshold,
             new_region->id());
