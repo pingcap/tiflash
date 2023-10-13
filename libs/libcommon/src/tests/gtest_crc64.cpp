@@ -187,7 +187,7 @@ TEST_P(CRC64, Random)
     auto dev = std::random_device{};
     auto seed = dev();
     auto eng = std::mt19937_64{seed};
-    auto dist = std::uniform_int_distribution<char>{};
+    auto dist = std::uniform_int_distribution<std::int8_t>{};
     for (auto i = 0; i < 1000; ++i)
     {
         std::vector<char> data;
@@ -212,7 +212,7 @@ TEST_P(CRC64, Alignment)
     auto dev = std::random_device{};
     auto seed = dev();
     auto eng = std::mt19937_64{seed};
-    auto dist = std::uniform_int_distribution<char>{};
+    auto dist = std::uniform_int_distribution<std::int8_t>{};
     auto data = std::vector<char>(8192);
     for (auto & i : data)
     {
@@ -221,8 +221,8 @@ TEST_P(CRC64, Alignment)
     auto digest = crc64::Digest{GetParam()};
     digest.update(data.data(), data.size());
     auto initial = digest.checksum();
-    auto storage = reinterpret_cast<char *>(::operator new (8192 * 2, std::align_val_t{1024}));
-    SCOPE_EXIT({ ::operator delete (storage, std::align_val_t{1024}); });
+    auto * storage = reinterpret_cast<char *>(::operator new(8192 * 2, std::align_val_t{1024}));
+    SCOPE_EXIT({ ::operator delete(storage, std::align_val_t{1024}); });
     for (auto align = 1; align <= 600; ++align)
     {
         std::memcpy(storage + align, data.data(), data.size());
@@ -241,7 +241,7 @@ TEST_P(CRC64, Consection)
     auto dev = std::random_device{};
     auto seed = dev();
     auto eng = std::mt19937_64{seed};
-    auto dist = std::uniform_int_distribution<char>{};
+    auto dist = std::uniform_int_distribution<std::int8_t>{};
     auto data = std::vector<char>(65536);
     auto a = crc64::Digest{crc64::Mode::Table};
     auto b = crc64::Digest{GetParam()};
