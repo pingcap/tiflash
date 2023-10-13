@@ -629,8 +629,9 @@ struct PreHandledSnapshotWithFiles
         , prehandle_result(std::move(prehandle_result_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
-        GET_METRIC(tiflash_raft_snapshot_total_bytes, type_approx_raft_snapshot)
-            .Observe(prehandle_result.stats.approx_raft_snapshot_size);
+        if (prehandle_result.stats.approx_raft_snapshot_size)
+            GET_METRIC(tiflash_raft_snapshot_total_bytes, type_approx_raft_snapshot)
+                .Observe(prehandle_result.stats.approx_raft_snapshot_size);
         GET_METRIC(tiflash_raft_ongoing_snapshot_total_bytes, type_raft_snapshot)
             .Increment(prehandle_result.stats.raft_snapshot_bytes);
         GET_METRIC(tiflash_raft_ongoing_snapshot_total_bytes, type_dt_on_disk)
