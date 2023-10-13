@@ -122,6 +122,7 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
             auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
             auto raftstore = ptr->getObject("raftstore");
             proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
+            LOG_INFO(log, "Parsed proxy config snap_handle_pool_size {}", proxy_config_summary.snap_handle_pool_size);
             proxy_config_summary.valid = true;
         }
         catch (...)

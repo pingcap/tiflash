@@ -1118,9 +1118,6 @@ try
             std::make_pair(start.toString(), end.toString()));
         auto r1 = proxy_instance->getRegion(region_id);
 
-        // See `decodeWriteCfValue`.
-        auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-
         {
             MockSSTReader::getMockSSTData().clear();
             MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
