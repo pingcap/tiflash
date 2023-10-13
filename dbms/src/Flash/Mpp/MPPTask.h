@@ -47,7 +47,28 @@ enum class AbortType
     ONERROR,
 };
 
+<<<<<<< HEAD
 class MPPTask : public std::enable_shared_from_this<MPPTask>
+=======
+// This struct notify the MPPTaskManager that this MPPTask is completed destructed
+class MPPTaskMonitorHelper
+{
+public:
+    MPPTaskMonitorHelper() = default;
+
+    ~MPPTaskMonitorHelper();
+
+    void initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_);
+
+private:
+    MPPTaskManager * manager = nullptr;
+    String task_unique_id;
+    bool added_to_monitor = false;
+};
+
+class MPPTask
+    : public std::enable_shared_from_this<MPPTask>
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
     , private boost::noncopyable
 {
 public:
@@ -117,7 +138,11 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
+<<<<<<< HEAD
     std::atomic<bool> registered{false};
+=======
+    std::atomic<bool> is_registered{false};
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
 
     MPPTaskScheduleEntry schedule_entry;
 

@@ -85,6 +85,24 @@ void injectFailPointDuringRegisterTunnel(bool is_root_task)
 }
 } // namespace
 
+<<<<<<< HEAD
+=======
+void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_)
+{
+    manager = manager_;
+    task_unique_id = task_unique_id_;
+    added_to_monitor = manager->addMonitoredTask(task_unique_id);
+}
+
+MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
+{
+    if (added_to_monitor)
+    {
+        manager->removeMonitoredTask(task_unique_id);
+    }
+}
+
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
@@ -256,11 +274,22 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
 
 void MPPTask::unregisterTask()
 {
+<<<<<<< HEAD
     auto [result, reason] = manager->unregisterTask(id);
     if (result)
         LOG_DEBUG(log, "task unregistered");
     else
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+=======
+    if (is_registered)
+    {
+        auto [result, reason] = manager->unregisterTask(id, getErrString());
+        if (result)
+            LOG_DEBUG(log, "task unregistered");
+        else
+            LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+    }
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)

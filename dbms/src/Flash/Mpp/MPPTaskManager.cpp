@@ -235,16 +235,66 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         query_set = it->second;
     }
+<<<<<<< HEAD
     query_set->task_map.emplace(task->id, task);
     /// cancel all the alarm waiting on this task
     auto alarm_it = query_set->alarms.find(task->id.task_id);
     if (alarm_it != query_set->alarms.end())
+=======
+    gather_task_set->registerTask(task->id);
+    task->is_registered = true;
+    task->initProcessListEntry(query->process_list_entry);
+    task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
+    return {true, ""};
+}
+
+MPPQueryId MPPTaskManager::getCurrentMinTSOQueryId(const String & resource_group_name)
+{
+    std::lock_guard lock(mu);
+    return scheduler->getCurrentMinTSOQueryId(resource_group_name);
+}
+
+bool MPPTaskManager::isTaskExists(const MPPTaskId & id)
+{
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(id.gather_id);
+    if (gather_task_set == nullptr)
+        return false;
+    return gather_task_set->isTaskRegistered(id);
+}
+
+std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
+{
+    if (!task->isRootMPPTask())
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
     {
         for (auto & alarm : alarm_it->second)
             alarm.second.Cancel();
         query_set->alarms.erase(alarm_it);
     }
+<<<<<<< HEAD
     task->registered = true;
+=======
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(task->id.gather_id);
+    if (!error_msg.empty())
+    {
+        return {false, fmt::format("Gather is aborted, error message = {}", error_msg)};
+    }
+    /// gather_task_set must not be nullptr if the current query is not aborted since MPPTaskManager::registerTask
+    /// always create the gather_task_set
+    RUNTIME_CHECK_MSG(query != nullptr, "query must not be null when make task visible");
+    RUNTIME_CHECK_MSG(gather_task_set != nullptr, "gather set must not be null when make task visible");
+    if (gather_task_set->findMPPTask(task->id) != nullptr)
+    {
+        return {false, "task is already visible"};
+    }
+    RUNTIME_CHECK_MSG(
+        query->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
+        "Task process list entry should always be the same as query process list entry");
+    gather_task_set->makeTaskActive(task);
+    gather_task_set->cancelAlarmsBySenderTaskId(task->id);
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
     cv.notify_all();
     return {true, ""};
 }
