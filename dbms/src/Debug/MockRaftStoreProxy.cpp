@@ -180,7 +180,7 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
 }
 
 // Must call `RustGcHelper` to gc the returned pointer in the end.
-static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, uint64_t)
+static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, ConfigJsonType)
 {
     auto * s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");
     GCMonitor::instance().add(RawObjType::MockString, 1);
