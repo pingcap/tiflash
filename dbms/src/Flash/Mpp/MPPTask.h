@@ -37,7 +37,40 @@
 namespace DB
 {
 class MPPTaskManager;
+<<<<<<< HEAD
 class MPPTask : public std::enable_shared_from_this<MPPTask>
+=======
+using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
+class DAGContext;
+class ProcessListEntry;
+class QueryOperatorSpillContexts;
+
+enum class AbortType
+{
+    /// todo add ONKILL to distinguish between silent cancellation and kill
+    ONCANCELLATION,
+    ONERROR,
+};
+
+// This struct notify the MPPTaskManager that this MPPTask is completed destructed
+class MPPTaskMonitorHelper
+{
+public:
+    MPPTaskMonitorHelper() = default;
+
+    ~MPPTaskMonitorHelper();
+
+    void initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_);
+
+private:
+    MPPTaskManager * manager = nullptr;
+    String task_unique_id;
+    bool added_to_monitor = false;
+};
+
+class MPPTask
+    : public std::enable_shared_from_this<MPPTask>
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
     , private boost::noncopyable
 {
 public:
@@ -114,6 +147,16 @@ private:
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
+<<<<<<< HEAD
+=======
+
+    MPPTaskManager * manager;
+    std::atomic<bool> is_registered{false};
+
+    MPPTaskScheduleEntry schedule_entry;
+
+    ProcessListEntryHolder process_list_entry_holder;
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;

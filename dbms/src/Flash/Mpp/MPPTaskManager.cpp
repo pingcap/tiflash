@@ -98,9 +98,125 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     MPPQueryTaskSetPtr canceled_task_set;
     {
         std::lock_guard lock(mu);
+<<<<<<< HEAD
         /// just to double check the query still exists
         auto it = mpp_query_map.find(query_id);
         if (it != mpp_query_map.end())
+=======
+        auto [query, gather, _] = getMPPQueryAndGatherTaskSet(gather_id);
+        RUNTIME_ASSERT(
+            gather != nullptr,
+            log,
+            "MPPGatherTaskSet {} should remaining in MPPTaskManager",
+            gather_id.toString());
+        gather->state = MPPGatherTaskSet::Aborted;
+        cv.notify_all();
+    }
+    LOG_WARNING(log, "Finish abort gather: " + gather_id.toString());
+}
+
+std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
+{
+    if (!task->isRootMPPTask())
+    {
+        FAIL_POINT_PAUSE(FailPoints::pause_before_register_non_root_mpp_task);
+    }
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(task->id.gather_id);
+    if (!error_msg.empty())
+    {
+        return {false, fmt::format("gather is being aborted, error message = {}", error_msg)};
+    }
+
+    auto & context = task->context;
+
+    if (query == nullptr)
+        query = addMPPQuery(
+            task->id.gather_id.query_id,
+            task->id.gather_id.hasMeaningfulGatherId(),
+            task->context->getSettingsRef().auto_spill_check_min_interval_ms);
+    if (query->process_list_entry == nullptr)
+    {
+        query->process_list_entry = setProcessListElement(
+            *context,
+            context->getDAGContext()->dummy_query_string,
+            context->getDAGContext()->dummy_ast.get(),
+            true);
+    }
+    if (gather_task_set == nullptr)
+    {
+        gather_task_set = query->addMPPGatherTaskSet(task->id.gather_id);
+    }
+    if (gather_task_set->isTaskRegistered(task->id))
+    {
+        return {false, "task is already registered"};
+    }
+    gather_task_set->registerTask(task->id);
+    task->is_registered = true;
+    task->initProcessListEntry(query->process_list_entry);
+    task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
+    return {true, ""};
+}
+
+MPPQueryId MPPTaskManager::getCurrentMinTSOQueryId(const String & resource_group_name)
+{
+    std::lock_guard lock(mu);
+    return scheduler->getCurrentMinTSOQueryId(resource_group_name);
+}
+
+bool MPPTaskManager::isTaskExists(const MPPTaskId & id)
+{
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(id.gather_id);
+    if (gather_task_set == nullptr)
+        return false;
+    return gather_task_set->isTaskRegistered(id);
+}
+
+std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
+{
+    if (!task->isRootMPPTask())
+    {
+        FAIL_POINT_PAUSE(FailPoints::pause_before_make_non_root_mpp_task_active);
+    }
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(task->id.gather_id);
+    if (!error_msg.empty())
+    {
+        return {false, fmt::format("Gather is aborted, error message = {}", error_msg)};
+    }
+    /// gather_task_set must not be nullptr if the current query is not aborted since MPPTaskManager::registerTask
+    /// always create the gather_task_set
+    RUNTIME_CHECK_MSG(query != nullptr, "query must not be null when make task visible");
+    RUNTIME_CHECK_MSG(gather_task_set != nullptr, "gather set must not be null when make task visible");
+    if (gather_task_set->findMPPTask(task->id) != nullptr)
+    {
+        return {false, "task is already visible"};
+    }
+    RUNTIME_CHECK_MSG(
+        query->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
+        "Task process list entry should always be the same as query process list entry");
+    gather_task_set->makeTaskActive(task);
+    gather_task_set->cancelAlarmsBySenderTaskId(task->id);
+    cv.notify_all();
+    return {true, ""};
+}
+
+std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id, const String & error_message)
+{
+    std::unique_lock lock(mu);
+    MPPGatherTaskSetPtr gather_task_set = nullptr;
+    MPPQueryPtr query = nullptr;
+    cv.wait(lock, [&] {
+        String reason;
+        std::tie(query, gather_task_set, reason) = getMPPQueryAndGatherTaskSet(id.gather_id);
+        return gather_task_set == nullptr || gather_task_set->allowUnregisterTask();
+    });
+    if (gather_task_set != nullptr)
+    {
+        assert(query != nullptr);
+        if (gather_task_set->isTaskRegistered(id))
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
         {
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock

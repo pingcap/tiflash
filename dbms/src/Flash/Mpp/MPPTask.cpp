@@ -50,6 +50,70 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
+<<<<<<< HEAD
+=======
+
+namespace
+{
+void injectFailPointBeforeRegisterTunnel(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
+    }
+}
+
+void injectFailPointBeforeMakeMPPTaskPublic(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_root_mpp_task_active);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_non_root_mpp_task_active);
+    }
+}
+
+void injectFailPointBeforeRegisterMPPTask(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
+    }
+}
+
+void injectFailPointDuringRegisterTunnel(bool is_root_task)
+{
+    if (!is_root_task)
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
+}
+} // namespace
+
+void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_)
+{
+    manager = manager_;
+    task_unique_id = task_unique_id_;
+    added_to_monitor = manager->addMonitoredTask(task_unique_id);
+}
+
+MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
+{
+    if (added_to_monitor)
+    {
+        manager->removeMonitoredTask(task_unique_id);
+    }
+}
+
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : context(context_)
     , meta(meta_)
@@ -135,6 +199,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
 
 void MPPTask::unregisterTask()
 {
+<<<<<<< HEAD
     if (manager != nullptr)
     {
         LOG_DEBUG(log, "task unregistered");
@@ -144,6 +209,33 @@ void MPPTask::unregisterTask()
     {
         LOG_ERROR(log, "task manager is unset");
     }
+=======
+    if (is_registered)
+    {
+        auto [result, reason] = manager->unregisterTask(id, getErrString());
+        if (result)
+            LOG_DEBUG(log, "task unregistered");
+        else
+            LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+    }
+}
+
+void MPPTask::initQueryOperatorSpillContexts(
+    const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts)
+{
+    assert(mpp_query_operator_spill_contexts != nullptr);
+    dag_context->setQueryOperatorSpillContexts(mpp_query_operator_spill_contexts);
+}
+
+void MPPTask::initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry)
+{
+    /// all the mpp tasks of the same mpp query shares the same process list entry
+    assert(query_process_list_entry != nullptr);
+    process_list_entry_holder.process_list_entry = query_process_list_entry;
+    dag_context->setProcessListEntry(query_process_list_entry);
+    context->setProcessListElement(&query_process_list_entry->get());
+    current_memory_tracker = getMemoryTracker();
+>>>>>>> 96a006956b (Fix potential hang when duplicated task registered. (#8193))
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
