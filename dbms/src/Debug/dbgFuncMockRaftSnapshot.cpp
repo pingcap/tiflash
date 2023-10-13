@@ -263,9 +263,6 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         table_id));
 }
 
-std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
-std::mutex MockSSTReader::mut;
-
 class RegionMockTest final
 {
 public:

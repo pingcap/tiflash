@@ -75,13 +75,14 @@ struct PreHandlingTrace : MutexLockWrap
     void waitForSubtaskResources(uint64_t region_id, size_t parallel);
     void releaseSubtaskResources(uint64_t region_id, size_t split_id)
     {
-        UNUSED(region_id);
-        UNUSED(split_id);
         std::unique_lock<std::mutex> cpu_resource_lock(cpu_resource_mut);
         // TODO(split) refine this to avoid notify_all
         auto prev = ongoing_prehandle_subtask_count.fetch_sub(1);
-        LOG_INFO(&Poco::Logger::get("!!!!!"), "!!!!!! prev {} after {}", prev, ongoing_prehandle_subtask_count.load());
-        // RUNTIME_CHECK_MSG(prev > 0, "Try to decrease prehandle subtask count to below 0, region_id={}, split_id={}", region_id, split_id);
+        RUNTIME_CHECK_MSG(
+            prev > 0,
+            "Try to decrease prehandle subtask count to below 0, region_id={}, split_id={}",
+            region_id,
+            split_id);
         cpu_resource_cv.notify_all();
     }
 };

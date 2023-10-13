@@ -67,6 +67,47 @@ struct ReadFromStreamResult
     RegionPtr region;
 };
 
+void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parallel)
+{
+    auto parallel_subtask_limit = kvstore->getMaxParallelPrehandleSize();
+    {
+        auto current = ongoing_prehandle_subtask_count.load();
+        if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
+        {
+            LOG_DEBUG(
+                log,
+                "Prehandle resource meet, limit={}, current={}, region_id={}",
+                parallel_subtask_limit,
+                ongoing_prehandle_subtask_count.load(),
+                region_id);
+            ongoing_prehandle_subtask_count.fetch_add(parallel);
+            return;
+        }
+    }
+    Stopwatch watch;
+    LOG_DEBUG(
+        log,
+        "Prehandle resource wait begin, limit={}, current={}, region_id={}",
+        parallel_subtask_limit,
+        ongoing_prehandle_subtask_count.load(),
+        region_id);
+    while (true)
+    {
+        std::unique_lock<std::mutex> cpu_resource_lock{cpu_resource_mut};
+        cpu_resource_cv.wait(cpu_resource_lock, [&]() {
+            return ongoing_prehandle_subtask_count.load() + parallel <= parallel_subtask_limit;
+        });
+        auto current = ongoing_prehandle_subtask_count.load();
+        if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
+        {
+            break;
+        }
+    }
+    GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_parallel_wait)
+        .Observe(watch.elapsedSeconds());
+    LOG_INFO(log, "Prehandle resource acquired after {} seconds, region_id={}", watch.elapsedSeconds(), region_id);
+}
+
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
     LoggerPtr log,
     const RegionPtr & new_region,
@@ -78,7 +119,6 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
     const DM::SSTFilesToBlockInputStreamOpts & opts,
     TMTContext & tmt)
 {
-    UNUSED(trace);
     auto region_id = new_region->id();
     auto split_id = sst_stream->getSplitId();
     CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
@@ -218,7 +258,6 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     {
         e.addMessage(
             fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
-        LOG_INFO(log, "!!!!! dfffff {}", e.message());
         e.rethrow();
     }
     return result;
@@ -317,12 +356,14 @@ static inline std::vector<std::string> getSplitKey(
         LOG_INFO(
             log,
             "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
+            "region_range {}"
             "region_id={}",
             fmt_buf.toString(),
             total_concurrency,
             ongoing_count,
             want_split_parts,
             split_keys.size(),
+            new_region->getRange()->toDebugString(),
             new_region->id());
     }
     return split_keys;

@@ -133,5 +133,8 @@ private:
     static std::map<Key, MockSSTReader::Data> MockSSTData;
 };
 
+inline std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
+inline std::mutex MockSSTReader::mut;
+
 SSTReaderInterfaces make_mock_sst_reader_interface();
 } // namespace DB

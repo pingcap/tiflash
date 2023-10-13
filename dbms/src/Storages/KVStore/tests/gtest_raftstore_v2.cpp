@@ -368,7 +368,6 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            LOG_INFO(log, "!!!!!!! insert2 {}", ths_id);
             {
                 auto [kvr1, res] = proxy_instance->snapshot(
                     kvs,
@@ -386,9 +385,7 @@ try
         ASSERT_EQ(kvs.getOngoingPrehandleTaskCount(), 1);
         for (size_t ths_id = 1; ths_id < region_ids.size(); ths_id++)
         {
-            LOG_INFO(log, "!!!!!!! insert {}", ths_id);
             ths.push_back(std::thread(runId, ths_id));
-            LOG_INFO(log, "!!!!!!! insert3 {}", ths_id);
         }
 
         auto loop = 0;
