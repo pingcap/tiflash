@@ -501,7 +501,6 @@ inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_ke
         decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
-using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 inline std::string DecodedTiKVKeyRangeToDebugString(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & key_range)
 {
     if (unlikely(*key_range.first >= *key_range.second))

@@ -19,7 +19,7 @@
 
 namespace DB
 {
-using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
+
 namespace DM
 {
 class ScanContext;
@@ -32,7 +32,7 @@ struct RegionQueryInfo
         RegionID region_id_,
         UInt64 version_,
         UInt64 conf_version_,
-        Int64 physical_table_id_,
+        TableID physical_table_id_,
         const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_ = {},
         const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & required_handle_ranges_ = {})
         : region_id(region_id_)
@@ -45,7 +45,7 @@ struct RegionQueryInfo
     RegionID region_id;
     UInt64 version;
     UInt64 conf_version;
-    Int64 physical_table_id;
+    TableID physical_table_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
