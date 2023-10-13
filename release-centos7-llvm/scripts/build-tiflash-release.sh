@@ -81,7 +81,7 @@ cmake -S "${SRCPATH}" \
   -GNinja
 
 if [ $CMAKE_BUILD_TYPE == "TSAN" ] || [ $CMAKE_BUILD_TYPE == "ASAN" ]; then
-  cmake --build . --target gtests_dbms --parallel ${NPROC}
+  cmake --build . --target gtests_dbms gtests_libcommon --parallel ${NPROC}
   cmake --build . --target tiflash --parallel ${NPROC}
   cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 else
