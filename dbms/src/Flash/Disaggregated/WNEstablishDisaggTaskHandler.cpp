@@ -85,6 +85,8 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     }
 
     // run into DAGStorageInterpreter and build the segment snapshots
+    // TODO: Remove this after resource control of WN is supported.
+    context->getSettingsRef().enable_resource_control = false;
     query_executor_holder.set(queryExecute(*context));
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;

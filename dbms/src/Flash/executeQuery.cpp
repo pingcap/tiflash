@@ -155,6 +155,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     }
 
     prepareForExecute(context);
+    dag_context.enableResourceControl();
 
     ProcessList::EntryPtr process_list_entry;
     if (likely(!internal))
@@ -199,7 +200,6 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
-    dag_context.enableResourceControl();
     return {std::move(executor)};
 }
 
