@@ -157,7 +157,7 @@ public:
         : log(log_)
     {}
 
-    void addMonitoredTask(const String & task_unique_id)
+    bool addMonitoredTask(const String & task_unique_id)
     {
         std::lock_guard lock(mu);
         auto iter = monitored_tasks.find(task_unique_id);
@@ -167,10 +167,11 @@ public:
                 log,
                 "task {} is repeatedly added to be monitored which is not an expected behavior!",
                 task_unique_id);
-            return;
+            return false;
         }
 
         monitored_tasks.insert(std::make_pair(task_unique_id, Stopwatch()));
+        return true;
     }
 
     void removeMonitoredTask(const String & task_unique_id)
@@ -184,6 +185,12 @@ public:
         }
 
         monitored_tasks.erase(iter);
+    }
+
+    bool isInMonitor(const String & task_unique_id)
+    {
+        std::lock_guard lock(mu);
+        return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
     std::mutex mu;
@@ -220,7 +227,7 @@ public:
 
     std::shared_ptr<MPPTaskMonitor> getMPPTaskMonitor() const { return monitor; }
 
-    void addMonitoredTask(const String & task_unique_id) { monitor->addMonitoredTask(task_unique_id); }
+    bool addMonitoredTask(const String & task_unique_id) { return monitor->addMonitoredTask(task_unique_id); }
 
     void removeMonitoredTask(const String & task_unique_id) { monitor->removeMonitoredTask(task_unique_id); }
 
@@ -260,6 +267,8 @@ public:
 
     /// for test
     MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
+
+    bool isTaskExists(const MPPTaskId & id);
 
 private:
     MPPQueryPtr addMPPQuery(
