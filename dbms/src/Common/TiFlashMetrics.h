@@ -449,6 +449,10 @@ namespace DB
       F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
       F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
       F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
+    M(tiflash_raft_snapshot_total_bytes,                                                                                            \
+      "Bucketed snapshot total size",                                                                                               \
+      Histogram,                                                                                                                    \
+      F(type_approx_raft_snapshot, {{"type", "approx_raft_snapshot"}}, ExpBuckets{1024, 2, 24})) /* 16G */                          \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \

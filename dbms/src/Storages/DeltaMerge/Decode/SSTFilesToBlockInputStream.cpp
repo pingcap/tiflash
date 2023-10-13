@@ -317,6 +317,10 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
         // Let's try to load keys until process_keys_offset_end
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
+            if (maybeStopBySoftLimit(cf, *reader_ptr))
+            {
+                break;
+            }
             {
                 // if (maybeStopBySoftLimit(cf, *reader_ptr))
                 // {
@@ -416,8 +420,9 @@ bool SSTFilesToBlockInputStream::maybeSkipBySoftLimit(ColumnFamilyType cf, SSTRe
         auto key = reader->keyView();
         if (soft_limit.value().raw_start < buffToStrView(key))
         {
-            // This happens when there is too many untrimmed data.
-            LOG_INFO(
+            // This happens when there is too many untrimmed data,
+            // or it is already seeked.
+            LOG_TRACE(
                 log,
                 "Re-Seek backward is forbidden, start_limit {} current {}, cf={}, split_id={}, region_id={}",
                 soft_limit.value().raw_start.toDebugString(),
@@ -503,6 +508,8 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
             magic_enum::enum_name(cf),
             soft_limit.value().split_id,
             region->id());
+        // Seek to the end of reader to prevent further check.
+        reader->seekToLast();
         return true;
     }
     return false;

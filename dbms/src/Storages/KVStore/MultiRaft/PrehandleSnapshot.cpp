@@ -191,6 +191,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                 .stats = PrehandleResult::Stats{
                     .parallels = 1,
                     .raft_snapshot_bytes = sst_stream->getProcessKeys().total_bytes(),
+                    .approx_raft_snapshot_size = 0,
                     .dt_disk_bytes = stream->getTotalBytesOnDisk(),
                     .dt_total_bytes = stream->getTotalCommittedBytes(),
                     .total_keys = sst_stream->getProcessKeys().total(),
@@ -280,7 +281,7 @@ size_t KVStore::getMaxParallelPrehandleSize() const
 
 // If size is 0, do not parallel prehandle for this snapshot, which is legacy.
 // If size is non-zero, use extra this many threads to prehandle.
-static inline std::vector<std::string> getSplitKey(
+static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     LoggerPtr log,
     KVStore * kvstore,
     RegionPtr new_region,
@@ -297,11 +298,18 @@ static inline std::vector<std::string> getSplitKey(
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
     if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
-        return {};
-    // if (kvstore->getOngoingPrehandleTaskCount() >= 2)
-    //     return {};
-    if (sst_stream->getApproxBytes() <= parallel_prehandle_threshold)
-        return {};
+        return std::make_pair(std::vector<std::string>{}, 0);
+    auto approx_bytes = sst_stream->getApproxBytes();
+    if (approx_bytes <= parallel_prehandle_threshold)
+    {
+        LOG_INFO(
+            log,
+            "getSplitKey refused to split, approx_bytes={} parallel_prehandle_threshold={} region_id={}",
+            approx_bytes,
+            parallel_prehandle_threshold,
+            new_region->id());
+        return std::make_pair(std::vector<std::string>{}, approx_bytes);
+    }
 
     // Get this info again, since getApproxBytes maybe take some time.
     auto ongoing_count = kvstore->getOngoingPrehandleTaskCount();
@@ -321,7 +329,7 @@ static inline std::vector<std::string> getSplitKey(
             ongoing_count,
             total_concurrency,
             new_region->id());
-        return {};
+        return std::make_pair(std::vector<std::string>{}, approx_bytes);
     }
     // Will generate at most `want_split_parts - 1` keys.
     std::vector<std::string> split_keys = sst_stream->findSplitKeys(want_split_parts);
@@ -366,7 +374,7 @@ static inline std::vector<std::string> getSplitKey(
             new_region->getRange()->toDebugString(),
             new_region->id());
     }
-    return split_keys;
+    return std::make_pair(std::move(split_keys), approx_bytes);
 }
 
 struct ParallelPrehandleCtx
@@ -669,7 +677,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 DM::SSTFilesToBlockInputStreamOpts(opt));
 
             // `split_keys` do not begin with 'z'.
-            auto split_keys = getSplitKey(log, this, new_region, sst_stream);
+            auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
             prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1);
             ReadFromStreamResult result;
             if (split_keys.empty())
@@ -710,6 +718,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     storage);
             }
 
+            prehandle_result.stats.approx_raft_snapshot_size = approx_bytes;
             if (result.error == ReadFromStreamError::ErrUpdateSchema)
             {
                 // It will be thrown in `SSTFilesToBlockInputStream`.

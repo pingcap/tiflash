@@ -36,10 +36,13 @@ extern const int DIVIDED_BY_ZERO;
 extern const int INVALID_TIME;
 } // namespace ErrorCodes
 
+namespace
+{
 bool strictSqlMode(UInt64 sql_mode)
 {
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
+} // namespace
 
 // for non-mpp(Cop/CopStream/BatchCop)
 DAGContext::DAGContext(
@@ -188,9 +191,32 @@ void DAGContext::initOutputInfo()
                 Errors::Coprocessor::BadRequest);
         result_field_types.push_back(output_field_types[i]);
     }
-    encode_type = analyzeDAGEncodeType(*this);
+    encode_type = analyzeDAGEncodeType();
     keep_session_timezone_info
         = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
+}
+
+tipb::EncodeType DAGContext::analyzeDAGEncodeType() const
+{
+    const tipb::EncodeType request_encode_type = dag_request->encode_type();
+    if (isMPPTask() && !isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        return tipb::EncodeType::TypeCHBlock;
+    }
+    if (dag_request->has_force_encode_type() && dag_request->force_encode_type())
+    {
+        assert(request_encode_type == tipb::EncodeType::TypeCHBlock);
+        return request_encode_type;
+    }
+    if (isUnsupportedEncodeType(result_field_types, request_encode_type))
+        return tipb::EncodeType::TypeDefault;
+    if (request_encode_type == tipb::EncodeType::TypeChunk && dag_request->has_chunk_memory_layout()
+        && dag_request->chunk_memory_layout().has_endian()
+        && dag_request->chunk_memory_layout().endian() == tipb::Endian::BigEndian)
+        // todo support BigEndian encode for chunk encode type
+        return tipb::EncodeType::TypeDefault;
+    return request_encode_type;
 }
 
 bool DAGContext::allowZeroInDate() const

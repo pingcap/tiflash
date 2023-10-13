@@ -35,6 +35,7 @@ struct PrehandleResult
         // These are bytes we actually read from sst reader.
         // It doesn't includes rocksdb's space amplification.
         size_t raft_snapshot_bytes = 0;
+        size_t approx_raft_snapshot_size = 0;
         size_t dt_disk_bytes = 0;
         size_t dt_total_bytes = 0;
         size_t total_keys = 0;
@@ -47,6 +48,7 @@ struct PrehandleResult
         {
             parallels += other.parallels;
             raft_snapshot_bytes += other.raft_snapshot_bytes;
+            approx_raft_snapshot_size += other.approx_raft_snapshot_size;
             dt_disk_bytes += other.dt_disk_bytes;
             dt_total_bytes += other.dt_total_bytes;
             total_keys += other.total_keys;

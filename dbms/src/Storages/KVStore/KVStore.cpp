@@ -117,7 +117,8 @@ void KVStore::updateProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
     // Try fetch proxy's config as a json string
     if (proxy_helper && proxy_helper->fn_get_config_json)
     {
-        RustStrWithView rust_string = proxy_helper->fn_get_config_json(proxy_helper->proxy_ptr, 1);
+        RustStrWithView rust_string
+            = proxy_helper->fn_get_config_json(proxy_helper->proxy_ptr, ConfigJsonType::ProxyConfigAddressed);
         std::string cpp_string(rust_string.buff.data, rust_string.buff.len);
         RustGcHelper::instance().gcRustPtr(rust_string.inner.ptr, rust_string.inner.type);
         try
@@ -127,6 +128,7 @@ void KVStore::updateProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
             auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
             auto raftstore = ptr->getObject("raftstore");
             proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
+            LOG_INFO(log, "Parsed proxy config snap_handle_pool_size {}", proxy_config_summary.snap_handle_pool_size);
             proxy_config_summary.valid = true;
         }
         catch (...)

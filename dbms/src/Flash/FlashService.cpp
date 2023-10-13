@@ -115,31 +115,22 @@ void FlashService::init(Context & context_)
 
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
-    LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
-    cop_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+    LOG_INFO(log, "Limit the maximum number of concurrent cop requests to {}.", cop_pool_size);
+    cop_limiter = std::make_unique<Limiter<grpc::Status>>(cop_pool_size);
 
-    LOG_INFO(log, "Use a thread pool with {} threads to handle cop stream requests.", cop_pool_size);
-    cop_stream_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-stream-pool"); });
+    LOG_INFO(log, "Limit the maximum number of concurrent cop stream requests to {}.", cop_pool_size);
+    cop_stream_limiter = std::make_unique<Limiter<grpc::Status>>(cop_pool_size);
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
-    LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
-    batch_cop_pool = std::make_unique<legacy::ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    LOG_INFO(log, "Limit the maximum number of concurrent batch cop requests to {}.", batch_cop_pool_size);
+    batch_cop_limiter = std::make_unique<Limiter<grpc::Status>>(batch_cop_pool_size);
 }
 
 FlashService::~FlashService() = default;
 
 namespace
 {
-// Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(legacy::ThreadPool & pool, std::function<grpc::Status()> job)
-{
-    std::packaged_task<grpc::Status()> task(job);
-    std::future<grpc::Status> future = task.get_future();
-    pool.schedule([&task] { task(); });
-    return future.get();
-}
-
 String getClientMetaVarWithDefault(
     const grpc::ServerContext * grpc_context,
     const String & name,
@@ -245,8 +236,8 @@ grpc::Status FlashService::Coprocessor(
 
     const auto & settings = context->getSettingsRef();
     auto handle_limit
-        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
-    auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
+        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_limiter->getLimit();
+    std::chrono::milliseconds max_queued_duration_ms(std::min(settings.cop_pool_max_queued_seconds, 20) * 1000);
 
     if (handle_limit > 0)
     {
@@ -256,24 +247,13 @@ grpc::Status FlashService::Coprocessor(
             current > handle_limit)
         {
             response->mutable_region_error()->mutable_server_is_busy()->set_reason(
-                fmt::format("tiflash cop pool queued too much, current = {}, limit = {}", current, handle_limit));
+                fmt::format("tiflash cop limiter queued too much, current = {}, limit = {}", current, handle_limit));
             return grpc::Status::OK;
         }
     }
 
-    grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
+    auto exec_func = [&]() -> grpc::Status {
         auto wait_ms = watch.elapsedMilliseconds();
-        if (max_queued_duration_ms > 0)
-        {
-            if (wait_ms > static_cast<UInt64>(max_queued_duration_ms))
-            {
-                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
-                    "this task queued in tiflash cop pool too long, current = {} ms, limit = {} ms",
-                    wait_ms,
-                    max_queued_duration_ms));
-                return grpc::Status::OK;
-            }
-        }
         if (wait_ms > 1000)
             log_level = Poco::Message::PRIO_INFORMATION;
         LOG_IMPL(
@@ -303,7 +283,19 @@ grpc::Status FlashService::Coprocessor(
             request->context().resource_control_context().resource_group_name());
         CoprocessorHandler<false> cop_handler(cop_context, request, response, request_identifier);
         return cop_handler.execute();
-    });
+    };
+    auto timeout_func = [&]() -> grpc::Status {
+        auto wait_ms = watch.elapsedMilliseconds();
+        response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
+            "this task queued in tiflash cop limiter too long, current = {} ms, limit = {} ms"
+            ", current_requests = {}, limit_requests = {}",
+            wait_ms,
+            max_queued_duration_ms.count(),
+            cop_limiter->getActiveCount(),
+            cop_limiter->getLimit()));
+        return grpc::Status::OK;
+    };
+    grpc::Status ret = cop_limiter->executeFor(std::move(exec_func), max_queued_duration_ms, std::move(timeout_func));
 
     LOG_IMPL(log, log_level, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
@@ -330,7 +322,7 @@ grpc::Status FlashService::BatchCoprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
+    grpc::Status ret = batch_cop_limiter->execute([&] {
         auto wait_ms = watch.elapsedMilliseconds();
         LOG_INFO(log, "Begin process batch cop request after wait {} ms, start ts: {}", wait_ms, request->start_ts());
         auto [db_context, status] = createDBContext(grpc_context);
@@ -395,9 +387,9 @@ grpc::Status FlashService::CoprocessorStream(
     context->setMockStorage(mock_storage);
 
     const auto & settings = context->getSettingsRef();
-    auto handle_limit
-        = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
-    auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
+    auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get()
+                                                            : 10 * cop_stream_limiter->getLimit();
+    std::chrono::milliseconds max_queued_duration_ms(std::min(settings.cop_pool_max_queued_seconds, 20) * 1000);
 
     if (handle_limit > 0)
     {
@@ -408,7 +400,7 @@ grpc::Status FlashService::CoprocessorStream(
         {
             coprocessor::Response response;
             response.mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
-                "tiflash cop stream pool queued too much, current = {}, limit = {}",
+                "tiflash cop stream limiter queued too much, current = {}, limit = {}",
                 current,
                 handle_limit));
             writer->Write(response);
@@ -416,21 +408,8 @@ grpc::Status FlashService::CoprocessorStream(
         }
     }
 
-    grpc::Status ret = executeInThreadPool(*cop_stream_pool, [&] {
+    auto exec_func = [&]() -> grpc::Status {
         auto wait_ms = watch.elapsedMilliseconds();
-        if (max_queued_duration_ms > 0)
-        {
-            if (wait_ms > static_cast<UInt64>(max_queued_duration_ms))
-            {
-                coprocessor::Response response;
-                response.mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
-                    "this task queued in tiflash cop stream pool too long, current = {} ms, limit = {} ms",
-                    wait_ms,
-                    max_queued_duration_ms));
-                writer->Write(response);
-                return grpc::Status::OK;
-            }
-        }
         if (wait_ms > 1000)
             log_level = Poco::Message::PRIO_INFORMATION;
         LOG_IMPL(
@@ -460,7 +439,22 @@ grpc::Status FlashService::CoprocessorStream(
             request->context().resource_control_context().resource_group_name());
         CoprocessorHandler<true> cop_handler(cop_context, request, writer, request_identifier);
         return cop_handler.execute();
-    });
+    };
+    auto timeout_func = [&]() -> grpc::Status {
+        auto wait_ms = watch.elapsedMilliseconds();
+        coprocessor::Response response;
+        response.mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format(
+            "this task queued in tiflash cop stream limiter too long, current = {} ms, limit = {} ms"
+            ", current_requests = {}, limit_requests = {}",
+            wait_ms,
+            max_queued_duration_ms.count(),
+            cop_stream_limiter->getActiveCount(),
+            cop_stream_limiter->getLimit()));
+        writer->Write(response);
+        return grpc::Status::OK;
+    };
+    grpc::Status ret
+        = cop_stream_limiter->executeFor(std::move(exec_func), max_queued_duration_ms, std::move(timeout_func));
 
     LOG_IMPL(log, log_level, "Handle coprocessor stream request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;

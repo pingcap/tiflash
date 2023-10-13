@@ -102,6 +102,7 @@ namespace DB
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
+    M(cop_send_failure)                                      \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)
@@ -157,7 +158,9 @@ namespace DB
     M(random_exception_when_connect_local_tunnel)            \
     M(random_exception_when_construct_async_request_handler) \
     M(random_fail_in_resize_callback)                        \
-    M(random_marked_for_auto_spill)
+    M(random_marked_for_auto_spill)                          \
+    M(random_trigger_remote_read)                            \
+    M(random_cop_send_failure_failpoint)
 
 namespace FailPoints
 {

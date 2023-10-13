@@ -33,6 +33,8 @@ public:
     virtual size_t approxSize() const = 0;
     virtual std::vector<std::string> findSplitKeys(uint64_t splits_count) const = 0;
     virtual void seek(BaseBuffView && view) const = 0;
+    virtual void seekToFirst() const = 0;
+    virtual void seekToLast() const = 0;
     virtual size_t getSplitId() const = 0;
 
     virtual ~SSTReader() = default;
@@ -50,6 +52,8 @@ public:
     size_t approxSize() const override;
     std::vector<std::string> findSplitKeys(uint64_t splits_count) const override;
     void seek(BaseBuffView && view) const override;
+    void seekToFirst() const override;
+    void seekToLast() const override;
     size_t getSplitId() const override;
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
@@ -124,6 +128,22 @@ public:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "MultiSSTReader don't support seek for multiple ssts");
         }
         return mono->seek(std::move(view));
+    }
+    void seekToFirst() const override
+    {
+        if (args.size() > 1)
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "MultiSSTReader don't support seek for multiple ssts");
+        }
+        return mono->seekToFirst();
+    }
+    void seekToLast() const override
+    {
+        if (args.size() > 1)
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "MultiSSTReader don't support seek for multiple ssts");
+        }
+        return mono->seekToLast();
     }
     size_t getSplitId() const override { return split_id; }
 

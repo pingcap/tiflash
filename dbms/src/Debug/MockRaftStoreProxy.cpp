@@ -180,7 +180,7 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
 }
 
 // Must call `RustGcHelper` to gc the returned pointer in the end.
-static RustStrWithView fn_get_config_json(RaftStoreProxyPtr ptr, uint64_t)
+static RustStrWithView fn_get_config_json(RaftStoreProxyPtr ptr, ConfigJsonType)
 {
     auto & x = as_ref(ptr);
     auto * s = new std::string(x.proxy_config_string);

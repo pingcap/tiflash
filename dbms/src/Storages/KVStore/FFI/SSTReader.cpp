@@ -93,6 +93,18 @@ void MonoSSTReader::seek(BaseBuffView && view) const
     proxy_helper->sst_reader_interfaces.fn_seek(inner, type, EngineIteratorSeekType::Key, view);
 }
 
+void MonoSSTReader::seekToFirst() const
+{
+    proxy_helper->sst_reader_interfaces
+        .fn_seek(inner, type, EngineIteratorSeekType::First, BaseBuffView{.data = nullptr, .len = 0});
+}
+
+void MonoSSTReader::seekToLast() const
+{
+    proxy_helper->sst_reader_interfaces
+        .fn_seek(inner, type, EngineIteratorSeekType::Last, BaseBuffView{.data = nullptr, .len = 0});
+}
+
 MonoSSTReader::MonoSSTReader(
     const TiFlashRaftProxyHelper * proxy_helper_,
     SSTView view,
