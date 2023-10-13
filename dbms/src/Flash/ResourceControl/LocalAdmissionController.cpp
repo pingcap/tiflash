@@ -22,6 +22,8 @@ namespace DB
 {
 void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
 {
+    assert(!stopped);
+
     if (name.empty())
         return;
 
@@ -58,7 +60,8 @@ void LocalAdmissionController::startBackgroudJob()
         {
             // If the unique_client_id cannot be successfully obtained from GAC for a long time, then the behavior of resource control is:
             // when the resource group has consumed RU, all queries cannot be scheduled anymore.
-            unique_client_id = etcd_client->acquireServerIDFromPD();
+            unique_client_id = etcd_client->acquireServerIDFromGAC();
+            need_reset_unique_client_id.store(true);
         }
         catch (...)
         {
