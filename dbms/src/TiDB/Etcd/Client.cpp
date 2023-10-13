@@ -239,7 +239,7 @@ grpc::Status Client::resign(const v3electionpb::LeaderKey & leader_key)
 
 // Using ectd Txn to check if /tidb/server_id/server_id exists.
 // If doesn't exists, put it to etcd and return. Otherwise retry(max retry 3 times).
-UInt64 Client::acquireServerIDFromPD()
+UInt64 Client::acquireServerIDFromGAC()
 {
     const Int32 retry_times = 3;
     UInt64 random_server_id = 0;
@@ -328,6 +328,26 @@ std::unordered_set<UInt64> Client::getExistsServerID()
     }
     LOG_INFO(log, "existing server ids: {}", exists_server_ids.size());
     return exists_server_ids;
+}
+
+void Client::deleteServerIDFromGAC(UInt64 serverID)
+{
+    etcdserverpb::DeleteRangeRequest del_range_req;
+    const String key = fmt::format("{}/{}", TIDB_SERVER_ID_ETCD_PATH, serverID);
+    del_range_req.set_key(key);
+
+    etcdserverpb::DeleteRangeResponse del_range_resp;
+    grpc::ClientContext context;
+    context.set_deadline(std::chrono::system_clock::now() + timeout);
+
+    auto status = leaderClient()->kv_stub->DeleteRange(&context, del_range_req, &del_range_resp);
+    if (!status.ok())
+        throw Exception("deleteServerIDFromGAC failed, grpc error: {}", status.error_message());
+
+    if (del_range_resp.deleted() != 1)
+        throw Exception(
+            "deleteServerIDFromGAC failed, unexpected deleted num, expect 1, got {}",
+            del_range_resp.deleted());
 }
 
 bool Session::isValid() const
