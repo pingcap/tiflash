@@ -322,10 +322,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                 break;
             }
             {
-                // if (maybeStopBySoftLimit(cf, *reader_ptr))
-                // {
-                //     break;
-                // }
                 BaseBuffView key = reader->keyView();
                 BaseBuffView value = reader->valueView();
                 // TODO: use doInsert to avoid locking

@@ -80,7 +80,6 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
                 parallel_subtask_limit,
                 ongoing_prehandle_subtask_count.load(),
                 region_id);
-            ongoing_prehandle_subtask_count.fetch_add(parallel);
             return;
         }
     }
@@ -364,7 +363,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
         LOG_INFO(
             log,
             "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
-            "region_range {}"
+            "region_range {} approx_bytes {}"
             "region_id={}",
             fmt_buf.toString(),
             total_concurrency,
@@ -372,6 +371,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
             want_split_parts,
             split_keys.size(),
             new_region->getRange()->toDebugString(),
+            approx_bytes,
             new_region->id());
     }
     return std::make_pair(std::move(split_keys), approx_bytes);
