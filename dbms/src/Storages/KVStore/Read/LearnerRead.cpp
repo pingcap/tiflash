@@ -129,15 +129,22 @@ namespace
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
 
 
-struct LearnerReadWorker
+class LearnerReadWorker
 {
 public:
-    LearnerReadWorker(MvccQueryInfo & mvcc_query_info_, TMTContext & tmt_, bool for_batch_cop, bool is_wn_disagg_read)
+    LearnerReadWorker(
+        MvccQueryInfo & mvcc_query_info_,
+        TMTContext & tmt_,
+        bool for_batch_cop,
+        bool is_wn_disagg_read,
+        const LoggerPtr & log_)
         : mvcc_query_info(mvcc_query_info_)
         , tmt(tmt_)
         , kvstore(tmt.getKVStore())
+        , log(log_)
         , unavailable_regions(for_batch_cop, is_wn_disagg_read)
     {
+        assert(log != nullptr);
         stats.num_regions = mvcc_query_info.regions_query_info.size();
     }
 
@@ -541,7 +548,7 @@ LearnerReadSnapshot doLearnerRead(
     const bool is_wn_disagg_read = context.getDAGContext() ? context.getDAGContext()->is_disaggregated_task : false;
 
     auto & tmt = context.getTMTContext();
-    LearnerReadWorker worker(mvcc_query_info, tmt, for_batch_cop, is_wn_disagg_read);
+    LearnerReadWorker worker(mvcc_query_info, tmt, for_batch_cop, is_wn_disagg_read, log);
 
     LearnerReadSnapshot regions_snapshot = worker.buildRegionsSnapshot();
     const auto & [start_time, end_time] = worker.waitUntilDataAvailable(regions_snapshot);
