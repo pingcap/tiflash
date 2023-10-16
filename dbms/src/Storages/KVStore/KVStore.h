@@ -363,7 +363,7 @@ private:
 
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
-    void updateProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
+    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

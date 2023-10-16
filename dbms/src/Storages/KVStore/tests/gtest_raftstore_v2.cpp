@@ -371,7 +371,7 @@ try
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3}})";
     KVStore & kvs = getKVS();
-    kvs.updateProxyConfig(proxy_helper.get());
+    kvs.fetchProxyConfig(proxy_helper.get());
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
     UInt64 region_id = 1;
