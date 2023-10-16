@@ -67,9 +67,8 @@ struct ReadFromStreamResult
     RegionPtr region;
 };
 
-void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parallel)
+void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit)
 {
-    auto parallel_subtask_limit = kvstore->getMaxParallelPrehandleSize();
     {
         auto current = ongoing_prehandle_subtask_count.load();
         if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
@@ -584,10 +583,12 @@ void executeParallelTransform(
         }
         LOG_INFO(
             log,
-            "Finished all extra parallel prehandle task write cf {} dmfiles {} error {}, cost={}, region_id={}",
+            "Finished all extra parallel prehandle task write cf {} dmfiles {} error {}, splits={}, cost={}s, "
+            "region_id={}",
             prehandle_result.stats.write_cf_keys,
             prehandle_result.ingest_ids.size(),
             magic_enum::enum_name(head_result.error),
+            split_key_count,
             watch.elapsedSeconds(),
             new_region->id());
     }
@@ -680,7 +681,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 
             // `split_keys` do not begin with 'z'.
             auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
-            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1);
+            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxParallelPrehandleSize());
             ReadFromStreamResult result;
             if (split_keys.empty())
             {

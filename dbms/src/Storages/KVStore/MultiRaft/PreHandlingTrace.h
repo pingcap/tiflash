@@ -32,7 +32,6 @@ struct PreHandlingTrace : MutexLockWrap
         std::atomic_bool abort_flag;
     };
 
-    class KVStore * kvstore;
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
     std::atomic<uint64_t> ongoing_prehandle_subtask_count{0};
     uint64_t parallel_subtask_limit;
@@ -40,9 +39,8 @@ struct PreHandlingTrace : MutexLockWrap
     std::condition_variable cpu_resource_cv;
     LoggerPtr log;
 
-    PreHandlingTrace(class KVStore * kvstore_)
-        : kvstore(kvstore_)
-        , log(Logger::get("PreHandlingTrace"))
+    PreHandlingTrace()
+        : log(Logger::get("PreHandlingTrace"))
     {}
     std::shared_ptr<Item> registerTask(uint64_t region_id)
     {
@@ -72,7 +70,7 @@ struct PreHandlingTrace : MutexLockWrap
         auto _ = genLockGuard();
         return tasks.find(region_id) != tasks.end();
     }
-    void waitForSubtaskResources(uint64_t region_id, size_t parallel);
+    void waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit);
     void releaseSubtaskResources(uint64_t region_id, size_t split_id)
     {
         std::unique_lock<std::mutex> cpu_resource_lock(cpu_resource_mut);
