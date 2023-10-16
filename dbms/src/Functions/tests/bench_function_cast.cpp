@@ -355,26 +355,26 @@ public:
     std::vector<Float64> dest_float64_vec;
 };
 
-#define CAST_BENCHMARK(CLASS_NAME, CASE_NAME, FROM_COL, DEST_TYPE)    \
-    BENCHMARK_DEFINE_F(CLASS_NAME, CASE_NAME)                         \
-    (benchmark::State & state)                                        \
-    try                                                               \
-    {                                                                 \
-        const String func_name = "tidb_cast";                         \
-        auto context = DB::tests::TiFlashTestEnv::getContext();       \
-        auto dag_context_ptr = std::make_unique<DAGContext>(1024);    \
-        UInt64 ori_flags = dag_context_ptr->getFlags();               \
-        dag_context_ptr->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);  \
-        dag_context_ptr->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);  \
-        dag_context_ptr->clearWarnings();                             \
-        context.setDAGContext(dag_context_ptr.get());                 \
-        for (auto _ : state)                                          \
-        {                                                             \
-            executeFunction(context, func_name, FROM_COL, DEST_TYPE); \
-        }                                                             \
-        dag_context_ptr->setFlags(ori_flags);                         \
-    }                                                                 \
-    CATCH                                                             \
+#define CAST_BENCHMARK(CLASS_NAME, CASE_NAME, FROM_COL, DEST_TYPE)     \
+    BENCHMARK_DEFINE_F(CLASS_NAME, CASE_NAME)                          \
+    (benchmark::State & state)                                         \
+    try                                                                \
+    {                                                                  \
+        const String func_name = "tidb_cast";                          \
+        auto context = DB::tests::TiFlashTestEnv::getContext();        \
+        auto dag_context_ptr = std::make_unique<DAGContext>(1024);     \
+        UInt64 ori_flags = dag_context_ptr->getFlags();                \
+        dag_context_ptr->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);   \
+        dag_context_ptr->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);   \
+        dag_context_ptr->clearWarnings();                              \
+        context->setDAGContext(dag_context_ptr.get());                 \
+        for (auto _ : state)                                           \
+        {                                                              \
+            executeFunction(*context, func_name, FROM_COL, DEST_TYPE); \
+        }                                                              \
+        dag_context_ptr->setFlags(ori_flags);                          \
+    }                                                                  \
+    CATCH                                                              \
     BENCHMARK_REGISTER_F(CLASS_NAME, CASE_NAME)->Iterations(1000);
 
 // NOTE: There are three factors that will affects performance:
