@@ -42,7 +42,7 @@ struct RegionLearnerReadSnapshot : RegionPtr
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 
 [[nodiscard]] LearnerReadSnapshot doLearnerRead(
-    TiDB::TableID table_id,
+    TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     bool for_batch_cop,
     Context & context,

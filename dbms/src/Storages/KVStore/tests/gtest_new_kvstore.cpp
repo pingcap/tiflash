@@ -722,7 +722,7 @@ TEST_F(RegionKVStoreTest, LearnerRead)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
-    auto region_id = 1;
+    const RegionID region_id = 1;
     KVStore & kvs = getKVS();
     ctx.getTMTContext().debugSetKVStore(kvstore);
     initStorages();
@@ -732,19 +732,24 @@ try
     startReadIndexUtils(ctx);
     SCOPE_EXIT({ stopReadIndexUtils(); });
 
-    auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    const auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
-    auto kvr1 = kvs.getRegion(region_id);
-    ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
+    const auto region_1 = kvs.getRegion(region_id);
+    ASSERT_EQ(region_1->appliedIndex(), 5);
+    ASSERT_EQ(region_1->appliedIndexTerm(), 5);
+    ctx.getTMTContext().getRegionTable().updateRegion(*region_1);
 
-    std::vector<std::string> keys{
+    // prepare 3 kv for region_1
+    Strings keys{
         RecordKVFormat::genKey(table_id, 3).toString(),
         RecordKVFormat::genKey(table_id, 3, 5).toString(),
-        RecordKVFormat::genKey(table_id, 3, 8).toString()};
-    std::vector<std::string> vals(
-        {RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20).toString(),
-         TiKVValue("value1").toString(),
-         RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5).toString()});
+        RecordKVFormat::genKey(table_id, 3, 8).toString(),
+    };
+    Strings vals{
+        RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20).toString(),
+        TiKVValue("value1").toString(),
+        RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5).toString(),
+    };
     auto ops = std::vector<ColumnFamilyType>{
         ColumnFamilyType::Lock,
         ColumnFamilyType::Default,
@@ -756,30 +761,44 @@ try
         std::move(vals),
         {WriteCmdType::Put, WriteCmdType::Put, WriteCmdType::Put},
         std::move(ops));
+    // the applied index of region is not advanced
+    ASSERT_EQ(region_1->appliedIndex(), 5);
+    ASSERT_EQ(region_1->appliedIndexTerm(), 5);
     ASSERT_EQ(index, 6);
-    ASSERT_EQ(kvr1->appliedIndex(), 5);
     ASSERT_EQ(term, 5);
 
     auto mvcc_query_info = MvccQueryInfo(false, 10);
-    auto f = [&] {
-        auto discard = doLearnerRead(table_id, mvcc_query_info, false, ctx, log);
-        UNUSED(discard);
-    };
-    EXPECT_THROW(f(), RegionException);
+    mvcc_query_info.regions_query_info.emplace_back(RegionQueryInfo{
+        region_id,
+        region_1->version(),
+        region_1->confVer(),
+        table_id,
+        region_1->getRange()->rawKeys(),
+        {},
+    });
+    EXPECT_THROW(
+        {
+            // The region applied index does not get advanced and will
+            // get wait index timeout
+            auto discard = doLearnerRead(table_id, mvcc_query_info, false, ctx, log);
+            UNUSED(discard);
+        },
+        RegionException);
 
-    // We can't `doApply`, since the TiKVValue is not valid.
-    auto r1 = proxy_instance->getRegion(region_id);
-    r1->updateAppliedIndex(index);
-    kvr1->setApplied(index, term);
+    {
+        /// Advance the index in mock proxy
+        // We can't `doApply`, since the TiKVValue is not valid.
+        auto r1 = proxy_instance->getRegion(region_id);
+        r1->updateAppliedIndex(index);
+    }
+    region_1->setApplied(index, term);
     auto regions_snapshot = doLearnerRead(table_id, mvcc_query_info, false, ctx, log);
     // 0 unavailable regions
     ASSERT_EQ(regions_snapshot.size(), 1);
 
-    // No throw
-    auto mvcc_query_info2 = MvccQueryInfo(false, 10);
-    mvcc_query_info2.regions_query_info
-        .emplace_back(1, kvr1->version(), kvr1->confVer(), table_id, kvr1->getRange()->rawKeys());
-    validateQueryInfo(mvcc_query_info2, regions_snapshot, ctx.getTMTContext(), log);
+    // Check the regions_snapshot after learner read done and snapshot on the storage is acquired.
+    // Should not throw
+    validateQueryInfo(mvcc_query_info, regions_snapshot, ctx.getTMTContext(), log);
 }
 CATCH
 

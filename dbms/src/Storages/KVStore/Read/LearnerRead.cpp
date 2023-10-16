@@ -128,7 +128,6 @@ namespace
 {
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
 
-
 class LearnerReadWorker
 {
 public:
@@ -150,30 +149,38 @@ public:
 
     LearnerReadSnapshot buildRegionsSnapshot();
 
+    // Ensure the correctness for reading requests for given regions_snapshot.
+    // - Execute read index and get the latest applied indexes from TiKV
+    // - Wait until the applied index on this store reach the applied index
     std::tuple<Clock::time_point, Clock::time_point> //
-    waitUntilDataAvailable(const LearnerReadSnapshot & regions_snapshot);
-
-    RegionsReadIndexResult readIndex(const LearnerReadSnapshot & regions_snapshot, Stopwatch & watch);
-
-    void waitIndex(
+    waitUntilDataAvailable(
         const LearnerReadSnapshot & regions_snapshot,
-        RegionsReadIndexResult & batch_read_index_result,
-        UInt64 timeout_ms,
-        Stopwatch & watch);
-
-    const LearnerReadStatistics & getStats() const { return stats; }
-    UnavailableRegions & getUnavailableRegions() { return unavailable_regions; }
+        UInt64 read_index_timeout_ms,
+        UInt64 wait_index_timeout_ms);
 
 private:
+    /// read index relate methods
     std::vector<kvrpcpb::ReadIndexRequest> buildBatchReadIndexReq(
         const RegionTable & region_table,
         const LearnerReadSnapshot & regions_snapshot,
         RegionsReadIndexResult & batch_read_index_result);
     void doBatchReadIndex(
         const std::vector<kvrpcpb::ReadIndexRequest> & batch_read_index_req,
+        UInt64 timeout_ms,
         RegionsReadIndexResult & batch_read_index_result);
-
     void recordReadIndexError(RegionsReadIndexResult & read_index_result);
+
+    RegionsReadIndexResult readIndex(
+        const LearnerReadSnapshot & regions_snapshot,
+        UInt64 timeout_ms,
+        Stopwatch & watch);
+
+    /// wait index relate methods
+    void waitIndex(
+        const LearnerReadSnapshot & regions_snapshot,
+        RegionsReadIndexResult & batch_read_index_result,
+        UInt64 timeout_ms,
+        Stopwatch & watch);
 
 private:
     MvccQueryInfo & mvcc_query_info;
@@ -327,11 +334,13 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
             ++stats.num_read_index_request;
         }
     }
+    assert(stats.num_regions == stats.num_stale_read + stats.num_cached_read_index + stats.num_read_index_request);
     return batch_read_index_req;
 }
 
 void LearnerReadWorker::doBatchReadIndex(
     const std::vector<kvrpcpb::ReadIndexRequest> & batch_read_index_req,
+    const UInt64 timeout_ms,
     RegionsReadIndexResult & batch_read_index_result)
 {
     const auto & make_default_batch_read_index_result = [&](bool with_region_error) {
@@ -343,11 +352,6 @@ void LearnerReadWorker::doBatchReadIndex(
             batch_read_index_result.emplace(req.context().region_id(), std::move(resp));
         }
     };
-    if (!tmt.checkRunning(std::memory_order_relaxed))
-    {
-        make_default_batch_read_index_result(true);
-        return;
-    }
     kvstore->addReadIndexEvent(1);
     SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
     if (!tmt.checkRunning())
@@ -365,23 +369,26 @@ void LearnerReadWorker::doBatchReadIndex(
 
     /// Blocking learner read. Note that learner read must be performed ahead of data read,
     /// otherwise the desired index will be blocked by the lock of data read.
-    auto res = kvstore->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+    auto res = kvstore->batchReadIndex(batch_read_index_req, timeout_ms);
     for (auto && [resp, region_id] : res)
     {
         batch_read_index_result.emplace(region_id, std::move(resp));
     }
 }
 
-RegionsReadIndexResult LearnerReadWorker::readIndex(const LearnerReadSnapshot & regions_snapshot, Stopwatch & watch)
+RegionsReadIndexResult LearnerReadWorker::readIndex(
+    const LearnerReadSnapshot & regions_snapshot,
+    UInt64 timeout_ms,
+    Stopwatch & watch)
 {
     RegionsReadIndexResult batch_read_index_result;
-    const std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req
+    const auto batch_read_index_req
         = buildBatchReadIndexReq(tmt.getRegionTable(), regions_snapshot, batch_read_index_result);
 
     GET_METRIC(tiflash_stale_read_count).Increment(stats.num_stale_read);
     GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
 
-    doBatchReadIndex(batch_read_index_req, batch_read_index_result);
+    doBatchReadIndex(batch_read_index_req, timeout_ms, batch_read_index_result);
 
     stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
@@ -491,17 +498,18 @@ void LearnerReadWorker::waitIndex(
         unavailable_regions.size());
 }
 
-std::tuple<Clock::time_point, Clock::time_point> LearnerReadWorker::waitUntilDataAvailable(
-    const LearnerReadSnapshot & regions_snapshot)
+std::tuple<Clock::time_point, Clock::time_point> //
+LearnerReadWorker::waitUntilDataAvailable(
+    const LearnerReadSnapshot & regions_snapshot,
+    UInt64 read_index_timeout_ms,
+    UInt64 wait_index_timeout_ms)
 {
     const auto start_time = Clock::now();
 
     Stopwatch watch;
-
-    RegionsReadIndexResult batch_read_index_result = readIndex(regions_snapshot, watch);
-
+    RegionsReadIndexResult batch_read_index_result = readIndex(regions_snapshot, read_index_timeout_ms, watch);
     watch.restart(); // restart to count the elapsed of wait index
-    waitIndex(regions_snapshot, batch_read_index_result, tmt.waitIndexTimeout(), watch);
+    waitIndex(regions_snapshot, batch_read_index_result, wait_index_timeout_ms, watch);
 
     const auto end_time = Clock::now();
     const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -529,7 +537,7 @@ std::tuple<Clock::time_point, Clock::time_point> LearnerReadWorker::waitUntilDat
 } // namespace
 
 LearnerReadSnapshot doLearnerRead(
-    const TiDB::TableID logical_table_id,
+    const TableID logical_table_id,
     MvccQueryInfo & mvcc_query_info,
     bool for_batch_cop,
     Context & context,
@@ -549,9 +557,11 @@ LearnerReadSnapshot doLearnerRead(
 
     auto & tmt = context.getTMTContext();
     LearnerReadWorker worker(mvcc_query_info, tmt, for_batch_cop, is_wn_disagg_read, log);
-
     LearnerReadSnapshot regions_snapshot = worker.buildRegionsSnapshot();
-    const auto & [start_time, end_time] = worker.waitUntilDataAvailable(regions_snapshot);
+    const auto & [start_time, end_time] = worker.waitUntilDataAvailable( //
+        regions_snapshot,
+        tmt.batchReadIndexTimeout(),
+        tmt.waitIndexTimeout());
 
     if (auto * dag_context = context.getDAGContext())
     {
