@@ -450,12 +450,14 @@ try
         }
 
         auto loop = 0;
+        // All threads can be prehandled.
         while (kvs.getOngoingPrehandleTaskCount() != 3)
         {
             loop += 1;
             ASSERT(loop < 30);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+        ASSERT_EQ(kvs.prehandling_trace.ongoing_prehandle_subtask_count.load(), 3);
         DB::FailPointHelper::disableFailPoint(DB::FailPoints::pause_before_prehandle_subtask);
         for (auto && t : ths)
         {

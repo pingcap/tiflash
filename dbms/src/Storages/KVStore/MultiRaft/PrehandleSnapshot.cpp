@@ -72,8 +72,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
 {
     {
         auto current = ongoing_prehandle_subtask_count.load();
-        if (current + parallel <= parallel_subtask_limit &&
-            likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
+        if (current + parallel <= parallel_subtask_limit
+            && likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
         {
             LOG_DEBUG(
                 log,
@@ -482,9 +482,7 @@ void executeParallelTransform(
     std::shared_ptr<StorageDeltaMerge> storage)
 {
     CurrentMetrics::add(CurrentMetrics::RaftNumParallelPrehandlingTasks);
-    SCOPE_EXIT({
-        CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks);
-    });
+    SCOPE_EXIT({ CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks); });
     using SingleSnapshotAsyncTasks = AsyncTasks<uint64_t, std::function<bool()>, bool>;
     auto split_key_count = split_keys.size();
     RUNTIME_CHECK_MSG(
