@@ -74,6 +74,27 @@ struct UnavailableRegions
             throw RegionException(std::move(ids), status);
     }
 
+    void addRegionWaitIndexTimeout(
+        const RegionID region_id,
+        UInt64 index_to_wait,
+        UInt64 current_applied_index,
+        bool for_batch_cop)
+    {
+        if (!for_batch_cop)
+        {
+            // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
+            add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
+            return;
+        }
+        // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
+        throw TiFlashException(
+            Errors::Coprocessor::RegionError,
+            "Region unavailable, region_id={} wait_index={} applied_index={}",
+            region_id,
+            index_to_wait,
+            current_applied_index);
+    }
+
     bool contains(RegionID region_id) const { return ids.count(region_id); }
 
 private:
@@ -347,6 +368,97 @@ void doBatchReadIndex(
     }();
 }
 
+void doWaitIndex(
+    const MvccQueryInfoWrap & mvcc_query_info,
+    const LearnerReadSnapshot & regions_snapshot,
+    std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> & batch_read_index_result,
+    const UInt64 timeout_ms,
+    const bool for_batch_cop,
+    Stopwatch & watch,
+    TMTContext & tmt,
+    UnavailableRegions & unavailable_regions,
+    const LoggerPtr & log)
+{
+    const auto & regions_info = mvcc_query_info.getRegionsInfo();
+    for (const auto & region_to_query : regions_info)
+    {
+        // if region is unavailable, skip wait index.
+        if (unavailable_regions.contains(region_to_query.region_id))
+            continue;
+
+        const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
+
+        const auto total_wait_index_elapsed_ms = watch.elapsedMilliseconds();
+        const auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
+        if (timeout_ms != 0 && total_wait_index_elapsed_ms > timeout_ms)
+        {
+            // Wait index timeout is enabled && timeout happens, simply check all Regions' applied index
+            // instead of wait index for Regions one by one.
+            if (!region->checkIndex(index_to_wait))
+            {
+                auto current = region->appliedIndex();
+                unavailable_regions
+                    .addRegionWaitIndexTimeout(region_to_query.region_id, index_to_wait, current, for_batch_cop);
+            }
+            continue; // timeout happens, check next region quickly
+        }
+
+        // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
+        // a specify Region.
+        const auto [wait_res, time_cost]
+            = region->waitIndex(index_to_wait, timeout_ms, [&tmt]() { return tmt.checkRunning(); });
+        if (wait_res != WaitIndexResult::Finished)
+        {
+            auto current = region->appliedIndex();
+            unavailable_regions
+                .addRegionWaitIndexTimeout(region_to_query.region_id, index_to_wait, current, for_batch_cop);
+            continue; // error or timeout happens, check next region quickly
+        }
+
+        if (time_cost > 0)
+        {
+            // Only record information if wait-index does happen
+            GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+        }
+
+        if (unlikely(!mvcc_query_info->resolve_locks))
+        {
+            continue;
+        }
+
+        // Try to resolve locks and flush data into storage layer
+        const auto & physical_table_id = region_to_query.physical_table_id;
+        auto res = RegionTable::resolveLocksAndWriteRegion(
+            tmt,
+            physical_table_id,
+            region,
+            mvcc_query_info->read_tso,
+            region_to_query.bypass_lock_ts,
+            region_to_query.version,
+            region_to_query.conf_version,
+            log);
+
+        std::visit(
+            variant_op::overloaded{
+                [&](LockInfoPtr & lock) { unavailable_regions.addRegionLock(region->id(), std::move(lock)); },
+                [&](RegionException::RegionReadStatus & status) {
+                    if (status != RegionException::RegionReadStatus::OK)
+                    {
+                        LOG_WARNING(
+                            log,
+                            "Check memory cache, region_id={} version={} handle_range={} status={}",
+                            region_to_query.region_id,
+                            region_to_query.version,
+                            RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
+                            magic_enum::enum_name(status));
+                        unavailable_regions.add(region->id(), status);
+                    }
+                },
+            },
+            res);
+    } // wait index for next region
+}
+
 } // namespace
 
 LearnerReadSnapshot doLearnerRead(
@@ -375,7 +487,6 @@ LearnerReadSnapshot doLearnerRead(
     LearnerReadStatistics stats;
 
     // TODO: refactor this enormous lambda into smaller parts
-    Stopwatch batch_wait_data_watch;
     Stopwatch watch;
 
     /// read index
@@ -412,101 +523,18 @@ LearnerReadSnapshot doLearnerRead(
     {
         watch.restart(); // restart to count the elapsed of wait index
 
-        auto handle_wait_timeout_region
-            = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id, UInt64 index, UInt64 current) {
-                  if (!for_batch_cop)
-                  {
-                      // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
-                      unavailable_regions.add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
-                      return;
-                  }
-                  // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
-                  throw TiFlashException(
-                      Errors::Coprocessor::RegionError,
-                      "Region unavailable, region_id={} wait_index={} applied_index={}",
-                      region_id,
-                      index,
-                      current);
-              };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
-        for (size_t region_idx = 0; region_idx < num_regions; ++region_idx)
-        {
-            const auto & region_to_query = regions_info[region_idx];
-            // if region is unavailable, skip wait index.
-            if (unavailable_regions.contains(region_to_query.region_id))
-                continue;
+        doWaitIndex(
+            mvcc_query_info,
+            regions_snapshot,
+            batch_read_index_result,
+            wait_index_timeout_ms,
+            for_batch_cop,
+            watch,
+            tmt,
+            unavailable_regions,
+            log);
 
-            const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
-
-            const auto total_wait_index_elapsed_ms = watch.elapsedMilliseconds();
-            const auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
-            if (wait_index_timeout_ms == 0 || total_wait_index_elapsed_ms <= wait_index_timeout_ms)
-            {
-                // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
-                // a specify Region.
-                auto [wait_res, time_cost]
-                    = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
-                if (wait_res != WaitIndexResult::Finished)
-                {
-                    auto current = region->appliedIndex();
-                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait, current);
-                    continue; // error happens, check next region quickly
-                }
-                if (time_cost > 0)
-                {
-                    // Only record information if wait-index does happen
-                    GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
-                }
-            }
-            else
-            {
-                // Wait index timeout is enabled && timeout happens, simply check the Region index instead of wait index
-                // for Regions one by one.
-                if (!region->checkIndex(index_to_wait))
-                {
-                    auto current = region->appliedIndex();
-                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait, current);
-                }
-                continue; // timeout happens, check next region quickly
-            }
-
-            if (unlikely(!mvcc_query_info->resolve_locks))
-            {
-                continue;
-            }
-
-            // Try to resolve locks and flush data into storage layer
-            const Int64 physical_table_id = region_to_query.physical_table_id;
-            auto res = RegionTable::resolveLocksAndWriteRegion(
-                tmt,
-                physical_table_id,
-                region,
-                mvcc_query_info->read_tso,
-                region_to_query.bypass_lock_ts,
-                region_to_query.version,
-                region_to_query.conf_version,
-                log);
-
-            std::visit(
-                variant_op::overloaded{
-                    [&](LockInfoPtr & lock) { unavailable_regions.addRegionLock(region->id(), std::move(lock)); },
-                    [&](RegionException::RegionReadStatus & status) {
-                        if (status != RegionException::RegionReadStatus::OK)
-                        {
-                            LOG_WARNING(
-                                log,
-                                "Check memory cache, region_id={} version={} handle_range={} status={}",
-                                region_to_query.region_id,
-                                region_to_query.version,
-                                RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
-                                magic_enum::enum_name(status));
-                            unavailable_regions.add(region->id(), status);
-                        }
-                    },
-                },
-                res);
-        } // wait index for next region
-        GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
         stats.wait_index_elapsed_ms = watch.elapsedMilliseconds();
         LOG_DEBUG(
             log,
@@ -516,13 +544,15 @@ LearnerReadSnapshot doLearnerRead(
             unavailable_regions.size());
     }
 
+    const auto end_time = Clock::now();
+    const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    GET_METRIC(tiflash_syncing_data_freshness).Observe(time_elapsed_ms / 1000.0); // For DBaaS SLI
+
     // Will be handled in `CoprocessorHandler::execute`.
     unavailable_regions.tryThrowRegionException(
         for_batch_cop,
         context.getDAGContext() ? context.getDAGContext()->is_disaggregated_task : false);
 
-    const auto end_time = Clock::now();
-    const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     // Use info level if read wait index run slow
     const auto log_lvl = time_elapsed_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
