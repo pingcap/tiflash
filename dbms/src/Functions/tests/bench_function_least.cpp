@@ -273,7 +273,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2, col3);
+        executeFunction(*context, func_name, col1, col2, col3);
     }
 }
 CATCH
@@ -287,7 +287,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2);
+        executeFunction(*context, func_name, col1, col2);
     }
 }
 CATCH
@@ -301,7 +301,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col_nullable1, col_nullable2, col_nullable3);
+        executeFunction(*context, func_name, col_nullable1, col_nullable2, col_nullable3);
     }
 }
 CATCH
@@ -315,7 +315,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2, col3);
+        executeFunction(*context, func_name, col1, col2, col3);
     }
 }
 CATCH
@@ -329,7 +329,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2);
+        executeFunction(*context, func_name, col1, col2);
     }
 }
 CATCH
@@ -343,7 +343,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col_nullable1, col_nullable2, col_nullable3);
+        executeFunction(*context, func_name, col_nullable1, col_nullable2, col_nullable3);
     }
 }
 CATCH
@@ -358,7 +358,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, v_col);
+        executeFunction(*context, func_name, v_col);
     }
 }
 CATCH
@@ -372,7 +372,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, v_col);
+        executeFunction(*context, func_name, v_col);
     }
 }
 CATCH
