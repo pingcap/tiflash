@@ -112,13 +112,12 @@ void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const Strin
 {
     manager = manager_;
     task_unique_id = task_unique_id_;
-    manager->addMonitoredTask(task_unique_id);
-    initialized = true;
+    added_to_monitor = manager->addMonitoredTask(task_unique_id);
 }
 
 MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
 {
-    if (initialized)
+    if (added_to_monitor)
     {
         manager->removeMonitoredTask(task_unique_id);
     }
@@ -361,11 +360,14 @@ MemoryTracker * MPPTask::getMemoryTracker() const
 
 void MPPTask::unregisterTask()
 {
-    auto [result, reason] = manager->unregisterTask(id, getErrString());
-    if (result)
-        LOG_DEBUG(log, "task unregistered");
-    else
-        LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+    if (is_registered)
+    {
+        auto [result, reason] = manager->unregisterTask(id, getErrString());
+        if (result)
+            LOG_DEBUG(log, "task unregistered");
+        else
+            LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+    }
 }
 
 void MPPTask::initQueryOperatorSpillContexts(

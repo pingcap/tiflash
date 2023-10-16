@@ -376,6 +376,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
         return {false, "task is already registered"};
     }
     gather_task_set->registerTask(task->id);
+    task->is_registered = true;
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
     return {true, ""};
@@ -385,6 +386,15 @@ MPPQueryId MPPTaskManager::getCurrentMinTSOQueryId(const String & resource_group
 {
     std::lock_guard lock(mu);
     return scheduler->getCurrentMinTSOQueryId(resource_group_name);
+}
+
+bool MPPTaskManager::isTaskExists(const MPPTaskId & id)
+{
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(id.gather_id);
+    if (gather_task_set == nullptr)
+        return false;
+    return gather_task_set->isTaskRegistered(id);
 }
 
 std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
@@ -412,7 +422,6 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
         "Task process list entry should always be the same as query process list entry");
     gather_task_set->makeTaskActive(task);
     gather_task_set->cancelAlarmsBySenderTaskId(task->id);
-    task->is_public = true;
     cv.notify_all();
     return {true, ""};
 }

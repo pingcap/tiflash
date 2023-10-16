@@ -121,5 +121,29 @@ try
 }
 CATCH
 
+TEST_F(TestMPPTaskManager, testDuplicateMPPTaskId)
+try
+{
+    MPPTaskPtr original_task;
+    auto context = createContextForTest();
+    auto mpp_task_manager = context->getTMTContext().getMPPTaskManager();
+    {
+        mpp::EstablishMPPConnectionRequest establish_req;
+        auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, ""));
+        auto * sender_meta = establish_req.mutable_sender_meta();
+        fillTaskMeta(sender_meta, 1, gather_id);
+        original_task = MPPTask::newTaskForTest(*sender_meta, context);
+        auto result = mpp_task_manager->registerTask(original_task.get());
+        ASSERT_TRUE(result.first);
+        auto second_task = MPPTask::newTaskForTest(*sender_meta, context);
+        result = mpp_task_manager->registerTask(second_task.get());
+        ASSERT_FALSE(result.first);
+        second_task->handleError(result.second);
+    }
+    ASSERT_TRUE(mpp_task_manager->isTaskExists(original_task->getId()));
+    ASSERT_TRUE(mpp_task_manager->getMPPTaskMonitor()->isInMonitor(original_task->getId().toString()));
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
