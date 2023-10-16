@@ -363,7 +363,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
         LOG_INFO(
             log,
             "getSplitKey result {}, total_concurrency={} ongoing={} total_split_parts={} split_keys={} "
-            "region_range {} approx_bytes {}"
+            "region_range={} approx_bytes={} "
             "region_id={}",
             fmt_buf.toString(),
             total_concurrency,
