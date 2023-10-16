@@ -48,6 +48,7 @@
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
+#include <common/logger_useful.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>
 #include <grpcpp/support/status_code_enum.h>
@@ -63,10 +64,12 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 extern const int UNKNOWN_EXCEPTION;
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace ErrorCodes
 namespace FailPoints
 {
 extern const char exception_when_fetch_disagg_pages[];
+extern const char pause_before_wn_establish_task[];
 } // namespace FailPoints
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                \
@@ -920,12 +923,19 @@ grpc::Status FlashService::EstablishDisaggTask(
         auto task = std::make_shared<std::packaged_task<void()>>(
             [db_context = db_context, &task_id, &request, &response, deadline = grpc_context->deadline()]() {
                 auto current = std::chrono::system_clock::now();
-                RUNTIME_CHECK(current < deadline, current, deadline);
+                if (current >= deadline)
+                    throw Exception(
+                        ErrorCodes::TIMEOUT_EXCEEDED,
+                        "The request is already expired, ignore, deadline={} current={}",
+                        deadline,
+                        current);
+
                 auto handler = std::make_unique<WNEstablishDisaggTaskHandler>(db_context, task_id);
                 SCOPE_EXIT({ current_memory_tracker = nullptr; });
                 handler->prepare(request);
                 handler->execute(response);
             });
+        FAIL_POINT_PAUSE(FailPoints::pause_before_wn_establish_task);
         WNEstablishDisaggTaskPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
         task->get_future().get();
     }
@@ -953,7 +963,18 @@ grpc::Status FlashService::EstablishDisaggTask(
     }
     catch (Exception & e)
     {
-        LOG_ERROR(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        if (e.code() == ErrorCodes::TIMEOUT_EXCEEDED)
+        {
+            LOG_WARNING(logger, "EstablishDisaggTask meet expired request: {}", e.displayText());
+        }
+        else
+        {
+            LOG_ERROR(
+                logger,
+                "EstablishDisaggTask meet exception: {}\n{}",
+                e.displayText(),
+                e.getStackTrace().toString());
+        }
         record_other_error(e.code(), e.message());
     }
     catch (const pingcap::Exception & e)

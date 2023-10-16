@@ -59,7 +59,7 @@ struct MemUtilsTest : ::testing::TestWithParam<std::pair<bool, bool>>
 };
 TEST_P(MemUtilsTest, CompareTrivial)
 {
-    TempOption _option(GetParam().first, GetParam().second);
+    TempOption option(GetParam().first, GetParam().second);
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
              {"123", "123"},
              {"abc", "abc"},
@@ -83,17 +83,17 @@ TEST_P(MemUtilsTest, CompareTrivial)
 TEST_P(MemUtilsTest, CompareLongEq)
 {
     using namespace simd_option;
-    TempOption _option(GetParam().first, GetParam().second);
+    TempOption option(GetParam().first, GetParam().second);
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<std::int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
-    auto aligned1 = aligned1_.data;
-    auto aligned2 = aligned2_.data;
+    auto aligned1_arr = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_arr = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
+    auto * aligned1 = aligned1_arr.data;
+    auto * aligned2 = aligned2_arr.data;
     aligned2 += 23;
 
     for (auto & i : data)
@@ -110,17 +110,17 @@ TEST_P(MemUtilsTest, CompareLongEq)
 TEST_P(MemUtilsTest, CompareLongNe)
 {
     using namespace simd_option;
-    TempOption _option(GetParam().first, GetParam().second);
+    TempOption option(GetParam().first, GetParam().second);
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<std::int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
-    auto aligned1 = aligned1_.data;
-    auto aligned2 = aligned2_.data;
+    auto aligned1_arr = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_arr = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
+    auto * aligned1 = aligned1_arr.data;
+    auto * aligned2 = aligned2_arr.data;
 
     aligned2 += 23;
 
@@ -159,7 +159,7 @@ TEST(MemUtilsTest, MemoryIsZeroGeneric)
     auto length = 1024 * 128 - 3;
     auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
     std::memset(memory.data, 0, length + 4);
-    auto ptr = memory.data + 1;
+    auto * ptr = memory.data + 1;
     ASSERT_TRUE(mem_utils::_detail::memoryIsByteGeneric(ptr, length, std::byte{0}));
     for (auto i = 0; i < length; ++i)
     {
@@ -180,7 +180,7 @@ TEST(MemUtilsTest, MemoryIsZeroAVX2)
     auto length = 1024 * 128 - 3;
     auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
     std::memset(memory.data, 0, length + 4);
-    auto ptr = memory.data + 1;
+    auto * ptr = memory.data + 1;
     ASSERT_TRUE(mem_utils::_detail::memoryIsByteAVX2(ptr, length, std::byte{0}));
     for (auto i = 0; i < length; ++i)
     {
@@ -202,7 +202,7 @@ TEST(MemUtilsTest, MemoryIsZeroAVX512)
     auto length = 1024 * 128 - 3;
     auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
     std::memset(memory.data, 0, length + 4);
-    auto ptr = memory.data + 1;
+    auto * ptr = memory.data + 1;
     ASSERT_TRUE(mem_utils::_detail::memoryIsByteAVX512(ptr, length, std::byte{0}));
     for (auto i = 0; i < length; ++i)
     {
@@ -219,7 +219,7 @@ TEST(MemUtilsTest, MemoryIsZeroSSE2)
     auto length = 1024 * 128 - 3;
     auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
     std::memset(memory.data, 0, length + 4);
-    auto ptr = memory.data + 1;
+    auto * ptr = memory.data + 1;
     ASSERT_TRUE(mem_utils::_detail::memoryIsByteSSE2(ptr, length, std::byte{0}));
     for (auto i = 0; i < length; ++i)
     {
@@ -297,7 +297,7 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<std::int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
     auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
@@ -325,7 +325,7 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
     auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});

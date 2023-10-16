@@ -69,7 +69,8 @@ namespace DB
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
-    M(force_region_persist_version)
+    M(force_region_persist_version)                               \
+    M(force_wait_index_timeout)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -127,6 +128,7 @@ namespace DB
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)                   \
     M(pause_before_prehandle_subtask)     \
+    M(pause_before_wn_establish_task)     \
     M(pause_passive_flush_before_persist_region)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                       \
