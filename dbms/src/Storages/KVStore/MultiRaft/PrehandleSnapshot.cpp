@@ -492,6 +492,7 @@ void executeParallelTransform(
         new_region->getRange()->toDebugString(),
         split_key_count,
         new_region->id());
+    Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
     auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
     sst_stream->resetSoftLimit(
@@ -583,10 +584,11 @@ void executeParallelTransform(
         }
         LOG_INFO(
             log,
-            "Finished all extra parallel prehandle task write cf {} dmfiles {} error {}, region_id={}",
+            "Finished all extra parallel prehandle task write cf {} dmfiles {} error {}, cost={}, region_id={}",
             prehandle_result.stats.write_cf_keys,
             prehandle_result.ingest_ids.size(),
             magic_enum::enum_name(head_result.error),
+            watch.elapsedSeconds(),
             new_region->id());
     }
     else
