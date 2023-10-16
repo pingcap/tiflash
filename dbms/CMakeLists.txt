@@ -363,11 +363,6 @@ if (ENABLE_TESTS)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark tiflash_functions server_for_test delta_merge kvstore)
 
-    install (TARGETS bench_dbms
-            COMPONENT tiflash-gtest
-            DESTINATION "."
-            RUNTIME_DEPENDENCY_SET tiflash-gtest-dependency)
-
     add_check(bench_dbms)
 endif ()
 
