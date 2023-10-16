@@ -57,6 +57,7 @@
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -703,9 +704,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         query_info.mvcc_query_info
             = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso, scan_context);
 
-        const String & request_str = settings.regions;
-
-        if (!request_str.empty())
+        if (const String & request_str = settings.regions; !request_str.empty())
         {
             TableID table_id = InvalidTableID;
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
@@ -730,7 +729,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
                 const auto & epoch = region.region_epoch();
                 RegionQueryInfo info(region.id(), epoch.version(), epoch.conf_ver(), table_id);
-                if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
                 {
                     // Extract the handle range according to current table
                     TiKVKey start_key = RecordKVFormat::encodeAsTiKVKey(region.start_key());
@@ -745,6 +743,44 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 throw Exception(
                     "[InterpreterSelectQuery::executeFetchColumns] no region query",
                     ErrorCodes::LOGICAL_ERROR);
+        }
+        else
+        {
+            TableID table_id = InvalidTableID;
+            if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
+            {
+                table_id = managed_storage->getTableInfo().id;
+            }
+            else
+            {
+                throw Exception("Not supported request on non-manageable storage");
+            }
+
+            // Only for (integration) test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
+            // todo support partition table
+            auto & tmt = context.getTMTContext();
+            const auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, table_id);
+            if (regions.empty())
+            {
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "[InterpreterSelectQuery::executeFetchColumns] can not find any regions for the query, table_id={}",
+                    table_id);
+            }
+
+            query_info.mvcc_query_info->regions_query_info.reserve(regions.size());
+            for (const auto & [id, region] : regions)
+            {
+                if (region == nullptr)
+                    continue;
+                query_info.mvcc_query_info->regions_query_info.emplace_back(RegionQueryInfo{
+                    id,
+                    region->version(),
+                    region->confVer(),
+                    table_id,
+                    region->getRange()->rawKeys(),
+                    {}});
+            }
         }
 
         /// PARTITION SELECT only supports MergeTree family now.

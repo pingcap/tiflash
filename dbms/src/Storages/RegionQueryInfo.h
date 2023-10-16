@@ -76,6 +76,14 @@ struct MvccQueryInfo
 
 public:
     explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
+
+    void addReadIndexResToCache(RegionID region_id, UInt64 read_index) { read_index_res[region_id] = read_index; }
+    UInt64 getReadIndexRes(RegionID region_id) const
+    {
+        if (auto it = read_index_res.find(region_id); it != read_index_res.end())
+            return it->second;
+        return 0;
+    }
 };
 
 } // namespace DB
