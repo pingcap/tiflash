@@ -98,7 +98,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
             return ongoing_prehandle_subtask_count.load() + parallel <= parallel_subtask_limit;
         });
         auto current = ongoing_prehandle_subtask_count.load();
-        if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
+        if (current + parallel <= parallel_subtask_limit
+            && likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
         {
             break;
         }
