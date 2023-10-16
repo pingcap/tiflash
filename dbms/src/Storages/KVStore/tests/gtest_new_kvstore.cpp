@@ -14,6 +14,7 @@
 
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/RegionQueryInfo.h>
 
 #include "kvstore_helper.h"
 

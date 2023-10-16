@@ -16,6 +16,7 @@
 
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/RegionQueryInfo_fwd.h>
 
 namespace DB
 {
@@ -69,18 +70,19 @@ struct MvccQueryInfo
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
+    // A cache for Region -> read index result between retries
     using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
-    ReadIndexRes read_index_res;
+    ReadIndexRes read_index_res_cache;
 
     DM::ScanContextPtr scan_context;
 
 public:
     explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
 
-    void addReadIndexResToCache(RegionID region_id, UInt64 read_index) { read_index_res[region_id] = read_index; }
+    void addReadIndexResToCache(RegionID region_id, UInt64 read_index) { read_index_res_cache[region_id] = read_index; }
     UInt64 getReadIndexRes(RegionID region_id) const
     {
-        if (auto it = read_index_res.find(region_id); it != read_index_res.end())
+        if (auto it = read_index_res_cache.find(region_id); it != read_index_res_cache.end())
             return it->second;
         return 0;
     }

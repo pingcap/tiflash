@@ -31,6 +31,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/Utils.h>
+#include <Storages/RegionQueryInfo.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 #include <fmt/chrono.h>
