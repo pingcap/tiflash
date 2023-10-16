@@ -62,7 +62,7 @@ public:
 private:
     MPPTaskManager * manager = nullptr;
     String task_unique_id;
-    bool initialized = false;
+    bool added_to_monitor = false;
 };
 
 class MPPTask
@@ -176,7 +176,7 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
-    std::atomic<bool> is_public{false};
+    std::atomic<bool> is_registered{false};
 
     MPPTaskScheduleEntry schedule_entry;
 
