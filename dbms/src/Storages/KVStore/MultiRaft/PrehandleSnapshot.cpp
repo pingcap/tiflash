@@ -34,6 +34,7 @@
 namespace CurrentMetrics
 {
 extern const Metric RaftNumPrehandlingSubTasks;
+extern const Metric RaftNumParallelPrehandlingTasks;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -71,7 +72,8 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
 {
     {
         auto current = ongoing_prehandle_subtask_count.load();
-        if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
+        if (current + parallel <= parallel_subtask_limit &&
+            likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
         {
             LOG_DEBUG(
                 log,
@@ -479,6 +481,10 @@ void executeParallelTransform(
     uint64_t index,
     std::shared_ptr<StorageDeltaMerge> storage)
 {
+    CurrentMetrics::add(CurrentMetrics::RaftNumParallelPrehandlingTasks);
+    SCOPE_EXIT({
+        CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks);
+    });
     using SingleSnapshotAsyncTasks = AsyncTasks<uint64_t, std::function<bool()>, bool>;
     auto split_key_count = split_keys.size();
     RUNTIME_CHECK_MSG(
