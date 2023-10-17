@@ -770,13 +770,12 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                     {
                         if (region == nullptr)
                             continue;
-                        query_info.mvcc_query_info->regions_query_info.emplace_back(RegionQueryInfo{
+                        query_info.mvcc_query_info->regions_query_info.emplace_back(
                             id,
                             region->version(),
                             region->confVer(),
                             table_id,
-                            region->getRange()->rawKeys(),
-                            {}});
+                            region->getRange()->rawKeys());
                     }
                 }
             }

@@ -50,9 +50,9 @@ struct UnavailableRegions
 
     size_t size() const { return ids.size(); }
 
-    bool empty() const { return size() == 0; }
+    bool empty() const { return ids.empty(); }
 
-    bool contains(RegionID region_id) const { return ids.count(region_id); }
+    bool contains(RegionID region_id) const { return ids.contains(region_id); }
 
     void add(RegionID id, RegionException::RegionReadStatus status_)
     {

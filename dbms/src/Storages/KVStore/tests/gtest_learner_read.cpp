@@ -119,7 +119,7 @@ try
 
     // region_200 can stale read
     // region_201 can not stale read
-    // region_202 not exist safe ts info, can not stale read
+    // region_202 has no safe ts info, can not stale read
     // region_203 read index cache exist in the `mvcc_query_info`
     RegionTable region_table(global_ctx);
     region_table.updateSafeTS(region_id_200, /*leader_safe_ts*/ 10005, /*self_safe_ts*/ 10005);

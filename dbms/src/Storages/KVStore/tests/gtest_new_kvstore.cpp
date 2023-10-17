@@ -786,7 +786,7 @@ try
         RegionException);
 
     {
-        /// Advance the index in mock proxy
+        /// Advance the index in `MockRaftStoreProxy`
         // We can't `doApply`, since the TiKVValue is not valid.
         auto r1 = proxy_instance->getRegion(region_id);
         r1->updateAppliedIndex(index);
