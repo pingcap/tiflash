@@ -16,6 +16,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/RegionQueryInfo.h>
@@ -23,25 +24,14 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/kvrpcpb.pb.h>
 
-#include "Storages/KVStore/Types.h"
-
 namespace DB::tests
 {
 class LearnerReadTest : public ::testing::Test
 {
 public:
     LearnerReadTest()
-        : test_path(TiFlashTestEnv::getTemporaryPath("/learner_read_test"))
-        , log(Logger::get())
+        : log(Logger::get())
     {}
-
-    void SetUp() override
-    {
-        path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        kvstore = std::make_shared<KVStore>(global_ctx);
-        kvstore->restore(*path_pool, nullptr);
-    }
 
 protected:
     static kvrpcpb::ReadIndexResponse makeReadIndexResult(UInt64 index)
@@ -67,10 +57,6 @@ protected:
     }
 
 protected:
-    const String test_path;
-    std::unique_ptr<PathPool> path_pool;
-    std::shared_ptr<KVStore> kvstore;
-
     LoggerPtr log;
 };
 
