@@ -76,7 +76,7 @@ private:
 
     RegionException::UnavailableRegions ids;
     std::vector<std::pair<RegionID, LockInfoPtr>> region_locks;
-    RegionException::RegionReadStatus status{RegionException::RegionReadStatus::NOT_FOUND}; // NOLINT
+    RegionException::RegionReadStatus status{RegionException::RegionReadStatus::NOT_FOUND};
 };
 
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;

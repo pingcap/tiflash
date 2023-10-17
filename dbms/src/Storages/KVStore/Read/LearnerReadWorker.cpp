@@ -52,7 +52,10 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
         add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
         return;
     }
-    // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
+
+    // When wait index timeout happens, we return a `TiFlashException` instead of `RegionException` to break
+    // the read request from retrying.
+    // TODO: later maybe we can return SERVER_IS_BUSY to the client
     throw TiFlashException(
         Errors::Coprocessor::RegionError,
         "Region unavailable, region_id={} wait_index={} applied_index={}",
@@ -402,7 +405,14 @@ LearnerReadWorker::waitUntilDataAvailable(
     const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     GET_METRIC(tiflash_syncing_data_freshness).Observe(time_elapsed_ms / 1000.0); // For DBaaS SLI
 
-    // throw Region exception if there are any unavailable regions, the exception will be handled in `CoprocessorHandler::execute`.
+    // Throw Region exception if there are any unavailable regions, the exception will be handled in the
+    // following methods
+    // - `CoprocessorHandler::execute`
+    // - `FlashService::EstablishDisaggTask`
+    // - `DAGDriver::execute`
+    // - `DAGStorageInterpreter::doBatchCopLearnerRead`
+    // - `DAGStorageInterpreter::buildLocalStreamsForPhysicalTable`
+    // - `DAGStorageInterpreter::buildLocalExecForPhysicalTable`
     unavailable_regions.tryThrowRegionException();
 
     // Use info level if read wait index run slow
