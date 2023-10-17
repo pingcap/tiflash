@@ -107,7 +107,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
     }
     GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_parallel_wait)
         .Observe(watch.elapsedSeconds());
-    LOG_INFO(log, "Prehandle resource acquired after {} seconds, region_id={}", watch.elapsedSeconds(), region_id);
+    LOG_INFO(log, "Prehandle resource acquired after {:.3f} seconds, region_id={} parallel={}", watch.elapsedSeconds(), region_id, parallel);
 }
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
