@@ -693,7 +693,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             {
                 LOG_INFO(
                     log,
-                    "Single threaded prehandling for single region, range={}, region_id={}",
+                    "Single threaded prehandling for single region, range={} region_id={}",
                     new_region->getRange()->toDebugString(),
                     new_region->id());
                 std::tie(result, prehandle_result) = executeTransform(
