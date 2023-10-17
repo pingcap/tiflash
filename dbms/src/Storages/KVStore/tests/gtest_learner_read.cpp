@@ -136,7 +136,7 @@ try
     ASSERT_EQ(read_index_result[region_id_200].read_index(), 0);
 
     ASSERT_TRUE(read_index_result.contains(region_id_203)); // read index cache
-    ASSERT_EQ(read_index_result[region_id_200].read_index(), 0);
+    ASSERT_EQ(read_index_result[region_id_203].read_index(), 60);
 
     const auto & stats = worker.getStats();
     ASSERT_EQ(stats.num_regions, 4);
