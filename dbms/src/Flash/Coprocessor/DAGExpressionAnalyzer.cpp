@@ -1621,6 +1621,20 @@ NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
     if (unlikely(output_offsets.empty()))
         throw Exception("DAGRequest without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
+    // The root final projection requires that the column names in the schema are not duplicated,
+    // so we add an ExpressionAction::project here.
+    {
+        NamesWithAliases before_final_project_aliases;
+        UniqueNameGenerator unique_name_generator;
+        for (auto & col : source_columns)
+        {
+            auto new_col_name = unique_name_generator.toUniqueName(col.name);
+            before_final_project_aliases.emplace_back(col.name, new_col_name);
+            col.name = new_col_name;
+        }
+        actions->add(ExpressionAction::project(before_final_project_aliases));
+    }
+
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     auto [need_append_type_cast, need_append_type_cast_vec]
         = isCastRequiredForRootFinalProjection(schema, output_offsets);
