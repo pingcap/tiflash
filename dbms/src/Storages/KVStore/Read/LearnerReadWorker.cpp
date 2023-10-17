@@ -263,7 +263,7 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
     }
 }
 
-LearnerReadWorker::RegionsReadIndexResult LearnerReadWorker::readIndex(
+RegionsReadIndexResult LearnerReadWorker::readIndex(
     const LearnerReadSnapshot & regions_snapshot,
     UInt64 timeout_ms,
     Stopwatch & watch)

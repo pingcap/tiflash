@@ -21,6 +21,10 @@
 
 namespace DB
 {
+namespace tests
+{
+class LearnerReadTest;
+}
 
 struct LearnerReadStatistics
 {
@@ -75,7 +79,7 @@ private:
     RegionException::RegionReadStatus status{RegionException::RegionReadStatus::NOT_FOUND}; // NOLINT
 };
 
-
+using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
 class LearnerReadWorker
 {
 public:
@@ -97,8 +101,12 @@ public:
         UInt64 read_index_timeout_ms,
         UInt64 wait_index_timeout_ms);
 
+    const LearnerReadStatistics & getStats() const { return stats; }
+    const UnavailableRegions & getUnavailableRegions() const { return unavailable_regions; }
+
+    friend class tests::LearnerReadTest;
+
 private:
-    using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
     /// read index relate methods
     std::vector<kvrpcpb::ReadIndexRequest> buildBatchReadIndexReq(
         const RegionTable & region_table,
