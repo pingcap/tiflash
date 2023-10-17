@@ -63,8 +63,9 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/logger_useful.h>
+#include <google/protobuf/text_format.h>
 
-#include "common/logger_useful.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Dynamic/Var.h>
@@ -73,7 +74,6 @@
 #include <Poco/JSON/Parser.h>
 #pragma GCC diagnostic pop
 
-#include <google/protobuf/text_format.h>
 
 namespace ProfileEvents
 {
