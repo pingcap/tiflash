@@ -87,9 +87,10 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
     Stopwatch watch;
     LOG_DEBUG(
         log,
-        "Prehandle resource wait begin, limit={}, current={}, region_id={}",
+        "Prehandle resource wait begin, limit={} current={} parallel={} region_id={}",
         parallel_subtask_limit,
         ongoing_prehandle_subtask_count.load(),
+        parallel,
         region_id);
     while (true)
     {
@@ -106,7 +107,7 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
     }
     GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_parallel_wait)
         .Observe(watch.elapsedSeconds());
-    LOG_INFO(log, "Prehandle resource acquired after {} seconds, region_id={}", watch.elapsedSeconds(), region_id);
+    LOG_INFO(log, "Prehandle resource acquired after {:.3f} seconds, region_id={} parallel={}", watch.elapsedSeconds(), region_id, parallel);
 }
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
@@ -588,7 +589,7 @@ void executeParallelTransform(
         }
         LOG_INFO(
             log,
-            "Finished all extra parallel prehandle task write cf {} dmfiles {} error {}, splits={}, cost={}s, "
+            "Finished all extra parallel prehandle task, write_cf={} dmfiles={} error={} splits={} cost={:.3f}s "
             "region_id={}",
             prehandle_result.stats.write_cf_keys,
             prehandle_result.ingest_ids.size(),
@@ -692,7 +693,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             {
                 LOG_INFO(
                     log,
-                    "Single threaded prehandling for single region, range={}, region_id={}",
+                    "Single threaded prehandling for single region, range={} region_id={}",
                     new_region->getRange()->toDebugString(),
                     new_region->id());
                 std::tie(result, prehandle_result) = executeTransform(
