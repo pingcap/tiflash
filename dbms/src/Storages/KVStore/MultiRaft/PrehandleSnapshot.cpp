@@ -87,9 +87,10 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
     Stopwatch watch;
     LOG_DEBUG(
         log,
-        "Prehandle resource wait begin, limit={}, current={}, region_id={}",
+        "Prehandle resource wait begin, limit={} current={} parallel={} region_id={}",
         parallel_subtask_limit,
         ongoing_prehandle_subtask_count.load(),
+        parallel,
         region_id);
     while (true)
     {
