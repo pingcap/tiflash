@@ -63,6 +63,8 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+
+#include "common/logger_useful.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Dynamic/Var.h>
@@ -746,36 +748,36 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         }
         else
         {
-            TableID table_id = InvalidTableID;
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
             {
-                table_id = managed_storage->getTableInfo().id;
-
+                TableID table_id = managed_storage->getTableInfo().id;
                 // Only for (integration) test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
                 // todo support partition table
                 auto & tmt = context.getTMTContext();
                 const auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, table_id);
                 if (regions.empty())
                 {
-                    throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
+                    LOG_WARNING(
+                        log,
                         "[InterpreterSelectQuery::executeFetchColumns] can not find any regions for the query, "
                         "table_id={}",
                         table_id);
                 }
-
-                query_info.mvcc_query_info->regions_query_info.reserve(regions.size());
-                for (const auto & [id, region] : regions)
+                else
                 {
-                    if (region == nullptr)
-                        continue;
-                    query_info.mvcc_query_info->regions_query_info.emplace_back(RegionQueryInfo{
-                        id,
-                        region->version(),
-                        region->confVer(),
-                        table_id,
-                        region->getRange()->rawKeys(),
-                        {}});
+                    query_info.mvcc_query_info->regions_query_info.reserve(regions.size());
+                    for (const auto & [id, region] : regions)
+                    {
+                        if (region == nullptr)
+                            continue;
+                        query_info.mvcc_query_info->regions_query_info.emplace_back(RegionQueryInfo{
+                            id,
+                            region->version(),
+                            region->confVer(),
+                            table_id,
+                            region->getRange()->rawKeys(),
+                            {}});
+                    }
                 }
             }
         }
