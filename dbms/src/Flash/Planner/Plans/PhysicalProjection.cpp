@@ -69,15 +69,9 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
     auto final_project_aliases = analyzer.genNonRootFinalProjectAliases(column_prefix);
     project_actions->add(ExpressionAction::project(final_project_aliases));
-
-    NamesAndTypes schema = child->getSchema();
-    RUNTIME_CHECK(final_project_aliases.size() == schema.size());
-    // replace column name of schema by alias.
-    for (size_t i = 0; i < final_project_aliases.size(); ++i)
-    {
-        RUNTIME_CHECK(schema[i].name == final_project_aliases[i].first);
-        schema[i].name = final_project_aliases[i].second;
-    }
+    NamesAndTypes schema;
+    for (const auto & col : project_actions->getSampleBlock())
+        schema.emplace_back(col.name, col.type);
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),
@@ -114,16 +108,9 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         keep_session_timezone_info);
 
     project_actions->add(ExpressionAction::project(final_project_aliases));
-
-    RUNTIME_CHECK(final_project_aliases.size() == output_offsets.size());
     NamesAndTypes schema;
-    for (size_t i = 0; i < final_project_aliases.size(); ++i)
-    {
-        const auto & alias = final_project_aliases[i].second;
-        RUNTIME_CHECK(!alias.empty());
-        const auto & type = analyzer.getCurrentInputColumns()[output_offsets[i]].type;
-        schema.emplace_back(alias, type);
-    }
+    for (const auto & col : project_actions->getSampleBlock())
+        schema.emplace_back(col.name, col.type);
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),
