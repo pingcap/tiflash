@@ -807,7 +807,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 if (const auto * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
                 {
                     // With `no_kvsotre` is true, we do not do learner read
-                    if (likely(!select_query->no_kvstore))
+                    if (likely(!select_query->no_kvstore && !query_info.mvcc_query_info->regions_query_info.empty()))
                     {
                         auto table_info = managed_storage->getTableInfo();
                         learner_read_snapshot
