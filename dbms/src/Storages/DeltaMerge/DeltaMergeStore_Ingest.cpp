@@ -747,9 +747,11 @@ UInt64 DeltaMergeStore::ingestFiles(
     Segments updated_segments;
     if (!range.none())
     {
-        if (!segments.empty() || !external_files.empty()) {
+        if (!segments.empty() || !external_files.empty())
+        {
             if (use_split_replace)
-                updated_segments = ingestDTFilesUsingSplit(dm_context, range, external_files, files, clear_data_in_range);
+                updated_segments
+                    = ingestDTFilesUsingSplit(dm_context, range, external_files, files, clear_data_in_range);
             else
                 updated_segments = ingestDTFilesUsingColumnFile(dm_context, range, files, clear_data_in_range);
         }
