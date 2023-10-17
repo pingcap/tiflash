@@ -589,7 +589,7 @@ void executeParallelTransform(
         }
         LOG_INFO(
             log,
-            "Finished all extra parallel prehandle task write cf {} dmfiles {} error {}, splits={}, cost={}s, "
+            "Finished all extra parallel prehandle task, write_cf={} dmfiles={} error={} splits={} cost={:.3f}s "
             "region_id={}",
             prehandle_result.stats.write_cf_keys,
             prehandle_result.ingest_ids.size(),
