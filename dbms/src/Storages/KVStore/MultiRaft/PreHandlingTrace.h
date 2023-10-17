@@ -34,7 +34,6 @@ struct PreHandlingTrace : MutexLockWrap
 
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
     std::atomic<uint64_t> ongoing_prehandle_subtask_count{0};
-    uint64_t parallel_subtask_limit;
     std::mutex cpu_resource_mut;
     std::condition_variable cpu_resource_cv;
     LoggerPtr log;
