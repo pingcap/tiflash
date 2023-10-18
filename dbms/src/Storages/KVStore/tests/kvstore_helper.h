@@ -85,7 +85,7 @@ public:
     void SetUp() override
     {
         // clean data and create path pool instance
-        path_pool = createCleanPathPool(test_path);
+        path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
@@ -172,23 +172,6 @@ protected:
     std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
-
-    static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
-    {
-        // Drop files on disk
-        LOG_INFO(Logger::get("Test"), "Clean path {} for bootstrap", path);
-        Poco::File file(path);
-        if (file.exists())
-            file.remove(true);
-        file.createDirectories();
-
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        auto path_capacity = global_ctx.getPathCapacity();
-        auto provider = global_ctx.getFileProvider();
-        // Create a PathPool instance on the clean directory
-        Strings main_data_paths{path};
-        return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
-    }
 
     std::atomic_bool has_init{false};
     std::string test_path;
