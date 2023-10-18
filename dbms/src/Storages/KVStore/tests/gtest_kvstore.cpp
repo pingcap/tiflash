@@ -15,10 +15,9 @@
 #include <Debug/dbgTools.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
+
 TEST_F(RegionKVStoreTest, PersistenceV1)
 try
 {
@@ -1640,5 +1639,4 @@ TEST_F(RegionKVStoreTest, RegionRange)
     }
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
