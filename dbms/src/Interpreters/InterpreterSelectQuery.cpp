@@ -576,7 +576,7 @@ namespace
 {
 bool tryFillQueryRegionsByString(SelectQueryInfo & query_info, StoragePtr & storage, const String & request_str)
 {
-    if (!request_str.empty())
+    if (request_str.empty())
         return false; // parse fail
 
     TableID table_id = InvalidTableID;
