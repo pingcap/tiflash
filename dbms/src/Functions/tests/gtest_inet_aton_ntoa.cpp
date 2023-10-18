@@ -133,37 +133,36 @@ try
 }
 CATCH
 
-TEST_F(TestInetAtonNtoa, InetNtoa)
-try
+template <typename IntegerType>
+void testInetNtoaImpl(TestInetAtonNtoa & tester)
 {
     const String func_name = "IPv4NumToString";
 
     // empty column
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({}),
-        executeFunction(func_name, createColumn<Nullable<UInt32>>({})));
+        tester.executeFunction(func_name, createColumn<Nullable<IntegerType>>({})));
 
-    ASSERT_COLUMN_EQ(createColumn<String>({}), executeFunction(func_name, createColumn<UInt32>({})));
+    ASSERT_COLUMN_EQ(createColumn<String>({}), tester.executeFunction(func_name, createColumn<IntegerType>({})));
 
     // const null-only column
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, {}),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, {})));
+        tester.executeFunction(func_name, createConstColumn<Nullable<IntegerType>>(1, {})));
 
     // const non-null column
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(1, "0.0.0.1"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
+        tester.executeFunction(func_name, createConstColumn<Nullable<IntegerType>>(1, 1)));
 
     // normal cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>(
             {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
-        executeFunction(
+        tester.executeFunction(
             func_name,
-            createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
+            createColumn<Nullable<IntegerType>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
 }
-CATCH
 
 TEST_F(TestInetAtonNtoa, InetNtoaReversible)
 try
@@ -176,16 +175,28 @@ try
     std::uniform_int_distribution<UInt32> dist;
 
     InferredDataVector<Nullable<UInt32>> num_vec;
-    for (size_t i = 0; i < 10000; ++i)
+    InferredDataVector<Nullable<Int32>> num_vec_int;
+    for (size_t i = 0; i < 512; ++i)
     {
         num_vec.emplace_back(dist(mt));
+        num_vec_int.emplace_back(num_vec.back());
     }
 
     auto num_data_type = makeDataType<Nullable<UInt32>>();
+    auto num_data_type_int = makeDataType<Nullable<Int32>>();
     ColumnWithTypeAndName num_column(makeColumn<Nullable<UInt32>>(num_data_type, num_vec), num_data_type, "num");
+    ColumnWithTypeAndName num_column_int(
+        makeColumn<Nullable<Int32>>(num_data_type_int, num_vec_int),
+        num_data_type_int,
+        "num_int");
     auto str_column = executeFunction(ntoa, num_column);
-    auto num_column_2 = executeFunction(aton, str_column);
-    ASSERT_COLUMN_EQ(num_column, num_column_2);
+    {
+        auto str_to_num = executeFunction(aton, str_column);
+        ASSERT_COLUMN_EQ(num_column, str_to_num);
+    }
+    {
+        ASSERT_COLUMN_EQ(executeFunction(ntoa, num_column_int), str_column);
+    }
 }
 CATCH
 

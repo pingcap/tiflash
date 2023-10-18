@@ -808,10 +808,10 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!checkDataType<DataTypeUInt32>(&*arguments[0]))
+        if (!checkDataType<DataTypeUInt32>(&*arguments[0]) && !checkDataType<DataTypeInt32>(&*arguments[0]))
             throw Exception(
                 fmt::format(
-                    "Illegal type {} of argument of function {}, expected UInt32",
+                    "Illegal type {} of argument of function {}, expected UInt32/Int32",
                     arguments[0]->getName(),
                     getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -822,33 +822,43 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    template <typename ColumnContainer>
+    static void executeImplColumnInteger(Block & block, const ColumnContainer & vec_in, size_t result)
+    {
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & vec_res = col_res->getChars();
+        ColumnString::Offsets & offsets_res = col_res->getOffsets();
+
+        vec_res.resize(vec_in.size() * (IPV4_MAX_TEXT_LENGTH + 1)); /// the longest value is: 255.255.255.255\0
+        offsets_res.resize(vec_in.size());
+        char * begin = reinterpret_cast<char *>(&vec_res[0]);
+        char * pos = begin;
+
+        for (size_t i = 0; i < vec_in.size(); ++i)
+        {
+            formatIP<mask_tail_octets>(static_cast<UInt32>(vec_in[i]), pos);
+            offsets_res[i] = pos - begin;
+        }
+
+        vec_res.resize(pos - begin);
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
         if (const auto * col = typeid_cast<const ColumnUInt32 *>(column.get()))
         {
-            const ColumnUInt32::Container & vec_in = col->getData();
-
-            auto col_res = ColumnString::create();
-
-            ColumnString::Chars_t & vec_res = col_res->getChars();
-            ColumnString::Offsets & offsets_res = col_res->getOffsets();
-
-            vec_res.resize(vec_in.size() * (IPV4_MAX_TEXT_LENGTH + 1)); /// the longest value is: 255.255.255.255\0
-            offsets_res.resize(vec_in.size());
-            char * begin = reinterpret_cast<char *>(&vec_res[0]);
-            char * pos = begin;
-
-            for (size_t i = 0; i < vec_in.size(); ++i)
-            {
-                formatIP<mask_tail_octets>(vec_in[i], pos);
-                offsets_res[i] = pos - begin;
-            }
-
-            vec_res.resize(pos - begin);
-
-            block.getByPosition(result).column = std::move(col_res);
+            const typename ColumnUInt32::Container & vec_in = col->getData();
+            executeImplColumnInteger(block, vec_in, result);
+        }
+        else if (const auto * col = typeid_cast<const ColumnInt32 *>(column.get()))
+        {
+            const typename ColumnInt32::Container & vec_in = col->getData();
+            executeImplColumnInteger(block, vec_in, result);
         }
         else
             throw Exception(
