@@ -1169,14 +1169,7 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
 {
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
     String tz_col;
-<<<<<<< HEAD
     String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
-    // <origin_column_name, offset>
-    std::unordered_map<String, size_t> had_casted_map;
-=======
-    String tz_cast_func_name
-        = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
->>>>>>> dcb0173452 (fix the unexpected error `Block schema mismatch in FineGrainedShuffleWriter-V1` (#8200))
 
     const auto & current_columns = getCurrentInputColumns();
     NamesAndTypes after_cast_columns = current_columns;
