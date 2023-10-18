@@ -15,8 +15,42 @@
 version: '2.3'
 
 services:
-  # for tests under fullstack-test directory
-  # (engine DeltaTree)
+  pd0:
+    image: hub.pingcap.net/qa/pd:${PD_BRANCH:-master}
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./config/pd.toml:/pd.toml:ro
+      - ./data/pd0:/data
+      - ./log/pd0:/log
+    command:
+      - --name=pd0
+      - --client-urls=http://0.0.0.0:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-client-urls=http://pd0:2379
+      - --advertise-peer-urls=http://pd0:2380
+      - --initial-cluster=pd0=http://pd0:2380
+      - --config=/pd.toml
+      - --data-dir=/data
+      - --log-file=/log/pd.log
+    restart: on-failure
+  tikv0:
+    image: hub.pingcap.net/qa/tikv:${TIKV_BRANCH:-master}
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./config/tikv_v2.toml:/tikv_v2.toml:ro
+      - ./data/tikv0:/data
+      - ./log/tikv0:/log
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv0:20160
+      - --status-addr=0.0.0.0:20180
+      - --advertise-status-addr=tikv0:20180
+      - --pd=pd0:2379
+      - --config=/tikv_v2.toml
+      - --data-dir=/data
+      - --log-file=/log/tikv.log
   tiflash0:
     image: hub.pingcap.net/tiflash/tiflash-ci-base
     security_opt:
@@ -42,20 +76,3 @@ services:
     depends_on:
       - "pd0"
       - "tikv0"
-  tikv0:
-    image: hub.pingcap.net/qa/tikv:${TIKV_BRANCH:-master}
-    security_opt:
-      - seccomp:unconfined
-    volumes:
-      - ./config/tikv.toml:/tikv.toml:ro
-      - ./data/tikv0:/data
-      - ./log/tikv0:/log
-    command:
-      - --addr=0.0.0.0:20160
-      - --advertise-addr=tikv0:20160
-      - --status-addr=0.0.0.0:20180
-      - --advertise-status-addr=tikv0:20180
-      - --pd=pd0:2379
-      - --config=/tikv_v2.toml
-      - --data-dir=/data
-      - --log-file=/log/tikv.log
