@@ -705,12 +705,22 @@ void assertBlockSchema(
         const auto & expected = get_datatype(i);
 
         if (!expected->equals(*actual))
+<<<<<<< HEAD
             throw Exception(
                 fmt::format(
                     "Block schema mismatch in {}: different types: expected {}, got {}",
                     context_description,
                     expected->getName(),
                     actual->getName()));
+=======
+            throw Exception(fmt::format(
+                "Block schema mismatch in {}: different types: expected {}, got {}; col_index: {}; col_name: {}",
+                context_description,
+                expected->getName(),
+                actual->getName(),
+                i,
+                block.getByPosition(i).name));
+>>>>>>> dcb0173452 (fix the unexpected error `Block schema mismatch in FineGrainedShuffleWriter-V1` (#8200))
     }
 }
 /// used by test
