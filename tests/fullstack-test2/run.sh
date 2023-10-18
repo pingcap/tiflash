@@ -22,9 +22,9 @@ set -xe
 
 check_env
 
-# # run fullstack-tests (for engine DeltaTree)
-# docker-compose -f cluster.yaml -f tiflash-dt.yaml down
-# clean_data_log
+# run fullstack-tests (for engine DeltaTree)
+docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+clean_data_log
 
 # docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
 # wait_env
