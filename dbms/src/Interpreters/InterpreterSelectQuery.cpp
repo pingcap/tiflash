@@ -236,9 +236,8 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto storage_tmp = context.getTable(database_name, table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
         if (!managed_storage
-            || !(
-                managed_storage->engineType() == ::TiDB::StorageEngine::DT
-                || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+            || (managed_storage->engineType() != ::TiDB::StorageEngine::DT
+                && managed_storage->engineType() != ::TiDB::StorageEngine::TMT))
         {
             LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
@@ -748,6 +747,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         }
         else
         {
+            // We may run query on a table other than manageable storage on mock test
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
             {
                 TableID table_id = managed_storage->getTableInfo().id;
@@ -757,6 +757,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 const auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, table_id);
                 if (regions.empty())
                 {
+                    // We may run query on a table without any regions on mock test, keep going
                     LOG_WARNING(
                         log,
                         "[InterpreterSelectQuery::executeFetchColumns] can not find any regions for the query, "
@@ -765,6 +766,11 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 }
                 else
                 {
+                    RUNTIME_CHECK_MSG(
+                        query_info.mvcc_query_info->regions_query_info.empty(),
+                        "the origin regions info is not empty! size={}",
+                        query_info.mvcc_query_info->regions_query_info.size());
+
                     query_info.mvcc_query_info->regions_query_info.reserve(regions.size());
                     for (const auto & [id, region] : regions)
                     {
@@ -845,7 +851,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 }
 
 
-void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression)
+void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression) const
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<FilterBlockInputStream>(
@@ -999,7 +1005,7 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
 }
 
 
-void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression)
+void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression) const
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<FilterBlockInputStream>(
