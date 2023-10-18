@@ -285,7 +285,8 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
 
     LOG_DEBUG(
         log,
-        "Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} cost={}ms",
+        "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
+        "cost={}ms",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
@@ -380,9 +381,11 @@ void LearnerReadWorker::waitIndex(
     } // wait index for next region
 
     stats.wait_index_elapsed_ms = watch.elapsedMilliseconds();
-    LOG_DEBUG(
+    const auto log_lvl = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+    LOG_IMPL(
         log,
-        "Finish wait index | resolve locks, wait_cost={}ms n_regions={} n_unavailable={}",
+        log_lvl,
+        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}",
         stats.wait_index_elapsed_ms,
         stats.num_regions,
         unavailable_regions.size());
@@ -415,8 +418,10 @@ LearnerReadWorker::waitUntilDataAvailable(
     // - `DAGStorageInterpreter::buildLocalExecForPhysicalTable`
     unavailable_regions.tryThrowRegionException();
 
-    // Use info level if read wait index run slow
-    const auto log_lvl = time_elapsed_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    // Use info level if read wait index run slow or any unavailable region exists
+    const auto log_lvl = (time_elapsed_ms > 1000 || !unavailable_regions.empty()) //
+        ? Poco::Message::PRIO_INFORMATION
+        : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_lvl,

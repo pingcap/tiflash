@@ -61,6 +61,7 @@ LearnerReadSnapshot doLearnerRead(
 
     if (auto * dag_context = context.getDAGContext())
     {
+        // TODO(observability): add info about the number of stale read regions
         dag_context->has_read_wait_index = true;
         dag_context->read_wait_index_start_timestamp = start_time;
         dag_context->read_wait_index_end_timestamp = end_time;
