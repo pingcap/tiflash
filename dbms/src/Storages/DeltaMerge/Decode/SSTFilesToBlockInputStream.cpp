@@ -151,6 +151,7 @@ void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, Colum
     if (prehandle_task->abort_flag.load())
         return;
 
+    // now the stream must be stopped by `soft_limit`, let's check the keys in reader
     RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value(), cf={}", magic_enum::enum_name(cf));
     BaseBuffView cur = reader->keyView();
     RUNTIME_CHECK_MSG(
