@@ -38,6 +38,7 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -65,8 +66,6 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 #include <google/protobuf/text_format.h>
-
-#include "Flash/Coprocessor/DAGQueryInfo.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
