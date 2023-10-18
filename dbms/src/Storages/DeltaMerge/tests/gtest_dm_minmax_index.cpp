@@ -2072,7 +2072,7 @@ try
 }
 CATCH
 
-TEST_F(DMMinMaxIndexTest, InNULL)
+TEST_F(DMMinMaxIndexTest, InOrNotInNULL)
 try
 {
     RSCheckParam param;
@@ -2113,6 +2113,21 @@ try
         // make a in filter, check in (3)
         auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
         ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+    }
+    {
+        // make a not in filter, check not in (NULL)
+        auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field()}));
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+    }
+    {
+        // make a not in filter, check not in (NULL, 1)
+        auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))}));
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a not in filter, check not in (3)
+        auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))}));
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
     }
 }
 CATCH
