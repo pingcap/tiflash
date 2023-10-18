@@ -164,6 +164,14 @@ void testInetNtoaImpl(TestInetAtonNtoa & tester)
             createColumn<Nullable<IntegerType>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
 }
 
+TEST_F(TestInetAtonNtoa, InetNtoa)
+try
+{
+    testInetNtoaImpl<UInt32>(*this);
+    testInetNtoaImpl<Int32>(*this);
+}
+CATCH
+
 TEST_F(TestInetAtonNtoa, InetNtoaReversible)
 try
 {
