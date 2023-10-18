@@ -4,17 +4,16 @@
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
-   Expression: <before select>
-    MergeSorting, limit = 10
-     Union: <for partial order>
-      PartialSorting x 10: limit = 10
-       Expression: <before order>
-        Filter: <execute having>
-         SharedQuery: <restore concurrency>
-          ParallelAggregating, max_threads: 10, final: true
-           Expression x 10: <before aggregation>
-            Filter: <execute where>
-             MockTableScan
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      Expression: <before order>
+       Filter: <execute having>
+        SharedQuery: <restore concurrency>
+         ParallelAggregating, max_threads: 10, final: true
+          Expression x 10: <before aggregation>
+           Filter: <execute where>
+            MockTableScan
 @
 ~test_suite_name: SingleQueryBlock
 ~result_index: 1
@@ -38,50 +37,47 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before select>
-   Expression: <projection>
-    Expression: <final projection>
-     Expression: <projection>
-      Expression: <final projection>
-       Expression: <projection>
-        Expression: <final projection>
-         MockTableScan
+  Expression: <projection>
+   Expression: <final projection>
+    Expression: <projection>
+     Expression: <final projection>
+      Expression: <projection>
+       Expression: <final projection>
+        MockTableScan
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 1
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before select>
-   Expression: <projection>
-    SharedQuery: <restore concurrency>
-     Expression: <final projection>
-      MergeSorting, limit = 10
-       Union: <for partial order>
-        PartialSorting x 10: limit = 10
-         Expression: <projection>
-          Expression: <final projection>
-           MockTableScan
+  Expression: <projection>
+   SharedQuery: <restore concurrency>
+    Expression: <final projection>
+     MergeSorting, limit = 10
+      Union: <for partial order>
+       PartialSorting x 10: limit = 10
+        Expression: <projection>
+         Expression: <final projection>
+          MockTableScan
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 2
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before select>
-   Expression: <projection>
-    Expression: <final projection>
-     SharedQuery: <restore concurrency>
-      ParallelAggregating, max_threads: 10, final: true
-       Expression x 10: <projection>
-        SharedQuery: <restore concurrency>
-         Expression: <final projection>
-          MergeSorting, limit = 10
-           Union: <for partial order>
-            PartialSorting x 10: limit = 10
-             Expression: <projection>
-              Expression: <final projection>
-               MockTableScan
+  Expression: <projection>
+   Expression: <final projection>
+    SharedQuery: <restore concurrency>
+     ParallelAggregating, max_threads: 10, final: true
+      Expression x 10: <projection>
+       SharedQuery: <restore concurrency>
+        Expression: <final projection>
+         MergeSorting, limit = 10
+          Union: <for partial order>
+           PartialSorting x 10: limit = 10
+            Expression: <projection>
+             Expression: <final projection>
+              MockTableScan
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 3
@@ -89,41 +85,39 @@ Union: <for test>
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
-   Expression: <before select>
-    Limit, limit = 10
-     Union: <for partial limit>
-      Limit x 10, limit = 10
-       Expression: <projection>
-        Expression: <final projection>
-         Expression: <before select>
-          Filter: <execute where>
-           Expression: <projection>
-            Expression: <final projection>
-             SharedQuery: <restore concurrency>
-              ParallelAggregating, max_threads: 10, final: true
-               Expression x 10: <projection>
-                SharedQuery: <restore concurrency>
-                 Expression: <final projection>
-                  MergeSorting, limit = 10
-                   Union: <for partial order>
-                    PartialSorting x 10: limit = 10
-                     Expression: <projection>
-                      Expression: <final projection>
-                       MockTableScan
+   Limit, limit = 10
+    Union: <for partial limit>
+     Limit x 10, limit = 10
+      Expression: <projection>
+       Expression: <final projection>
+        Expression: <before select>
+         Filter: <execute where>
+          Expression: <projection>
+           Expression: <final projection>
+            SharedQuery: <restore concurrency>
+             ParallelAggregating, max_threads: 10, final: true
+              Expression x 10: <projection>
+               SharedQuery: <restore concurrency>
+                Expression: <final projection>
+                 MergeSorting, limit = 10
+                  Union: <for partial order>
+                   PartialSorting x 10: limit = 10
+                    Expression: <projection>
+                     Expression: <final projection>
+                      MockTableScan
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 4
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before select>
-   Expression: <projection>
-    Expression: <final projection>
-     Expression: <projection>
-      Expression: <final projection>
-       Expression: <projection>
-        Expression: <final projection>
-         MockExchangeReceiver
+  Expression: <projection>
+   Expression: <final projection>
+    Expression: <projection>
+     Expression: <final projection>
+      Expression: <projection>
+       Expression: <final projection>
+        MockExchangeReceiver
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 5
@@ -131,14 +125,13 @@ Union: <for test>
 Union: <for test>
  MockExchangeSender x 10
   Expression: <final projection>
-   Expression: <before select>
-    Expression: <projection>
-     Expression: <final projection>
-      Expression: <projection>
-       Expression: <final projection>
-        Expression: <projection>
-         Expression: <final projection>
-          MockExchangeReceiver
+   Expression: <projection>
+    Expression: <final projection>
+     Expression: <projection>
+      Expression: <final projection>
+       Expression: <projection>
+        Expression: <final projection>
+         MockExchangeReceiver
 @
 ~test_suite_name: Window
 ~result_index: 0
@@ -212,11 +205,10 @@ Union: <for test>
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
-   Expression: <before select>
-    MergeSorting, limit = 10
-     Union: <for partial order>
-      PartialSorting x 10: limit = 10
-       MockExchangeReceiver
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      MockExchangeReceiver
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 2
@@ -239,11 +231,10 @@ Union: <for test>
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
-   Expression: <before select>
-    MergeSorting, limit = 10
-     Union: <for partial order>
-      PartialSorting x 10: limit = 10
-       MockExchangeReceiver
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      MockExchangeReceiver
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 0
@@ -256,10 +247,9 @@ CreatingSets
      MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <before select>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-     Expression: <final projection>
-      MockExchangeReceiver
+   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
+    Expression: <final projection>
+     MockExchangeReceiver
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 1
@@ -272,10 +262,9 @@ CreatingSets
      MockExchangeReceiver
  Union: <for test>
   Expression x 5: <final projection>
-   Expression: <before select>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-     Expression: <final projection>
-      MockTableScan
+   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
+    Expression: <final projection>
+     MockTableScan
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 2
@@ -288,29 +277,26 @@ CreatingSets
      MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <before select>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-     Expression: <final projection>
-      MockExchangeReceiver
+   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
+    Expression: <final projection>
+     MockExchangeReceiver
 @
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 0
 ~result:
 Union: <for test>
  Expression x 8: <final projection>
-  Expression: <before select>
-   Aggregating: <enable fine grained shuffle>
-    MockExchangeReceiver
+  Aggregating: <enable fine grained shuffle>
+   MockExchangeReceiver
 @
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 1
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before select>
-   SharedQuery: <restore concurrency>
-    ParallelAggregating, max_threads: 10, final: true
-     MockExchangeReceiver x 10
+  SharedQuery: <restore concurrency>
+   ParallelAggregating, max_threads: 10, final: true
+    MockExchangeReceiver x 10
 @
 ~test_suite_name: Join
 ~result_index: 0
@@ -330,10 +316,9 @@ CreatingSets
        MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <before select>
-    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
-     Expression: <final projection>
-      MockTableScan
+   HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
+    Expression: <final projection>
+     MockTableScan
 @
 ~test_suite_name: Join
 ~result_index: 1
@@ -353,10 +338,9 @@ CreatingSets
        MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <before select>
-    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
-     Expression: <final projection>
-      MockExchangeReceiver
+   HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
+    Expression: <final projection>
+     MockExchangeReceiver
 @
 ~test_suite_name: Join
 ~result_index: 2
@@ -377,10 +361,9 @@ CreatingSets
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
-    Expression: <before select>
-     HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
-      Expression: <final projection>
-       MockExchangeReceiver
+    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
+     Expression: <final projection>
+      MockExchangeReceiver
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 0
@@ -393,12 +376,11 @@ CreatingSets
      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <before select>
-    SharedQuery: <restore concurrency>
-     ParallelAggregating, max_threads: 10, final: true
-      HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-       Expression: <final projection>
-        MockTableScan
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
+      Expression: <final projection>
+       MockTableScan
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 1
@@ -411,13 +393,12 @@ CreatingSets
      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <before select>
-    SharedQuery: <restore concurrency>
-     ParallelAggregating, max_threads: 10, final: true
-      HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
-       Expression: <append join key and join filters for probe side>
-        Expression: <final projection>
-         MockTableScan
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
+      Expression: <append join key and join filters for probe side>
+       Expression: <final projection>
+        MockTableScan
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 2
@@ -447,12 +428,11 @@ CreatingSets
 ~result_index: 0
 ~result:
 Expression: <final projection>
- Expression: <before select>
-  Limit, limit = 10
-   Aggregating
-    Expression: <before aggregation>
-     Filter: <execute where>
-      MockTableScan
+ Limit, limit = 10
+  Aggregating
+   Expression: <before aggregation>
+    Filter: <execute where>
+     MockTableScan
 @
 ~test_suite_name: ListBase
 ~result_index: 1
@@ -460,15 +440,14 @@ Expression: <final projection>
 Union: <for test>
  SharedQuery x 20: <restore concurrency>
   Expression: <final projection>
-   Expression: <before select>
-    MergeSorting, limit = 10
-     Union: <for partial order>
-      PartialSorting x 20: limit = 10
-       SharedQuery: <restore concurrency>
-        ParallelAggregating, max_threads: 20, final: true
-         Expression x 20: <before aggregation>
-          Filter: <execute where>
-           MockTableScan
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      SharedQuery: <restore concurrency>
+       ParallelAggregating, max_threads: 20, final: true
+        Expression x 20: <before aggregation>
+         Filter: <execute where>
+          MockTableScan
 @
 ~test_suite_name: ExpandPlan
 ~result_index: 0
@@ -484,18 +463,17 @@ CreatingSets
  Union: <for test>
   SharedQuery x 10: <restore concurrency>
    Expression: <final projection>
-    Expression: <before select>
-     MergeSorting, limit = 2
-      Union: <for partial order>
-       PartialSorting x 10: limit = 2
-        Expression: <projection>
-         Expression: <final projection>
-          HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
-           Expression: <final projection>
-            Expression: <expand: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
-             SharedQuery: <restore concurrency>
-              ParallelAggregating, max_threads: 10, final: true
-               MockExchangeReceiver x 10
+    MergeSorting, limit = 2
+     Union: <for partial order>
+      PartialSorting x 10: limit = 2
+       Expression: <projection>
+        Expression: <final projection>
+         HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
+          Expression: <final projection>
+           Expression: <expand: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
+            SharedQuery: <restore concurrency>
+             ParallelAggregating, max_threads: 10, final: true
+              MockExchangeReceiver x 10
 @
 ~test_suite_name: Expand2Plan
 ~result_index: 0
@@ -511,18 +489,17 @@ CreatingSets
  Union: <for test>
   SharedQuery x 10: <restore concurrency>
    Expression: <final projection>
-    Expression: <before select>
-     MergeSorting, limit = 2
-      Union: <for partial order>
-       PartialSorting x 10: limit = 2
-        Expression: <projection>
-         Expression: <final projection>
-          HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
-           Expression: <final projection>
-            Expand2: <expand: leveled projection: [[ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
+    MergeSorting, limit = 2
+     Union: <for partial order>
+      PartialSorting x 10: limit = 2
+       Expression: <projection>
+        Expression: <final projection>
+         HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
+          Expression: <final projection>
+           Expand2: <expand: leveled projection: [[ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
 [ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 2_UInt64 UInt64 Const(UInt64)]]>
-             Expression: <final projection>
-              SharedQuery: <restore concurrency>
-               ParallelAggregating, max_threads: 10, final: true
-                MockExchangeReceiver x 10
+            Expression: <final projection>
+             SharedQuery: <restore concurrency>
+              ParallelAggregating, max_threads: 10, final: true
+               MockExchangeReceiver x 10
 @

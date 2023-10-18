@@ -381,6 +381,14 @@ void buildActionsAfterWindow(
     chain.finalize();
     chain.clear();
 }
+
+bool hasDuplicateColumnNames(const NamesAndTypes & columns)
+{
+    std::unordered_set<String> col_name_set;
+    for (const auto & col : columns)
+        col_name_set.insert(col.name);
+    return col_name_set.size() < columns.size();
+}
 } // namespace
 
 ExpressionActionsChain::Step & DAGExpressionAnalyzer::initAndGetLastStep(ExpressionActionsChain & chain) const
@@ -1622,7 +1630,8 @@ NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
         throw Exception("DAGRequest without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     // The root final projection requires that the column names in the schema are not duplicated,
-    // so we add an ExpressionAction::project here.
+    // so we add an ExpressionAction::project if needed here.
+    if (hasDuplicateColumnNames(source_columns))
     {
         NamesWithAliases before_final_project_aliases;
         UniqueNameGenerator unique_name_generator;
