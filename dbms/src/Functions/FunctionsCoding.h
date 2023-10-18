@@ -808,10 +808,16 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!checkDataType<DataTypeUInt32>(&*arguments[0]) && !checkDataType<DataTypeInt32>(&*arguments[0]))
+        /*
+        UInt64/Int64 or other types are NOT allowed by now. MySQL will return default value and warning if failed to cast into 4B integer.
+            Warning 1411: Incorrect integer value: '`?`.`?`.`?`' for function inet_ntoa
+        */
+        if (!checkDataType<DataTypeUInt32>(&*arguments[0]) && !checkDataType<DataTypeInt32>(&*arguments[0])
+            && !checkDataType<DataTypeUInt16>(&*arguments[0]) && !checkDataType<DataTypeInt16>(&*arguments[0])
+            && !checkDataType<DataTypeUInt8>(&*arguments[0]) && !checkDataType<DataTypeInt8>(&*arguments[0]))
             throw Exception(
                 fmt::format(
-                    "Illegal type {} of argument of function {}, expected UInt32/Int32",
+                    "Illegal type {} of argument of function {}, expected UInt32/Int32/UInt16/Int16/UInt8/Int8",
                     arguments[0]->getName(),
                     getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -850,23 +856,30 @@ public:
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
-        if (const auto * col = typeid_cast<const ColumnUInt32 *>(column.get()))
-        {
-            const typename ColumnUInt32::Container & vec_in = col->getData();
-            executeImplColumnInteger(block, vec_in, result);
-        }
-        else if (const auto * col = typeid_cast<const ColumnInt32 *>(column.get()))
-        {
-            const typename ColumnInt32::Container & vec_in = col->getData();
-            executeImplColumnInteger(block, vec_in, result);
-        }
+#define DISPATCH(ColType)                                                   \
+    else if (const auto * col = typeid_cast<const ColType *>(column.get())) \
+    {                                                                       \
+        const typename ColType::Container & vec_in = col->getData();        \
+        executeImplColumnInteger(block, vec_in, result);                    \
+    }
+
+        if (false) {} // NOLINT
+        DISPATCH(ColumnUInt32)
+        DISPATCH(ColumnInt32)
+        DISPATCH(ColumnUInt16)
+        DISPATCH(ColumnInt16)
+        DISPATCH(ColumnUInt8)
+        DISPATCH(ColumnInt8)
         else
+        {
             throw Exception(
                 fmt::format(
                     "Illegal column {} of argument of function {}",
                     block.getByPosition(arguments[0]).column->getName(),
                     getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
+        }
+#undef DISPATCH
     }
 };
 
