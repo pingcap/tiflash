@@ -58,11 +58,12 @@ public:
             [](const String & child, FmtBuffer & bf) { bf.fmtAppend(R"("{}")", child); },
             ",");
         fmt_buffer.fmtAppend(
-            R"(],"outbound_rows":{},"outbound_blocks":{},"outbound_bytes":{},"outbound_allocated_bytes":{},"execution_time_ns":{})",
+            R"(],"outbound_rows":{},"outbound_blocks":{},"outbound_bytes":{},"outbound_allocated_bytes":{},"concurrency":{},"execution_time_ns":{})",
             base.rows,
             base.blocks,
             base.bytes,
             base.allocated_bytes,
+            base.concurrency,
             base.execution_time_ns);
         if constexpr (ExecutorImpl::has_extra_info)
         {
