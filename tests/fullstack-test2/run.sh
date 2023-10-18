@@ -49,11 +49,11 @@ check_env
 
 echo "run fullstack with raftstore-v2"
 
-docker-compose -f cluster.yaml -f config/tiflash-raftstore-v2.yaml up -d
+docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml up -d
 echo "wait_env start ..."
 wait_env
 echo "wait_env end ..."
-docker-compose -f cluster.yaml -f config/tiflash-raftstore-v2.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2/ddl'
+docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2/ddl'
 
-docker-compose -f cluster.yaml -f config/tiflash-raftstore-v2.yaml down
+docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml down
 clean_data_log
