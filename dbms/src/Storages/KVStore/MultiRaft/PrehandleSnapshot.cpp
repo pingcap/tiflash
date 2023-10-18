@@ -286,7 +286,7 @@ size_t KVStore::getMaxParallelPrehandleSize() const
     else
     {
         auto cpu_num = std::thread::hardware_concurrency();
-        total_concurrency = static_cast<size_t>(std::clamp((cpu_num * 0.7).clamp(2.0, 16.0)));
+        total_concurrency = static_cast<size_t>(std::clamp(cpu_num * 0.7, 2.0, 16.0));
     }
     return total_concurrency;
 }
