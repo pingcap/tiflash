@@ -55,12 +55,8 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     child->transform(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
-<<<<<<< HEAD:dbms/src/Flash/Planner/plans/PhysicalExchangeSender.cpp
-    restoreConcurrency(pipeline, dag_context.final_concurrency, log);
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
-=======
->>>>>>> dcb0173452 (fix the unexpected error `Block schema mismatch in FineGrainedShuffleWriter-V1` (#8200)):dbms/src/Flash/Planner/Plans/PhysicalExchangeSender.cpp
 
     String extra_info;
     if (fine_grained_shuffle.enable())
@@ -71,11 +67,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     }
     else
     {
-        restoreConcurrency(
-            pipeline,
-            dag_context.final_concurrency,
-            context.getSettingsRef().max_buffered_bytes_in_executor,
-            log);
+        restoreConcurrency(pipeline, dag_context.final_concurrency, log);
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
