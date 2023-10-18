@@ -127,15 +127,15 @@ inline RSOperatorPtr parseTiCompareExpr( //
             break;
         }
     }
-    int column_child_idx = -1;
+    int column_expr_child_idx = -1;
     for (int child_idx = 0; child_idx < expr.children_size(); ++child_idx)
     {
         const auto & child = expr.children(child_idx);
         if (isColumnExpr(child))
         {
             // If iter to the second column, return unsupported.
-            if (child_idx == 0 || column_child_idx == -1)
-                column_child_idx = child_idx;
+            if (column_expr_child_idx == -1)
+                column_expr_child_idx = child_idx;
             else
                 return createUnsupported(
                     expr.ShortDebugString(),
@@ -186,7 +186,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         }
     }
 
-    bool inverse_cmp = column_child_idx == 1;
+    bool inverse_cmp = column_expr_child_idx == 1;
     switch (filter_type)
     {
     case FilterParser::RSFilterType::Equal:
