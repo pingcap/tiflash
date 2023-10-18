@@ -53,7 +53,7 @@ docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml up -d
 echo "wait_env start ..."
 wait_env
 echo "wait_env end ..."
-docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2/ddl'
+docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true && ./run-test.sh fullstack-test-dt'
 
 docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml down
 clean_data_log
