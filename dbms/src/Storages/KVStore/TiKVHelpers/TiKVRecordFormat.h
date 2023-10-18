@@ -401,7 +401,6 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
     auto write_type = RecordKVFormat::readUInt8(data, len); //write type
 
     bool can_ignore = write_type != CFModifyFlag::DelFlag && write_type != CFModifyFlag::PutFlag;
-
     if (can_ignore)
         return std::nullopt;
 
