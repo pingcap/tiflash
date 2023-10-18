@@ -16,7 +16,6 @@
 
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 
-
 #include <boost/noncopyable.hpp>
 #include <memory>
 

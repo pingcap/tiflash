@@ -48,7 +48,8 @@ RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask(const SegmentRead
         {
             auto page_oid = PageOID{
                 .store_id = extra_info.remote_segment_id.store_id,
-                .ks_table_id = {extra_info.remote_segment_id.keyspace_id, extra_info.remote_segment_id.physical_table_id},
+                .ks_table_id
+                = {extra_info.remote_segment_id.keyspace_id, extra_info.remote_segment_id.physical_table_id},
                 .page_id = page_id,
             };
             cf_tiny_oids.emplace_back(page_oid);
@@ -279,7 +280,9 @@ void RNWorkerFetchPages::doFetchPages(
             // Write page into LocalPageCache. Note that the page must be occupied.
             auto oid = Remote::PageOID{
                 .store_id = seg_task->extra_remote_info->remote_segment_id.store_id,
-                .ks_table_id = {seg_task->extra_remote_info->remote_segment_id.keyspace_id, seg_task->extra_remote_info->remote_segment_id.physical_table_id},
+                .ks_table_id
+                = {seg_task->extra_remote_info->remote_segment_id.keyspace_id,
+                   seg_task->extra_remote_info->remote_segment_id.physical_table_id},
                 .page_id = remote_page.page_id(),
             };
             auto read_buffer

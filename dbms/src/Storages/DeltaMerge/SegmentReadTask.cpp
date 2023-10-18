@@ -14,15 +14,14 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Remote/RNDataProvider.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
-
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Interpreters/SharedContexts/Disagg.h>
 
 namespace CurrentMetrics
 {
@@ -198,8 +197,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
     return result_tasks;
 }
 
-void SegmentReadTask::initColumnFileDataProvider(
-    const Remote::RNLocalPageCacheGuardPtr & pages_guard)
+void SegmentReadTask::initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard)
 {
     auto & data_provider = read_snapshot->delta->getPersistedFileSetSnapshot()->data_provider;
     RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(data_provider));

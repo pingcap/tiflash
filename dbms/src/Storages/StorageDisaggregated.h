@@ -23,8 +23,8 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
-#include <Storages/IStorage.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
+#include <Storages/IStorage.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
