@@ -708,10 +708,12 @@ void assertBlockSchema(
 
         if (!expected->equals(*actual))
             throw Exception(fmt::format(
-                "Block schema mismatch in {}: different types: expected {}, got {}",
+                "Block schema mismatch in {}: different types: expected {}, got {}; col_index: {}; col_name: {}",
                 context_description,
                 expected->getName(),
-                actual->getName()));
+                actual->getName(),
+                i,
+                block.getByPosition(i).name));
     }
 }
 /// used by test
