@@ -80,20 +80,6 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     return false;
 }
 
-ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
-{
-    assert(isColumnExpr(expr));
-    auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= static_cast<Int64>(columns_to_read.size()))
-    {
-        throw TiFlashException(
-            "Column index out of bound: " + DB::toString(column_index) + ", should in [0,"
-                + DB::toString(columns_to_read.size()) + ")",
-            Errors::Coprocessor::BadRequest);
-    }
-    return columns_to_read[column_index].id;
-}
-
 ColumnDefine getColumnDefineForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
 {
     assert(isColumnExpr(expr));
@@ -107,13 +93,6 @@ ColumnDefine getColumnDefineForColumnExpr(const tipb::Expr & expr, const ColumnD
     }
     return columns_to_read[column_index];
 }
-
-enum class OperandType
-{
-    Unknown = 0,
-    Column,
-    Literal,
-};
 
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr & expr,
@@ -176,8 +155,8 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     fmt::format("ColumnRef with field type({}) is not supported", field_type),
                     false);
 
-            ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
-            attr = creator(id);
+            const auto col = getColumnDefineForColumnExpr(child, columns_to_read);
+            attr = creator(col.id);
         }
         else if (isLiteralExpr(child))
         {
@@ -349,8 +328,8 @@ RSOperatorPtr parseTiExpr(
                             false);
                     else
                     {
-                        ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
-                        Attr attr = creator(id);
+                        const auto col = getColumnDefineForColumnExpr(child, columns_to_read);
+                        Attr attr = creator(col.id);
                         op = createIsNull(attr);
                     }
                 }
