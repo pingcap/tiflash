@@ -99,8 +99,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     const FilterParser::RSFilterType filter_type,
     const ColumnDefines & columns_to_read,
     const FilterParser::AttrCreatorByColumnID & creator,
-    const TimezoneInfo & timezone_info,
-    const LoggerPtr & /*log*/)
+    const TimezoneInfo & timezone_info)
 {
     if (unlikely(expr.children_size() != 2 && filter_type != FilterParser::RSFilterType::In))
         return createUnsupported(
@@ -296,7 +295,7 @@ RSOperatorPtr parseTiExpr(
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
         case FilterParser::RSFilterType::In:
-            op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
+            op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info);
             break;
 
         case FilterParser::RSFilterType::IsNull:
