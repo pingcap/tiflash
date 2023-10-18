@@ -24,8 +24,6 @@
 
 #include <magic_enum.hpp>
 
-#include "common/likely.h"
-
 
 namespace DB
 {
@@ -134,7 +132,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                 expr.children_size()),
             false);
 
-    // Support four types of expression:
+    // Support three types of expression:
     // 1. `column` `op` `literal`
     // 2. `literal` `op` `column`
     // 3. `column` in (literal1, literal2, ...)
