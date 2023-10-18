@@ -58,10 +58,6 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     child->buildBlockInputStream(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
-<<<<<<< HEAD
-    restoreConcurrency(pipeline, dag_context.final_concurrency, log);
-=======
->>>>>>> dcb0173452 (fix the unexpected error `Block schema mismatch in FineGrainedShuffleWriter-V1` (#8200))
 
     String extra_info;
     if (fine_grained_shuffle.enable())
@@ -72,11 +68,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     }
     else
     {
-        restoreConcurrency(
-            pipeline,
-            dag_context.final_concurrency,
-            context.getSettingsRef().max_buffered_bytes_in_executor,
-            log);
+        restoreConcurrency(pipeline, dag_context.final_concurrency, log);
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
