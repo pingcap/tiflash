@@ -111,9 +111,10 @@ inline RSOperatorPtr parseTiCompareExpr( //
             false);
 
     // Support three types of expression:
-    // 1. `column` `op` `literal`
-    // 2. `literal` `op` `column`
-    // 3. `column` in (literal1, literal2, ...)
+    // 1. op(column, literal), in sql: column op literal
+    // 2. op(literal, column), in sql: literal op column
+    // 3. in(coloumn, literal1, literal2, ...), in sql: column in (literal1, literal2, ...)
+    // op is one of: =, !=, >, >=, <, <=
 
     Attr attr;
     std::vector<Field> values;
