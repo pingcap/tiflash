@@ -23,8 +23,6 @@
 #include <Storages/DeltaMerge/Filter/Like.h>
 #include <Storages/DeltaMerge/Filter/Not.h>
 #include <Storages/DeltaMerge/Filter/NotEqual.h>
-#include <Storages/DeltaMerge/Filter/NotIn.h>
-#include <Storages/DeltaMerge/Filter/NotLike.h>
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
@@ -43,8 +41,6 @@ RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_d
 RSOperatorPtr createLike(const Attr & attr, const Field & value)                                { return std::make_shared<Like>(attr, value); }
 RSOperatorPtr createNot(const RSOperatorPtr & op)                                               { return std::make_shared<Not>(op); }
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)                            { return std::make_shared<NotEqual>(attr, value); }
-RSOperatorPtr createNotIn(const Attr & attr, const Fields & values)                             { return std::make_shared<NotIn>(attr, values); }
-RSOperatorPtr createNotLike(const Attr & attr, const Field & value)                             { return std::make_shared<NotLike>(attr, value); }
 RSOperatorPtr createOr(const RSOperators & children)                                            { return std::make_shared<Or>(children); }
 RSOperatorPtr createIsNull(const Attr & attr)                                                   { return std::make_shared<IsNull>(attr);}
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not)     { return std::make_shared<Unsupported>(content, reason, is_not); }

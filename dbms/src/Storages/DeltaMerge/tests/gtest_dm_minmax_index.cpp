@@ -2072,7 +2072,7 @@ try
 }
 CATCH
 
-TEST_F(DMMinMaxIndexTest, InOrNotInNULL)
+TEST_F(DMMinMaxIndexTest, InNULL)
 try
 {
     RSCheckParam param;
@@ -2114,65 +2114,124 @@ try
         auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
         ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
     }
-    {
-        // make a not in filter, check not in (NULL)
-        auto filter = createNotIn(attr("Nullable(Int64)"), {Field()});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
-    }
-    {
-        // make a not in filter, check not in (NULL, 1)
-        auto filter = createNotIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
-    }
-    {
-        // make a not in filter, check not in (3)
-        auto filter = createNotIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
-        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
-    }
 }
 CATCH
 
-TEST_F(DMMinMaxIndexTest, TestParseIn)
+TEST_F(DMMinMaxIndexTest, ParseIn)
 try
 {
-    // a in (1, 2)
-    tipb::Expr expr;
-    expr.set_sig(tipb::ScalarFuncSig::InInt);
-    expr.set_tp(tipb::ExprType::ScalarFunc);
-    {
-        tipb::Expr * col = expr.add_children();
-        col->set_tp(tipb::ExprType::ColumnRef);
-        {
-            WriteBufferFromOwnString ss;
-            encodeDAGInt64(1, ss);
-            col->set_val(ss.releaseStr());
-        }
-        auto * field_type = col->mutable_field_type();
-        field_type->set_tp(tipb::ExprType::Int64);
-        field_type->set_flag(0);
-    }
-    {
-        tipb::Expr * lit = expr.add_children();
-        lit->set_tp(tipb::ExprType::Int64);
-        {
-            WriteBufferFromOwnString ss;
-            encodeDAGInt64(1, ss);
-            lit->set_val(ss.releaseStr());
-        }
-    }
-    {
-        tipb::Expr * lit = expr.add_children();
-        lit->set_tp(tipb::ExprType::Int64);
-        {
-            WriteBufferFromOwnString ss;
-            encodeDAGInt64(2, ss);
-            lit->set_val(ss.releaseStr());
-        }
-    }
-
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
     google::protobuf::RepeatedPtrField<tipb::Expr> filters;
-    filters.Add()->CopyFrom(expr);
+    {
+        // a in (1, 2)
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::InInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        {
+            tipb::Expr * lit = expr.add_children();
+            lit->set_tp(tipb::ExprType::Int64);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                lit->set_val(ss.releaseStr());
+            }
+        }
+        {
+            tipb::Expr * lit = expr.add_children();
+            lit->set_tp(tipb::ExprType::Int64);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(2, ss);
+                lit->set_val(ss.releaseStr());
+            }
+        }
+        filters.Add()->CopyFrom(expr);
+    }
+    {
+        // a in (1, b)
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::InInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        {
+            tipb::Expr * lit = expr.add_children();
+            lit->set_tp(tipb::ExprType::Int64);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                lit->set_val(ss.releaseStr());
+            }
+        }
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(2, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        filters.Add()->CopyFrom(expr);
+    }
+    {
+        // a in (b), this will not really happen, and it will be optimized to a = b
+        // just for test
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::InInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(1, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        {
+            tipb::Expr * col = expr.add_children();
+            col->set_tp(tipb::ExprType::ColumnRef);
+            {
+                WriteBufferFromOwnString ss;
+                encodeDAGInt64(2, ss);
+                col->set_val(ss.releaseStr());
+            }
+            auto * field_type = col->mutable_field_type();
+            field_type->set_tp(tipb::ExprType::Int64);
+            field_type->set_flag(0);
+        }
+        filters.Add()->CopyFrom(expr);
+    }
+
     const ColumnDefines columns_to_read
         = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()},
            ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
@@ -2194,7 +2253,17 @@ try
     };
     const auto op
         = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
-    ASSERT_EQ(op->toDebugString(), "{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]}");
+    ASSERT_EQ(
+        op->toDebugString(),
+        "{\"op\":\"and\",\"children\":[{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]},{\"op\":\"unsupported\","
+        "\"reason\":\"Multiple ColumnRef in expression is not supported\",\"content\":\"tp: ScalarFunc children { tp: "
+        "ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 0 } } children { tp: "
+        "Int64 val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" } children { tp: ColumnRef val: "
+        "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: "
+        "InInt\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"Multiple ColumnRef in expression is not "
+        "supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: "
+        "\"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 0 } } children { tp: ColumnRef val: "
+        "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: InInt\",\"is_not\":\"0\"}]}");
 }
 CATCH
 
