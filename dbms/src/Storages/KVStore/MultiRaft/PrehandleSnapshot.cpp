@@ -72,18 +72,16 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
 {
     {
         auto current = ongoing_prehandle_subtask_count.load();
-        if (current + parallel <= parallel_subtask_limit)
+        if (current + parallel <= parallel_subtask_limit
+            && ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel))
         {
-            if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
-            {
-                LOG_DEBUG(
-                    log,
-                    "Prehandle resource meet, limit={}, current={}, region_id={}",
-                    parallel_subtask_limit,
-                    ongoing_prehandle_subtask_count.load(),
-                    region_id);
-                return;
-            }
+            LOG_DEBUG(
+                log,
+                "Prehandle resource meet, limit={}, current={}, region_id={}",
+                parallel_subtask_limit,
+                ongoing_prehandle_subtask_count.load(),
+                region_id);
+            return;
         }
     }
     Stopwatch watch;
@@ -101,12 +99,10 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
             return ongoing_prehandle_subtask_count.load() + parallel <= parallel_subtask_limit;
         });
         auto current = ongoing_prehandle_subtask_count.load();
-        if (current + parallel <= parallel_subtask_limit)
+        if (current + parallel <= parallel_subtask_limit
+            && ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel))
         {
-            if (likely(ongoing_prehandle_subtask_count.compare_exchange_weak(current, current + parallel)))
-            {
-                break;
-            }
+            break;
         }
     }
     GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_parallel_wait)
