@@ -379,6 +379,9 @@ namespace DB
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
       F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
+      F(type_apply_snapshot_predecode_parallel_wait,                                                                                \
+        {{"type", "snapshot_predecode_parallel_wait"}},                                                                             \
+        ExpBuckets{0.1, 2, 10}),                                                                                                    \
       F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets{0.05, 2, 10}),                    \
       F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                          \
     M(tiflash_raft_process_keys,                                                                                                    \
