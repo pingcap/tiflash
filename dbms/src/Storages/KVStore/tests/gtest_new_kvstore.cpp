@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockSSTGenerator.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 
@@ -48,13 +49,16 @@ try
                       ->normalWrite(region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             tryPersistRegion(kvs, region_id);
         }
         {
             const KVStore & kvs = reloadKVSFromDisk();
+            proxy_instance->reload(region_id);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index + 1);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
@@ -82,16 +86,19 @@ try
                       ->normalWrite(region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore failed before write and advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             tryPersistRegion(kvs, region_id);
         }
         {
             MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
+            proxy_instance->reload(region_id);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
+            ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
@@ -130,7 +137,7 @@ try
                       ->normalWrite(region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_NE(kvr1->appliedIndex(), index);
             // The persisted applied_index is `applied_index`.
@@ -138,8 +145,10 @@ try
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
+            proxy_instance->reload(region_id);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
@@ -159,7 +168,7 @@ try
                 {4},
                 {{{RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60)}}});
             MockRaftStoreProxy::FailCond cond;
-            cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE;
+            cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_PERSIST_ADVANCE;
 
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
@@ -171,13 +180,15 @@ try
                       ->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore succeed. Proxy failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             tryPersistRegion(kvs, region_id);
         }
         {
             MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
+            proxy_instance->reload(region_id);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
@@ -350,7 +361,7 @@ static void validate(
     KVStore & kvs,
     std::unique_ptr<MockRaftStoreProxy> & proxy_instance,
     UInt64 region_id,
-    MockRaftStoreProxy::Cf & cf_data,
+    MockSSTGenerator & cf_data,
     ColumnFamilyType cf,
     int sst_size,
     int key_count)
@@ -364,7 +375,7 @@ static void validate(
                               SSTView snap,
                               SSTReader::RegionRangeFilter range,
                               size_t split_id) -> std::unique_ptr<MonoSSTReader> {
-        auto parsed_kind = MockRaftStoreProxy::parseSSTViewKind(buffToStrView(snap.path));
+        auto parsed_kind = MockSSTGenerator::parseSSTViewKind(buffToStrView(snap.path));
         auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
         assert(reader->sst_format_kind() == parsed_kind);
         return reader;
@@ -412,7 +423,7 @@ try
             {
                 // Only one file
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{900, 800, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{900, 800, ColumnFamilyType::Default};
                 default_cf.insert(1, "v1");
                 default_cf.insert(2, "v2");
                 default_cf.finish_file();
@@ -422,7 +433,7 @@ try
             {
                 // Empty
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{901, 800, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{901, 800, ColumnFamilyType::Default};
                 default_cf.finish_file();
                 default_cf.freeze();
                 validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 0);
@@ -430,7 +441,7 @@ try
             {
                 // Multiple files
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{902, 800, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{902, 800, ColumnFamilyType::Default};
                 default_cf.insert(1, "v1");
                 default_cf.finish_file();
                 default_cf.insert(2, "v2");
@@ -450,7 +461,7 @@ try
             {
                 // Test of ingesting multiple files with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
                 default_cf.insert(1, "v1");
                 default_cf.insert(2, "v2");
                 default_cf.finish_file();
@@ -484,7 +495,7 @@ try
             {
                 // Test of ingesting single file with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
                 default_cf.insert(10, "v10");
                 default_cf.insert(11, "v11");
                 default_cf.finish_file();
@@ -511,12 +522,12 @@ try
             {
                 // Test of ingesting multiple cfs with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
                 default_cf.insert(20, "v20");
                 default_cf.insert(21, "v21");
                 default_cf.finish_file();
                 default_cf.freeze();
-                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
                 write_cf.insert(20, "v20");
                 write_cf.insert(21, "v21");
                 write_cf.finish_file();
@@ -539,12 +550,12 @@ try
             {
                 // Test of ingesting duplicated key with the same value.
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
                 default_cf.insert(21, "v21");
                 default_cf.insert(21, "v21");
                 default_cf.finish_file();
                 default_cf.freeze();
-                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
                 write_cf.insert(21, "v21");
                 write_cf.insert(21, "v21");
                 write_cf.finish_file();
@@ -558,12 +569,12 @@ try
             {
                 // Test of ingesting duplicated key with different values.
                 MockSSTReader::getMockSSTData().clear();
-                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
                 default_cf.insert(21, "v21");
                 default_cf.insert(21, "v22");
                 default_cf.finish_file();
                 default_cf.freeze();
-                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
                 write_cf.insert(21, "v21");
                 write_cf.insert(21, "v21");
                 write_cf.finish_file();
@@ -581,11 +592,11 @@ try
                 MockSSTReader::getMockSSTData().clear();
                 auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
                 auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
-                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
                 default_cf.insert_raw(k1, value_default1);
                 default_cf.finish_file();
                 default_cf.freeze();
-                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
                 write_cf.insert_raw(k1, value_write1);
                 write_cf.finish_file();
                 write_cf.freeze();
@@ -630,7 +641,7 @@ try
     KVStore & kvs = getKVS();
     {
         std::string k = "7480000000000000FF795F720380000000FF0000026303800000FF0000017801000000FCF9DE534E2797FB83";
-        MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+        MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
         write_cf.insert_raw(Redact::hexStringToKey(k.data(), k.size()), "v1");
         write_cf.finish_file(SSTFormatKind::KIND_TABLET);
         write_cf.freeze();
@@ -666,7 +677,7 @@ try
             auto kin1 = RecordKVFormat::genKey(table_id, 0, 0);
             auto kin2 = RecordKVFormat::genKey(table_id, 5, 0);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.insert_raw(klo, "v1");
             default_cf.insert_raw(klo2, "v1");
             default_cf.insert_raw(kin1, "v1");
@@ -675,7 +686,7 @@ try
             default_cf.insert_raw(kro2, "v1");
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(klo, "v1");
             write_cf.insert_raw(klo2, "v1");
             write_cf.insert_raw(kro, "v1");
@@ -768,7 +779,7 @@ try
 
     // We can't `doApply`, since the TiKVValue is not valid.
     auto r1 = proxy_instance->getRegion(region_id);
-    r1->updateAppliedIndex(index);
+    r1->updateAppliedIndex(index, true);
     kvr1->setApplied(index, term);
     auto regions_snapshot = doLearnerRead(table_id, mvcc_query_info, false, ctx, log);
     // 0 unavailable regions
@@ -811,11 +822,11 @@ try
             auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
             auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.insert_raw(k1, value_default);
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k1, value_write);
             write_cf.insert_raw(k2, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
@@ -904,10 +915,10 @@ try
         {
             auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k1, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -921,10 +932,10 @@ try
         {
             auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k2, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -961,10 +972,10 @@ try
         {
             auto k5 = RecordKVFormat::genKey(table_id, 5, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k5, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -1014,10 +1025,10 @@ try
         {
             auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k1, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -1031,10 +1042,10 @@ try
         {
             auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k2, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -1071,10 +1082,10 @@ try
         {
             auto k5 = RecordKVFormat::genKey(table_id, 5, 111);
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.insert_raw(k5, value_write);
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -1120,10 +1131,10 @@ try
 
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 

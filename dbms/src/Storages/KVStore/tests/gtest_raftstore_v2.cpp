@@ -61,7 +61,7 @@ try
         auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -69,7 +69,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -141,7 +141,7 @@ try
 
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             for (uint64_t tso = 1; tso < 50; tso++)
             {
                 auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(tso, 999);
@@ -150,7 +150,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             for (uint64_t tso = 1; tso < 50; tso++)
             {
                 auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(tso, 999);
@@ -205,7 +205,7 @@ try
         auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -213,7 +213,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -234,7 +234,7 @@ try
 CATCH
 
 // Test if one subtask throws.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnap4)
+TEST_F(RegionKVStoreTest, KVStoreSingleSnapXXX4)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -264,7 +264,7 @@ try
         auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -272,7 +272,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -282,9 +282,10 @@ try
             write_cf.freeze();
 
             std::shared_ptr<std::atomic_uint64_t> fpv = std::make_shared<std::atomic_uint64_t>(0);
+            FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
+            SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_raise_prehandle_exception"); });
             {
                 fpv->store(1);
-                FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
                 auto [kvr1, res]
                     = proxy_instance
                           ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
@@ -304,7 +305,7 @@ try
 CATCH
 
 // Test if default has significantly more kvs than write cf.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnap5)
+TEST_F(RegionKVStoreTest, KVStoreSingleSnapXXX5)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -337,7 +338,7 @@ try
         auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -345,7 +346,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             for (HandleID h = table_limit_start + 10; h < table_limit_end - 10; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -412,7 +413,7 @@ try
         std::vector<std::thread> ths;
         auto runId = [&](size_t ths_id) {
             auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-            MockRaftStoreProxy::Cf default_cf{region_ids[ths_id], table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_ids[ths_id], table_id, ColumnFamilyType::Default};
             for (HandleID h = table_limits[ths_id]; h < table_limits[ths_id + 1]; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -420,7 +421,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_ids[ths_id], table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_ids[ths_id], table_id, ColumnFamilyType::Write};
             for (HandleID h = table_limits[ths_id]; h < table_limits[ths_id + 1]; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -441,7 +442,7 @@ try
             }
         };
         ths.push_back(std::thread(runId, 0));
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
         ASSERT_EQ(kvs.getOngoingPrehandleTaskCount(), 1);
         for (size_t ths_id = 1; ths_id < region_ids.size(); ths_id++)
