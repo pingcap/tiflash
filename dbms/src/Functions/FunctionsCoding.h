@@ -810,7 +810,7 @@ public:
     {
         /*
         UInt64, Signed Integer or other types are NOT allowed by now.
-        MySQL will return default value and warning if failed to cast into 4 bytes unsigned integer.
+		MySQL will return default value and warning if failed to cast into 4 bytes unsigned integer(include `Out of range`).
             Warning 1411: Incorrect integer value: '`?`.`?`.`?`' for function inet_ntoa
         */
         if (arguments[0]->isUnsignedInteger() && arguments[0]->getSizeOfValueInMemory() <= sizeof(UInt32))
