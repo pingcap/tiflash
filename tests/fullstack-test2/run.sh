@@ -49,6 +49,8 @@ clean_data_log
 
 echo "run fullstack with raftstore-v2"
 
+ls .
+ls ./config
 docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml up -d
 echo "wait_env start ..."
 wait_env
