@@ -484,14 +484,15 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
         // We record them, as persisted raft log, for potential recovery.
-        region->commands[index]
-            = {term,
-               MockProxyRegion::RawWrite{
-                   keys,
-                   vals,
-                   cmd_types,
-                   cmd_cf,
-               }};
+        region->commands[index] = {
+            term,
+            MockProxyRegion::RawWrite{
+                keys,
+                vals,
+                cmd_types,
+                cmd_cf,
+            },
+        };
     }
     return std::make_tuple(index, term);
 }

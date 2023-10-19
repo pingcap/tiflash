@@ -1,119 +1,141 @@
 ~test_suite_name: SimplePipeline
 ~result_index: 0
 ~result:
+query concurrency: 1
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Filter|selection_1 -> Projection|project_2 -> Limit|limit_3 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_4
 @
 ~test_suite_name: SimplePipeline
 ~result_index: 1
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: StrangeQuery
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Filter|selection_1 -> Filter|selection_2 -> Filter|selection_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: StrangeQuery
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Limit|limit_2 -> Limit|limit_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: StrangeQuery
 ~result_index: 2
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> TopN|topn_2 -> TopN|topn_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: SingleQueryBlock
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> TopN|topn_4 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Filter|selection_1 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: SingleQueryBlock
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> Limit|limit_4 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Filter|selection_1 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 0
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 1
 ~result:
+query concurrency: 5
 pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 2
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 3
 ~result:
+query concurrency: 5
 pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 4
 ~result:
+query concurrency: 1
 pipeline#0: AggregationConvergent|aggregation_1 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 5
 ~result:
+query concurrency: 5
 pipeline#0: AggregationConvergent|aggregation_1 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 6
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 7
 ~result:
+query concurrency: 5
 pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 8
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> Filter|selection_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 9
 ~result:
+query concurrency: 5
 pipeline#0: MockTableScan|table_scan_0 -> Filter|selection_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 10
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|project_2 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 11
 ~result:
+query concurrency: 1
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|project_2 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 12
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|project_2 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 13
 ~result:
+query concurrency: 1
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|project_2 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 14
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: AggregationConvergent|aggregation_1 -> Projection|project_2 -> AggregationBuild|NonTiDBOperator
   |- pipeline#2: MockTableScan|table_scan_0 -> AggregationBuild|NonTiDBOperator
@@ -121,6 +143,7 @@ pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
 ~test_suite_name: ParallelQuery
 ~result_index: 15
 ~result:
+query concurrency: 1
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: AggregationConvergent|aggregation_1 -> Projection|project_2 -> AggregationBuild|NonTiDBOperator
   |- pipeline#2: MockTableScan|table_scan_0 -> AggregationBuild|NonTiDBOperator
@@ -128,134 +151,159 @@ pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
 ~test_suite_name: ParallelQuery
 ~result_index: 16
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
  |- pipeline#1: MockTableScan|table_scan_0 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 17
 ~result:
+query concurrency: 1
 pipeline#0: AggregationConvergent|aggregation_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
  |- pipeline#1: MockTableScan|table_scan_0 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 18
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 19
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 20
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 21
 ~result:
+query concurrency: 1
 pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 22
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_1 -> Limit|limit_2 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> Projection|project_2 -> Projection|project_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> TopN|topn_2 -> Projection|project_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 2
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_4 -> Projection|project_5 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Projection|project_1 -> TopN|topn_2 -> Projection|project_3 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 3
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_4 -> Projection|project_5 -> Filter|selection_6 -> Projection|project_7 -> Limit|limit_8 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Projection|project_1 -> TopN|topn_2 -> Projection|project_3 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 4
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|project_1 -> Projection|project_2 -> Projection|project_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 5
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|project_1 -> Projection|project_2 -> Projection|project_3 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_4
 @
 ~test_suite_name: Window
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> WindowSort|sort_1 -> Window|window_2 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: Window
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> WindowSort|sort_1 -> Window|window_2 -> Projection|project_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: Window
 ~result_index: 2
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> WindowSort|sort_1 -> Projection|project_2 -> Window|window_3 -> Projection|project_4 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> WindowSort|sort_1 -> Window|window_2 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 2
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> WindowSort|sort_1 -> Window|window_2 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 3
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> Projection|NonTiDBOperator
  |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> Projection|NonTiDBOperator
  |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Aggregation|aggregation_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_1 -> Projection|NonTiDBOperator
  |- pipeline#1: MockExchangeReceiver|exchange_receiver_0 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: Join
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_6 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_1 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
   |- pipeline#2: MockTableScan|table_scan_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
@@ -264,6 +312,7 @@ pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProb
 ~test_suite_name: Join
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_6 -> Projection|NonTiDBOperator
  |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
   |- pipeline#2: MockExchangeReceiver|exchange_receiver_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
@@ -272,6 +321,7 @@ pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperat
 ~test_suite_name: Join
 ~result_index: 2
 ~result:
+query concurrency: 10
 pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_6 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_7
  |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
   |- pipeline#2: MockExchangeReceiver|exchange_receiver_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
@@ -280,6 +330,7 @@ pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperat
 ~test_suite_name: JoinThenAgg
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> AggregationBuild|NonTiDBOperator
   |- pipeline#2: MockTableScan|table_scan_1 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
@@ -287,6 +338,7 @@ pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
 ~test_suite_name: JoinThenAgg
 ~result_index: 1
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> AggregationBuild|NonTiDBOperator
   |- pipeline#2: MockTableScan|table_scan_1 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
@@ -294,6 +346,7 @@ pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
 ~test_suite_name: JoinThenAgg
 ~result_index: 2
 ~result:
+query concurrency: 20
 pipeline#0: AggregationConvergent|aggregation_3 -> Limit|limit_4 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_5
  |- pipeline#1: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> AggregationBuild|NonTiDBOperator
   |- pipeline#2: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator
@@ -301,24 +354,28 @@ pipeline#0: AggregationConvergent|aggregation_3 -> Limit|limit_4 -> Projection|N
 ~test_suite_name: ListBase
 ~result_index: 0
 ~result:
+query concurrency: 1
 pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> Limit|limit_4 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Filter|selection_1 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ListBase
 ~result_index: 1
 ~result:
+query concurrency: 20
 pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> TopN|topn_4 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_0 -> Filter|selection_1 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: ExpandPlan
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_1 -> Expand|expand_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|project_6 -> TopN|topn_7 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_3 -> Projection|project_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator |- pipeline#2: MockExchangeReceiver|exchange_receiver_0 -> AggregationBuild|NonTiDBOperator
 @
 ~test_suite_name: Expand2Plan
 ~result_index: 0
 ~result:
+query concurrency: 10
 pipeline#0: AggregationConvergent|aggregation_1 -> Filter|expand_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|project_6 -> TopN|topn_7 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_3 -> Projection|project_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator |- pipeline#2: MockExchangeReceiver|exchange_receiver_0 -> AggregationBuild|NonTiDBOperator
 @

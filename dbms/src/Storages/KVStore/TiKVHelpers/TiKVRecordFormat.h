@@ -401,7 +401,6 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
     auto write_type = RecordKVFormat::readUInt8(data, len); //write type
 
     bool can_ignore = write_type != CFModifyFlag::DelFlag && write_type != CFModifyFlag::PutFlag;
-
     if (can_ignore)
         return std::nullopt;
 
@@ -501,7 +500,6 @@ inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_ke
         decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
-using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 inline std::string DecodedTiKVKeyRangeToDebugString(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & key_range)
 {
     if (unlikely(*key_range.first >= *key_range.second))

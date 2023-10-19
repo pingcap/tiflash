@@ -541,7 +541,6 @@ Block GenRegionBlockDataWithSchema(
     // No committed data, just return
     if (!data_list_read)
         return res_block;
-
     {
         Stopwatch watch;
         {

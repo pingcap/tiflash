@@ -174,7 +174,7 @@ public:
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
     bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
 
-    UInt64 getSelfSafeTS(UInt64 region_id);
+    UInt64 getSelfSafeTS(UInt64 region_id) const;
 
 private:
     friend class MockTiDB;
