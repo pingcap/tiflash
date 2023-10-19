@@ -808,16 +808,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        /*
-        UInt64, Signed Integer or other types are NOT allowed by now.
-        MySQL will return default value and warning if failed to cast into 4 bytes unsigned integer(include `Out of range`).
-            Warning 1411: Incorrect integer value: '`?`.`?`.`?`' for function inet_ntoa
-        */
-        if (arguments[0]->isUnsignedInteger() && arguments[0]->getSizeOfValueInMemory() <= sizeof(UInt32))
-            return std::make_shared<DataTypeString>();
+        if (arguments[0]->isInteger())
+            return makeNullable(std::make_shared<DataTypeString>());
         throw Exception(
             fmt::format(
-                "Illegal type {} of argument of function {}, expected UInt32/UInt16/UInt8",
+                "Illegal type {} of argument of function {}, expected integer",
                 arguments[0]->getName(),
                 getName()),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -830,24 +825,36 @@ public:
     static void executeImplColumnInteger(Block & block, const ColumnContainer & vec_in, size_t result)
     {
         auto col_res = ColumnString::create();
-
+        auto nullmap_res = ColumnUInt8::create();
         ColumnString::Chars_t & vec_res = col_res->getChars();
         ColumnString::Offsets & offsets_res = col_res->getOffsets();
+        ColumnUInt8::Container & vec_res_nullmap = nullmap_res->getData();
 
         vec_res.resize(vec_in.size() * (IPV4_MAX_TEXT_LENGTH + 1)); /// the longest value is: 255.255.255.255\0
         offsets_res.resize(vec_in.size());
+        vec_res_nullmap.assign(vec_in.size(), static_cast<UInt8>(0));
+
         char * begin = reinterpret_cast<char *>(&vec_res[0]);
         char * pos = begin;
 
         for (size_t i = 0; i < vec_in.size(); ++i)
         {
-            formatIP<mask_tail_octets>(static_cast<UInt32>(vec_in[i]), pos);
+            auto && value = vec_in[i];
+            if (/*always `false` for unsigned integer*/ value < 0
+                || /*auto optimized by compiler*/ static_cast<UInt64>(value) > std::numeric_limits<UInt32>::max())
+            {
+                *pos++ = 0;
+                vec_res_nullmap[i] = 1;
+            }
+            else
+            {
+                formatIP<mask_tail_octets>(static_cast<UInt32>(value), pos);
+            }
             offsets_res[i] = pos - begin;
         }
 
         vec_res.resize(pos - begin);
-
-        block.getByPosition(result).column = std::move(col_res);
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_res));
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -862,9 +869,14 @@ public:
     }
 
         if (false) {} // NOLINT
+        DISPATCH(ColumnUInt64)
+        DISPATCH(ColumnInt64)
         DISPATCH(ColumnUInt32)
+        DISPATCH(ColumnInt32)
         DISPATCH(ColumnUInt16)
+        DISPATCH(ColumnInt16)
         DISPATCH(ColumnUInt8)
+        DISPATCH(ColumnInt8)
         else
         {
             throw Exception(
