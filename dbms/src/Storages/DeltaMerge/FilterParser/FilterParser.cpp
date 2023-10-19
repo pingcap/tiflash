@@ -186,6 +186,18 @@ inline RSOperatorPtr parseTiCompareExpr( //
         }
     }
 
+    // At least one ColumnRef and one Literal
+    if (unlikely(column_expr_child_idx == -1))
+        return createUnsupported(expr.ShortDebugString(), "No ColumnRef in expression", false);
+    if (unlikely(values.empty()))
+        return createUnsupported(expr.ShortDebugString(), "No Literal in expression", false);
+    // For compare expression, only support one Literal
+    if (unlikely(values.size() > 1 && filter_type != FilterParser::RSFilterType::In))
+        return createUnsupported(
+            expr.ShortDebugString(),
+            fmt::format("Multiple Literal in compare expression is not supported, size: {}", values.size()),
+            false);
+
     bool inverse_cmp = column_expr_child_idx == 1;
     switch (filter_type)
     {
