@@ -51,6 +51,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <TiDB/Decode/TypeMapping.h>
@@ -309,6 +310,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
             Errors::Coprocessor::BadRequest);
     }
 }
+
+DAGStorageInterpreter::~DAGStorageInterpreter() = default;
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {

@@ -31,8 +31,16 @@ struct PreHandlingTrace : MutexLockWrap
         {}
         std::atomic_bool abort_flag;
     };
-    std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
 
+    std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
+    std::atomic<uint64_t> ongoing_prehandle_subtask_count{0};
+    std::mutex cpu_resource_mut;
+    std::condition_variable cpu_resource_cv;
+    LoggerPtr log;
+
+    PreHandlingTrace()
+        : log(Logger::get("PreHandlingTrace"))
+    {}
     std::shared_ptr<Item> registerTask(uint64_t region_id)
     {
         // Automaticlly override the old one.
@@ -60,6 +68,19 @@ struct PreHandlingTrace : MutexLockWrap
     {
         auto _ = genLockGuard();
         return tasks.find(region_id) != tasks.end();
+    }
+    void waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit);
+    void releaseSubtaskResources(uint64_t region_id, size_t split_id)
+    {
+        std::unique_lock<std::mutex> cpu_resource_lock(cpu_resource_mut);
+        // TODO(split) refine this to avoid notify_all
+        auto prev = ongoing_prehandle_subtask_count.fetch_sub(1);
+        RUNTIME_CHECK_MSG(
+            prev > 0,
+            "Try to decrease prehandle subtask count to below 0, region_id={}, split_id={}",
+            region_id,
+            split_id);
+        cpu_resource_cv.notify_all();
     }
 };
 } // namespace DB

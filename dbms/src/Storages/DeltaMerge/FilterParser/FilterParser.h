@@ -77,10 +77,10 @@ public:
         LessEqual,
 
         In,
-        NotIn,
+        // NotIn, TiDB will convert it to Not(In）
 
         Like,
-        NotLike,
+        // NotLike, TiDB will convert it to Not(Like)
 
         IsNull,
     };

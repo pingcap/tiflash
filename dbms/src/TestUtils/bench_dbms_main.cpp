@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
 
@@ -25,6 +26,7 @@ int main(int argc, char * argv[])
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     if (::benchmark::ReportUnrecognizedArguments(argc, argv))
         return 1;
+    DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
     ::benchmark::RunSpecifiedBenchmarks();
     DB::tests::TiFlashTestEnv::shutdown();
     ::benchmark::Shutdown();

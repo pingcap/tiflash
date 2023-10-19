@@ -14,24 +14,10 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
-
-namespace DB::DM
+namespace DB
 {
 
-class NotLike : public ColCmpVal
-{
-public:
-    NotLike(const Attr & attr_, const Field & value_)
-        : ColCmpVal(attr_, value_, 0)
-    {}
+struct RegionQueryInfo;
+struct MvccQueryInfo;
 
-    String name() override { return "not_like"; }
-
-    RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
-    {
-        return RSResults(pack_count, Some);
-    }
-};
-
-} // namespace DB::DM
+} // namespace DB

@@ -41,7 +41,7 @@ function wait_env() {
 
   for (( i = 0; i < "${timeout}"; i++ )); do
     if [[ -n $(cat ./log/tidb0/tidb.log | grep "server is running MySQL protocol") && \
-          -n $(cat ./log/tiflash/server.log | grep "Ready for connections") ]]; then
+          -n $(cat ./log/tiflash/server.log | grep "Start to wait for terminal signal") ]]; then
         local failed='false'
         break
     fi
