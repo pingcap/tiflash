@@ -18,9 +18,9 @@
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/FastAddPeer.h>
 
 namespace DB
 {

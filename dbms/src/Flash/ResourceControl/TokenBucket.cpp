@@ -49,6 +49,7 @@ void TokenBucket::reConfig(const TokenBucketConfig & config)
     auto now = std::chrono::steady_clock::now();
     tokens = config.tokens;
     fill_rate = config.fill_rate;
+    fill_rate_ms = config.fill_rate / 1000;
     capacity = config.capacity;
 
     compact(now);
@@ -85,6 +86,9 @@ double TokenBucket::getAvgSpeedPerSec()
 
 void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
 {
+    if (timepoint - last_compact_timepoint <= MIN_COMPACT_INTERVAL)
+        return;
+
     tokens += getDynamicTokens(timepoint);
     if (tokens >= capacity)
         tokens = capacity;
@@ -95,8 +99,8 @@ double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) c
 {
     RUNTIME_CHECK(timepoint >= last_compact_timepoint);
     auto elspased = timepoint - last_compact_timepoint;
-    auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
-    return elapsed_second * fill_rate;
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elspased).count();
+    return elapsed_ms * fill_rate_ms;
 }
 
 } // namespace DB

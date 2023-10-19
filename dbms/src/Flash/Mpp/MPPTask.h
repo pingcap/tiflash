@@ -62,7 +62,7 @@ public:
 private:
     MPPTaskManager * manager = nullptr;
     String task_unique_id;
-    bool initialized = false;
+    bool added_to_monitor = false;
 };
 
 class MPPTask
@@ -77,6 +77,15 @@ public:
     static Ptr newTask(Args &&... args)
     {
         return Ptr(new MPPTask(std::forward<Args>(args)...));
+    }
+
+    /// Ensure all MPPTasks are allocated as std::shared_ptr
+    template <typename... Args>
+    static Ptr newTaskForTest(Args &&... args)
+    {
+        auto ret = Ptr(new MPPTask(std::forward<Args>(args)...));
+        ret->initForTest();
+        return ret;
     }
 
     const MPPTaskId & getId() const { return id; }
@@ -104,6 +113,8 @@ private:
     MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_);
 
     void runImpl();
+
+    void initForTest();
 
     void unregisterTask();
 
@@ -165,7 +176,7 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
-    std::atomic<bool> is_public{false};
+    std::atomic<bool> is_registered{false};
 
     MPPTaskScheduleEntry schedule_entry;
 

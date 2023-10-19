@@ -35,14 +35,14 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PartitionStreams.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
@@ -773,18 +773,18 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size, static_cast<size_t>(3));
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
-    auto ingest_ids = kvstore->preHandleSnapshotToFiles(
+    auto prehandle_result = kvstore->preHandleSnapshotToFiles(
         new_region,
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
         std::nullopt,
         tmt);
-    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
+    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, prehandle_result.ingest_ids});
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
-        output(fmt::format("Generate {} files for [region_id={}]", ingest_ids.size(), region_id));
+        output(fmt::format("Generate {} files for [region_id={}]", prehandle_result.ingest_ids.size(), region_id));
     }
 }
 
@@ -879,18 +879,18 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size, static_cast<size_t>(3));
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
-    auto ingest_ids = kvstore->preHandleSnapshotToFiles(
+    auto prehandle_result = kvstore->preHandleSnapshotToFiles(
         new_region,
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
         std::nullopt,
         tmt);
-    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
+    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, prehandle_result.ingest_ids});
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
-        output(fmt::format("Generate {} files for [region_id={}]", ingest_ids.size(), region_id));
+        output(fmt::format("Generate {} files for [region_id={}]", prehandle_result.ingest_ids.size(), region_id));
     }
 }
 

@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1694430080744,
+  "iteration": 1697179538312,
   "links": [],
   "panels": [
     {
@@ -4200,9 +4200,9 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"min_tso\"}) by (instance)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"min_tso\"}) by (instance, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             }
@@ -4302,29 +4302,47 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_soft_limit\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_soft_limit\"}) by (instance, type, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"estimated_thread_usage\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"estimated_thread_usage\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_hard_limit\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"thread_hard_limit\"}) by (instance, type, resource_group)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
+              "queryType": "randomWalk",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"global_estimated_thread_usage\"}) by (instance, type, resource_group)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
+              "queryType": "randomWalk",
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"group_entry_count\"}) by (instance, type)",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-{{type}}",
               "queryType": "randomWalk",
-              "refId": "C"
+              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -4422,18 +4440,18 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_queries_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_queries_count\"}) by (instance, type, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_queries_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_queries_count\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             }
@@ -4533,18 +4551,18 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_tasks_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"waiting_tasks_count\"}) by (instance, type, resource_group)",
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_tasks_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"active_tasks_count\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-{{type}}",
+              "legendFormat": "{{instance}}-{{type}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             }
@@ -4644,10 +4662,10 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"hard_limit_exceeded_count\"}) by (instance, type)",
+              "expr": "max(tiflash_task_scheduler{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"hard_limit_exceeded_count\"}) by (instance, type, resource_group)",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-{{resource_group}}",
               "queryType": "randomWalk",
               "refId": "B"
             }
@@ -4745,28 +4763,28 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le,resource_group))",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-80",
+              "legendFormat": "{{instance}}-{{resource_group}}-80",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le,resource_group))",
               "hide": true,
               "interval": "",
-              "legendFormat": "{{instance}}-90",
+              "legendFormat": "{{instance}}-{{resource_group}}-90",
               "queryType": "randomWalk",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(1, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le,resource_group))",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-100",
+              "legendFormat": "{{instance}}-{{resource_group}}-100",
               "queryType": "randomWalk",
               "refId": "C"
             }
@@ -7267,7 +7285,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "hide": false,
               "interval": "",
               "legendFormat": "100%-{{type}}",
@@ -9050,7 +9068,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -9293,7 +9311,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -10188,7 +10206,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "max",
@@ -10315,7 +10333,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "max",
@@ -10471,7 +10489,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -11299,7 +11317,7 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 6,
+            "x": 0,
             "y": 65
           },
           "heatmap": {},
@@ -11358,6 +11376,105 @@
           "yBucketBound": "upper",
           "yBucketNumber": null,
           "yBucketSize": null
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 65
+          },
+          "hiddenSeries": false,
+          "id": 249,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_ongoing_snapshot_total_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Ongoing raft snapshot",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -11547,7 +11664,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -11657,6 +11774,14 @@
               "intervalFactor": 1,
               "legendFormat": "Pending-{{instance}}",
               "refId": "B"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_RaftNumPrehandlingSubTasks{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "PrehandleSubtasks-{{instance}}",
+              "refId": "A"
             }
           ],
           "thresholds": [],
@@ -11841,6 +11966,78 @@
           "yBucketSize": null
         },
         {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 93
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 250,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_snapshot_total_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"approx_raft_snapshot\"}[1m])) by (le)",
+              "format": "heatmap",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Snapshot Size Heatmap",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "bytes",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -11858,7 +12055,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 93
+            "y": 100
           },
           "height": "",
           "hiddenSeries": false,
@@ -11972,7 +12169,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 100
+            "y": 107
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12041,7 +12238,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 100
+            "y": 107
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12111,7 +12308,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 114
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12177,7 +12374,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 114
           },
           "hiddenSeries": false,
           "id": 91,
@@ -12212,7 +12409,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": " 100%",
@@ -12688,7 +12885,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -15635,7 +15832,7 @@
             },
             {
               "exemplar": true,
-              "expr": "\r\nhistogram_quantile(1.00, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)\r",
               "hide": false,
               "interval": "",
               "legendFormat": "100-{{type}}",
@@ -16094,6 +16291,160 @@
         }
       ],
       "title": "Pipeline Model",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 248,
+      "panels": [
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Metas of resource group",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 14
+          },
+          "hiddenSeries": false,
+          "id": 246,
+          "legend": {
+            "alignAsTable": false,
+            "avg": true,
+            "current": true,
+            "hideEmpty": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"remaining_tokens\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "interval": "",
+              "legendFormat": "remaining_tokens-{{instance}}-{{resource_group}}",
+              "queryType": "randomWalk",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"avg_speed\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "avg_speed-{{instance}}-{{resource_group}}",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "total_consumption-{{instance}}-{{resource_group}}",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_fill_rate\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "bucket_fill_rate-{{instance}}-{{resource_group}}",
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_capacity\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "bucket_capacity-{{instance}}-{{resource_group}}",
+              "refId": "E"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"fetch_tokens_from_gac_count\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "fetch_tokens_from_gac_count-{{instance}}-{{resource_group}}",
+              "refId": "F"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "TiFlash Resource Group",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
+      "title": "TiFlash Resource Control",
       "type": "row"
     }
   ],

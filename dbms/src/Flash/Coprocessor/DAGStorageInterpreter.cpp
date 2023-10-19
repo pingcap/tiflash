@@ -46,13 +46,15 @@
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
@@ -70,6 +72,7 @@ extern const char force_remote_read_for_batch_cop[];
 extern const char force_remote_read_for_batch_cop_once[];
 extern const char pause_after_copr_streams_acquired[];
 extern const char pause_after_copr_streams_acquired_once[];
+extern const char random_trigger_remote_read[];
 } // namespace FailPoints
 
 namespace
@@ -128,6 +131,10 @@ std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus> Ma
                     status = RegionException::RegionReadStatus::NOT_FOUND;
             });
             fiu_do_on(FailPoints::force_remote_read_for_batch_cop_once, {
+                if (batch_cop)
+                    status = RegionException::RegionReadStatus::NOT_FOUND;
+            });
+            fiu_do_on(FailPoints::random_trigger_remote_read, {
                 if (batch_cop)
                     status = RegionException::RegionReadStatus::NOT_FOUND;
             });
@@ -261,19 +268,22 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
 
 String genErrMsgForLocalRead(
     const ManageableStoragePtr & storage,
+    const KeyspaceID keyspace_id,
     const TableID & table_id,
     const TableID & logical_table_id)
 {
     return table_id == logical_table_id
         ? fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, table_id={})",
+            "(while creating read sources from storage `{}`.`{}`, keyspace_id={} table_id={})",
             storage->getDatabaseName(),
             storage->getTableName(),
+            keyspace_id,
             table_id)
         : fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, table_id={}, logical_table_id={})",
+            "(while creating read sources from storage `{}`.`{}`, keyspace_id={} table_id={} logical_table_id={})",
             storage->getDatabaseName(),
             storage->getTableName(),
+            keyspace_id,
             table_id,
             logical_table_id);
 }
@@ -300,6 +310,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
             Errors::Coprocessor::BadRequest);
     }
 }
+
+DAGStorageInterpreter::~DAGStorageInterpreter() = default;
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
@@ -613,7 +625,8 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     DAGContext & dag_context = *context.getDAGContext();
-    auto scan_context = std::make_shared<DM::ScanContext>();
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName(), dag_context.isResourceControlEnabled());
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
 
@@ -695,6 +708,7 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
         req->tp = pingcap::coprocessor::ReqType::DAG;
         req->start_ts = context.getSettingsRef().read_tso;
         req->schema_version = context.getSettingsRef().schema_version;
+        req->resource_group_name = dagContext().getResourceGroupName();
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
@@ -745,7 +759,8 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
         enable_cop_stream,
         queue_size,
         cop_timeout,
-        tiflash_label_filter);
+        tiflash_label_filter,
+        log->identifier());
     context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
     return coprocessor_reader;
@@ -881,7 +896,11 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("(while doing learner read for table, logical table_id={})", logical_table_id));
+            const auto keyspace_id = context.getDAGContext()->getKeyspaceID();
+            e.addMessage(fmt::format(
+                "(while doing learner read for table, keyspace={} logical_table_id={})",
+                keyspace_id,
+                logical_table_id));
             throw;
         }
     }
@@ -1013,6 +1032,7 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
     auto & storage = storages_with_structure_lock[table_id].storage;
 
     const DAGContext & dag_context = *context.getDAGContext();
+    const auto keyspace_id = dag_context.getKeyspaceID();
     for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
     {
         try
@@ -1031,15 +1051,11 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                 RUNTIME_CHECK_MSG(
                     delta_merge_storage != nullptr,
                     "delta_merge_storage which cast from storage is null");
-                table_snap = delta_merge_storage
-                                 ->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
-                // TODO: could be shared on the logical table level
-                table_snap->output_field_types = std::make_shared<std::vector<tipb::FieldType>>();
-                *table_snap->output_field_types = collectOutputFieldTypes(*dag_context.dag_request);
-                RUNTIME_CHECK(
-                    table_snap->output_field_types->size() == table_snap->column_defines->size(),
-                    table_snap->output_field_types->size(),
-                    table_snap->column_defines->size());
+                table_snap = delta_merge_storage->writeNodeBuildRemoteReadSnapshot( //
+                    required_columns,
+                    query_info,
+                    context,
+                    max_streams);
             }
 
             injectFailPointForLocalRead(query_info);
@@ -1066,14 +1082,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
             throw;
         }
     }
@@ -1096,6 +1112,7 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
     auto & storage = storages_with_structure_lock[table_id].storage;
 
     const DAGContext & dag_context = *context.getDAGContext();
+    const auto keyspace_id = dag_context.getKeyspaceID();
     for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
     {
         try
@@ -1118,15 +1135,11 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                 RUNTIME_CHECK_MSG(
                     delta_merge_storage != nullptr,
                     "delta_merge_storage which cast from storage is null");
-                table_snap = delta_merge_storage
-                                 ->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
-                // TODO: could be shared on the logical table level
-                table_snap->output_field_types = std::make_shared<std::vector<tipb::FieldType>>();
-                *table_snap->output_field_types = collectOutputFieldTypes(*dag_context.dag_request);
-                RUNTIME_CHECK(
-                    table_snap->output_field_types->size() == table_snap->column_defines->size(),
-                    table_snap->output_field_types->size(),
-                    table_snap->column_defines->size());
+                table_snap = delta_merge_storage->writeNodeBuildRemoteReadSnapshot( //
+                    required_columns,
+                    query_info,
+                    context,
+                    max_streams);
             }
 
             injectFailPointForLocalRead(query_info);
@@ -1152,14 +1165,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(storage, keyspace_id, table_id, logical_table_id));
             throw;
         }
     }
@@ -1183,12 +1196,13 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     for (const auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
-        const TableID table_id = table_query_info.first;
+        const TableID physical_table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        auto table_snap = buildLocalStreamsForPhysicalTable(table_id, query_info, current_pipeline, max_block_size);
+        auto table_snap
+            = buildLocalStreamsForPhysicalTable(physical_table_id, query_info, current_pipeline, max_block_size);
         if (table_snap)
         {
-            disaggregated_snap->addTask(table_id, std::move(table_snap));
+            disaggregated_snap->addTask(physical_table_id, std::move(table_snap));
         }
         if (has_multiple_partitions)
             stream_pool->addPartitionStreams(current_pipeline.streams);
@@ -1246,12 +1260,13 @@ void DAGStorageInterpreter::buildLocalExec(
     for (const auto & table_query_info : table_query_infos)
     {
         PipelineExecGroupBuilder builder;
-        const TableID table_id = table_query_info.first;
+        const TableID physical_table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        auto table_snap = buildLocalExecForPhysicalTable(exec_context, builder, table_id, query_info, max_block_size);
+        auto table_snap
+            = buildLocalExecForPhysicalTable(exec_context, builder, physical_table_id, query_info, max_block_size);
         if (table_snap)
         {
-            disaggregated_snap->addTask(table_id, std::move(table_snap));
+            disaggregated_snap->addTask(physical_table_id, std::move(table_snap));
         }
 
         if (has_multiple_partitions)
@@ -1286,10 +1301,15 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> storages_with_lock;
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
+        // Just for mock test, return all existing storages without schema sync
         auto logical_table_storage = tmt.getStorages().get(keyspace_id, logical_table_id);
         if (!logical_table_storage)
         {
-            throw TiFlashException(fmt::format("Table {} doesn't exist.", logical_table_id), Errors::Table::NotExists);
+            throw TiFlashException(
+                Errors::Table::NotExists,
+                "Table doesn't exist, keyspace={} table_id={}",
+                keyspace_id,
+                logical_table_id);
         }
         storages_with_lock[logical_table_id]
             = {logical_table_storage, logical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
@@ -1301,8 +1321,10 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
                 if (!physical_table_storage)
                 {
                     throw TiFlashException(
-                        fmt::format("Table {} doesn't exist.", physical_table_id),
-                        Errors::Table::NotExists);
+                        Errors::Table::NotExists,
+                        "Table doesn't exist, keyspace={} table_id={}",
+                        keyspace_id,
+                        physical_table_id);
                 }
                 storages_with_lock[physical_table_id]
                     = {physical_table_storage,
@@ -1329,12 +1351,13 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         if (unlikely(table_store->engineType() != ::TiDB::StorageEngine::DT))
         {
             throw TiFlashException(
-                fmt::format(
-                    "Specifying schema_version for non-managed storage: {}, table: {}, id: {} is not allowed",
-                    table_store->getName(),
-                    table_store->getTableName(),
-                    table_id),
-                Errors::Coprocessor::Internal);
+                Errors::Coprocessor::Internal,
+                "Specifying schema_version for non-managed storage is not allowed"
+                ", engine={} table_name={} keyspace={} table_id={}",
+                table_store->getName(),
+                table_store->getTableName(),
+                keyspace_id,
+                table_id);
         }
 
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
@@ -1412,10 +1435,15 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     auto sync_schema = [&](TableID table_id) {
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         auto start_time = Clock::now();
-        tmt.getSchemaSyncerManager()->syncTableSchema(context, dagContext().getKeyspaceID(), table_id);
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_INFO(log, "Table {} schema sync cost {} ms.", logical_table_id, schema_sync_cost);
+        LOG_INFO(
+            log,
+            "Table schema sync done, keyspace={} table_id={} cost={} ms",
+            keyspace_id,
+            logical_table_id,
+            schema_sync_cost);
     };
 
     /// Try get storage and lock once.

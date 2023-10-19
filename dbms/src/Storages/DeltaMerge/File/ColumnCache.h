@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
 #include <cstddef>
@@ -52,6 +52,8 @@ public:
 
     using ColumnCacheElement = std::pair<ColumnPtr, std::pair<size_t, size_t>>;
     ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
+
+    void clear() { column_caches.clear(); }
 
 private:
     bool isPackInCache(PackId pack_id, ColId column_id);

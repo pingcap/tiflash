@@ -24,9 +24,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
@@ -64,22 +64,26 @@ template <>
 CoprocessorHandler<false>::CoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::Request * cop_request_,
-    coprocessor::Response * cop_response_)
+    coprocessor::Response * cop_response_,
+    const String & identifier)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_response(cop_response_)
-    , log(Logger::get("CoprocessorHandler"))
+    , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
+    , log(Logger::get(identifier))
 {}
 
 template <>
 CoprocessorHandler<true>::CoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::Request * cop_request_,
-    grpc::ServerWriter<coprocessor::Response> * cop_writer_)
+    grpc::ServerWriter<coprocessor::Response> * cop_writer_,
+    const String & identifier)
     : cop_context(cop_context_)
     , cop_request(cop_request_)
     , cop_writer(cop_writer_)
-    , log(Logger::get("CoprocessorHandler(stream)"))
+    , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
+    , log(Logger::get(identifier))
 {}
 
 template <bool is_stream>
@@ -139,20 +143,11 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
-            const char * msg;
-            if constexpr (is_stream)
-                msg = "CoprocessorHandler(stream)";
-            else
-                msg = "CoprocessorHandler";
-
             DAGRequestKind kind;
             if constexpr (is_stream)
                 kind = DAGRequestKind::CopStream;
             else
                 kind = DAGRequestKind::Cop;
-
-            const String & resource_group_name
-                = cop_request->context().resource_control_context().resource_group_name();
 
             DAGContext dag_context(
                 dag_request,
@@ -161,7 +156,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 kind,
                 resource_group_name,
-                Logger::get(msg));
+                Logger::get(log->identifier()));
             cop_context.db_context.setDAGContext(&dag_context);
 
             if constexpr (is_stream)

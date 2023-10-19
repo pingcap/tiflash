@@ -27,7 +27,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/FileStream.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/ThreadPool.h>

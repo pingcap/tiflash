@@ -17,7 +17,7 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <chrono>

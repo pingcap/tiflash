@@ -61,6 +61,14 @@ void DMFileReaderPool::set(DMFileReader & from_reader, int64_t col_id, size_t st
     }
 }
 
+// Check is there any concurrent DMFileReader with `from_reader`.
+bool DMFileReaderPool::hasConcurrentReader(DMFileReader & from_reader)
+{
+    std::lock_guard lock(mtx);
+    auto itr = readers.find(from_reader.path());
+    return itr != readers.end() && itr->second.size() >= 2;
+}
+
 DMFileReader * DMFileReaderPool::get(const std::string & name)
 {
     std::lock_guard lock(mtx);

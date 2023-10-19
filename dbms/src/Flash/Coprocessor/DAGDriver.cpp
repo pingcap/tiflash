@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
@@ -26,12 +27,18 @@
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
+#include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <pingcap/Exception.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char cop_send_failure[];
+extern const char random_cop_send_failure_failpoint[];
+} // namespace FailPoints
+
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -126,7 +133,13 @@ try
             context.getSettingsRef().dag_records_per_chunk,
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
-        query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
+        query_executor
+            ->execute([&response_writer](const Block & block) {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::cop_send_failure);
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_cop_send_failure_failpoint);
+                response_writer->write(block);
+            })
+            .verify();
         response_writer->flush();
 
         if (dag_context.collect_execution_summaries)
@@ -146,7 +159,13 @@ try
             context.getSettingsRef().batch_send_min_limit,
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
-        query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
+        query_executor
+            ->execute([&response_writer](const Block & block) {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::cop_send_failure);
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_cop_send_failure_failpoint);
+                response_writer->write(block);
+            })
+            .verify();
         response_writer->flush();
 
         tipb::SelectResponse last_response;
@@ -189,7 +208,13 @@ try
             context.getSettingsRef().batch_send_min_limit,
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
-        query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
+        query_executor
+            ->execute([&response_writer](const Block & block) {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::cop_send_failure);
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_cop_send_failure_failpoint);
+                response_writer->write(block);
+            })
+            .verify();
         response_writer->flush();
 
         tipb::SelectResponse last_response;

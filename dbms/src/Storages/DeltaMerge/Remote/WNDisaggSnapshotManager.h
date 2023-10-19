@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager_fwd.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <fmt/chrono.h>

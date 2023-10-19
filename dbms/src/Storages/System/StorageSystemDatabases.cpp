@@ -20,10 +20,10 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/System/StorageSystemDatabases.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 
 
 namespace DB

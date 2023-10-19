@@ -17,7 +17,7 @@
 #include <Interpreters/Set.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 

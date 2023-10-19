@@ -41,14 +41,15 @@
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/TiDB.h>
+#include <grpcpp/support/status_code_enum.h>
 #include <kvproto/disaggregated.pb.h>
 #include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>
@@ -68,6 +69,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace ErrorCodes
 
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
@@ -170,7 +172,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
     {
         auto remote_table_ranges = buildRemoteTableRanges();
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
-        auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+        const auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
         batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
         RUNTIME_CHECK(!batch_cop_tasks.empty());
     }
@@ -209,15 +211,21 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 {
     Stopwatch watch;
 
-    auto req = buildEstablishDisaggTaskReq(db_context, batch_cop_task);
+    const auto req = buildEstablishDisaggTaskReq(db_context, batch_cop_task);
 
     auto * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(EstablishDisaggTask)> rpc(cluster->rpc_client, req->address());
     disaggregated::EstablishDisaggTaskResponse resp;
     grpc::ClientContext client_context;
-    rpc.setClientContext(client_context, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
+    rpc.setClientContext(client_context, db_context.getSettingsRef().disagg_build_task_timeout);
     auto status = rpc.call(&client_context, *req, &resp);
-    if (!status.ok())
+    if (status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED)
+        throw Exception(
+            ErrorCodes::TIMEOUT_EXCEEDED,
+            "EstablishDisaggregated execution was interrupted, maximum execution time exceeded, wn_address={} {}",
+            req->address(),
+            log->identifier());
+    else if (!status.ok())
         throw Exception(rpc.errMsg(status));
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
@@ -499,12 +507,14 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
     const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     LOG_INFO(
         log,
-        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
+        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={} "
+        "column_defines={}",
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         read_task->segment_read_tasks.size(),
-        num_streams);
+        num_streams,
+        *column_defines);
 
     return DM::Remote::RNWorkers::create(
         db_context,

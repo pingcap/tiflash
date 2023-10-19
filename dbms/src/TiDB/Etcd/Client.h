@@ -88,7 +88,8 @@ public:
 
     // Basically same with tidb's Domain::acquireServerID.
     // Only for tiflash resource control.
-    UInt64 acquireServerIDFromPD();
+    UInt64 acquireServerIDFromGAC();
+    void deleteServerIDFromGAC(UInt64 serverID);
 
 private:
     EtcdConnClientPtr getOrCreateGRPCConn(const String & addr);

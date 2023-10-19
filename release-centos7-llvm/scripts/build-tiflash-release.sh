@@ -20,6 +20,12 @@ if [[ -z ${CMAKE_BUILD_TYPE} ]]; then
   CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 fi
 
+if [ $CMAKE_BUILD_TYPE == "TSAN" ] || [ $CMAKE_BUILD_TYPE == "ASAN" ]; then
+  ENABLE_TESTS=ON
+else
+  ENABLE_TESTS=OFF
+fi
+
 DEFAULT_CMAKE_PREFIX_PATH="/usr/local/"
 DEFINE_CMAKE_PREFIX_PATH="-DCMAKE_PREFIX_PATH=${DEFAULT_CMAKE_PREFIX_PATH}"
 
@@ -62,7 +68,7 @@ cmake -S "${SRCPATH}" \
   ${DEFINE_CMAKE_PREFIX_PATH} \
   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
   -DENABLE_TESTING=OFF \
-  -DENABLE_TESTS=OFF \
+  -DENABLE_TESTS=${ENABLE_TESTS} \
   -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
   -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
   -Wno-dev \
@@ -74,13 +80,19 @@ cmake -S "${SRCPATH}" \
   -DENABLE_PCH=${ENABLE_PCH} \
   -GNinja
 
-cmake --build . --target tiflash --parallel ${NPROC}
-cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
-
-# unset LD_LIBRARY_PATH before test
-unset LD_LIBRARY_PATH
-readelf -d "${INSTALL_DIR}/tiflash"
-ldd "${INSTALL_DIR}/tiflash"
-
-# show version
-${INSTALL_DIR}/tiflash version
+if [ $CMAKE_BUILD_TYPE == "TSAN" ] || [ $CMAKE_BUILD_TYPE == "ASAN" ]; then
+  cmake --build . --target gtests_dbms gtests_libcommon --parallel ${NPROC}
+  cmake --build . --target tiflash --parallel ${NPROC}
+  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
+else
+  cmake --build . --target tiflash --parallel ${NPROC}
+  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
+  
+  # unset LD_LIBRARY_PATH before test
+  unset LD_LIBRARY_PATH
+  readelf -d "${INSTALL_DIR}/tiflash"
+  ldd "${INSTALL_DIR}/tiflash"
+  
+  # show version
+  ${INSTALL_DIR}/tiflash version
+fi

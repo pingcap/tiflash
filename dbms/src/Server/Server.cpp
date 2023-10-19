@@ -80,16 +80,16 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
-#include <Storages/Transaction/FileEncryption.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -1563,32 +1563,43 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     auto & tmt_context = global_context->getTMTContext();
+    const bool is_disagg_storage = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    const bool is_prod = !global_context->isTest();
+
+    // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
+    if (!is_disagg_storage)
+    {
 #ifdef DBMS_PUBLIC_GTEST
-    LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+        LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-    LocalAdmissionController::global_instance
-        = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+        LocalAdmissionController::global_instance
+            = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
 
-    // For test mode, TaskScheduler is controlled by test case.
-    bool is_prod = !global_context->isTest();
-    if (is_prod)
-    {
-        auto get_pool_size = [](const auto & setting) {
-            return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
-        };
-        TaskSchedulerConfig config{
-            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-             settings.pipeline_cpu_task_thread_pool_queue_type},
-            {get_pool_size(settings.pipeline_io_task_thread_pool_size),
-             settings.pipeline_io_task_thread_pool_queue_type},
-        };
-        RUNTIME_CHECK(!TaskScheduler::instance);
-        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
-        LOG_INFO(log, "init pipeline task scheduler");
-    }
-    SCOPE_EXIT({
+        // For test mode, TaskScheduler is controlled by test case.
         if (is_prod)
+        {
+            auto get_pool_size = [](const auto & setting) {
+                return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+            };
+            TaskSchedulerConfig config{
+                {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+                 settings.pipeline_cpu_task_thread_pool_queue_type},
+                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+                 settings.pipeline_io_task_thread_pool_queue_type},
+            };
+            RUNTIME_CHECK(!TaskScheduler::instance);
+            TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+            LOG_INFO(log, "init pipeline task scheduler");
+        }
+    }
+
+    SCOPE_EXIT({
+        if (!is_disagg_storage)
+            LocalAdmissionController::global_instance.reset();
+    });
+    SCOPE_EXIT({
+        if (!is_disagg_storage && is_prod)
         {
             assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();

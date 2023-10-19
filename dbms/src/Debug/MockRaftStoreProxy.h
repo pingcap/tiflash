@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ReadIndexWorker.h>
 #include <kvproto/raft_serverpb.pb.h>
 #include <raft_cmdpb.pb.h>
 
@@ -260,7 +260,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         bool freezed;
     };
 
-    RegionPtr snapshot(
+    std::tuple<RegionPtr, PrehandleResult> snapshot(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,
@@ -312,6 +312,8 @@ enum class RawObjType : uint32_t
     None,
     MockReadIndexTask,
     MockAsyncWaker,
+    MockString,
+    MockVecOfString
 };
 
 struct GCMonitor
@@ -344,4 +346,21 @@ std::vector<std::pair<std::string, std::string>> regionRangeToEncodeKeys(Types &
     return ranges_str;
 }
 
+struct RustStrWithViewVecInner
+{
+    std::vector<std::string> * vec;
+    BaseBuffView * buffs;
+    ~RustStrWithViewVecInner()
+    {
+        delete vec;
+        delete[] buffs;
+    }
+};
+
+inline BaseBuffView * createBaseBuffViewArray(size_t len)
+{
+    void * raw_memory = operator new[](len * sizeof(BaseBuffView));
+    BaseBuffView * ptr = static_cast<BaseBuffView *>(raw_memory);
+    return ptr;
+}
 } // namespace DB

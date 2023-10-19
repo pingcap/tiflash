@@ -22,13 +22,13 @@
 #include <Poco/Path.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
 #include <aws/s3/S3Client.h>
 
 #include <ext/scope_guard.h>

@@ -42,6 +42,7 @@ namespace FailPoints
 extern const char random_aggregate_create_state_failpoint[];
 extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
+extern const char random_fail_in_resize_callback[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
@@ -148,6 +149,43 @@ size_t AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(Type type)
 
     default:
         throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void AggregatedDataVariants::setResizeCallbackIfNeeded(size_t thread_num) const
+{
+    if (aggregator)
+    {
+        auto agg_spill_context = aggregator->agg_spill_context;
+        if (agg_spill_context->isSpillEnabled() && agg_spill_context->isInAutoSpillMode())
+        {
+            auto resize_callback = [agg_spill_context, thread_num]() {
+                if (agg_spill_context->supportFurtherSpill()
+                    && agg_spill_context->isThreadMarkedForAutoSpill(thread_num))
+                    return false;
+                bool ret = true;
+                fiu_do_on(FailPoints::random_fail_in_resize_callback, {
+                    if (agg_spill_context->supportFurtherSpill())
+                    {
+                        ret = !agg_spill_context->markThreadForAutoSpill(thread_num);
+                    }
+                });
+                return ret;
+            };
+#define M(NAME)                                                                                         \
+    case AggregationMethodType(NAME):                                                                   \
+    {                                                                                                   \
+        ToAggregationMethodPtr(NAME, aggregation_method_impl)->data.setResizeCallback(resize_callback); \
+        break;                                                                                          \
+    }
+            switch (type)
+            {
+                APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+            default:
+                throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+            }
+#undef M
+        }
     }
 }
 
@@ -626,6 +664,24 @@ void NO_INLINE Aggregator::executeImpl(
 }
 
 template <typename Method>
+std::optional<typename Method::EmplaceResult> Aggregator::emplaceKey(
+    Method & method,
+    typename Method::State & state,
+    size_t index,
+    Arena & aggregates_pool,
+    std::vector<std::string> & sort_key_containers) const
+{
+    try
+    {
+        return state.emplaceKey(method.data, index, aggregates_pool, sort_key_containers);
+    }
+    catch (ResizeException &)
+    {
+        return {};
+    }
+}
+
+template <typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
@@ -645,9 +701,21 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     {
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
-            state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
-        agg_process_info.start_row += agg_size;
+        for (size_t i = 0; i < agg_size; ++i)
+        {
+            auto emplace_result_hold
+                = emplaceKey(method, state, agg_process_info.start_row, *aggregates_pool, sort_key_containers);
+            if likely (emplace_result_hold.has_value())
+            {
+                emplace_result_hold.value().setMapped(place);
+                ++agg_process_info.start_row;
+            }
+            else
+            {
+                LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+                break;
+            }
+        }
         return;
     }
 
@@ -678,12 +746,20 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     /// Generic case.
 
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[agg_size]);
+    std::optional<size_t> processed_rows;
 
     for (size_t i = agg_process_info.start_row; i < agg_process_info.start_row + agg_size; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
+        auto emplace_result_holder = emplaceKey(method, state, i, *aggregates_pool, sort_key_containers);
+        if unlikely (!emplace_result_holder.has_value())
+        {
+            LOG_INFO(log, "HashTable resize throw ResizeException since the data is already marked for spill");
+            break;
+        }
+
+        auto & emplace_result = emplace_result_holder.value();
 
         /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
         if (emplace_result.isInserted())
@@ -700,21 +776,25 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
             aggregate_data = emplace_result.getMapped();
 
         places[i - agg_process_info.start_row] = aggregate_data;
+        processed_rows = i;
     }
 
-    /// Add values to the aggregate functions.
-    for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
-         ++inst)
+    if (processed_rows)
     {
-        inst->batch_that->addBatch(
-            agg_process_info.start_row,
-            agg_size,
-            places.get(),
-            inst->state_offset,
-            inst->batch_arguments,
-            aggregates_pool);
+        /// Add values to the aggregate functions.
+        for (AggregateFunctionInstruction * inst = agg_process_info.aggregate_functions_instructions.data(); inst->that;
+             ++inst)
+        {
+            inst->batch_that->addBatch(
+                agg_process_info.start_row,
+                *processed_rows - agg_process_info.start_row + 1,
+                places.get(),
+                inst->state_offset,
+                inst->batch_arguments,
+                aggregates_pool);
+        }
+        agg_process_info.start_row = *processed_rows + 1;
     }
-    agg_process_info.start_row += agg_size;
 }
 
 void NO_INLINE
@@ -785,7 +865,7 @@ void Aggregator::prepareAggregateInstructions(
     }
 }
 
-void Aggregator::AggProcessInfo::prepareForAgg(Aggregator * aggregator)
+void Aggregator::AggProcessInfo::prepareForAgg()
 {
     if (prepare_for_agg_done)
         return;
@@ -838,7 +918,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
         LOG_TRACE(log, "Aggregation method: `{}`", result.getMethodName());
     }
 
-    agg_process_info.prepareForAgg(this);
+    agg_process_info.prepareForAgg();
 
     if (is_cancelled())
         return true;
@@ -896,12 +976,16 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
       */
     if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
+    {
         result.convertToTwoLevel();
+        result.setResizeCallbackIfNeeded(thread_num);
+    }
 
     /** Flush data to disk if too much RAM is consumed.
       */
     auto revocable_bytes = result.revocableBytes();
-    LOG_TRACE(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
+    if (revocable_bytes > 20 * 1024 * 1024)
+        LOG_TRACE(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
     if (agg_spill_context->updatePerThreadRevocableMemory(revocable_bytes, thread_num))
     {
         result.tryMarkNeedSpill();
@@ -953,6 +1037,7 @@ void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num
 
     /// NOTE Instead of freeing up memory and creating new hash tables and arenas, you can re-use the old ones.
     data_variants.init(data_variants.type);
+    data_variants.setResizeCallbackIfNeeded(thread_num);
     data_variants.need_spill = false;
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
@@ -1062,7 +1147,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     size_t src_rows = 0;
     size_t src_bytes = 0;
-    AggProcessInfo agg_process_info;
+    AggProcessInfo agg_process_info(this);
 
     /// Read all the data
     while (Block block = stream->read())

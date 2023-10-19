@@ -21,11 +21,11 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiKVRange.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -118,8 +118,8 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
     if (auto region = tmt.getKVStore()->getRegion(region_id); region)
     {
-        tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region);
-        output(fmt::format("region_table try flush region {}", region_id));
+        tmt.getRegionTable().tryWriteBlockByRegion(region);
+        output(fmt::format("region_table try write region {}", region_id));
     }
 }
 

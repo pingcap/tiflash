@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
@@ -247,7 +248,7 @@ DMFileReader::Stream::Stream(
 
             buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
             // read from the buffer based on the raw data
-            buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+            buf = std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
                 std::move(raw_data),
                 file_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
@@ -257,7 +258,7 @@ DMFileReader::Stream::Stream(
     }
     else
     { // v2
-        buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+        buf = std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
@@ -512,7 +513,7 @@ inline bool isExtraColumn(const ColumnDefine & cd)
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
 }
 
-inline bool isCacheableColumn(const ColumnDefine & cd)
+bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
 {
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
 }
@@ -603,7 +604,7 @@ Block DMFileReader::read()
         try
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
-            auto & cd = read_columns[i];
+            const auto & cd = read_columns[i];
             if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle_on_fast_mode)
             {
                 // Return the first row's handle
@@ -618,17 +619,15 @@ Block DMFileReader::read()
                     Handle min_handle = pack_filter.getMinHandle(start_pack_id);
                     column = cd.type->createColumnConst(read_rows, Field(min_handle));
                 }
-                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
                 skip_packs_by_column[i] = read_packs;
             }
             else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_fast_mode)
             {
-                ColumnPtr column;
-
-                column = cd.type->createColumnConst(
+                ColumnPtr column = cd.type->createColumnConst(
                     read_rows,
                     Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
-                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
 
                 skip_packs_by_column[i] = read_packs;
             }
@@ -767,7 +766,7 @@ Block DMFileReader::read()
 }
 
 void DMFileReader::readFromDisk(
-    ColumnDefine & column_define,
+    const ColumnDefine & column_define,
     MutableColumnPtr & column,
     size_t start_pack_id,
     size_t read_rows,
@@ -804,15 +803,22 @@ void DMFileReader::readFromDisk(
 }
 
 void DMFileReader::readColumn(
-    ColumnDefine & column_define,
+    const ColumnDefine & column_define,
     ColumnPtr & column,
     size_t start_pack_id,
     size_t pack_count,
     size_t read_rows,
     size_t skip_packs)
 {
+    bool has_concurrent_reader = DMFileReaderPool::instance().hasConcurrentReader(*this);
     if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
     {
+        // If there are concurrent read requests, this data is likely to be shared.
+        // So the allocation and deallocation of this data may not be in the same MemoryTracker.
+        // This can lead to inaccurate memory statistics of MemoryTracker.
+        // To solve this problem, we use a independent global memory tracker to trace the shared column data in ColumnSharingCacheMap.
+        auto mem_tracker_guard
+            = has_concurrent_reader ? std::make_optional<MemoryTrackerSetter>(true, nullptr) : std::nullopt;
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         auto col = data_type->createColumn();
         readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, last_read_from_cache[column_define.id]);
@@ -824,7 +830,7 @@ void DMFileReader::readColumn(
         last_read_from_cache[column_define.id] = true;
     }
 
-    if (col_data_cache != nullptr)
+    if (has_concurrent_reader && col_data_cache != nullptr)
     {
         DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
     }

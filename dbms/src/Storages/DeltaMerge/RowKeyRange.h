@@ -19,12 +19,12 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <Storages/KVStore/Types.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB::DM
 {

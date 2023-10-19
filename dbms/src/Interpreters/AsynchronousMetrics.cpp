@@ -26,13 +26,14 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/FileUsage.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/config_common.h>
 
 #include <chrono>
@@ -242,23 +243,60 @@ void AsynchronousMetrics::update()
                 {
                     if (auto store = dt_storage->getStoreIfInited(); store)
                     {
-                        auto stat = store->getStoreStats();
-                        calculateMax(
-                            max_dt_stable_oldest_snapshot_lifetime,
-                            stat.storage_stable_oldest_snapshot_lifetime);
-                        calculateMax(
-                            max_dt_delta_oldest_snapshot_lifetime,
-                            stat.storage_delta_oldest_snapshot_lifetime);
-                        calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
+                        const auto stat = store->getStoreStats();
+                        if (context.getPageStorageRunMode() == PageStorageRunMode::ONLY_V2)
+                        {
+                            calculateMax(
+                                max_dt_stable_oldest_snapshot_lifetime,
+                                stat.storage_stable_oldest_snapshot_lifetime);
+                            calculateMax(
+                                max_dt_delta_oldest_snapshot_lifetime,
+                                stat.storage_delta_oldest_snapshot_lifetime);
+                            calculateMax(
+                                max_dt_meta_oldest_snapshot_lifetime,
+                                stat.storage_meta_oldest_snapshot_lifetime);
+                        }
                         calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                     }
                 }
             }
         }
 
-        set("MaxDTStableOldestSnapshotLifetime", max_dt_stable_oldest_snapshot_lifetime);
-        set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
-        set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
+        switch (context.getPageStorageRunMode())
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            set("MaxDTStableOldestSnapshotLifetime", max_dt_stable_oldest_snapshot_lifetime);
+            set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
+            set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
+            break;
+        }
+        case PageStorageRunMode::ONLY_V3:
+        case PageStorageRunMode::MIX_MODE:
+        {
+            if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool)
+            {
+                const auto log_snap_stat = global_storage_pool->log_storage->getSnapshotsStat();
+                const auto meta_snap_stat = global_storage_pool->meta_storage->getSnapshotsStat();
+                const auto data_snap_stat = global_storage_pool->data_storage->getSnapshotsStat();
+                set("MaxDTDeltaOldestSnapshotLifetime", log_snap_stat.longest_living_seconds);
+                set("MaxDTMetaOldestSnapshotLifetime", meta_snap_stat.longest_living_seconds);
+                set("MaxDTStableOldestSnapshotLifetime", data_snap_stat.longest_living_seconds);
+            }
+            break;
+        }
+        case PageStorageRunMode::UNI_PS:
+        {
+            if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
+            {
+                // Only set delta snapshot lifetime when UniPS is enabled
+                const auto snap_stat = uni_ps->getSnapshotsStat();
+                set("MaxDTDeltaOldestSnapshotLifetime", snap_stat.longest_living_seconds);
+            }
+            break;
+        }
+        }
+
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 

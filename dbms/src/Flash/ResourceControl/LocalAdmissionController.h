@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
@@ -27,6 +28,7 @@
 #include <pingcap/kv/Cluster.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 
@@ -172,12 +174,6 @@ private:
         return !burstable && bucket->lowToken();
     }
 
-    double getRU() const
-    {
-        std::lock_guard lock(mu);
-        return bucket->peek();
-    }
-
     // Return how many tokens should acquire from GAC for the next n seconds.
     double getAcquireRUNum(uint32_t n, double amplification) const
     {
@@ -305,6 +301,7 @@ private:
         std::lock_guard lock(mu);
         auto ori = ru_consumption_delta;
         ru_consumption_delta = 0.0;
+        total_consumption += ori;
         return ori;
     }
 
@@ -320,12 +317,26 @@ private:
         std::lock_guard lock(mu);
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
         last_fetch_tokens_from_gac_timepoint = tp;
+        ++fetch_tokens_from_gac_count;
     }
 
     bool inTrickleModeLease(const std::chrono::steady_clock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
+    }
+
+    void collectMetrics() const
+    {
+        std::lock_guard lock(mu);
+        const auto & config = bucket->getConfig();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(bucket->getAvgSpeedPerSec());
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_consumption);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
+            .Set(fetch_tokens_from_gac_count);
     }
 
     const std::string name;
@@ -354,6 +365,8 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
         = std::chrono::steady_clock::now();
     std::chrono::time_point<std::chrono::steady_clock> stop_trickle_timepoint = std::chrono::steady_clock::now();
+    uint64_t fetch_tokens_from_gac_count = 0;
+    double total_consumption = 0.0;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -372,6 +385,7 @@ public:
     LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
+        , watch_gac_grpc_context(std::make_unique<grpc::ClientContext>())
     {
         background_threads.emplace_back([this] { this->startBackgroudJob(); });
         background_threads.emplace_back([this] { this->watchGAC(); });
@@ -381,6 +395,8 @@ public:
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
+        assert(!stopped);
+
         // When tidb_enable_resource_control is disabled, resource group name is empty.
         if (name.empty())
             return;
@@ -405,6 +421,8 @@ public:
 
     std::optional<uint64_t> getPriority(const std::string & name)
     {
+        assert(!stopped);
+
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
@@ -424,24 +442,29 @@ public:
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
-#ifdef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<MockLocalAdmissionController> global_instance;
-#else
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#endif
-
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
+        assert(!stopped);
+        // NOTE: Better not use lock inside refill_token_callback,
+        // because LAC needs to lock when calling refill_token_callback,
+        // which may introduce dead lock.
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
     }
     void unregisterRefillTokenCallback()
     {
+        assert(!stopped);
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
         refill_token_callback = nullptr;
     }
+
+#ifdef DBMS_PUBLIC_GTEST
+    static std::unique_ptr<MockLocalAdmissionController> global_instance;
+#else
+    static std::unique_ptr<LocalAdmissionController> global_instance;
+#endif
 
 private:
     void stop()
@@ -449,12 +472,35 @@ private:
         if (stopped)
             return;
         stopped.store(true);
-        watch_gac_grpc_context.TryCancel();
+
+        // TryCancel() is thread safe(https://github.com/grpc/grpc/pull/30416).
+        // But we need to create a new grpc_context for each new grpc reader/writer(https://github.com/grpc/grpc/issues/18348#issuecomment-477402608). So need to lock.
+        {
+            std::lock_guard lock(mu);
+            watch_gac_grpc_context->TryCancel();
+        }
         cv.notify_all();
         for (auto & thread : background_threads)
         {
             if (thread.joinable())
                 thread.join();
+        }
+
+        if (need_reset_unique_client_id.load())
+        {
+            try
+            {
+                etcd_client->deleteServerIDFromGAC(unique_client_id);
+                LOG_DEBUG(log, "delete server id({}) from GAC succeed", unique_client_id);
+            }
+            catch (...)
+            {
+                LOG_ERROR(
+                    log,
+                    "delete server id({}) from GAC failed: {}",
+                    unique_client_id,
+                    getCurrentExceptionMessage(false));
+            }
         }
     }
 
@@ -463,6 +509,7 @@ private:
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
+    static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
@@ -495,8 +542,6 @@ private:
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
-
-    void handleBackgroundError(const std::string & err_msg) const;
 
     static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
@@ -558,9 +603,10 @@ private:
         = std::chrono::steady_clock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
+    std::atomic<bool> need_reset_unique_client_id{false};
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
-    grpc::ClientContext watch_gac_grpc_context;
+    std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
     std::vector<std::thread> background_threads;
 
     std::function<void()> refill_token_callback;

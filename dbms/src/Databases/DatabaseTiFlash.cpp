@@ -30,8 +30,8 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TMTStorages.h>
 #include <common/logger_useful.h>
 
 namespace DB

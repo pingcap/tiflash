@@ -22,7 +22,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/Datum.h>
+#include <TiDB/Decode/Datum.h>
 
 #include <unordered_map>
 namespace DB
@@ -708,10 +708,12 @@ void assertBlockSchema(
 
         if (!expected->equals(*actual))
             throw Exception(fmt::format(
-                "Block schema mismatch in {}: different types: expected {}, got {}",
+                "Block schema mismatch in {}: different types: expected {}, got {}; col_index: {}; col_name: {}",
                 context_description,
                 expected->getName(),
-                actual->getName()));
+                actual->getName(),
+                i,
+                block.getByPosition(i).name));
     }
 }
 /// used by test
@@ -1469,30 +1471,6 @@ tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
         }
     }
     return dag_req;
-}
-
-tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
-{
-    const tipb::DAGRequest & dag_request = *dag_context.dag_request;
-    const tipb::EncodeType encode_type = dag_request.encode_type();
-    if (dag_context.isMPPTask() && !dag_context.isRootMPPTask())
-    {
-        /// always use CHBlock encode type for data exchange between TiFlash nodes
-        return tipb::EncodeType::TypeCHBlock;
-    }
-    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
-    {
-        assert(encode_type == tipb::EncodeType::TypeCHBlock);
-        return encode_type;
-    }
-    if (isUnsupportedEncodeType(dag_context.result_field_types, encode_type))
-        return tipb::EncodeType::TypeDefault;
-    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
-        && dag_request.chunk_memory_layout().has_endian()
-        && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
-        // todo support BigEndian encode for chunk encode type
-        return tipb::EncodeType::TypeDefault;
-    return encode_type;
 }
 
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/KVStore/TMTStorages.h>
 #include <TiDB/Schema/SchemaGetter.h>
 
 namespace DB

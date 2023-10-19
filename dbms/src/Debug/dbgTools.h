@@ -16,9 +16,9 @@
 
 #include <Parsers/IAST.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/raft_cmdpb.pb.h>
 
 #include <optional>

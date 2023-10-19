@@ -60,7 +60,7 @@ public:
     static const DataTypePtr delmark_column_type;
     static const DataTypePtr extra_table_id_column_type;
 
-    /// mark that ColumnId of those columns are defined in dbms/src/Storages/Transaction/Types.h
+    /// mark that ColumnId of those columns are defined in dbms/src/Storages/KVStore/Types.h
 
     // TODO: detail doc about these delete marks
     struct DelMark

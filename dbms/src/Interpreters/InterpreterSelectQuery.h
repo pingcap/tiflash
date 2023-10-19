@@ -20,7 +20,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreter.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <memory>
 
@@ -154,10 +154,10 @@ private:
     /// Fetch data from the table. Returns the stage to which the query was processed in Storage.
     QueryProcessingStage::Enum executeFetchColumns(Pipeline & pipeline, bool dry_run);
 
-    void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression);
+    void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression) const;
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool final);
     void executeMergeAggregated(Pipeline & pipeline, bool final);
-    void executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression);
+    void executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression) const;
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeOrder(Pipeline & pipeline);
     void executeMergeSorted(Pipeline & pipeline);

@@ -47,6 +47,7 @@
     M(DT_DeltaMergeTotalRows)                   \
     M(DT_DeltaIndexCacheSize)                   \
     M(RaftNumSnapshotsPendingApply)             \
+    M(RaftNumPrehandlingSubTasks)               \
     M(RateLimiterPendingWriteRequest)           \
     M(DT_SegmentReadTasks)                      \
     M(DT_SnapshotOfRead)                        \
@@ -81,7 +82,8 @@
     M(PageCacheUsed)                            \
     M(ConnectionPoolSize)                       \
     M(MemoryTrackingQueryStorageTask)           \
-    M(MemoryTrackingFetchPages)
+    M(MemoryTrackingFetchPages)                 \
+    M(MemoryTrackingSharedColumnData)
 
 namespace CurrentMetrics
 {

@@ -43,7 +43,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
@@ -275,12 +275,12 @@ void setOrderByColumnTypeAndDirectionForRangeFrame(
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
 
+    if (!window.frame().start().has_frame_range() && !window.frame().end().has_frame_range())
+        return;
+
     RUNTIME_CHECK_MSG(
         !window_desc.order_by.empty(),
         "Order by column should not be empty when the frame type is range");
-    RUNTIME_CHECK_MSG(
-        window_desc.order_by.size() == 1,
-        "Number of order by should not be larger than 1 in range frame");
 
     const Block & sample_block = actions->getSampleBlock();
     const String & order_by_col_name = window_desc.order_by[0].column_name;
@@ -309,10 +309,6 @@ std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return std::make_pair("", "");
-
-    RUNTIME_CHECK_MSG(
-        window.frame().start().has_frame_range() || window.frame().end().has_frame_range(),
-        "tipb::WindowFrameBound of start or end must be set when the frame type is range");
 
     String begin_aux_col_name;
     String end_aux_col_name;
@@ -1515,8 +1511,6 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     String tz_col;
     String tz_cast_func_name
         = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
-    // <origin_column_name, offset>
-    std::unordered_map<String, size_t> had_casted_map;
 
     const auto & current_columns = getCurrentInputColumns();
     NamesAndTypes after_cast_columns = current_columns;
@@ -1534,35 +1528,23 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
             || need_append_type_cast_vec[index])
         {
             const String & origin_column_name = current_columns[offset].name;
-            auto it = had_casted_map.find(origin_column_name);
-            if (it == had_casted_map.end())
+            String updated_name = origin_column_name;
+            auto updated_type = current_columns[offset].type;
+            /// first add timestamp cast
+            if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
             {
-                String updated_name = origin_column_name;
-                auto updated_type = current_columns[offset].type;
-                /// first add timestamp cast
-                if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
-                {
-                    if (tz_col.empty())
-                        tz_col = getActions(tz_expr, actions);
-                    updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, actions);
-                }
-                /// then add type cast
-                if (need_append_type_cast_vec[index])
-                {
-                    updated_type = getDataTypeByFieldTypeForComputingLayer(require_schema[offset]);
-                    updated_name = appendCast(updated_type, actions, updated_name);
-                }
-                had_casted_map[origin_column_name] = offset;
-
-                after_cast_columns[offset].name = updated_name;
-                after_cast_columns[offset].type = updated_type;
+                if (tz_col.empty())
+                    tz_col = getActions(tz_expr, actions);
+                updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, actions);
             }
-            else
+            /// then add type cast
+            if (need_append_type_cast_vec[index])
             {
-                size_t pre_casted_offset = it->second;
-                assert(after_cast_columns.size() > pre_casted_offset);
-                after_cast_columns[offset] = after_cast_columns[pre_casted_offset];
+                updated_type = getDataTypeByFieldTypeForComputingLayer(require_schema[offset]);
+                updated_name = appendCast(updated_type, actions, updated_name);
             }
+            after_cast_columns[offset].name = updated_name;
+            after_cast_columns[offset].type = updated_type;
         }
     }
 

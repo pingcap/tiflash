@@ -46,6 +46,26 @@ MPPTask * MPPGatherTaskSet::findMPPTask(const MPPTaskId & task_id) const
     return it->second.get();
 }
 
+void MPPGatherTaskSet::cancelAlarmsBySenderTaskId(const MPPTaskId & task_id)
+{
+    /// cancel all the alarm waiting on this task
+    auto alarm_it = alarms.find(task_id.task_id);
+    if (alarm_it != alarms.end())
+    {
+        for (auto & alarm : alarm_it->second)
+            alarm.second.Cancel();
+        alarms.erase(alarm_it);
+    }
+}
+
+void MPPGatherTaskSet::markTaskAsFinishedOrFailed(const MPPTaskId & task_id, const String & error_message)
+{
+    task_map.erase(task_id);
+    finished_or_failed_tasks[task_id] = error_message;
+    /// cancel all the alarms on this task
+    cancelAlarmsBySenderTaskId(task_id);
+}
+
 MPPQuery::~MPPQuery()
 {
     if likely (process_list_entry != nullptr)
@@ -138,6 +158,16 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
         /// task not found or not visible yet
         if (!call_data->isWaitingTunnelState())
         {
+            if (gather_task_set != nullptr)
+            {
+                auto task_result_info = gather_task_set->isTaskAlreadyFinishedOrFailed(id);
+                if (task_result_info.first)
+                    return {
+                        nullptr,
+                        task_result_info.second.empty()
+                            ? fmt::format("Task {} is already finished", id.task_id)
+                            : fmt::format("Task {} is failed: {}", id.task_id, task_result_info.second)};
+            }
             /// if call_data is in new_request state, put it to waiting tunnel state
             if (query == nullptr)
                 query = addMPPQuery(
@@ -148,7 +178,10 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
             call_data->setToWaitingTunnelState();
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
+            if likely (cq != nullptr)
+            {
+                alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
+            }
             return {nullptr, ""};
         }
         else
@@ -343,9 +376,25 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
         return {false, "task is already registered"};
     }
     gather_task_set->registerTask(task->id);
+    task->is_registered = true;
     task->initProcessListEntry(query->process_list_entry);
     task->initQueryOperatorSpillContexts(query->mpp_query_operator_spill_contexts);
     return {true, ""};
+}
+
+MPPQueryId MPPTaskManager::getCurrentMinTSOQueryId(const String & resource_group_name)
+{
+    std::lock_guard lock(mu);
+    return scheduler->getCurrentMinTSOQueryId(resource_group_name);
+}
+
+bool MPPTaskManager::isTaskExists(const MPPTaskId & id)
+{
+    std::unique_lock lock(mu);
+    auto [query, gather_task_set, error_msg] = getMPPQueryAndGatherTaskSet(id.gather_id);
+    if (gather_task_set == nullptr)
+        return false;
+    return gather_task_set->isTaskRegistered(id);
 }
 
 std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
@@ -372,20 +421,12 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
         query->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
         "Task process list entry should always be the same as query process list entry");
     gather_task_set->makeTaskActive(task);
-    /// cancel all the alarm waiting on this task
-    auto alarm_it = gather_task_set->alarms.find(task->id.task_id);
-    if (alarm_it != gather_task_set->alarms.end())
-    {
-        for (auto & alarm : alarm_it->second)
-            alarm.second.Cancel();
-        gather_task_set->alarms.erase(alarm_it);
-    }
-    task->is_public = true;
+    gather_task_set->cancelAlarmsBySenderTaskId(task->id);
     cv.notify_all();
     return {true, ""};
 }
 
-std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
+std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id, const String & error_message)
 {
     std::unique_lock lock(mu);
     MPPGatherTaskSetPtr gather_task_set = nullptr;
@@ -400,7 +441,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
         assert(query != nullptr);
         if (gather_task_set->isTaskRegistered(id))
         {
-            gather_task_set->removeMPPTask(id);
+            gather_task_set->markTaskAsFinishedOrFailed(id, error_message);
             if (!gather_task_set->hasMPPTask() && gather_task_set->alarms.empty())
             {
                 removeMPPGatherTaskSet(query, id.gather_id, false);
@@ -471,9 +512,9 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     return scheduler->tryToSchedule(schedule_entry, *this);
 }
 
-void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
+void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_name, const int needed_threads)
 {
     std::lock_guard lock(mu);
-    scheduler->releaseThreadsThenSchedule(needed_threads, *this);
+    scheduler->releaseThreadsThenSchedule(resource_group_name, needed_threads, *this);
 }
 } // namespace DB

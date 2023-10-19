@@ -15,13 +15,14 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -181,7 +182,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(100, 100, /*block_size=*/5));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -191,7 +192,7 @@ try
         /* split_after_rows */ 0,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -211,7 +212,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/5));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -221,7 +222,7 @@ try
         /* split_after_rows */ 0,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -243,7 +244,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1000));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -253,7 +254,7 @@ try
         /* split_after_rows */ 1,
         /* split_after_size */ 1,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -276,7 +277,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -286,7 +287,7 @@ try
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -315,7 +316,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -325,7 +326,7 @@ try
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -350,7 +351,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -360,7 +361,7 @@ try
         /* split_after_rows */ 10000,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -385,7 +386,7 @@ try
     auto blocks2 = prepareBlocks(130, 150, /*block_size=*/10);
     blocks1.insert(blocks1.end(), blocks2.begin(), blocks2.end());
     auto mock_stream = makeMockChild(blocks1);
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
@@ -396,7 +397,7 @@ try
         /* split_after_rows */ 20,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -427,7 +428,7 @@ try
     auto blocks2 = prepareBlocks(0, 30, /*block_size=*/20);
     blocks1.insert(blocks1.end(), blocks2.begin(), blocks2.end());
     auto mock_stream = makeMockChild(blocks1);
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
@@ -438,7 +439,7 @@ try
         /* split_after_rows */ 20,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     EXPECT_THROW(
@@ -460,7 +461,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -470,7 +471,7 @@ try
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     stream->writePrefix();
@@ -509,7 +510,7 @@ try
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
-    auto abort_flag = std::make_shared<std::atomic_bool>(false);
+    auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         /* log_prefix */ "",
         mock_stream,
@@ -519,20 +520,20 @@ try
         /* split_after_rows */ 10,
         /* split_after_size */ 0,
         0,
-        abort_flag,
+        prehandle_task,
         *db_context);
 
     auto sp = SyncPointCtl::enableInScope("before_SSTFilesToDTFilesOutputStream::handle_one");
     stream->writePrefix();
     auto t = std::thread([&]() { stream->write(); });
     sp.waitAndPause();
-    abort_flag->store(true, std::memory_order_seq_cst);
+    prehandle_task->abort_flag.store(true, std::memory_order_seq_cst);
     sp.next();
     sp.disable();
     t.join();
     stream->writeSuffix();
     auto files = stream->outputFiles();
-    ASSERT_EQ(true, abort_flag->load(std::memory_order_seq_cst));
+    ASSERT_EQ(true, prehandle_task->abort_flag.load(std::memory_order_seq_cst));
     ASSERT_EQ(1, files.size());
     auto delegator = storage->getAndMaybeInitStore()->path_pool->getStableDiskDelegator();
     std::vector<std::string> fps;

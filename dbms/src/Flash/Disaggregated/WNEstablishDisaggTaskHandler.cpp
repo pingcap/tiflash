@@ -24,8 +24,8 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 
 namespace DB
@@ -85,6 +85,8 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     }
 
     // run into DAGStorageInterpreter and build the segment snapshots
+    // TODO: Remove this after resource control of WN is supported.
+    context->getSettingsRef().enable_resource_control = false;
     query_executor_holder.set(queryExecute(*context));
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;

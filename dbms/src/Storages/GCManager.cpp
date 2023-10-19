@@ -18,8 +18,8 @@
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/GCManager.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 
 namespace DB
 {

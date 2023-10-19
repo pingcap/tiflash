@@ -32,7 +32,8 @@ public:
     BatchCoprocessorHandler(
         CoprocessorContext & cop_context_,
         const coprocessor::BatchRequest * cop_request_,
-        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_);
+        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
+        const String & identifier);
 
     grpc::Status execute();
 
@@ -45,6 +46,7 @@ protected:
     const coprocessor::BatchRequest * cop_request;
     grpc::ServerWriter<coprocessor::BatchResponse> * writer;
 
+    const String resource_group_name;
     const LoggerPtr log;
 };
 
