@@ -180,9 +180,10 @@ static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint
 }
 
 // Must call `RustGcHelper` to gc the returned pointer in the end.
-static RustStrWithView fn_get_config_json(RaftStoreProxyPtr, ConfigJsonType)
+static RustStrWithView fn_get_config_json(RaftStoreProxyPtr ptr, ConfigJsonType)
 {
-    auto * s = new std::string(R"({"raftstore":{"snap-handle-pool-size":4}})");
+    auto & x = as_ref(ptr);
+    auto * s = new std::string(x.proxy_config_string);
     GCMonitor::instance().add(RawObjType::MockString, 1);
     return RustStrWithView{
         .buff = cppStringAsBuff(*s),
@@ -604,14 +605,15 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
         // We record them, as persisted raft log, for potential recovery.
-        region->commands[index]
-            = {term,
-               MockProxyRegion::RawWrite{
-                   keys,
-                   vals,
-                   cmd_types,
-                   cmd_cf,
-               }};
+        region->commands[index] = {
+            term,
+            MockProxyRegion::RawWrite{
+                keys,
+                vals,
+                cmd_types,
+                cmd_cf,
+            },
+        };
     }
     return std::make_tuple(index, term);
 }
@@ -915,6 +917,7 @@ void MockRaftStoreProxy::Cf::finish_file(SSTFormatKind kind)
         kv_list.emplace_back(kv.first, kv.second);
     }
     std::sort(kv_list.begin(), kv_list.end(), [](const auto & a, const auto & b) { return a.first < b.first; });
+    std::scoped_lock<std::mutex> lock(MockSSTReader::mut);
     auto & mmp = MockSSTReader::getMockSSTData();
     mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
     kvs.clear();
@@ -942,6 +945,7 @@ MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyTyp
     , c(0)
     , freezed(false)
 {
+    std::scoped_lock<std::mutex> lock(MockSSTReader::mut);
     auto & mmp = MockSSTReader::getMockSSTData();
     auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
     mmp[MockSSTReader::Key{region_id_str, type}].clear();

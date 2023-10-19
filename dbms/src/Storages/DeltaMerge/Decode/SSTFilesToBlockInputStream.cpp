@@ -43,6 +43,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const TiFlashRaftProxyHelper * proxy_helper_,
     TMTContext & tmt_,
     std::optional<SSTScanSoftLimit> && soft_limit_,
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
     SSTFilesToBlockInputStreamOpts && opts_)
     : region(std::move(region_))
     , snapshot_index(snapshot_index_)
@@ -50,6 +51,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , proxy_helper(proxy_helper_)
     , tmt(tmt_)
     , soft_limit(std::move(soft_limit_))
+    , prehandle_task(prehandle_task_)
     , opts(std::move(opts_))
 {
     log = Logger::get(opts.log_prefix);
@@ -139,23 +141,30 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix() {}
 
-void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader)
+void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf)
 {
     // There must be no data left when we write suffix
     if (!reader)
         return;
     if (!reader->remained())
         return;
-    RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value()");
+    if (prehandle_task->abort_flag.load())
+        return;
+
+    // now the stream must be stopped by `soft_limit`, let's check the keys in reader
+    RUNTIME_CHECK_MSG(soft_limit.has_value(), "soft_limit.has_value(), cf={}", magic_enum::enum_name(cf));
     BaseBuffView cur = reader->keyView();
-    RUNTIME_CHECK_MSG(buffToStrView(cur) > soft_limit.value().raw_end, "cur > raw_end");
+    RUNTIME_CHECK_MSG(
+        buffToStrView(cur) > soft_limit.value().raw_end,
+        "cur > raw_end, cf={}",
+        magic_enum::enum_name(cf));
 }
 
 void SSTFilesToBlockInputStream::readSuffix()
 {
-    checkFinishedState(write_cf_reader);
-    checkFinishedState(default_cf_reader);
-    checkFinishedState(lock_cf_reader);
+    checkFinishedState(write_cf_reader, ColumnFamilyType::Write);
+    checkFinishedState(default_cf_reader, ColumnFamilyType::Default);
+    checkFinishedState(lock_cf_reader, ColumnFamilyType::Lock);
 
     // reset all SSTReaders and return without writting blocks any more.
     write_cf_reader.reset();
@@ -209,6 +218,7 @@ Block SSTFilesToBlockInputStream::read()
             loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
 
             auto block = readCommitedBlock();
+
             if (block.rows() != 0)
                 return block;
             // else continue to decode key-value from write CF.

@@ -18,6 +18,7 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
+#include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 
 #include <memory>
 #include <string_view>
@@ -116,6 +117,7 @@ public:
         const TiFlashRaftProxyHelper * proxy_helper_,
         TMTContext & tmt_,
         std::optional<SSTScanSoftLimit> && soft_limit_,
+        std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
         SSTFilesToBlockInputStreamOpts && opts_);
     ~SSTFilesToBlockInputStream() override;
 
@@ -163,7 +165,7 @@ private:
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
     bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReaderPtr & reader);
-    void checkFinishedState(SSTReaderPtr & reader);
+    void checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf);
 
 private:
     RegionPtr region;
@@ -172,6 +174,7 @@ private:
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     TMTContext & tmt;
     std::optional<SSTScanSoftLimit> soft_limit;
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
     const SSTFilesToBlockInputStreamOpts opts;
     LoggerPtr log;
 
