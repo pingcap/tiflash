@@ -809,20 +809,18 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         /*
-        UInt64/Int64 or other types are NOT allowed by now. MySQL will return default value and warning if failed to cast into 4B integer.
+        UInt64, Signed Integer or other types are NOT allowed by now.
+        MySQL will return default value and warning if failed to cast into 4 bytes unsigned integer.
             Warning 1411: Incorrect integer value: '`?`.`?`.`?`' for function inet_ntoa
         */
-        if (!checkDataType<DataTypeUInt32>(&*arguments[0]) && !checkDataType<DataTypeInt32>(&*arguments[0])
-            && !checkDataType<DataTypeUInt16>(&*arguments[0]) && !checkDataType<DataTypeInt16>(&*arguments[0])
-            && !checkDataType<DataTypeUInt8>(&*arguments[0]) && !checkDataType<DataTypeInt8>(&*arguments[0]))
-            throw Exception(
-                fmt::format(
-                    "Illegal type {} of argument of function {}, expected UInt32/Int32/UInt16/Int16/UInt8/Int8",
-                    arguments[0]->getName(),
-                    getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return std::make_shared<DataTypeString>();
+        if (arguments[0]->isUnsignedInteger() && arguments[0]->getSizeOfValueInMemory() <= sizeof(UInt32))
+            return std::make_shared<DataTypeString>();
+        throw Exception(
+            fmt::format(
+                "Illegal type {} of argument of function {}, expected UInt32/UInt16/UInt8",
+                arguments[0]->getName(),
+                getName()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     bool useDefaultImplementationForNulls() const override { return true; }
@@ -865,11 +863,8 @@ public:
 
         if (false) {} // NOLINT
         DISPATCH(ColumnUInt32)
-        DISPATCH(ColumnInt32)
         DISPATCH(ColumnUInt16)
-        DISPATCH(ColumnInt16)
         DISPATCH(ColumnUInt8)
-        DISPATCH(ColumnInt8)
         else
         {
             throw Exception(

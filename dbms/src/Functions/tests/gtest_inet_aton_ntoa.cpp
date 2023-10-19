@@ -133,42 +133,41 @@ try
 }
 CATCH
 
-template <typename IntegerType>
-void testInetNtoaImpl(TestInetAtonNtoa & tester)
+TEST_F(TestInetAtonNtoa, InetNtoa)
+try
 {
     const String func_name = "IPv4NumToString";
 
     // empty column
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({}),
-        tester.executeFunction(func_name, createColumn<Nullable<IntegerType>>({})));
+        executeFunction(func_name, createColumn<Nullable<UInt32>>({})));
 
-    ASSERT_COLUMN_EQ(createColumn<String>({}), tester.executeFunction(func_name, createColumn<IntegerType>({})));
+    ASSERT_COLUMN_EQ(createColumn<String>({}), executeFunction(func_name, createColumn<UInt32>({})));
 
     // const null-only column
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, {}),
-        tester.executeFunction(func_name, createConstColumn<Nullable<IntegerType>>(1, {})));
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, {})));
 
     // const non-null column
     ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "0.0.0.1"),
-        tester.executeFunction(func_name, createConstColumn<Nullable<IntegerType>>(1, 1)));
+        createConstColumn<String>(1, "255.255.255.255"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 0xffffffff)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "0.0.255.255"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt16>>(1, 0xffff)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "0.0.0.255"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 0xff)));
 
     // normal cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>(
             {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
-        tester.executeFunction(
+        executeFunction(
             func_name,
-            createColumn<Nullable<IntegerType>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
-}
-
-TEST_F(TestInetAtonNtoa, InetNtoa)
-try
-{
-    testInetNtoaImpl<UInt32>(*this);
-    testInetNtoaImpl<Int32>(*this);
+            createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
 }
 CATCH
 
