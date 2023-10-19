@@ -133,10 +133,8 @@ RSOperatorPtr createLess(const Attr & attr, const Field & value, int null_direct
 RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_direction);
 // set
 RSOperatorPtr createIn(const Attr & attr, const Fields & values);
-RSOperatorPtr createNotIn(const Attr & attr, const Fields & values);
 //
 RSOperatorPtr createLike(const Attr & attr, const Field & value);
-RSOperatorPtr createNotLike(const Attr & attr, const Field & values);
 //
 RSOperatorPtr createIsNull(const Attr & attr);
 //
