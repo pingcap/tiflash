@@ -131,7 +131,7 @@ public:
     using Result = MPMCQueueResult;
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
 
-    MPMCQueue(
+    explicit MPMCQueue(
         const CapacityLimits & capacity_limits_,
         ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; })
         : capacity_limits(capacity_limits_)

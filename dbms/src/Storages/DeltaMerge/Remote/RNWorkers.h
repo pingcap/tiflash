@@ -61,6 +61,8 @@ public:
     }
 
 private:
+    ChannelPtr empty_channel;
+
     RNWorkerFetchPagesPtr worker_fetch_pages;
     RNWorkerPrepareStreamsPtr worker_prepare_streams;
 };
