@@ -120,7 +120,7 @@ void PipelineExecutor::cancel()
 String PipelineExecutor::toString() const
 {
     assert(root_pipeline);
-    return root_pipeline->toTreeString();
+    return fmt::format("query concurrency: {}\n{}", context.getMaxStreams(), root_pipeline->toTreeString());
 }
 
 int PipelineExecutor::estimateNewThreadCount()

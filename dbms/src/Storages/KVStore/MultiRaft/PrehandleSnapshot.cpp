@@ -419,6 +419,7 @@ static void runInParallel(
         proxy_helper,
         tmt,
         std::move(part_limit),
+        prehandle_task,
         DM::SSTFilesToBlockInputStreamOpts(opt));
     try
     {
@@ -689,6 +690,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 proxy_helper,
                 tmt,
                 std::nullopt,
+                prehandle_task,
                 DM::SSTFilesToBlockInputStreamOpts(opt));
 
             // `split_keys` do not begin with 'z'.

@@ -14,23 +14,10 @@
 
 #pragma once
 
-#include <Common/FmtUtils.h>
-#include <common/types.h>
-
 namespace DB
 {
-struct BlockStreamProfileInfo;
-struct OperatorProfileInfo;
-struct BaseRuntimeStatistics
-{
-    size_t rows = 0;
-    size_t blocks = 0;
-    size_t bytes = 0;
-    size_t allocated_bytes = 0;
-    size_t concurrency = 0;
-    UInt64 execution_time_ns = 0;
 
-    void append(const BlockStreamProfileInfo &);
-    void append(const OperatorProfileInfo &);
-};
+struct RegionQueryInfo;
+struct MvccQueryInfo;
+
 } // namespace DB
