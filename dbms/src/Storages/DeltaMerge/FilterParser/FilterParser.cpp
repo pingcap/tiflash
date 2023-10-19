@@ -271,6 +271,7 @@ RSOperatorPtr parseTiExpr(
             if (const auto & child = expr.children(0); likely(isFunctionExpr(child)))
                 return createNot(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
             reason = "child of logical not is not function";
+            break;
         }
 
         case FilterParser::RSFilterType::And:
@@ -332,6 +333,7 @@ RSOperatorPtr parseTiExpr(
             {
                 reason = "child of IsNull is not ColumnRef";
             }
+            break;
         }
         // Unsupported filter type:
         case FilterParser::RSFilterType::Like:
