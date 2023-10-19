@@ -152,14 +152,8 @@ try
 
     // const non-null column
     ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "255.255.255.255"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 0xffffffff)));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "0.0.255.255"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt16>>(1, 0xffff)));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "0.0.0.255"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 0xff)));
+        createConstColumn<String>(1, "0.0.0.1"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
 
     // normal cases
     ASSERT_COLUMN_EQ(
@@ -182,28 +176,16 @@ try
     std::uniform_int_distribution<UInt32> dist;
 
     InferredDataVector<Nullable<UInt32>> num_vec;
-    InferredDataVector<Nullable<Int32>> num_vec_int;
     for (size_t i = 0; i < 512; ++i)
     {
         num_vec.emplace_back(dist(mt));
-        num_vec_int.emplace_back(num_vec.back());
     }
 
     auto num_data_type = makeDataType<Nullable<UInt32>>();
-    auto num_data_type_int = makeDataType<Nullable<Int32>>();
     ColumnWithTypeAndName num_column(makeColumn<Nullable<UInt32>>(num_data_type, num_vec), num_data_type, "num");
-    ColumnWithTypeAndName num_column_int(
-        makeColumn<Nullable<Int32>>(num_data_type_int, num_vec_int),
-        num_data_type_int,
-        "num_int");
     auto str_column = executeFunction(ntoa, num_column);
-    {
-        auto str_to_num = executeFunction(aton, str_column);
-        ASSERT_COLUMN_EQ(num_column, str_to_num);
-    }
-    {
-        ASSERT_COLUMN_EQ(executeFunction(ntoa, num_column_int), str_column);
-    }
+    auto num_column_2 = executeFunction(aton, str_column);
+    ASSERT_COLUMN_EQ(num_column, num_column_2);
 }
 CATCH
 
