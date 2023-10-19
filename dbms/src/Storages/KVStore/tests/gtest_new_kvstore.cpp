@@ -800,7 +800,7 @@ try
         /// Advance the index in `MockRaftStoreProxy`
         // We can't `doApply`, since the TiKVValue is not valid.
         auto r1 = proxy_instance->getRegion(region_id);
-        r1->updateAppliedIndex(index);
+        r1->updateAppliedIndex(index, true);
     }
     region_1->setApplied(index, term);
     auto regions_snapshot = doLearnerRead(table_id, mvcc_query_info, false, ctx, log);

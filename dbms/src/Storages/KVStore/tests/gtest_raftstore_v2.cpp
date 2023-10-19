@@ -63,7 +63,7 @@ try
         auto kkk = RecordKVFormat::decodeWriteCfValue(TiKVValue::copyFrom(value_write));
         {
             MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
@@ -71,7 +71,7 @@ try
             }
             default_cf.finish_file(SSTFormatKind::KIND_TABLET);
             default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
