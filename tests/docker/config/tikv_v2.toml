@@ -22,9 +22,7 @@
 [storage]
 # No space is reserved at all
 reserve-space = "0"
+engine = "raft-kv2"
 
 [raftstore]
 capacity = "100GB"
-
-[storage]
-engine = "raft-kv"
