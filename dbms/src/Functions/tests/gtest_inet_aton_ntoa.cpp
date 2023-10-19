@@ -152,8 +152,14 @@ try
 
     // const non-null column
     ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "0.0.0.1"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
+        createConstColumn<String>(1, "255.255.255.255"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 0xffffffff)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "0.0.255.255"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt16>>(1, 0xffff)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "0.0.0.255"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt8>>(1, 0xff)));
 
     // normal cases
     ASSERT_COLUMN_EQ(
