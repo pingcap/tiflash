@@ -383,6 +383,7 @@ void MockRaftStoreProxy::debugAddRegions(
         auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
         lock.regions.emplace(region_ids[i], region);
         lock.index.add(region);
+        tmt.getRegionTable().updateRegion(*region);
     }
 }
 
@@ -770,11 +771,14 @@ void MockRaftStoreProxy::doApply(
     region->persistAppliedIndex();
 }
 
-void MockRaftStoreProxy::reload(uint64_t region_id)
+void MockRaftStoreProxy::reload()
 {
-    auto region = getRegion(region_id);
-    assert(region != nullptr);
-    region->apply.set_applied_index(region->persisted_apply.applied_index());
+    for (auto iter = regions.begin(); iter != regions.end(); iter++)
+    {
+        auto region = getRegion(iter->first);
+        assert(region != nullptr);
+        region->reload();
+    }
 }
 
 void MockRaftStoreProxy::replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to)

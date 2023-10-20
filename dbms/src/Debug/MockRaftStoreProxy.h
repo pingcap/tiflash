@@ -44,6 +44,7 @@ struct MockProxyRegion : MutexLockWrap
     explicit MockProxyRegion(uint64_t id);
     UniversalWriteBatch persistMeta();
     void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
+    void reload();
 
     struct RawWrite
     {
@@ -172,6 +173,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<UInt64> region_ids,
         std::vector<std::pair<std::string, std::string>> && ranges);
 
+    /// Use region meta info in KVStore to replace what's in MockProxy.
+    /// Do not use in normal logic.
     void loadRegionFromKVStore(KVStore & kvs, TMTContext & tmt, UInt64 region_id);
 
     /// We assume that we generate one command, and immediately commit.
@@ -235,7 +238,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t index,
         std::optional<bool> check_proactive_flush = std::nullopt);
 
-    void reload(uint64_t region_id);
+    void reload();
     void replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to);
 
     void clear()

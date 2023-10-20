@@ -115,6 +115,12 @@ void MockProxyRegion::setState(raft_serverpb::RegionLocalState s)
     this->state = s;
 }
 
+void MockProxyRegion::reload()
+{
+    auto _ = genLockGuard();
+    this->apply.set_applied_index(this->persisted_apply.applied_index());
+}
+
 MockProxyRegion::MockProxyRegion(uint64_t id_)
     : id(id_)
 {

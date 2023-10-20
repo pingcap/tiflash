@@ -91,6 +91,8 @@ public:
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
         proxy_helper = proxy_instance->generateProxyHelper();
         kvstore->restore(*path_pool, proxy_helper.get());
+        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        global_ctx.getTMTContext().getRegionTable().clear();
         {
             auto store = metapb::Store{};
             store.set_id(1234);

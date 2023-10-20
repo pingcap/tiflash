@@ -446,7 +446,6 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         auto && [request, response]
             = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
         source_region->setStateApplying();
-        source_region->makeRaftCommandDelegate(kvs.genTaskLock());
         const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
         try
         {
@@ -850,7 +849,6 @@ TEST_F(RegionKVStoreTest, Writes)
 
 TEST_F(RegionKVStoreTest, AdminSplit)
 {
-    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     proxy_instance->debugAddRegions(
@@ -874,7 +872,6 @@ TEST_F(RegionKVStoreTest, AdminSplit)
 
 TEST_F(RegionKVStoreTest, AdminMerge)
 {
-    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     proxy_instance->debugAddRegions(
@@ -883,7 +880,6 @@ TEST_F(RegionKVStoreTest, AdminMerge)
         {1, 7},
         {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)},
          {RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}});
-
     {
         testRaftMergeRollback(kvs, ctx.getTMTContext());
         testRaftMerge(kvs, ctx.getTMTContext());

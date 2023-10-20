@@ -56,7 +56,7 @@ try
         }
         {
             const KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload(region_id);
+            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index + 1);
@@ -95,7 +95,7 @@ try
         {
             MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload(region_id);
+            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
@@ -146,7 +146,7 @@ try
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload(region_id);
+            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index);
@@ -189,7 +189,7 @@ try
         {
             MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload(region_id);
+            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
@@ -420,7 +420,6 @@ try
             proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
-            ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
             {
                 // Only one file
                 MockSSTReader::getMockSSTData().clear();
@@ -748,7 +747,6 @@ try
     const auto region_1 = kvs.getRegion(region_id);
     ASSERT_EQ(region_1->appliedIndex(), 5);
     ASSERT_EQ(region_1->appliedIndexTerm(), 5);
-    ctx.getTMTContext().getRegionTable().updateRegion(*region_1);
 
     // prepare 3 kv for region_1
     Strings keys{
