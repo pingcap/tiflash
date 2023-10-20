@@ -56,7 +56,6 @@ try
         }
         {
             const KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index + 1);
@@ -95,7 +94,6 @@ try
         {
             MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
@@ -146,7 +144,6 @@ try
         }
         {
             KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index);
@@ -189,7 +186,6 @@ try
         {
             MockRaftStoreProxy::FailCond cond;
             KVStore & kvs = reloadKVSFromDisk();
-            proxy_instance->reload();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);

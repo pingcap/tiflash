@@ -86,13 +86,10 @@ public:
     {
         // clean data and create path pool instance
         path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
-        reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
         proxy_helper = proxy_instance->generateProxyHelper();
-        kvstore->restore(*path_pool, proxy_helper.get());
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        global_ctx.getTMTContext().getRegionTable().clear();
+        reloadKVSFromDisk();
         {
             auto store = metapb::Store{};
             store.set_id(1234);
@@ -116,6 +113,8 @@ protected:
         kvstore = std::make_shared<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
+        proxy_instance->reload();
+        global_ctx.getTMTContext().getRegionTable().clear();
         return *kvstore;
     }
     void createDefaultRegions() { proxy_instance->init(100); }
