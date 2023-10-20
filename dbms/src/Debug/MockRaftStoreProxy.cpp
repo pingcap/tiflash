@@ -775,7 +775,7 @@ void MockRaftStoreProxy::reload()
 {
     for (auto & iter : regions)
     {
-        auto region = getRegion(iter->first);
+        auto region = getRegion(iter.first);
         assert(region != nullptr);
         region->reload();
     }
