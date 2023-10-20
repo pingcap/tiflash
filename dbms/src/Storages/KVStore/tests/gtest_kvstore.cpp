@@ -73,7 +73,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
 
     // Start mock proxy in other thread
     std::atomic_bool over{false};
-    auto proxy_runner = std::thread([&]() { proxy_instance->testRunNormal(over); });
+    auto proxy_runner = std::thread([&]() { proxy_instance->testRunReadIndex(over); });
     KVStore & kvs = getKVS();
     ASSERT_EQ(kvs.getProxyHelper(), proxy_helper.get());
 

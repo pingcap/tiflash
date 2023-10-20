@@ -137,20 +137,6 @@ struct MockReadIndex
 
 struct MockRaftStoreProxy : MutexLockWrap
 {
-    MockProxyRegionPtr getRegion(uint64_t id);
-    MockProxyRegionPtr doGetRegion(uint64_t id);
-
-    void init(size_t region_num);
-    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
-
-    size_t size() const;
-
-    MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
-    void testRunNormal(const std::atomic_bool & over);
-
-    void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
-
-    static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
     /// Mutation funcs.
     struct FailCond
     {
@@ -163,6 +149,20 @@ struct MockRaftStoreProxy : MutexLockWrap
         };
         Type type = NORMAL;
     };
+
+    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
+    static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
+
+    MockProxyRegionPtr getRegion(uint64_t id);
+    MockProxyRegionPtr doGetRegion(uint64_t id);
+
+    void init(size_t region_num);
+    size_t size() const;
+
+    MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
+    void testRunReadIndex(const std::atomic_bool & over);
+
+    void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
 
     /// Boostrap with a given region.
     /// Similar to TiKV's `bootstrap_region`.
@@ -276,6 +276,11 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::string proxy_config_string;
     std::map<uint64_t, MockProxyRegionPtr> regions;
 };
+
+inline MockRaftStoreProxy & as_ref(RaftStoreProxyPtr ptr)
+{
+    return *reinterpret_cast<MockRaftStoreProxy *>(reinterpret_cast<size_t>(ptr.inner));
+}
 
 enum class RawObjType : uint32_t
 {

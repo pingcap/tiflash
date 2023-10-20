@@ -147,7 +147,7 @@ protected:
         over.store(false);
         ctx.getTMTContext().setStatusRunning();
         // Start mock proxy in other thread
-        proxy_runner.reset(new std::thread([&]() { proxy_instance->testRunNormal(over); }));
+        proxy_runner.reset(new std::thread([&]() { proxy_instance->testRunReadIndex(over); }));
         ASSERT_EQ(kvstore->getProxyHelper(), proxy_helper.get());
         kvstore->initReadIndexWorkers([]() { return std::chrono::milliseconds(10); }, 1);
         ASSERT_NE(kvstore->read_index_worker_manager, nullptr);

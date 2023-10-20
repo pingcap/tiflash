@@ -16,6 +16,7 @@
 #include <Common/Logger.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Debug/MockFFIImpls.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTGenerator.h>
 #include <Debug/MockSSTReader.h>
@@ -35,7 +36,6 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <google/protobuf/text_format.h>
 
-
 namespace DB
 {
 namespace RegionBench
@@ -44,125 +44,22 @@ extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const Ti
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
 
-RawRustPtr fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view);
-RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data);
-uint8_t fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr resp, RawVoidPtr waker);
-void fn_handle_batch_read_index(
-    RaftStoreProxyPtr,
-    CppStrVecView,
-    RawVoidPtr,
-    uint64_t,
-    void (*)(RawVoidPtr, BaseBuffView, uint64_t));
-kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts);
-
-MockRaftStoreProxy & as_ref(RaftStoreProxyPtr ptr)
-{
-    return *reinterpret_cast<MockRaftStoreProxy *>(reinterpret_cast<size_t>(ptr.inner));
-}
-
-extern void mock_set_rust_gc_helper(void (*)(RawVoidPtr, RawRustPtrType));
-
-void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
-{
-    if (!ptr)
-        return;
-    auto type = static_cast<RawObjType>(type_);
-    GCMonitor::instance().add(type, -1);
-    switch (type)
-    {
-    case RawObjType::None:
-        break;
-    case RawObjType::MockReadIndexTask:
-        delete reinterpret_cast<MockReadIndexTask *>(ptr);
-        break;
-    case RawObjType::MockAsyncWaker:
-        delete reinterpret_cast<MockAsyncWaker *>(ptr);
-        break;
-    case RawObjType::MockString:
-        delete reinterpret_cast<std::string *>(ptr);
-        break;
-    case RawObjType::MockVecOfString:
-        delete reinterpret_cast<RustStrWithViewVecInner *>(ptr);
-        break;
-    }
-}
-
-KVGetStatus fn_get_region_local_state(
-    RaftStoreProxyPtr ptr,
-    uint64_t region_id,
-    RawVoidPtr data,
-    RawCppStringPtr * error_msg)
-{
-    if (!ptr.inner)
-    {
-        *error_msg = RawCppString::New("RaftStoreProxyPtr is none");
-        return KVGetStatus::Error;
-    }
-    auto & x = as_ref(ptr);
-    auto region = x.getRegion(region_id);
-    if (region)
-    {
-        auto state = region->getState();
-        auto buff = state.SerializePartialAsString();
-        SetPBMsByBytes(MsgPBType::RegionLocalState, data, BaseBuffView{buff.data(), buff.size()});
-        return KVGetStatus::Ok;
-    }
-    else
-        return KVGetStatus::NotFound;
-}
-
-void fn_notify_compact_log(
-    RaftStoreProxyPtr ptr,
-    uint64_t region_id,
-    uint64_t compact_index,
-    uint64_t compact_term,
-    uint64_t applied_index)
-{
-    UNUSED(applied_index);
-    // Update flushed applied_index and truncated state.
-    auto & x = as_ref(ptr);
-    auto region = x.getRegion(region_id);
-    ASSERT(region);
-    // `applied_index` in proxy's disk can still be less than the `applied_index` here when fg flush.
-    if (region && region->getApply().truncated_state().index() < compact_index)
-    {
-        region->tryUpdateTruncatedState(compact_index, compact_term);
-    }
-}
-
-static RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr, uint8_t, int64_t)
-{
-    auto & x = as_ref(ptr);
-    return x.cluster_ver;
-}
-
-// Must call `RustGcHelper` to gc the returned pointer in the end.
-static RustStrWithView fn_get_config_json(RaftStoreProxyPtr ptr, ConfigJsonType)
-{
-    auto & x = as_ref(ptr);
-    auto * s = new std::string(x.proxy_config_string);
-    GCMonitor::instance().add(RawObjType::MockString, 1);
-    return RustStrWithView{
-        .buff = cppStringAsBuff(*s),
-        .inner = RawRustPtr{.ptr = s, .type = static_cast<RawRustPtrType>(RawObjType::MockString)}};
-}
-
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
 {
     TiFlashRaftProxyHelper res{};
     res.proxy_ptr = proxy_ptr;
-    res.fn_make_read_index_task = fn_make_read_index_task;
-    res.fn_poll_read_index_task = fn_poll_read_index_task;
-    res.fn_make_async_waker = fn_make_async_waker;
-    res.fn_handle_batch_read_index = fn_handle_batch_read_index;
-    res.fn_get_region_local_state = fn_get_region_local_state;
-    res.fn_notify_compact_log = fn_notify_compact_log;
-    res.fn_get_cluster_raftstore_version = fn_get_cluster_raftstore_version;
-    res.fn_get_config_json = fn_get_config_json;
+    res.fn_make_read_index_task = MockFFIImpls::fn_make_read_index_task;
+    res.fn_poll_read_index_task = MockFFIImpls::fn_poll_read_index_task;
+    res.fn_make_async_waker = MockFFIImpls::fn_make_async_waker;
+    res.fn_handle_batch_read_index = MockFFIImpls::fn_handle_batch_read_index;
+    res.fn_get_region_local_state = MockFFIImpls::fn_get_region_local_state;
+    res.fn_notify_compact_log = MockFFIImpls::fn_notify_compact_log;
+    res.fn_get_cluster_raftstore_version = MockFFIImpls::fn_get_cluster_raftstore_version;
+    res.fn_get_config_json = MockFFIImpls::fn_get_config_json;
     {
         // make sure such function pointer will be set at most once.
         static std::once_flag flag;
-        std::call_once(flag, []() { MockSetFFI::MockSetRustGcHelper(fn_gc_rust_ptr); });
+        std::call_once(flag, []() { MockSetFFI::MockSetRustGcHelper(MockFFIImpls::fn_gc_rust_ptr); });
     }
 
     return res;
@@ -226,7 +123,7 @@ size_t MockRaftStoreProxy::size() const
     return regions.size();
 }
 
-void MockRaftStoreProxy::testRunNormal(const std::atomic_bool & over)
+void MockRaftStoreProxy::testRunReadIndex(const std::atomic_bool & over)
 {
     while (!over)
     {

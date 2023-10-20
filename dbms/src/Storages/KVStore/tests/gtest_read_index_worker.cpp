@@ -284,7 +284,7 @@ void ReadIndexTest::testNormal()
     // start mock proxy in other thread
     auto proxy_runner = std::thread([&]() {
         setThreadName("proxy-runner");
-        proxy_instance.testRunNormal(over);
+        proxy_instance.testRunReadIndex(over);
     });
 
     {

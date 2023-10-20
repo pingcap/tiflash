@@ -16,6 +16,7 @@
 #include <Common/Logger.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Debug/MockFFIImpls.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTGenerator.h>
 #include <Debug/MockSSTReader.h>
@@ -37,9 +38,7 @@
 
 namespace DB
 {
-MockRaftStoreProxy & as_ref(RaftStoreProxyPtr ptr);
-
-RawRustPtr fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view)
+RawRustPtr MockFFIImpls::fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view)
 {
     auto & x = as_ref(ptr);
     kvrpcpb::ReadIndexRequest req;
@@ -50,7 +49,7 @@ RawRustPtr fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view)
     return RawRustPtr{task, static_cast<uint32_t>(RawObjType::MockReadIndexTask)};
 }
 
-RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data)
+RawRustPtr MockFFIImpls::fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data)
 {
     auto * p = new MockAsyncWaker{std::make_shared<MockAsyncNotifier>()};
     p->data->data = data;
@@ -59,7 +58,7 @@ RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data)
     return RawRustPtr{p, static_cast<uint32_t>(RawObjType::MockAsyncWaker)};
 }
 
-uint8_t fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr resp, RawVoidPtr waker)
+uint8_t MockFFIImpls::fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr resp, RawVoidPtr waker)
 {
     auto & read_index_task = *reinterpret_cast<MockReadIndexTask *>(task);
     auto * async_waker = reinterpret_cast<MockAsyncWaker *>(waker);
@@ -76,7 +75,7 @@ uint8_t fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr r
     }
 }
 
-void fn_handle_batch_read_index(
+void MockFFIImpls::fn_handle_batch_read_index(
     RaftStoreProxyPtr,
     CppStrVecView,
     RawVoidPtr,
