@@ -130,13 +130,7 @@ static void TestInetAtonNtoaImpl(TestInetAtonNtoa & test)
         createColumn<Nullable<String>>({}),
         test.executeFunction(func_name, createColumn<Nullable<Type>>({})));
 
-<<<<<<< HEAD
-    ASSERT_COLUMN_EQ(
-        createColumn<String>({}),
-        executeFunction(func_name, createColumn<UInt32>({})));
-=======
     ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}), test.executeFunction(func_name, createColumn<Type>({})));
->>>>>>> ea99379f4f (Fix the compatibility issue in func `FunctionIPv4NumToString` (#8210))
 
     // const null-only column
     ASSERT_COLUMN_EQ(
@@ -204,12 +198,6 @@ static void TestInetAtonNtoaImpl(TestInetAtonNtoa & test)
     }
 }
 
-<<<<<<< HEAD
-    // normal cases
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
-        executeFunction(func_name, createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
-=======
 
 TEST_F(TestInetAtonNtoa, InetNtoa)
 try
@@ -224,7 +212,6 @@ try
     M(UInt64);
     M(Int64);
 #undef M
->>>>>>> ea99379f4f (Fix the compatibility issue in func `FunctionIPv4NumToString` (#8210))
 }
 CATCH
 

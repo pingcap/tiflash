@@ -776,14 +776,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-<<<<<<< HEAD
-        if (!checkDataType<DataTypeUInt32>(&*arguments[0]))
-            throw Exception(
-                fmt::format("Illegal type {} of argument of function {}, expected UInt32", arguments[0]->getName(), getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return std::make_shared<DataTypeString>();
-=======
         if (arguments[0]->isInteger())
             return makeNullable(std::make_shared<DataTypeString>());
         throw Exception(
@@ -792,7 +784,6 @@ public:
                 arguments[0]->getName(),
                 getName()),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
->>>>>>> ea99379f4f (Fix the compatibility issue in func `FunctionIPv4NumToString` (#8210))
     }
 
     bool useDefaultImplementationForNulls() const override { return true; }
@@ -845,7 +836,9 @@ public:
         executeImplColumnInteger(block, vec_in, result);                    \
     }
 
-        if (false) {} // NOLINT
+        if (false) // NOLINT
+        {
+        }
         DISPATCH(ColumnUInt64)
         DISPATCH(ColumnInt64)
         DISPATCH(ColumnUInt32)
