@@ -22,7 +22,12 @@ RNWorkers::RNWorkers(const Context & context, const Options & options, size_t nu
 {
     RUNTIME_CHECK(num_streams > 0, num_streams);
     size_t n = options.read_task->segment_read_tasks.size();
-    RUNTIME_CHECK(n > 0, n);
+    if (n == 0)
+    {
+        empty_channel = std::make_shared<Channel>(0);
+        empty_channel->finish();
+        return;
+    }
 
     auto fetch_pages_concurrency = n;
     auto prepare_streams_concurrency = n;
@@ -69,18 +74,26 @@ RNWorkers::RNWorkers(const Context & context, const Options & options, size_t nu
 
 void RNWorkers::startInBackground()
 {
-    worker_fetch_pages->startInBackground();
-    worker_prepare_streams->startInBackground();
+    if (!empty_channel)
+    {
+        worker_fetch_pages->startInBackground();
+        worker_prepare_streams->startInBackground();
+    }
 }
 
 void RNWorkers::wait()
 {
-    worker_fetch_pages->wait();
-    worker_prepare_streams->wait();
+    if (!empty_channel)
+    {
+        worker_fetch_pages->wait();
+        worker_prepare_streams->wait();
+    }
 }
 
 RNWorkers::ChannelPtr RNWorkers::getReadyChannel() const
 {
+    if (empty_channel)
+        return empty_channel;
     return worker_prepare_streams->result_queue;
 }
 } // namespace DB::DM::Remote
