@@ -45,7 +45,7 @@ struct ExternalDTFileInfo;
 
 namespace tests
 {
-class RegionKVStoreTest;
+class KVStoreTestBase;
 }
 
 class IAST;
@@ -272,7 +272,7 @@ private:
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
     friend class ReadIndexStressTest;
     struct StoreMeta
     {

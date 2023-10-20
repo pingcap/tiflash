@@ -75,10 +75,10 @@ extern void ChangeRegionStateRange(
 namespace tests
 {
 // TODO: Use another way to workaround calling the private methods on KVStore
-class RegionKVStoreTest : public ::testing::Test
+class KVStoreTestBase : public ::testing::Test
 {
 public:
-    RegionKVStoreTest() { test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test"); }
+    KVStoreTestBase() { test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test_base"); }
 
     static void SetUpTestCase() {}
 
@@ -117,6 +117,7 @@ protected:
         global_ctx.getTMTContext().getRegionTable().clear();
         return *kvstore;
     }
+    // Onlt handle mock proxy's part. Conflicts with `debugAddRegions`.
     void createDefaultRegions() { proxy_instance->init(100); }
     void initStorages()
     {
@@ -171,8 +172,6 @@ protected:
 
 protected:
     std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
-    static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
-    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 
     std::atomic_bool has_init{false};
     std::string test_path;
@@ -184,8 +183,9 @@ protected:
     std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
     std::unique_ptr<std::thread> proxy_runner;
 
-    LoggerPtr log = DB::Logger::get("RegionKVStoreTest");
+    LoggerPtr log = DB::Logger::get("KVStoreTestBase");
     std::atomic_bool over{false};
 };
+
 } // namespace tests
 } // namespace DB

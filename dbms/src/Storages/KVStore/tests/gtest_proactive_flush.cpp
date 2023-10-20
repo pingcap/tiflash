@@ -14,11 +14,20 @@
 
 #include "kvstore_helper.h"
 
-
 namespace DB
 {
 namespace tests
 {
+class RegionKVStoreTest : public KVStoreTestBase
+{
+public:
+    RegionKVStoreTest()
+    {
+        log = DB::Logger::get("RegionKVStoreTest");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
+    }
+};
+
 TEST_F(RegionKVStoreTest, KVStorePassivePersistence)
 try
 {

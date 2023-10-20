@@ -28,9 +28,334 @@ extern const char force_set_sst_to_dtfile_block_size[];
 
 namespace tests
 {
+class RegionKVStoreV2Test : public KVStoreTestBase
+{
+public:
+    RegionKVStoreV2Test()
+    {
+        log = DB::Logger::get("RegionKVStoreV2Test");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_v2_test");
+    }
+};
+
+
+TEST_F(RegionKVStoreV2Test, KVStoreExtraDataSnapshot1)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        // See `decodeWriteCfValue`.
+        auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+
+        {
+            auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.insert_raw(k1, value_default);
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k1, value_write);
+            write_cf.insert_raw(k2, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance
+                      ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+            ASSERT_EQ(kvr1->writeCFCount(), 1); // k2
+        }
+        MockRaftStoreProxy::FailCond cond;
+        {
+            // Add a new key to trigger another row2col transform.
+            auto kvr1 = kvs.getRegion(region_id);
+            auto k = RecordKVFormat::genKey(table_id, 3, 111);
+            auto [index, term]
+                = proxy_instance
+                      ->rawWrite(region_id, {k}, {value_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            auto [index2, term2]
+                = proxy_instance
+                      ->rawWrite(region_id, {k}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+            ASSERT_EQ(kvr1->writeCFCount(), 1); // k2
+            UNUSED(term);
+            UNUSED(term2);
+        }
+        {
+            // A normal write to "save" the orphan key.
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            auto kvr1 = kvs.getRegion(region_id);
+            auto [index, term]
+                = proxy_instance
+                      ->rawWrite(region_id, {k2}, {value_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            // After applied this log, the write record is not orphan any more.
+            ASSERT_EQ(kvr1->writeCFCount(), 0);
+            auto [index2, term2]
+                = proxy_instance
+                      ->rawWrite(region_id, {k2}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
+            ASSERT_EQ(kvr1->writeCFCount(), 0);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 0);
+            UNUSED(term);
+            UNUSED(term2);
+        }
+        {
+            // An orphan key in normal write will still trigger a hard error.
+            // TODO Enable this test again when we fix `RegionData::readDataByWriteIt`.
+
+            // auto k = RecordKVFormat::genKey(table_id, 4, 111);
+            // auto [index, term2] = proxy_instance->rawWrite(region_id, {k}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            // UNUSED(term2);
+            // EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+        }
+    }
+}
+CATCH
+
+TEST_F(RegionKVStoreV2Test, KVStoreExtraDataSnapshot2)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        // See `decodeWriteCfValue`.
+        auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+
+        {
+            auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k1, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance
+                      ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            ASSERT_FALSE(kvs.prehandling_trace.hasTask(region_id));
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        {
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k2, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, 10);
+            // Every snapshot contains a full copy of this region. So we will drop all orphan keys in the previous region.
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        MockRaftStoreProxy::FailCond cond;
+        {
+            auto k3 = RecordKVFormat::genKey(table_id, 3, 111);
+            auto kvr1 = kvs.getRegion(region_id);
+            proxy_instance->rawWrite(
+                region_id,
+                {k3, k3},
+                {value_default, value_write},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write},
+                8);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, 8);
+
+            auto k4 = RecordKVFormat::genKey(table_id, 4, 111);
+            proxy_instance->rawWrite(
+                region_id,
+                {k4, k4},
+                {value_default, value_write},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write},
+                10);
+            // Remaining orphan keys of k2.
+            EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, 10), Exception);
+        }
+        {
+            auto k5 = RecordKVFormat::genKey(table_id, 5, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k5, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 15, 0, 20);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        {
+            auto k6 = RecordKVFormat::genKey(table_id, 6, 111);
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+
+            // Trigger a row2col.
+            auto && [req, res] = MockRaftStoreProxy::composeCompactLog(r1, 10);
+            proxy_instance->adminCommand(region_id, std::move(req), std::move(res), 20);
+            EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, 20), Exception);
+        }
+    }
+}
+CATCH
+
+TEST_F(RegionKVStoreV2Test, KVStoreExtraDataSnapshot)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        // See `decodeWriteCfValue`.
+        auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+
+        {
+            auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k1, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance
+                      ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            ASSERT_FALSE(kvs.prehandling_trace.hasTask(region_id));
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        {
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k2, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, 10);
+            // Every snapshot contains a full copy of this region. So we will drop all orphan keys in the previous region.
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        MockRaftStoreProxy::FailCond cond;
+        {
+            auto k3 = RecordKVFormat::genKey(table_id, 3, 111);
+            auto kvr1 = kvs.getRegion(region_id);
+            proxy_instance->rawWrite(
+                region_id,
+                {k3, k3},
+                {value_default, value_write},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write},
+                8);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, 8);
+
+            auto k4 = RecordKVFormat::genKey(table_id, 4, 111);
+            proxy_instance->rawWrite(
+                region_id,
+                {k4, k4},
+                {value_default, value_write},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write},
+                10);
+            // Remaining orphan keys of k2.
+            EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, 10), Exception);
+        }
+        {
+            auto k5 = RecordKVFormat::genKey(table_id, 5, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k5, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto [kvr1, res]
+                = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 15, 0, 20);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        {
+            auto k6 = RecordKVFormat::genKey(table_id, 6, 111);
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+
+            // Trigger a row2col.
+            auto && [req, res] = MockRaftStoreProxy::composeCompactLog(r1, 10);
+            proxy_instance->adminCommand(region_id, std::move(req), std::move(res), 20);
+            EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, 20), Exception);
+        }
+    }
+}
+CATCH
 
 // Test if active cancel from proxy.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnapCancel)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapCancel)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -97,7 +422,7 @@ try
 CATCH
 
 // Test several uncommitted keys with only one version.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnap1)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -181,7 +506,7 @@ try
 CATCH
 
 // Test if there is only one pk with may versions.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnap2)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap2)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -241,7 +566,7 @@ try
 CATCH
 
 // Test if there are too many untrimmed data.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnap3)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap3)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -301,7 +626,7 @@ try
 CATCH
 
 // Test if one subtask throws.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnapXXX4)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapXXX4)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -372,7 +697,7 @@ try
 CATCH
 
 // Test if default has significantly more kvs than write cf.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnapXXX5)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapXXX5)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -432,7 +757,7 @@ try
 CATCH
 
 // Test if parallel limit is reached.
-TEST_F(RegionKVStoreTest, KVStoreSingleSnap6)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap6)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();

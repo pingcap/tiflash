@@ -15,10 +15,24 @@
 #include <Debug/dbgTools.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 
+#include "kvstore_helper.h"
+
 namespace DB::tests
 {
 
-TEST_F(RegionKVStoreTest, PersistenceV1)
+class RegionKVStoreOldTest : public KVStoreTestBase
+{
+public:
+    static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
+    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+    RegionKVStoreOldTest()
+    {
+        log = DB::Logger::get("RegionKVStoreOldTest");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_old_test");
+    }
+};
+
+TEST_F(RegionKVStoreOldTest, PersistenceV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -52,7 +66,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ReadIndex)
+TEST_F(RegionKVStoreOldTest, ReadIndex)
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -229,7 +243,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
     ASSERT(!GCMonitor::instance().empty());
 }
 
-void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
+void RegionKVStoreOldTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
 {
     uint64_t region_id = 7;
     {
@@ -392,7 +406,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     }
 }
 
-void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
+void RegionKVStoreOldTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 {
     {
         auto region_id = 7;
@@ -534,7 +548,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     }
 }
 
-TEST_F(RegionKVStoreTest, RegionReadWrite)
+TEST_F(RegionKVStoreOldTest, RegionReadWrite)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     TableID table_id = 100;
@@ -661,7 +675,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
     }
 }
 
-TEST_F(RegionKVStoreTest, Writes)
+TEST_F(RegionKVStoreOldTest, Writes)
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -847,7 +861,7 @@ TEST_F(RegionKVStoreTest, Writes)
 }
 
 
-TEST_F(RegionKVStoreTest, AdminSplit)
+TEST_F(RegionKVStoreOldTest, AdminSplit)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
@@ -870,7 +884,7 @@ TEST_F(RegionKVStoreTest, AdminSplit)
     }
 }
 
-TEST_F(RegionKVStoreTest, AdminMerge)
+TEST_F(RegionKVStoreOldTest, AdminMerge)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
@@ -887,7 +901,7 @@ TEST_F(RegionKVStoreTest, AdminMerge)
 }
 
 
-TEST_F(RegionKVStoreTest, AdminChangePeer)
+TEST_F(RegionKVStoreOldTest, AdminChangePeer)
 {
     UInt64 region_id = 88;
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -916,7 +930,7 @@ TEST_F(RegionKVStoreTest, AdminChangePeer)
 // TODO Use test utils in new KVStore test for snapshot test.
 // Otherwise data will not actually be inserted.
 class ApplySnapshotTest
-    : public RegionKVStoreTest
+    : public RegionKVStoreOldTest
     , public testing::WithParamInterface<bool /* ingest_using_split */>
 {
 public:
@@ -1079,7 +1093,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ApplySnapshot)
+TEST_F(RegionKVStoreOldTest, ApplySnapshot)
 try
 {
     createDefaultRegions();
@@ -1173,7 +1187,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ApplySnapshotOverlap)
+TEST_F(RegionKVStoreOldTest, ApplySnapshotOverlap)
 try
 {
     createDefaultRegions();
@@ -1271,7 +1285,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, IngestSST)
+TEST_F(RegionKVStoreOldTest, IngestSST)
 try
 {
     createDefaultRegions();
@@ -1347,7 +1361,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, Restore)
+TEST_F(RegionKVStoreOldTest, Restore)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -1374,7 +1388,7 @@ TEST_F(RegionKVStoreTest, Restore)
     }
 }
 
-TEST_F(RegionKVStoreTest, RegionRange)
+TEST_F(RegionKVStoreOldTest, RegionRange)
 {
     {
         // Test util functions.
