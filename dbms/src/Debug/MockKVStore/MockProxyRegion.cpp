@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>

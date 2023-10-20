@@ -14,7 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/setThreadName.h>
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/chrono.h>
 

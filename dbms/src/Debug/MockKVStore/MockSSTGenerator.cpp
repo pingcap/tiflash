@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockSSTGenerator.h>
-#include <Debug/MockSSTReader.h>
+#include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 
 namespace DB
 {

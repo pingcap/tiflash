@@ -17,8 +17,8 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/SyncPoint/SyncPoint.h>
-#include <Debug/MockRaftStoreProxy.h>
-#include <Debug/MockSSTReader.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>

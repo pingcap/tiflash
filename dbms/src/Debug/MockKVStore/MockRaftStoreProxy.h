@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Debug/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>

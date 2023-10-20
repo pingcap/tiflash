@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockFFIImpls.h>
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockFFIImpls.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 
 namespace DB
 {

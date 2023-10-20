@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/RegionQueryInfo.h>
 

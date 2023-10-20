@@ -16,10 +16,10 @@
 #include <Common/Logger.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Debug/MockFFIImpls.h>
-#include <Debug/MockRaftStoreProxy.h>
-#include <Debug/MockSSTGenerator.h>
-#include <Debug/MockSSTReader.h>
+#include <Debug/MockKVStore/MockFFIImpls.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
